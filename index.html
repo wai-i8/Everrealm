@@ -205,43 +205,46 @@
         </section>
 
         <section id="skillBookConfirmPanel" class="overlay modal-overlay skill-book-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="skillBookConfirmTitle" data-modal-backdrop-dismiss="skill-book-confirm" hidden>
-          <button
-            id="skillBookConfirmCloseButton"
-            class="modal-close-button"
-            type="button"
-            data-modal-dismiss="skill-book-confirm"
-            aria-label="關閉技能書視窗"
-            title="關閉"
-          ><span aria-hidden="true">×</span></button>
-          <div class="skill-book-confirm-icon" aria-hidden="true">📖</div>
-          <p class="modal-kicker">SKILL MANUAL</p>
-          <h2 id="skillBookConfirmTitle">技能書</h2>
-          <p id="skillBookConfirmDescription"></p>
-          <dl id="skillBookConfirmStats" class="skill-book-confirm-stats"></dl>
-          <div class="modal-actions">
-            <button id="skillBookLearnButton" class="primary-button" type="button">確認學習</button>
-            <button id="skillBookCancelButton" class="secondary-button" type="button">取消</button>
+          <div class="ui-modal-window ui-window--skill">
+            <button
+              id="skillBookConfirmCloseButton"
+              class="modal-close-button"
+              type="button"
+              data-modal-dismiss="skill-book-confirm"
+              aria-label="關閉技能書視窗"
+              title="關閉"
+            ><span aria-hidden="true">×</span></button>
+            <div class="skill-book-confirm-icon" aria-hidden="true">📖</div>
+            <p class="modal-kicker">SKILL MANUAL</p>
+            <h2 id="skillBookConfirmTitle">技能書</h2>
+            <p id="skillBookConfirmDescription"></p>
+            <dl id="skillBookConfirmStats" class="skill-book-confirm-stats"></dl>
+            <div class="modal-actions">
+              <button id="skillBookLearnButton" class="primary-button" type="button">確認學習</button>
+              <button id="skillBookCancelButton" class="secondary-button" type="button">取消</button>
+            </div>
           </div>
         </section>
 
         <section id="skillDetailPanel" class="overlay modal-overlay skill-book-confirm-panel skill-detail-panel" role="dialog" aria-modal="true" aria-labelledby="skillDetailTitle" data-modal-backdrop-dismiss="skill-detail" hidden>
-          <button
-            id="skillDetailCloseButton"
-            class="modal-close-button"
-            type="button"
-            data-modal-dismiss="skill-detail"
-            aria-label="關閉技能資料視窗"
-            title="關閉"
-          ><span aria-hidden="true">×</span></button>
-          <div id="skillDetailIcon" class="skill-book-confirm-icon" aria-hidden="true">技</div>
-          <p class="modal-kicker">SKILL DETAIL</p>
-          <h2 id="skillDetailTitle">技能資料</h2>
-          <p id="skillDetailDescription"></p>
-          <div id="skillDetailRangePattern" class="skill-detail-range-pattern" aria-live="polite"></div>
-          <dl id="skillDetailStats" class="skill-book-confirm-stats"></dl>
-          <div class="modal-actions">
-            <button id="skillDetailLearnButton" class="primary-button" type="button" hidden>學習</button>
-            <button id="skillDetailDismissButton" class="secondary-button" type="button">返回技能樹</button>
+          <div class="ui-modal-window ui-window--skill">
+            <button
+              id="skillDetailCloseButton"
+              class="modal-close-button"
+              type="button"
+              data-modal-dismiss="skill-detail"
+              aria-label="關閉技能資料視窗"
+              title="關閉"
+            ><span aria-hidden="true">×</span></button>
+            <p class="modal-kicker">SKILL DETAIL</p>
+            <h2 id="skillDetailTitle">技能資料</h2>
+            <p id="skillDetailDescription"></p>
+            <div id="skillDetailRangePattern" class="skill-detail-range-pattern" aria-live="polite"></div>
+            <dl id="skillDetailStats" class="skill-book-confirm-stats"></dl>
+            <div class="modal-actions">
+              <button id="skillDetailLearnButton" class="primary-button" type="button" hidden>學習</button>
+              <button id="skillDetailDismissButton" class="secondary-button" type="button">返回技能樹</button>
+            </div>
           </div>
         </section>
 
@@ -327,7 +330,7 @@
           aria-describedby="facilitySubtitle"
           hidden
         >
-          <div class="facility-window">
+          <div class="facility-window ui-window">
             <header class="facility-header">
               <div class="facility-heading-copy">
                 <p id="facilityKicker" class="facility-kicker">OLD HARBOUR SERVICES</p>

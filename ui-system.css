@@ -1,0 +1,179 @@
+:root {
+  --ui-frame-image: url("assets/ui/ui-frame-v1.png");
+  --ui-button-image: url("assets/ui/ui-button-default-v1.png");
+  --ui-button-active-image: url("assets/ui/ui-button-active-v1.png");
+  --ui-button-gold-image: url("assets/ui/ui-button-gold-v1.png");
+  --ui-button-disabled-image: url("assets/ui/ui-button-disabled-v1.png");
+  --ui-tab-image: url("assets/ui/ui-tab-default-v1.png");
+  --ui-tab-active-image: url("assets/ui/ui-tab-active-v1.png");
+  --ui-slot-image: url("assets/ui/ui-slot-default-v1.png");
+  --ui-slot-selected-image: url("assets/ui/ui-slot-selected-v1.png");
+  --ui-slot-disabled-image: url("assets/ui/ui-slot-disabled-v1.png");
+  --ui-node-image: url("assets/ui/ui-skill-node-v1.png");
+}
+
+/* One scalable bitmap-backed frame shared by facility windows and modal
+   surfaces. The image carries material and ornament; HTML remains in charge
+   of content, type and interaction. */
+.ui-window,
+.ui-modal-window {
+  position: relative;
+  isolation: isolate;
+  border: 0 !important;
+  border-radius: 1.1rem !important;
+  background: linear-gradient(145deg, rgba(30,43,69,.98), rgba(8,15,30,.99));
+  box-shadow: 8px 10px 0 rgba(3,6,14,.72), 0 1.5rem 5rem rgba(0,0,0,.55);
+}
+.ui-window::before,
+.ui-modal-window::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ui-frame-image) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+.ui-window > *,
+.ui-modal-window > * { position: relative; z-index: 1; }
+
+/* Modal panels use a content-sized inner window instead of a fixed-height
+   pseudo background, so range-heavy skill details remain contained. */
+.ui-modal-window {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: min(44rem, calc(100vh - 2rem));
+  overflow: auto;
+  padding: clamp(1.15rem, 3vw, 2rem);
+  text-align: center;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,200,87,.65) rgba(4,8,17,.4);
+}
+.ui-modal-window > .modal-close-button { top: .8rem; right: .8rem; }
+.skill-book-confirm-panel { align-items: center; justify-content: center; }
+.skill-book-confirm-panel::before { display: none; }
+.skill-book-confirm-panel > .ui-modal-window { min-height: 0; }
+.skill-book-confirm-panel > .ui-modal-window > p:not(.modal-kicker) { max-width: 34rem; margin-inline: auto; }
+.skill-detail-panel > .ui-modal-window { text-align: left; }
+.skill-detail-panel > .ui-modal-window > .modal-kicker,
+.skill-detail-panel > .ui-modal-window > h2 { text-align: center; }
+.skill-detail-panel > .ui-modal-window > .modal-actions { margin-inline: auto; }
+
+/* The facility header remains a warm information band inside the dark stone
+   frame. Every content surface below it uses the same restrained inset. */
+.facility-window.ui-window { overflow: hidden; }
+.facility-window.ui-window::before { opacity: .96; }
+.facility-content,
+.facility-footer { background: rgba(5,9,19,.34); }
+.facility-summary article,
+.facility-list-card,
+.facility-feature-card,
+.equipment-card,
+.skill-card,
+.skill-book-card,
+.codex-card,
+.status-character-card,
+.status-stat-grid > div,
+.deck-slot,
+.deck-skill-choice {
+  border-color: rgba(255,200,87,.25);
+  border-radius: .58rem;
+  background: linear-gradient(145deg, rgba(34,48,77,.86), rgba(8,16,32,.94));
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 3px 4px 0 rgba(0,0,0,.22);
+}
+.facility-summary article:hover,
+.facility-list-card:hover,
+.equipment-card:hover,
+.skill-card:hover,
+.codex-card:hover { border-color: rgba(82,220,203,.62); }
+
+.facility-action-button,
+.primary-button,
+.secondary-button {
+  border: 0 !important;
+  border-radius: .55rem !important;
+  background-color: transparent !important;
+  background-image: var(--ui-button-image) !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  box-shadow: 0 .3rem .8rem rgba(0,0,0,.36) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+}
+.facility-action-button:hover:not(:disabled),
+.primary-button:hover,
+.secondary-button:hover,
+.facility-action-button:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible {
+  background-image: var(--ui-button-active-image) !important;
+  filter: brightness(1.08);
+}
+.primary-button,
+.facility-action-button:not(.is-quiet) { background-image: var(--ui-button-gold-image) !important; color: #171421; text-shadow: none; }
+.facility-action-button:disabled { background-image: var(--ui-button-disabled-image) !important; opacity: .78; }
+.facility-action-button.is-quiet,
+.secondary-button { color: var(--cream); }
+
+.facility-tab {
+  border: 0 !important;
+  border-radius: .45rem .45rem 0 0;
+  background-image: var(--ui-tab-image) !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.facility-tab:hover,
+.facility-tab:focus-visible,
+.facility-tab.is-active,
+.facility-tab[aria-selected="true"] {
+  background-image: var(--ui-tab-active-image) !important;
+}
+
+.equipment-icon,
+.skill-card-icon,
+.facility-summary-icon,
+.skill-book-cover,
+.status-stat-grid > div {
+  background-image: var(--ui-slot-image);
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+/* Full cards already carry their own selected/locked surface styles in
+   inventory-overhaul.css. Keep the bitmap slot treatment on the compact
+   icon surfaces only; stretching a slot frame over an entire card buries its
+   copy under a giant ornamental plate. */
+
+/* Skill nodes keep the prerequisite SVG as the dynamic layer, while their
+   visible body comes from the authored bitmap node frame. */
+.skill-tree-node {
+  border: 0 !important;
+  border-radius: .5rem !important;
+  background: transparent var(--ui-node-image) center / 100% 100% no-repeat !important;
+  box-shadow: 3px 4px 0 rgba(0,0,0,.28) !important;
+}
+.skill-tree-node-trigger { background: transparent !important; text-shadow: 0 1px 2px rgba(0,0,0,.65); }
+.skill-tree-node.is-canLearn,
+.skill-tree-node.is-learned,
+.skill-tree-node.is-equipped { filter: saturate(1.14) brightness(1.08); }
+.skill-tree-node.is-canLearn { box-shadow: 0 0 .95rem rgba(255,200,87,.3), 3px 4px 0 rgba(0,0,0,.28) !important; }
+.skill-tree-node.is-equipped { box-shadow: 0 0 .95rem rgba(82,220,203,.3), 3px 4px 0 rgba(0,0,0,.28) !important; }
+.skill-tree-node.is-missingPrereq,
+.skill-tree-node.is-conditionLocked { filter: grayscale(.46) saturate(.4) brightness(.78); }
+
+.skill-detail-range-pattern,
+.skill-book-confirm-stats,
+.facility-note,
+.skill-tree-legend span { border-radius: .48rem; }
+.skill-book-confirm-stats { max-height: none; }
+
+@media (max-width: 530px) {
+  .ui-modal-window {
+    width: calc(100vw - .7rem);
+    max-height: calc(100vh - .7rem);
+    padding: 1rem .72rem .85rem;
+    border-radius: .78rem !important;
+  }
+  .ui-modal-window > .modal-close-button { top: .5rem; right: .5rem; }
+  .skill-detail-panel > .ui-modal-window { text-align: left; }
+}

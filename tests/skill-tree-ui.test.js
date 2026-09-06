@@ -97,7 +97,8 @@ test("facility renders compact name-only SVG/DOM nodes and opens a dismissible d
   assert.match(renderSource, /class="skill-tree-node-trigger"[^>]*data-facility-action="skill-detail"/);
   assert.match(renderSource, /<strong>\$\{skill\.name\}<\/strong><\/button>/);
   assert.doesNotMatch(renderSource, /skill-tree-node-icon|skill-tree-node-state|data-facility-action="use-manual"/);
-  assert.match(gameSource, /skillDetailIcon"\)\.textContent = learnability\.status === "learned" \? skillIcon\(skill\) : "技"/);
+  assert.doesNotMatch(gameSource, /skillDetailIcon/);
+  assert.doesNotMatch(indexSource, />技</);
 
   assert.match(indexSource, /id="skillDetailPanel"[^>]*data-modal-backdrop-dismiss="skill-detail"/);
   assert.match(indexSource, /id="skillDetailCloseButton"[^>]*class="modal-close-button"/s);

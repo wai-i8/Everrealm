@@ -1,0 +1,483 @@
+{
+  "geometryVersion": 1,
+  "source": "C:\\Users\\lauka\\Projects\\Everrealm\\assets\\locomotion\\sources\\raw\\snake-atlas-source-v1.png",
+  "normalization": "fixed 4x7 source grid; largest alpha component; fixed shared anchor",
+  "frames": [
+    {
+      "direction": "down",
+      "column": 0,
+      "file": "down-0.png",
+      "sourceRect": [
+        0,
+        0,
+        237,
+        237
+      ],
+      "sourceAnchor": [
+        95.0,
+        212
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 1,
+      "file": "down-1.png",
+      "sourceRect": [
+        237,
+        0,
+        474,
+        237
+      ],
+      "sourceAnchor": [
+        90.5,
+        213
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 2,
+      "file": "down-2.png",
+      "sourceRect": [
+        474,
+        0,
+        711,
+        237
+      ],
+      "sourceAnchor": [
+        96.5,
+        212
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 3,
+      "file": "down-3.png",
+      "sourceRect": [
+        711,
+        0,
+        948,
+        237
+      ],
+      "sourceAnchor": [
+        97.5,
+        207
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 4,
+      "file": "down-4.png",
+      "sourceRect": [
+        948,
+        0,
+        1185,
+        237
+      ],
+      "sourceAnchor": [
+        96.0,
+        210
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 5,
+      "file": "down-5.png",
+      "sourceRect": [
+        1185,
+        0,
+        1422,
+        237
+      ],
+      "sourceAnchor": [
+        90.0,
+        210
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "down",
+      "column": 6,
+      "file": "down-6.png",
+      "sourceRect": [
+        1422,
+        0,
+        1659,
+        237
+      ],
+      "sourceAnchor": [
+        88.0,
+        211
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 0,
+      "file": "right-0.png",
+      "sourceRect": [
+        0,
+        237,
+        237,
+        474
+      ],
+      "sourceAnchor": [
+        108.5,
+        210
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 1,
+      "file": "right-1.png",
+      "sourceRect": [
+        237,
+        237,
+        474,
+        474
+      ],
+      "sourceAnchor": [
+        111.0,
+        207
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 2,
+      "file": "right-2.png",
+      "sourceRect": [
+        474,
+        237,
+        711,
+        474
+      ],
+      "sourceAnchor": [
+        108.5,
+        212
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 3,
+      "file": "right-3.png",
+      "sourceRect": [
+        711,
+        237,
+        948,
+        474
+      ],
+      "sourceAnchor": [
+        104.5,
+        204
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 4,
+      "file": "right-4.png",
+      "sourceRect": [
+        948,
+        237,
+        1185,
+        474
+      ],
+      "sourceAnchor": [
+        106.5,
+        197
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 5,
+      "file": "right-5.png",
+      "sourceRect": [
+        1185,
+        237,
+        1422,
+        474
+      ],
+      "sourceAnchor": [
+        102.5,
+        209
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "right",
+      "column": 6,
+      "file": "right-6.png",
+      "sourceRect": [
+        1422,
+        237,
+        1659,
+        474
+      ],
+      "sourceAnchor": [
+        101.0,
+        201
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 0,
+      "file": "up-0.png",
+      "sourceRect": [
+        0,
+        474,
+        237,
+        711
+      ],
+      "sourceAnchor": [
+        98.0,
+        211
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 1,
+      "file": "up-1.png",
+      "sourceRect": [
+        237,
+        474,
+        474,
+        711
+      ],
+      "sourceAnchor": [
+        95.0,
+        208
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 2,
+      "file": "up-2.png",
+      "sourceRect": [
+        474,
+        474,
+        711,
+        711
+      ],
+      "sourceAnchor": [
+        94.0,
+        212
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 3,
+      "file": "up-3.png",
+      "sourceRect": [
+        711,
+        474,
+        948,
+        711
+      ],
+      "sourceAnchor": [
+        103.5,
+        210
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 4,
+      "file": "up-4.png",
+      "sourceRect": [
+        948,
+        474,
+        1185,
+        711
+      ],
+      "sourceAnchor": [
+        94.0,
+        208
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 5,
+      "file": "up-5.png",
+      "sourceRect": [
+        1185,
+        474,
+        1422,
+        711
+      ],
+      "sourceAnchor": [
+        94.0,
+        208
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "up",
+      "column": 6,
+      "file": "up-6.png",
+      "sourceRect": [
+        1422,
+        474,
+        1659,
+        711
+      ],
+      "sourceAnchor": [
+        86.0,
+        210
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 0,
+      "file": "left-0.png",
+      "sourceRect": [
+        0,
+        711,
+        237,
+        948
+      ],
+      "sourceAnchor": [
+        113.0,
+        216
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 1,
+      "file": "left-1.png",
+      "sourceRect": [
+        237,
+        711,
+        474,
+        948
+      ],
+      "sourceAnchor": [
+        113.5,
+        215
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 2,
+      "file": "left-2.png",
+      "sourceRect": [
+        474,
+        711,
+        711,
+        948
+      ],
+      "sourceAnchor": [
+        111.0,
+        216
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 3,
+      "file": "left-3.png",
+      "sourceRect": [
+        711,
+        711,
+        948,
+        948
+      ],
+      "sourceAnchor": [
+        106.5,
+        216
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 4,
+      "file": "left-4.png",
+      "sourceRect": [
+        948,
+        711,
+        1185,
+        948
+      ],
+      "sourceAnchor": [
+        105.0,
+        217
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 5,
+      "file": "left-5.png",
+      "sourceRect": [
+        1185,
+        711,
+        1422,
+        948
+      ],
+      "sourceAnchor": [
+        100.0,
+        215
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    },
+    {
+      "direction": "left",
+      "column": 6,
+      "file": "left-6.png",
+      "sourceRect": [
+        1422,
+        711,
+        1659,
+        948
+      ],
+      "sourceAnchor": [
+        99.5,
+        214
+      ],
+      "sourceScale": 0.8847926267281107,
+      "normalization": "regular-grid-cell"
+    }
+  ]
+}

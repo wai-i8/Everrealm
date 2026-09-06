@@ -8,6 +8,13 @@
     stylesheet.href = "inventory-overhaul.css";
     document.head.append(stylesheet);
   }
+  if (!document.getElementById("everrealmUiStyles")) {
+    const stylesheet = document.createElement("link");
+    stylesheet.id = "everrealmUiStyles";
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = "ui-system.css";
+    document.head.append(stylesheet);
+  }
 
   const Core = window.LanternCore;
   const World = window.LanternWorld;
@@ -801,6 +808,14 @@
     const doorTop = Math.max(top, bottom - Math.max(36, Number(house.doorDepth) || 48));
     const doorLeft = Core.clamp(house.doorX - house.doorWidth / 2, house.x + inset, house.x + house.w - inset);
     const doorRight = Core.clamp(house.doorX + house.doorWidth / 2, house.x + inset, house.x + house.w - inset);
+    if (house.frontage === "north") {
+      const doorBottom = Math.min(bottom, Math.max(top, (Number(house.doorY) || top) + Math.max(36, Number(house.doorDepth) || 48)));
+      return [
+        { x: house.x + inset, y: top, w: Math.max(0, doorLeft - house.x - inset), h: Math.max(0, doorBottom - top) },
+        { x: doorRight, y: top, w: Math.max(0, house.x + house.w - inset - doorRight), h: Math.max(0, doorBottom - top) },
+        { x: house.x + inset, y: doorBottom, w: house.w - inset * 2, h: Math.max(0, bottom - doorBottom) },
+      ].filter((rect) => rect.w > 0 && rect.h > 0);
+    }
     return [
       { x: house.x + inset, y: top, w: house.w - inset * 2, h: Math.max(0, doorTop - top) },
       { x: house.x + inset, y: doorTop, w: Math.max(0, doorLeft - house.x - inset), h: Math.max(0, bottom - doorTop - 2) },
@@ -2606,7 +2621,6 @@
     const active = skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id));
     const missingNames = (learnability.missingPrerequisites || []).map((id) => Skills.getSkill(id)?.name || id);
     const stateLabel = skillTreeStateLabel(learnability.status, active, manualCount);
-    document.getElementById("skillDetailIcon").textContent = learnability.status === "learned" ? skillIcon(skill) : "技";
     document.getElementById("skillDetailTitle").textContent = skill.name;
     document.getElementById("skillDetailDescription").textContent = skill.description;
     document.getElementById("skillDetailStats").innerHTML = `
@@ -4549,7 +4563,7 @@
     const ty = position.y / world.tileSize;
     if (tx >= 46 && ty >= 32 && ty <= 37) return "霧都主城 · 東門";
     if (ty >= 32 && ty <= 37) return "霧都主城 · Main Street";
-    if (ty >= 16 && ty <= 20) return "霧都主城 · North Service Street";
+    if (ty >= 16 && ty <= 20) return "霧都主城 · Main Street";
     if (tx >= 16 && tx <= 19) return "霧都主城 · West Avenue";
     if (tx >= 31 && tx <= 34) return "霧都主城 · East Avenue";
     if (tx >= 4 && tx <= 16 && ty >= 4 && ty <= 16) return "霧都主城 · 公會街區";
@@ -5588,11 +5602,6 @@
         queueEnvironment(sprite, point.x, point.y, Math.max(w * 1.12, h * 1.4), point.y);
       }
     }
-    if (currentMapId === "world" && world.townGate) {
-      const gate = world.townGate;
-      const point = mapPoint(gate.x, gate.y + (Number(gate.spriteBottomOffset) || 30));
-      queueStandalone(gate.sprite || "townGateEast", point.x, point.y, (Number(gate.spriteWidth) || 600) * scale, (Number(gate.spriteHeight) || 400) * scale, point.y);
-    }
     for (const rock of world.rocks || []) {
       const point = mapPoint(rock.x, rock.y + (rock.radius || 10) * .8);
       queueEnvironment("rock", point.x, point.y, Math.max(7, (rock.radius || 10) * scale * 4.15), point.y);
@@ -5908,7 +5917,6 @@
   function depthFor(entity) {
     if (entity.kind === "house") return houseFootY(entity);
     if (entity.kind === "gate") return entity.y + entity.h;
-    if (entity.kind === "townGate") return entity.y - (entity.radius || 0);
     if (entity.kind === "portal" && MapTransitions.transitionTypeFor(entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
       const house = world.houses?.find((candidate) => candidate.id === entity.houseId);
       // The marker belongs to the doorway's foreground plane. Draw it after
@@ -5928,7 +5936,6 @@
       else renderables.push(object);
     }
     if (currentMapId === "field") renderables.push({ ...world.gate, kind: "gate" });
-    if (currentMapId === "world" && world.townGate && inView(world.townGate, 180)) renderables.push(world.townGate);
     for (const portal of world.portals) if (inView(portal, 100)) renderables.push(portal);
     for (const npc of world.npcs) if (inView(npc, 100)) renderables.push(npc);
     for (const enemy of enemies) if (enemy.alive && (!enemy.mainBoss || questStage >= 3) && inView(enemy, 130)) renderables.push(enemy);
@@ -5947,7 +5954,6 @@
     else if (entity.kind === "sign") drawSign(entity, shakeX, shakeY);
     else if (entity.kind === "chest") drawChest(entity, shakeX, shakeY);
     else if (entity.kind === "gate") drawGate(entity, shakeX, shakeY);
-    else if (entity.kind === "townGate") drawTownGate(entity, shakeX, shakeY);
     else if (entity.kind === "npc") drawNpc(entity, shakeX, shakeY);
     else if (entity.kind === "portal") drawPortal(entity, shakeX, shakeY);
     else if (entity.kind === "player") drawPlayer(shakeX, shakeY);
@@ -5963,16 +5969,19 @@
     const showLabel = portal.interactionMode === "gate" || nearestInteraction?.id === portal.id;
     const marker = portal.marker || MapTransitions.entranceFor(portal)?.marker || {};
     ctx.save();
-    Art.drawStandaloneSprite(ctx, {
-      sprite: marker.sprite || "townDoorMarker",
+    const markerSize = (Number(marker.size) || Math.max(Number(marker.width) || 34, Number(marker.height) || 34)) * scale;
+    if (!Art.drawMarker(ctx, {
+      sprite: marker.sprite || "interact",
       x: point.x,
-      y: point.y + 5 * scale,
-      width: (Number(marker.width) || 42) * scale,
-      height: (Number(marker.height) || 28) * scale,
+      y: point.y + 2 * scale,
+      size: markerSize,
       anchorX: Number.isFinite(marker.anchorX) ? marker.anchorX : .5,
-      anchorY: Number.isFinite(marker.anchorY) ? marker.anchorY : 1,
+      anchorY: Number.isFinite(marker.anchorY) ? marker.anchorY : .5,
       alpha: nearestInteraction?.id === portal.id ? 1 : .84,
-    });
+    })) {
+      ctx.fillStyle = "rgba(82,220,203,.22)";
+      ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(8, markerSize * .28), 0, Core.TAU); ctx.fill();
+    }
     if (showLabel) {
       const fontSize = Core.clamp(13 * scale, 12, 17);
       ctx.font = `900 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
@@ -6041,23 +6050,23 @@
     const point = worldToScreen(portal, shakeX, shakeY);
     const scale = camera.zoom;
     const showLabel = portal.alwaysVisible || nearestInteraction?.id === portal.id;
-    const direction = portal.direction === "north" ? { x: 0, y: -1 }
-      : portal.direction === "south" ? { x: 0, y: 1 }
-        : portal.direction === "west" ? { x: -1, y: 0 } : { x: 1, y: 0 };
     const pulse = .68 + Math.sin(elapsed * 2.2 + portal.x * .01) * .12;
     ctx.save();
-    ctx.strokeStyle = `rgba(255,200,87,${pulse})`;
-    ctx.fillStyle = "rgba(255,200,87,.18)";
-    ctx.lineWidth = Math.max(2, 3 * scale);
-    ctx.beginPath();
-    ctx.ellipse(point.x, point.y + 6 * scale, 22 * scale, 9 * scale, 0, 0, Core.TAU);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(point.x - direction.x * 10 * scale - direction.y * 8 * scale, point.y - direction.y * 10 * scale + direction.x * 8 * scale);
-    ctx.lineTo(point.x + direction.x * 12 * scale, point.y + direction.y * 12 * scale);
-    ctx.lineTo(point.x - direction.x * 10 * scale + direction.y * 8 * scale, point.y - direction.y * 10 * scale - direction.x * 8 * scale);
-    ctx.stroke();
+    const markerSize = Math.max(32, (portal.markerSize || 38) * scale);
+    const drewMarker = Art.drawMarker(ctx, {
+      sprite: "interact",
+      x: point.x,
+      y: point.y + 2 * scale,
+      size: markerSize,
+      anchorY: .5,
+      alpha: pulse,
+    });
+    if (!drewMarker) {
+      ctx.strokeStyle = `rgba(255,200,87,${pulse})`;
+      ctx.fillStyle = "rgba(255,200,87,.18)";
+      ctx.lineWidth = Math.max(2, 3 * scale);
+      ctx.beginPath(); ctx.ellipse(point.x, point.y + 6 * scale, 22 * scale, 9 * scale, 0, 0, Core.TAU); ctx.fill(); ctx.stroke();
+    }
     if (showLabel) {
       const fontSize = Core.clamp(14 * scale, 13, 18);
       ctx.font = `900 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
@@ -6419,66 +6428,6 @@
     ctx.fillStyle = "#7c5637"; ctx.fillRect(-13 * scale, -7 * scale, 26 * scale, 16 * scale);
     ctx.fillStyle = "#a77b49"; ctx.fillRect(-13 * scale, -8 * scale, 26 * scale, 5 * scale);
     ctx.fillStyle = "#ffc857"; ctx.fillRect(-2 * scale, -4 * scale, 4 * scale, 8 * scale);
-    ctx.restore();
-  }
-
-  function drawTownGate(gate, shakeX, shakeY) {
-    const point = worldToScreen(gate, shakeX, shakeY);
-    const scale = camera.zoom;
-    if (Art.drawStandaloneSprite(ctx, {
-      sprite: gate.sprite || "townGateEast",
-      x: point.x,
-      y: point.y + (Number(gate.spriteBottomOffset) || 30) * scale,
-      width: (Number(gate.spriteWidth) || 600) * scale,
-      height: (Number(gate.spriteHeight) || 400) * scale,
-      anchorX: .5,
-      anchorY: 1,
-    })) return;
-    const towerWidth = 38 * scale;
-    const towerHeight = 58 * scale;
-    const openingHalfHeight = 60 * scale;
-    ctx.save();
-    ctx.fillStyle = "rgba(3,6,13,.34)";
-    ctx.beginPath();
-    ctx.ellipse(point.x + 4 * scale, point.y, 34 * scale, 94 * scale, 0, 0, Core.TAU);
-    ctx.fill();
-    for (const side of [-1, 1]) {
-      const centreY = point.y + side * (openingHalfHeight + towerHeight * .42);
-      const left = point.x - towerWidth * .5;
-      const top = centreY - towerHeight * .5;
-      ctx.fillStyle = "#3f4d62";
-      ctx.fillRect(left, top, towerWidth, towerHeight);
-      ctx.fillStyle = "#56667d";
-      ctx.fillRect(left + 4 * scale, top + 5 * scale, towerWidth - 8 * scale, towerHeight - 10 * scale);
-      ctx.strokeStyle = "rgba(10,16,32,.48)";
-      ctx.lineWidth = Math.max(1, scale);
-      for (let row = 1; row < 4; row += 1) {
-        const y = top + row * towerHeight / 4;
-        ctx.beginPath(); ctx.moveTo(left + 3 * scale, y); ctx.lineTo(left + towerWidth - 3 * scale, y); ctx.stroke();
-      }
-      ctx.fillStyle = "#2a3549";
-      const merlonWidth = towerWidth / 5;
-      for (let merlon = 0; merlon < 5; merlon += 2) {
-        ctx.fillRect(left + merlon * merlonWidth, top - 7 * scale, merlonWidth, 9 * scale);
-      }
-      ctx.fillStyle = "#ffc857";
-      ctx.globalAlpha = .82;
-      ctx.beginPath();
-      ctx.moveTo(point.x, centreY - 10 * scale);
-      ctx.lineTo(point.x + 7 * scale, centreY);
-      ctx.lineTo(point.x, centreY + 10 * scale);
-      ctx.lineTo(point.x - 7 * scale, centreY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    ctx.strokeStyle = "rgba(255,200,87,.55)";
-    ctx.lineWidth = Math.max(2, 2 * scale);
-    ctx.setLineDash([7 * scale, 6 * scale]);
-    ctx.beginPath();
-    ctx.moveTo(point.x - 24 * scale, point.y - openingHalfHeight + 20 * scale);
-    ctx.lineTo(point.x - 24 * scale, point.y + openingHalfHeight - 20 * scale);
-    ctx.stroke();
     ctx.restore();
   }
 

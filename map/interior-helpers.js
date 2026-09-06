@@ -30,7 +30,7 @@
           approachDistanceTiles: 1.05,
           entryFacing: exit.entryFacing || "down",
           returnFacing: exit.returnFacing || null,
-          marker: { kind: "bitmap", sprite: "townDoorMarker", width: 42, height: 28, anchorX: .5, anchorY: 1 },
+          marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 },
         },
       },
     )];

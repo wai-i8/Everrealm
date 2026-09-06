@@ -11,11 +11,12 @@
 
   const DEFAULT_ENTRANCE_MARKER = Object.freeze({
     kind: "bitmap",
-    sprite: "townDoorMarker",
-    width: 42,
-    height: 28,
+    // Bottom-left frame (index 2) of marker-atlas-v1: the shared physical
+    // interaction marker for doors and ordinary passages.
+    sprite: "interact",
+    size: 34,
     anchorX: .5,
-    anchorY: 1,
+    anchorY: .5,
   });
 
   const HOUSE_SPRITE_PROFILES = Object.freeze({

@@ -20,6 +20,12 @@
     raccoon: "assets/locomotion/raccoon-v1.png",
     chick: "assets/locomotion/chick-v1.png",
     fox: "assets/locomotion/fox-v1.png",
+    wild_boar: "assets/locomotion/wild-boar-v1.png",
+    bear: "assets/locomotion/bear-v1.png",
+    turtle: "assets/locomotion/turtle-v1.png",
+    coyote: "assets/locomotion/coyote-v1.png",
+    frog: "assets/locomotion/frog-v1.png",
+    snake: "assets/locomotion/snake-v1.png",
     // Save/smoke compatibility aliases; new runtime spawns use canonical IDs.
     slime: "assets/locomotion/raccoon-v1.png",
     wisp: "assets/locomotion/chick-v1.png",
@@ -32,6 +38,7 @@
     frog: "assets/monster-sources/frog.png",
     turtle: "assets/monster-sources/turtle.png",
     bear: "assets/monster-sources/bear.png",
+    coyote: "assets/locomotion/sources/raw/coyote-atlas-source-v1.png",
   });
   const direction = (value) => Object.hasOwn(STANDARD_MOBILE_UNIT_SPRITE.directions, value) ? value : "down";
   function facingFromDelta(dx, dy, fallback = "down") {

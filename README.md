@@ -50,6 +50,7 @@ npm test
 - 怪物 canonical roster、棲地、等級／獎勵、戰鬥技能、遷移及 Codex：`docs/MONSTER_SYSTEM.md`
 - Guild 委託目錄、討伐／送信流程、技能書信封與保存契約：`docs/GUILD_COMMISSION_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
+- Shared Everrealm bitmap-backed windows、popups、responsive layout 同 UI states：`docs/UI_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`
 - 幸福 Online / STRUGARDEN 原版資料、來源證據及研究 provenance：`docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
@@ -70,6 +71,7 @@ npm test
 - `docs/MAP_SYSTEM.md`：世界／場景同戰鬥場地之間嘅關係。
 - `docs/PET_SYSTEM.md`：Familiar 系統；普通 Familiar 嘅探索／戰鬥移動接入共用 locomotion contract。
 - `docs/PRODUCTION_SYSTEM.md`：採集／生產系統。
+- `docs/UI_SYSTEM.md`：共用 fantasy bitmap UI frame、主要視窗組合、dynamic sizing 同 responsive presentation。
 - `ART_PIPELINE.md`：遊戲「應該點樣睇」以及所有 runtime 美術資產「技術上點製作、normalize、repack、切割、對位同驗收」；普通玩家／怪物／Familiar 嘅 28-frame Idle+Walk 標準亦以此文件為準。
 - `AGENTS.md`：指引 Codex 按當前工作只讀必要文件，並規定測試及文件維護方式。
 

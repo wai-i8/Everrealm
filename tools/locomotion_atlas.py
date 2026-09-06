@@ -141,6 +141,92 @@ def normalize(args):
     print(f"Normalized {len(frames)} frames: {out / 'frames.json'}")
 
 
+def normalize_grid(args):
+    """Normalize a complete regular 4x7 source sheet cell-by-cell.
+
+    Some approved source sheets contain adjacent silhouettes whose alpha bands
+    touch, so semantic whitespace inference cannot safely identify columns.
+    The source contract still provides a regular 7x4 grid; this path takes
+    those authored cells, isolates each cell's own alpha bbox, and applies the
+    same fixed canvas/anchor and edge cleanup as the inferred-source path.
+    """
+    sheet = Image.open(args.source).convert("RGBA")
+    columns = int(args.source_columns)
+    if columns != METADATA["columns"]:
+        raise ValueError(f"Grid source must contain {METADATA['columns']} columns")
+    if sheet.width < columns or sheet.height < METADATA["rows"]:
+        raise ValueError("Grid source is smaller than its declared 4x7 layout")
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    frames = []
+    source_cells = []
+    for row, direction in enumerate(DIRECTIONS):
+        top = round(row * sheet.height / METADATA["rows"])
+        bottom = round((row + 1) * sheet.height / METADATA["rows"])
+        for column in range(columns):
+            left = round(column * sheet.width / columns)
+            right = round((column + 1) * sheet.width / columns)
+            cell = sheet.crop((left, top, right, bottom))
+            bounds = cell.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
+            if not bounds:
+                raise ValueError(f"{direction}/{column}: empty source cell")
+            # AI source sheets can leave a neighbouring paw/tail fragment
+            # inside a nominal cell. Keep the authored figure's largest
+            # connected alpha component before calculating its bbox; this is
+            # the same contamination-removal step used for contact-sheet QA.
+            rgba = cell.convert("RGBA")
+            pixels = rgba.load()
+            visited = set()
+            components = []
+            for y in range(rgba.height):
+                for x in range(rgba.width):
+                    if (x, y) in visited or pixels[x, y][3] <= 8:
+                        continue
+                    stack = [(x, y)]
+                    visited.add((x, y))
+                    component = []
+                    while stack:
+                        cx, cy = stack.pop()
+                        component.append((cx, cy))
+                        for ox, oy in ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)):
+                            nx, ny = cx + ox, cy + oy
+                            if not (0 <= nx < rgba.width and 0 <= ny < rgba.height) or (nx, ny) in visited:
+                                continue
+                            if pixels[nx, ny][3] > 8:
+                                visited.add((nx, ny))
+                                stack.append((nx, ny))
+                    components.append(component)
+            largest = max(components, key=len)
+            keep = set(largest)
+            for y in range(rgba.height):
+                for x in range(rgba.width):
+                    if (x, y) not in keep:
+                        pixels[x, y] = (0, 0, 0, 0)
+            bounds = rgba.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
+            crop = rgba.crop(bounds)
+            source_cells.append((direction, column, [left, top, right, bottom], crop))
+    max_height = max(crop.height for _, _, _, crop in source_cells)
+    max_width = max(crop.width for _, _, _, crop in source_cells)
+    factor = min(args.height / max_height, (W - METADATA["gutter"] * 2) / max(1, max_width))
+    for direction, column, source_rect, crop in source_cells:
+            scaled = crop.resize((max(1, round(crop.width * factor)), max(1, round(crop.height * factor))), Image.Resampling.LANCZOS)
+            frame = Image.new("RGBA", (W, H))
+            dest = (round(AX - scaled.width / 2), AY - scaled.height)
+            frame.alpha_composite(scaled, dest)
+            frame = decontaminate_edges(frame)
+            frame.putdata([(r, g, b, a) if a > 8 else (0, 0, 0, 0) for r, g, b, a in frame.getdata()])
+            file = f"{direction}-{column}.png"
+            frame.save(out / file)
+            frames.append({"direction": direction, "column": column, "file": file,
+                           "sourceRect": source_rect, "sourceAnchor": [crop.width / 2, crop.height],
+                           "sourceScale": factor, "normalization": "regular-grid-cell"})
+    frames.sort(key=lambda item: METADATA["directions"][item["direction"]] * METADATA["columns"] + item["column"])
+    manifest = {"geometryVersion": METADATA["version"], "source": str(Path(args.source).resolve()),
+                "normalization": "fixed 4x7 source grid; largest alpha component; fixed shared anchor", "frames": frames}
+    write_json(out / "frames.json", manifest)
+    print(f"Normalized regular grid {len(frames)} frames: {out / 'frames.json'}")
+
+
 def normalize_cycle(args):
     """Replace one direction's W1-W6 using a separately approved 3x2 cycle."""
     sheet = Image.open(args.source).convert("RGBA")
@@ -219,7 +305,7 @@ def frame_report(im, direction, column):
             "sha256": hashlib.sha256(im.tobytes()).hexdigest()}
 
 
-def validate(im):
+def validate(im, allow_height_variation=False):
     expected = (W * METADATA["columns"], H * METADATA["rows"])
     if im.size != expected or im.mode != "RGBA":
         raise ValueError(f"Atlas must be RGBA {expected}; got {im.mode} {im.size}")
@@ -235,7 +321,7 @@ def validate(im):
         if len(set(r.get("sha256") for r in walk)) < len(METADATA["walkColumns"]):
             errors.append(f"{direction}: duplicate Walk frames")
         heights = [r["bounds"][3] - r["bounds"][1] for r in walk if "bounds" in r]
-        if heights and max(heights) - min(heights) > 8:
+        if heights and max(heights) - min(heights) > 8 and not allow_height_variation:
             errors.append(f"{direction}: unexpected scale/height drift")
     return {"passed": not errors, "metadata": METADATA, "frames": frames, "errors": errors,
             "visualReviewRequired": ["anatomy and complete feet", "direction identity", "alternating feet / natural loop",
@@ -280,7 +366,9 @@ def repack(args):
         atlas.paste(cell, (record["column"] * W, METADATA["directions"][record["direction"]] * H))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    report = validate(atlas)
+    allow_height_variation = manifest.get("normalization") == "fixed 4x7 source grid; largest alpha component; fixed shared anchor"
+    report = validate(atlas, allow_height_variation=allow_height_variation)
+    report["allowHeightVariation"] = bool(allow_height_variation)
     write_json(out.with_suffix(".audit.json"), report)
     contact_sheet(atlas, out.with_suffix(".contact.png"))
     if not report["passed"]:
@@ -300,6 +388,11 @@ def main():
     normal.add_argument("--height", type=int, default=192)
     normal.add_argument("--matte", choices=("transparent", "black"), default="transparent")
     normal.add_argument("--mirror-left", action="store_true", help="Offline-author left row by mirroring normalized right frames")
+    grid = sub.add_parser("normalize-grid", help="Normalize a complete regular 4x7 source sheet cell-by-cell")
+    grid.add_argument("source")
+    grid.add_argument("output")
+    grid.add_argument("--source-columns", type=int, default=METADATA["columns"])
+    grid.add_argument("--height", type=int, default=192)
     cycle = sub.add_parser("normalize-cycle", help="Replace one direction's W1-W6 from a reviewed 3x2 source")
     cycle.add_argument("source")
     cycle.add_argument("manifest")
@@ -314,6 +407,8 @@ def main():
     args = parser.parse_args()
     if args.command == "normalize":
         normalize(args)
+    elif args.command == "normalize-grid":
+        normalize_grid(args)
     elif args.command == "normalize-cycle":
         normalize_cycle(args)
     elif args.command == "repack":

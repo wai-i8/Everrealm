@@ -19,6 +19,23 @@
     paintLine(tiles, { x: 37, y: 16 }, { x: 37, y: 0 }, 2.15, TILES.PATH);
 
     const random = mulberry32(0xf13d2026);
+    const routeNodes = [[0, 26], [29, 26], [35, 22], [37, 16], [37, 0]];
+    function distanceToSegment(px, py, ax, ay, bx, by) {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSquared = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+      return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+    }
+    function routeDistance(tx, ty) {
+      let closest = Infinity;
+      for (let index = 1; index < routeNodes.length; index += 1) {
+        const [ax, ay] = routeNodes[index - 1];
+        const [bx, by] = routeNodes[index];
+        closest = Math.min(closest, distanceToSegment(tx, ty, ax, ay, bx, by));
+      }
+      return closest;
+    }
     const treeVariants = ["broadleafTree", "pineTree", "autumnTree", "blossomTree"];
     const treeSeeds = { broadleafTree: .125, pineTree: .375, autumnTree: .625, blossomTree: .875 };
     const trees = [];
@@ -31,8 +48,14 @@
           }
         }
         if (!deepForest) continue;
+        // The lower edge of the road is the player's most common approach
+        // lane. Keep a wider visual buffer there so the canopy cannot cover a
+        // readable unit even though the tree's collision trunk is clear.
+        const lowerRoadBuffer = ty >= 26 ? 4.2 : 2.6;
+        if (routeDistance(tx, ty) < lowerRoadBuffer) continue;
         const variant = treeVariants[(Math.floor(tx / 10) + Math.floor(ty / 9)) % treeVariants.length];
-        trees.push({ id: `field-tree-${trees.length}`, kind: "tree", ...point(tx, ty), tileX: tx, tileY: ty, radius: 28, seed: treeSeeds[variant] + (random() - .5) * .035, variant, groveId: `field-mass-${Math.floor(tx / 10)}-${Math.floor(ty / 9)}`, renderScale: 2.1 });
+        const renderScale = ty >= 26 ? 1.3 : 2.1;
+        trees.push({ id: `field-tree-${trees.length}`, kind: "tree", ...point(tx, ty), tileX: tx, tileY: ty, radius: ty >= 26 ? 23 : 28, seed: treeSeeds[variant] + (random() - .5) * .035, variant, groveId: `field-mass-${Math.floor(tx / 10)}-${Math.floor(ty / 9)}`, renderScale });
       }
     }
 
@@ -48,7 +71,6 @@
       { id: "field-west-sign", kind: "sign", name: "城外路牌", ...point(5, 24), radius: 10, text: "← 霧都主城　　沉燈坑道 ↑" },
       { id: "field-bend-sign", kind: "sign", name: "山道路牌", ...point(33, 24), radius: 10, text: "沿山路向北可達沉燈坑道。樹海內無路可行。" },
     ];
-    const lamps = [[3, 24], [10, 24], [18, 28], [26, 24], [33, 23], [35, 18], [39, 13], [35, 8]].map(([tx, ty], index) => ({ id: `field-lamp-${index}`, kind: "lamp", ...point(tx, ty), radius: 7 }));
     const chests = [
       { id: "grove-cache", kind: "chest", ...point(7, 27), radius: 13, reward: { coins: 38, potions: 1 }, name: "樹根木箱" },
       { id: "river-cache", kind: "chest", ...point(31, 24), radius: 13, reward: { coins: 55, potions: 1 }, name: "山路鐵箱" },
@@ -65,21 +87,21 @@
       { id: "boss-mistfang", type: "bear", ...point(37, 4), level: 5, boss: true, mainBoss: true },
     ];
     const gate = { id: "ruin-gate", name: "坑道封印", kind: "gate", x: 35 * TILE, y: 7 * TILE + 10, w: 5 * TILE, h: 20 };
-    const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回霧都主城", point(32.5, 13), { interactionMode: "gate", transitionType: TRANSITION_TYPES.PHYSICAL_GATE });
-    westExit.direction = "west"; westExit.mapLabel = "霧都"; westExit.alwaysVisible = true;
+    const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回霧都主城", point(32.5, 13), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
+    westExit.direction = "west"; westExit.mapLabel = "霧都出口"; westExit.alwaysVisible = true;
     const dungeonExit = makeExit("field-to-dungeon", 37, 1, MAP_IDS.DUNGEON, "entrance", "進入沉燈坑道", point(9, 26), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     dungeonExit.direction = "north"; dungeonExit.mapLabel = "坑道"; dungeonExit.alwaysVisible = true; dungeonExit.minLevel = 5;
     const start = point(3, 26);
     return withMapCollections({
       id: MAP_IDS.FIELD, name: "霧梅爾山地東南部", shortName: "霧梅爾山地", kind: "field", type: "world", biome: "mountain", theme: "forest-road", ambient: "misty-woodland",
       tileSize: TILE, tileTypes: TILES, width, height, tiles, start,
-      spawnPoints: { entrance: start, westGate: point(2, 26), dungeonFront: point(37, 2.6) }, exits: [westExit, dungeonExit], houses: [], trees, rocks: [], flowers, lamps, signs,
+      spawnPoints: { entrance: start, westGate: point(2, 26), dungeonFront: point(37, 2.6) }, exits: [westExit, dungeonExit], houses: [], trees, rocks: [], flowers, lamps: [], signs,
       solidRects: [], furniture: [], decorations: [], boards: [], npcs, enemySpawns, chests, shrine: null, waypoint: null, gate,
       worldPortalId: "world-to-field", dungeonPortalId: dungeonExit.id,
       objectives: { crystals: { west: point(16, 25), hollow: point(28, 27), north: point(37, 14) }, gate: point(37, 8), boss: point(37, 4), dungeon: point(37, 1), town: point(1, 26) },
       routeLayout: { style: "east-then-north", entrySide: "west", dungeonSide: "north", waypoints: [point(1, 26), point(29, 26), point(35, 22), point(37, 16), point(37, 1)], solidOutsideRoute: true },
       forestLayout: { style: "solid-tree-mass", treePattern: "two-tile-canopy-grid", collisionTile: TILES.WALL, visualGroundTile: TILES.GRASS, collisionRadius: 28, roadClearanceTiles: 2.15 },
-      staticObjects: [...trees, ...lamps, ...signs],
+      staticObjects: [...trees, ...signs],
     });
   }
   return { TILE, TILES, MAP_IDS, createMountainFieldMap, createFieldMap: createMountainFieldMap };

@@ -199,7 +199,7 @@ try {
         Start-Sleep -Milliseconds 250
         $townExit = Get-GameSnapshot
       }
-      if ($townExit.mode -ne 'playing' -or $townExit.currentMapId -ne 'field') { throw "East physical gate did not transition outside (map=$($townExit.currentMapId), mode=$($townExit.mode), x=$($townExit.x), y=$($townExit.y))." }
+      if ($townExit.mode -ne 'playing' -or $townExit.currentMapId -ne 'field') { throw "East physical passage did not transition outside (map=$($townExit.currentMapId), mode=$($townExit.mode), x=$($townExit.x), y=$($townExit.y))." }
     }
     'town-doors' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); true" | Out-Null
@@ -211,7 +211,7 @@ try {
         @{ portal = 'world-to-inn'; map = 'inn' }
       )) {
         $approachOffset = if ($entry.map -eq 'general-store') { 300 } else { -300 }
-        $approachExpression = if (@('guild', 'shop') -contains $entry.map) { 'door.x,door.y+70' } else { "door.x+$approachOffset,door.y" }
+        $approachExpression = if (@('guild', 'clinic', 'inn') -contains $entry.map) { 'door.x,door.y+70' } else { 'door.x,door.y-70' }
         $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const door=api.entityPosition('$($entry.portal)');api.teleport($approachExpression);const blocked=api.collisionAt(door.x,door.y,12);api.clickMoveTo(door.x,door.y);return JSON.stringify({door,blocked,start:api.snapshot()});})()" | ConvertFrom-Json
         $arrived = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $arrived; $attempt += 1) {
@@ -331,7 +331,7 @@ try {
       if ($directBattle.battle.phase -ne 'planning_move' -or -not $introHidden) { throw 'Battle did not start directly in movement planning.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleCommitMove(); true" | Out-Null
       Start-Sleep -Milliseconds 1100
-      $punchRange = (Invoke-GameExpression -Expression 'JSON.stringify(window.__RPG_DEBUG__.battleSkillRange("straight_punch"))') | ConvertFrom-Json
+      $punchRange = (Invoke-GameExpression -Expression 'JSON.stringify(window.__RPG_DEBUG__.battleSkillRange("kentotsu"))') | ConvertFrom-Json
       if ($punchRange.Count -ne 5) { throw "Straight Punch did not expose exactly five front/side range cells (count=$($punchRange.Count))." }
     }
     'artwalk' {

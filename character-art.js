@@ -235,15 +235,18 @@
     hollowmage: Object.freeze({ atlas: "monstersDepths", row: 2 }),
     "lantern-golem": Object.freeze({ atlas: "monstersDepths", row: 3 }),
     deepwarden: Object.freeze({ atlas: "monstersDepths", row: 4 }),
-    chick: Object.freeze({ atlas: "monstersCore", row: 1, sourceFallback: true }),
-    fox: Object.freeze({ atlas: "monstersCore", row: 2, sourceFallback: true }),
-    raccoon: Object.freeze({ atlas: "monstersCore", row: 0, sourceFallback: true }),
-    wild_boar: Object.freeze({ atlas: "monstersDepths", row: 1, sourceFallback: true }),
-    bear: Object.freeze({ atlas: "monstersDepths", row: 4, sourceFallback: true }),
-    turtle: Object.freeze({ atlas: "monstersCore", row: 4, sourceFallback: true }),
-    coyote: Object.freeze({ atlas: "monstersCore", row: 2, sourceFallback: true }),
-    frog: Object.freeze({ atlas: "monstersCore", row: 1, sourceFallback: true }),
-    snake: Object.freeze({ atlas: "monstersDepths", row: 2, sourceFallback: true }),
+    // Canonical ordinary monsters resolve through the shared 28-frame
+    // locomotion atlases registered from Locomotion.assets above. These
+    // entries intentionally carry no static four-facing fallback metadata.
+    chick: Object.freeze({ locomotion: true }),
+    fox: Object.freeze({ locomotion: true }),
+    raccoon: Object.freeze({ locomotion: true }),
+    wild_boar: Object.freeze({ locomotion: true }),
+    bear: Object.freeze({ locomotion: true }),
+    turtle: Object.freeze({ locomotion: true }),
+    coyote: Object.freeze({ locomotion: true }),
+    frog: Object.freeze({ locomotion: true }),
+    snake: Object.freeze({ locomotion: true }),
   });
 
   const markerSpriteIndices = Object.freeze({ question: 0, exclamation: 1, interact: 2, portal: 3 });
@@ -279,10 +282,6 @@
     generalStoreBuilding: { src: "assets/general-store-building-v1.png", standalone: true, image: null, ready: false, failed: false },
     innBuilding: { src: "assets/inn-building-v1.png", standalone: true, image: null, ready: false, failed: false },
     innBed: { src: "assets/inn-bed-v1.png", standalone: true, image: null, ready: false, failed: false },
-    townDoorMarker: { src: "assets/town-door-marker-v1.png", standalone: true, image: null, ready: false, failed: false },
-    // East-side wall terminus: the runtime gate now has an explicitly directional
-    // bitmap instead of reusing a front-facing gate facade on the right boundary.
-    townGateEast: { src: "assets/town-gate-east-v1.png", standalone: true, image: null, ready: false, failed: false },
   };
 
   for (const [id, src] of Object.entries(Locomotion.assets)) {

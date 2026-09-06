@@ -9,10 +9,11 @@
 - 室內／坑道物件：`assets/interior-props-v2.png`，4 × 3。室內委託板、長桌、屏風、人偶、旗幟、壁爐、壁燈、符文燈、菇叢、瓦礫、裂地及石柱。
 - 霧獸舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy runtime/fallback**；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
-- 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、燈、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
+- 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
 - 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及傳送門。
 - 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築；主城主要服務建築統一遵守下文「主城服務建築統一外觀規格」。
-- 主城門口與閘門：`assets/town-door-marker-v1.png` 係所有實體建築門共用嘅 bitmap 門檻標記；`assets/town-gate-east-v1.png` 係東門唯一嘅實體城門，採用城牆向左延伸、開口向右的 east-side directional composition。兩者都由 `drawStandaloneSprite` 按世界 anchor 繪製，唔以 Canvas 色塊冒充。
+- 主城實體轉場：普通建築門同東側 passage 共用 `assets/marker-atlas-v1.png` 左下角 `interact` frame（index 2），由 shared marker renderer 按 anchor 繪製；`assets/town-door-marker-v1.png` 同 `assets/town-gate-east-v1.png` 只保留作歷史／製作來源，不屬普通 transition runtime art。
+- UI：`assets/ui/ui-visual-atlas-v1.png` 係共用 fantasy window、button、tab、slot、skill-node 嘅 bitmap source atlas；HTML/CSS 負責 9-slice 式可伸縮組合，`docs/UI_SYSTEM.md` 負責玩家可見嘅組合與狀態規則。
 - 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。
 - 裝備圖示：`assets/equipment-icon-atlas-v1.png`，4 × 4。依裝備 catalog 順序排列十五件裝備，最後一格保留透明。
@@ -32,10 +33,10 @@
 
 ### 正面朝向與中央正門
 
-- 所有主要服務建築 exterior 必須以**正面朝下（Down-facing）**方式呈現，底邊係玩家主要接近方向。
-- **正式可用正門固定喺 bitmap 底邊水平正中央。** 門中心 X 必須與建築 semantic centerline 對齊。
+- 所有主要服務建築 exterior 必須以**正面朝向 Main Street** 嘅正交構圖呈現；北排建築面向南，南排建築面向北。
+- **正式可用正門固定喺面向 Main Street 嘅建築邊中央。** 門中心 X 必須與建築 semantic centerline 對齊。
 - 禁止將主要入口設計成偏左、偏右、側門、斜門或藏喺附屬攤位後面；呢啲構圖即使美術上有特色，都唔適合標準主城服務建築。
-- `doorAnchor`、門口 marker、threshold、approachPoint 同 exteriorSpawn 必須沿同一條 building centerline 配置，並由同一張 bitmap 嘅底部中央正門推導。
+- `doorAnchor`、門口 marker、threshold、approachPoint 同 exteriorSpawn 必須沿同一條 building centerline 配置，並按所屬街道側推導。
 - 門前台階／平台／地墊可以有風格差異，但必須保持中央入口清晰，並預留足夠透明／地面空間畀角色接近。
 - 如果畫面包含其他裝飾門、側門或開口，必須明顯次要且不可誤導為主要可互動入口；若會造成混淆，應從 final runtime asset 移除。
 
@@ -44,8 +45,8 @@
 新生成／重畫主城主要服務建築時，prompt／驗收必須同時確認：
 
 1. genuinely transparent PNG alpha；
-2. front-facing / Down-facing exterior；
-3. single primary entrance at exact bottom-center；
+2. front-facing to Main Street exterior；
+3. single primary entrance at exact Main Street-facing edge center；
 4. standardized building envelope／visual scale；
 5. complete foundation、steps、door shadow 同接地像素；
 6. 左右輪廓可以唔完全對稱，但門中心不可漂移；
@@ -67,9 +68,35 @@
 - 人物、NPC、物品等獨立素材預設一件一檔；確實需要 atlas 時，每格四邊至少留約 `8–10%` 真透明安全間距，人物頭髮、武器、法杖、羽毛及裙擺都不可貼住分格線。舊版緊密 NPC atlas 只可透過 renderer 安全 gutter 過渡，任何新版本不得再依賴程式裁走鄰格污染。
 - 建築、樹、燈柱及室內台座的最底像素、地基和接地陰影必須完整留在該格；四邊預留安全透明 padding。禁止以負 source offset 補救被裁走的內容。
 - 繪製定位一律用「腳底／底座中心 anchor」。視覺可向上伸展，但碰撞箱及傳送點不得跟隨圖片外框漂移。
-- 獨立建築圖另外保存 `spriteWidth`、`spriteHeight`、`spriteAnchorY` 同 `doorAnchor {x,y}`。一般獨立建築門座標由同一張 bitmap 的可見門洞推導；**主城主要服務建築必須按上文 contract 使用底部正中央正門，`doorAnchor` 與 building centerline 對齊**。禁止用圖片右下角或任意 per-building offset 猜門位。若 bitmap 門洞高於原始 house 碰撞底線，`doorDepth` 必須同步打開實體門洞，確保玩家半徑可以走入。
+- 獨立建築圖另外保存 `spriteWidth`、`spriteHeight`、`spriteAnchorY` 同 `doorAnchor {x,y}`。一般獨立建築門座標由同一張 bitmap 的可見門洞推導；**主城主要服務建築必須按上文 contract 使用面向 Main Street 嘅正中央正門，`doorAnchor` 與 building centerline 對齊**。禁止用圖片右下角或任意 per-building offset 猜門位。若 bitmap 門洞高於原始 house 碰撞底線，`doorDepth` 必須同步打開實體門洞，確保玩家半徑可以走入。
 - 新版場景資產要先在 atlas 單格預覽，再在戶外、公會、商店三種場景各做一次實機截圖；確認無截頂、無截底、無白邊、無跨格污染才可替換舊版。
 - `environment-atlas-v4.png`、`monster-atlas-v1.png` 及各 `*-source-*`／`*-edit-*` 只屬舊版或製作來源；新程式只引用 v5 場景、四方向怪物、清理後格鬥士及小地圖框。
+
+## Everrealm UI bitmap skin contract
+
+`assets/ui/ui-visual-atlas-v1.png` is the reusable source atlas for major
+player-facing window skins. It contains authored stone/metal frame corners,
+edges, inset panels, buttons and slot/node states in one transparent bitmap.
+The runtime must compose it with HTML/CSS backgrounds so the same skin can
+stretch across status, inventory, equipment, guild and skill windows.
+
+UI atlas rules:
+
+- keep corners and ornament inside fixed safe areas; only centre fills and
+  straight edges may stretch or repeat;
+- export genuinely transparent PNG alpha and audit the four corners before
+  runtime use; checkerboard or matte backgrounds are never part of final art;
+- keep text, values and controls in HTML/CSS, not baked into the bitmap;
+- preserve a minimum clear inset around the frame so dynamic content never
+  collides with ornaments;
+- selected, hover, disabled and locked states may use separate atlas states or
+  restrained CSS tinting, but must remain legible at small viewport sizes;
+- retain the atlas as source material and document any crop coordinates in the
+  UI system stylesheet rather than creating fixed-size per-window backgrounds.
+
+The bitmap owns material, border and ornament. CSS/HTML owns scalable layout,
+typography and interaction. Canvas remains appropriate for dynamic skill-tree
+connectors, range diagrams and targeting grids only.
 
 ## Standard Mobile Unit Locomotion Contract
 

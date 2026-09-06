@@ -91,15 +91,15 @@
 - 城內以石路、建築、街道、少量裝飾物為主。
 - 城內採用固定嘅六個 block 配置：北列為拾燈公會、霧草療癒所及霧燈旅店；南列為銀火裝備店、中央石砌廣場及霧穀雜貨舖。
 - 五個服務建築使用同一套標準建築模組與實體門互動；唔因為公會係地標而任意放大，亦唔因為商店係服務點而任意縮細。
-- 北側服務路、中央主街、兩條南北連接路同廣場交叉口組成連續步行路網；街燈只沿主路與轉角排列，樹木集中於城牆邊緣作框景。完整幾何以 `docs/maps/MAIN_TOWN.md` 為準。
+- 城內由一條中央 Main Street 組成連續步行路網；樹木集中於城牆邊緣作框景，唔另設平行服務街。完整幾何以 `docs/maps/MAIN_TOWN.md` 為準。
 - 一般情況唔產生普通野外 random encounter。
 - 劇情／特殊戰鬥可以明確指定 `town` battle theme。
 
-主城普通建築使用 `interactionMode: "door"` 嘅入口資料：玩家行到門檻／門口觸發實體入門互動，唔使用 portal marker 或魔法圓陣。東門使用 `interactionMode: "gate"`，以城門開口及出口 trigger 表達離城；魔法圓陣只保留畀真正超自然傳送或特殊入口。
+主城普通建築使用 `interactionMode: "door"` 嘅入口資料：玩家行到門檻／門口觸發實體入門互動，唔使用魔法圓陣。東側出口使用 `interactionMode: "passage"`，以城牆開口及出口 trigger 表達離城；魔法圓陣只保留畀真正超自然傳送或特殊入口。
 
-主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口顯示共用 `town-door-marker-v1.png`，唔使用魔法傳送圓陣。
+主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口使用 `marker-atlas-v1` 左下角（`interact`）實體互動 marker，唔使用魔法傳送圓陣。
 
-建築入口座標由 `maps/main-town.js` 保存 bitmap `doorAnchor`，再由 `map/map-transitions.js` 的 `resolveHouseDoorAnchor()` 統一推導成 world-space doorway。建築圖片係視覺層，house collision 係物理層；`doorDepth` 只負責讓角色半徑能通過門洞，唔會改變室內 map 或 spawn 目標。東門則使用 east-side directional bitmap `town-gate-east-v1.png`、east gate 開口及 `world-to-field` 出口，城牆其餘邊界保持實體。
+建築入口座標由 `maps/main-town.js` 保存 bitmap `doorAnchor`，再由 `map/map-transitions.js` 的 `resolveHouseDoorAnchor()` 統一推導成 world-space doorway。建築圖片係視覺層，house collision 係物理層；`doorDepth` 只負責讓角色半徑能通過門洞，唔會改變室內 map 或 spawn 目標。東側則保留清楚嘅 passage 開口及 `world-to-field` 出口，唔再依賴大型 East Gate bitmap；城牆其餘邊界保持實體。
 
 ### 3.2 山地野外
 
@@ -110,7 +110,7 @@
 - 西面接主城。
 - 主要道路由西向東，再通往北面坑道。
 - 山地／泥土／草地／岩石環境。
-- 樹林可以構成真正不可通行邊界。
+- 樹林可以構成真正不可通行邊界；主路下緣保留較闊 canopy visual buffer，避免樹冠遮住玩家。
 - 普通怪物可以喺合理區域活動及觸發遭遇。
 - 戰鬥場景預設使用 `mountain` biome。
 

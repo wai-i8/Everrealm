@@ -27,8 +27,8 @@ test("transition linker preserves the authored physical route graph", () => {
     ["world", "world-to-inn", "inn"], ["inn", "inn-to-world", "world"],
   ];
   const expectedTypes = {
-    "world-to-field": Transitions.TRANSITION_TYPES.PHYSICAL_GATE,
-    "field-to-world": Transitions.TRANSITION_TYPES.PHYSICAL_GATE,
+    "world-to-field": Transitions.TRANSITION_TYPES.PHYSICAL_PASSAGE,
+    "field-to-world": Transitions.TRANSITION_TYPES.PHYSICAL_PASSAGE,
     "field-to-dungeon": Transitions.TRANSITION_TYPES.PHYSICAL_PASSAGE,
     "dungeon-to-field": Transitions.TRANSITION_TYPES.PHYSICAL_PASSAGE,
   };

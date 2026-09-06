@@ -48,4 +48,10 @@ The Mountain Field uses chick, fox, raccoon, turtle, wild_boar, coyote and a can
 
 ## Art status
 
-`assets/monster-sources/` stores the six user-provided single-image references for snake, fox, wild boar, frog, turtle and bear. These are source art, not runtime locomotion atlases. The six entries are marked `locomotion.status: source-only` until directional frames can be authored, normalized, packed into the Standard Mobile Unit `4×7 / 28-frame` contract and audited. `chick`, `fox` and `raccoon` may use the existing approved atlases; the remaining monsters use an explicit legacy facing fallback during this foundation phase and must not be described as locomotion-complete.
+`assets/monster-sources/` stores the original single-image references. The six
+new canonical sets are normalized under
+`assets/locomotion/sources/<monster>/`, packed into runtime atlases under
+`assets/locomotion/`, and audited against the Standard Mobile Unit
+`4×7 / 28-frame` contract. `chick`, `fox` and `raccoon` retain their existing
+approved atlases; all nine canonical ordinary monsters resolve to their own
+runtime locomotion asset and no longer use the legacy four-facing fallback.

@@ -51,10 +51,12 @@ test("click-only exploration plans a collision-aware path and carries no mobile 
   assert.doesNotMatch(css, /\.dpad\s*\{|\.mobile-dash\s*\{/);
 });
 
-test("city-gate DECK console and minimap use world art instead of primitive scenery", () => {
+test("east-passage DECK console and minimap use world art instead of primitive scenery", () => {
   assert.match(mainTownSource, /harbour-gate-deck-console/);
-  assert.match(mainTownSource, /id:\s*"harbour-gate-deck-console"[\s\S]*?\.\.\.point\(38\.5, 12\)/);
-  assert.match(mainTownSource, /eastGateInside: point\(41\.4, 15\)/);
+  assert.match(mainTownSource, /id:\s*"harbour-gate-deck-console"[\s\S]*?\.\.\.point\(44\.5, 15\)/);
+  assert.match(mainTownSource, /eastGateInside: worldPoint\(47, 20\.5\)/);
+  assert.match(mainTownSource, /transitionType: TRANSITION_TYPES\.PHYSICAL_PASSAGE/);
+  assert.doesNotMatch(mainTownSource, /townGateEast|east-city-gate/);
   assert.match(game, /Art\.drawTerrainTile\(miniCtx/);
   assert.match(game, /Art\.drawEnvironmentSprite\(miniCtx/);
   assert.match(game, /awardDeckCapacityMilestone/);

@@ -209,12 +209,14 @@ test("world generator returns the expanded walled starting town", () => {
   assert.equal(world.enemySpawns.length, 0, "monsters belong in the separate field map");
   assert.equal(world.townLayout.style, "canonical-orthogonal-block-town");
   assert.deepEqual(world.townLayout.map, { widthTiles: 50, heightTiles: 42 });
-  assert.deepEqual(world.townLayout.centralPlaza.rect, [19, 20, 12, 12]);
+  assert.deepEqual(world.townLayout.centralPlaza.rect, [19, 26, 12, 12]);
+  assert.equal(world.lamps.length, 0, "the main town has no street lamps");
+  assert.equal(world.townGate, null, "the east exit is a passage, not a gate facade");
 });
 
-test("town perimeter is solid except for its explicit five-tile east gate", () => {
+test("town perimeter is solid except for its explicit five-tile east passage", () => {
   const world = World.createWorld();
-  const gate = world.townLayout.eastGate;
+  const passage = world.townLayout.eastPassage;
   for (let tx = 0; tx < world.width; tx += 1) {
     assert.equal(World.isTileSolid(World.tileAt(world, tx, 0)), true, `north wall ${tx} must be solid`);
     assert.equal(World.isTileSolid(World.tileAt(world, tx, world.height - 1)), true, `south wall ${tx} must be solid`);
@@ -223,8 +225,8 @@ test("town perimeter is solid except for its explicit five-tile east gate", () =
     assert.equal(World.isTileSolid(World.tileAt(world, 0, ty)), true, `west wall ${ty} must be solid`);
     assert.equal(
       World.isTileSolid(World.tileAt(world, world.width - 1, ty)),
-      ty < gate.opening[1] || ty >= gate.opening[1] + gate.opening[3],
-      `east edge ${ty} must match the authored gate opening`,
+      ty < passage.opening[1] || ty >= passage.opening[1] + passage.opening[3],
+      `east edge ${ty} must match the authored passage opening`,
     );
   }
 });
@@ -242,11 +244,14 @@ test("town square, services, DECK console and east exit share one walkable compo
   }
 });
 
-test("normal town services use physical door entries and the east gate uses a physical exit", () => {
+test("normal town services use physical door entries and the east passage uses a physical exit", () => {
   const world = World.createWorld();
-  const eastGate = world.portals.find((portal) => portal.id === "world-to-field");
-  assert.equal(eastGate.interactionMode, "gate");
-  assert.equal(eastGate.transitionType, "physical-gate");
+  const eastPassage = world.portals.find((portal) => portal.id === "world-to-field");
+  assert.equal(eastPassage.interactionMode, "passage");
+  assert.equal(eastPassage.transitionType, "physical-passage");
+  assert.equal(eastPassage.passageId, "east-town-passage");
+  assert.deepEqual(world.houses.map((house) => house.frontage), ["south", "north", "south", "south", "north"]);
+  assert.deepEqual(world.houses.map((house) => house.doorAnchor.y), [1, 0, 1, 1, 0]);
   assert.deepEqual(world.houses.map((house) => house.entryPortalId), [
     "world-to-guild", "world-to-shop", "world-to-inn", "world-to-clinic", "world-to-general-store",
   ]);
