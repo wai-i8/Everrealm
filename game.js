@@ -4315,12 +4315,16 @@
     }
     const tx = position.x / world.tileSize;
     const ty = position.y / world.tileSize;
-    if (tx >= 29 && ty >= 10 && ty <= 16) return "霧都主城 · 東門";
-    if (tx <= 14 && ty <= 13) return "霧都主城 · 公會街";
-    if (tx <= 13 && ty >= 15) return "霧都主城 · 工匠街";
-    if (tx >= 23 && ty <= 11) return "霧都主城 · 療癒街";
-    if (tx >= 11 && tx <= 19 && ty >= 17) return "霧都主城 · 市集街";
-    if (tx >= 23 && ty >= 15) return "霧都主城 · 旅店街";
+    if (tx >= 46 && ty >= 32 && ty <= 37) return "霧都主城 · 東門";
+    if (ty >= 32 && ty <= 37) return "霧都主城 · Main Street";
+    if (ty >= 16 && ty <= 20) return "霧都主城 · North Service Street";
+    if (tx >= 16 && tx <= 19) return "霧都主城 · West Avenue";
+    if (tx >= 31 && tx <= 34) return "霧都主城 · East Avenue";
+    if (tx >= 4 && tx <= 16 && ty >= 4 && ty <= 16) return "霧都主城 · 公會街區";
+    if (tx >= 19 && tx <= 31 && ty >= 4 && ty <= 16) return "霧都主城 · 療癒街區";
+    if (tx >= 34 && tx <= 46 && ty >= 4 && ty <= 16) return "霧都主城 · 旅店街區";
+    if (tx >= 4 && tx <= 16 && ty >= 20 && ty <= 32) return "霧都主城 · 裝備街區";
+    if (tx >= 34 && tx <= 46 && ty >= 20 && ty <= 32) return "霧都主城 · 雜貨街區";
     return "霧都主城 · 中央廣場";
   }
 
@@ -5507,6 +5511,35 @@
         }
       }
     }
+    drawTownRoadEdges(shakeX, shakeY);
+  }
+
+  function drawTownRoadEdges(shakeX, shakeY) {
+    if (currentMapId !== "world" || !world.townLayout?.roads) return;
+    const roadTiles = new Set();
+    for (const road of Object.values(world.townLayout.roads)) {
+      const [x, y, roadWidth, roadHeight] = road.rect;
+      for (let ty = y; ty < y + roadHeight; ty += 1) {
+        for (let tx = x; tx < x + roadWidth; tx += 1) roadTiles.add(`${tx},${ty}`);
+      }
+    }
+    for (const [tx, ty] of [[48, 32], [49, 32], [48, 33], [49, 33], [48, 34], [49, 34], [48, 35], [49, 35], [48, 36], [49, 36]]) roadTiles.add(`${tx},${ty}`);
+    const isRoad = (tx, ty) => roadTiles.has(`${tx},${ty}`);
+    const tileSize = world.tileSize * camera.zoom;
+    ctx.save();
+    ctx.strokeStyle = "rgba(239, 213, 166, .48)";
+    ctx.lineWidth = Math.max(1, camera.zoom * 1.1);
+    ctx.beginPath();
+    for (const key of roadTiles) {
+      const [tx, ty] = key.split(",").map(Number);
+      const point = worldToScreen({ x: tx * world.tileSize, y: ty * world.tileSize }, shakeX, shakeY);
+      if (!isRoad(tx, ty - 1)) { ctx.moveTo(point.x, point.y + .5); ctx.lineTo(point.x + tileSize, point.y + .5); }
+      if (!isRoad(tx, ty + 1)) { ctx.moveTo(point.x, point.y + tileSize - .5); ctx.lineTo(point.x + tileSize, point.y + tileSize - .5); }
+      if (!isRoad(tx - 1, ty)) { ctx.moveTo(point.x + .5, point.y); ctx.lineTo(point.x + .5, point.y + tileSize); }
+      if (!isRoad(tx + 1, ty)) { ctx.moveTo(point.x + tileSize - .5, point.y); ctx.lineTo(point.x + tileSize - .5, point.y + tileSize); }
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawGroundDetails(shakeX, shakeY) {

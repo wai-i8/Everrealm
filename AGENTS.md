@@ -71,6 +71,7 @@ For exact asset filenames, atlas layouts and art-processing rules, use `ART_PIPE
 ### Map source-of-truth routing
 
 - Shared map behavior, constants, helpers, registry or transition linking → read `docs/MAP_SYSTEM.md`, then edit `map/`.
+- Main Town block、道路、城牆、東門、建築及入口 blueprint → `docs/maps/MAIN_TOWN.md` is the canonical detailed design document; runtime dimensions and objects remain owned by `maps/main-town.js`.
 - A specific map's semantic/layout rule → read `docs/MAP_SYSTEM.md` plus its matching `docs/maps/*.md`.
 - A map's exact runtime dimensions, tiles, objects, NPCs, enemies or spawn points → edit only that map's owning file under `maps/**/*.js`.
 - A permanent semantic/layout rule change → update the relevant map Markdown as well as its owning JS.

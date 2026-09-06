@@ -85,20 +85,21 @@
 
 主要特徵：
 
+- 主城詳細 blueprint、block、道路、城牆、東門、建築尺寸及門口 anchor 以 `docs/maps/MAIN_TOWN.md` 為 canonical；本節只保留 map-system 層級規則。
 - 城牆包圍。
 - 東門連接山地野外西口。
 - 城內以石路、建築、街道、少量裝飾物為主。
-- 城內採用清楚嘅分區：中央石砌廣場、北側療癒街、西南工坊街、南側市集及東南旅店街。
-- 服務建築包括拾燈公會、銀火裝備店、霧草療癒所、霧穀雜貨舖及霧燈旅店；公會係主要地標，其餘建築按功能使用中小型比例。
-- 主路由西側入城，經中央廣場直達東門；南側另有起始／交叉道路，南北支路再接駁公會、療癒所、工坊、雜貨舖及旅店門口。街燈只沿主路與轉角排列，樹木集中於城牆邊緣作框景。
+- 城內採用固定嘅六個 block 配置：北列為拾燈公會、霧草療癒所及霧燈旅店；南列為銀火裝備店、中央石砌廣場及霧穀雜貨舖。
+- 五個服務建築使用同一套標準建築模組與實體門互動；唔因為公會係地標而任意放大，亦唔因為商店係服務點而任意縮細。
+- 北側服務路、中央主街、兩條南北連接路同廣場交叉口組成連續步行路網；街燈只沿主路與轉角排列，樹木集中於城牆邊緣作框景。完整幾何以 `docs/maps/MAIN_TOWN.md` 為準。
 - 一般情況唔產生普通野外 random encounter。
 - 劇情／特殊戰鬥可以明確指定 `town` battle theme。
 
 主城普通建築使用 `interactionMode: "door"` 嘅入口資料：玩家行到門檻／門口觸發實體入門互動，唔使用 portal marker 或魔法圓陣。東門使用 `interactionMode: "gate"`，以城門開口及出口 trigger 表達離城；魔法圓陣只保留畀真正超自然傳送或特殊入口。
 
-主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。後三個分別進入 `clinic`、`general-store`、`inn` 真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口顯示共用 `town-door-marker-v1.png`，唔使用魔法傳送圓陣。
+主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口顯示共用 `town-door-marker-v1.png`，唔使用魔法傳送圓陣。
 
-建築入口座標由 `maps/main-town.js` 保存 bitmap `doorAnchor`，再由 `map/map-transitions.js` 的 `resolveHouseDoorAnchor()` 統一推導成 world-space doorway。建築圖片係視覺層，house collision 係物理層；`doorDepth` 只負責讓角色半徑能通過門洞，唔會改變室內 map 或 spawn 目標。東門則使用 east-side directional bitmap `town-gate-east-v1.png`、三格 east gate 開口及 `world-to-field` 出口，城牆其餘邊界保持實體。
+建築入口座標由 `maps/main-town.js` 保存 bitmap `doorAnchor`，再由 `map/map-transitions.js` 的 `resolveHouseDoorAnchor()` 統一推導成 world-space doorway。建築圖片係視覺層，house collision 係物理層；`doorDepth` 只負責讓角色半徑能通過門洞，唔會改變室內 map 或 spawn 目標。東門則使用 east-side directional bitmap `town-gate-east-v1.png`、east gate 開口及 `world-to-field` 出口，城牆其餘邊界保持實體。
 
 ### 3.2 山地野外
 

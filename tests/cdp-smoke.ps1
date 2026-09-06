@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -155,13 +155,37 @@ try {
       if ($exploreUi.fontSizes.menu -lt 11 -or $exploreUi.fontSizes.zoom -lt 11 -or $exploreUi.fontSizes.quest -lt 11) { throw 'Exploration typography remained too small at 100% browser zoom.' }
     }
     'town' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(740,520); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1000,840); true" | Out-Null
       Start-Sleep -Milliseconds 2600
       $town = Get-GameSnapshot
       if ($town.mode -ne 'playing' -or $town.currentMapId -ne 'world') { throw 'Town visual preview did not remain in the main town.' }
     }
+    'town-plaza' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1000,840); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townPlaza = Get-GameSnapshot
+      if ($townPlaza.mode -ne 'playing' -or $townPlaza.currentMapId -ne 'world') { throw 'Town plaza visual preview did not remain in the main town.' }
+    }
+    'town-guild' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(700,400); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townGuild = Get-GameSnapshot
+      if ($townGuild.mode -ne 'playing' -or $townGuild.currentMapId -ne 'world') { throw 'Guild block visual preview did not remain in the main town.' }
+    }
+    'town-services' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1300,640); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townServices = Get-GameSnapshot
+      if ($townServices.mode -ne 'playing' -or $townServices.currentMapId -ne 'world') { throw 'Service blocks visual preview did not remain in the main town.' }
+    }
+    'town-tree' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=near]').click(); window.__RPG_DEBUG__.teleport(120,1520); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townTree = Get-GameSnapshot
+      if ($townTree.mode -ne 'playing' -or $townTree.currentMapId -ne 'world') { throw 'Town tree visual preview did not remain in the main town.' }
+    }
     'town-gate' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1260,520); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); const gate=window.__RPG_DEBUG__.entityPosition('world-to-field'); window.__RPG_DEBUG__.teleport(gate.x-120,gate.y); true" | Out-Null
       Start-Sleep -Milliseconds 2600
       $townGate = Get-GameSnapshot
       if ($townGate.mode -ne 'playing' -or $townGate.currentMapId -ne 'world') { throw 'Town gate visual preview did not remain in the main town.' }
@@ -178,13 +202,14 @@ try {
     'town-doors' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); true" | Out-Null
       foreach ($entry in @(
+        @{ portal = 'world-to-guild'; map = 'guild' },
         @{ portal = 'world-to-shop'; map = 'shop' },
         @{ portal = 'world-to-clinic'; map = 'clinic' },
         @{ portal = 'world-to-general-store'; map = 'general-store' },
         @{ portal = 'world-to-inn'; map = 'inn' }
       )) {
         $approachOffset = if ($entry.map -eq 'general-store') { 300 } else { -300 }
-        $approachExpression = if ($entry.map -eq 'shop') { 'door.x,door.y+70' } else { "door.x+$approachOffset,door.y" }
+        $approachExpression = if (@('guild', 'shop') -contains $entry.map) { 'door.x,door.y+70' } else { "door.x+$approachOffset,door.y" }
         $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const door=api.entityPosition('$($entry.portal)');api.teleport($approachExpression);const blocked=api.collisionAt(door.x,door.y,12);api.clickMoveTo(door.x,door.y);return JSON.stringify({door,blocked,start:api.snapshot()});})()" | ConvertFrom-Json
         $arrived = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $arrived; $attempt += 1) {
@@ -194,7 +219,7 @@ try {
         }
         if (-not $arrived) { throw "Physical town door did not enter $($entry.map) (map=$($doorSnapshot.currentMapId), mode=$($doorSnapshot.mode), door=$($doorData.door.x),$($doorData.door.y), blocked=$($doorData.blocked), player=$($doorSnapshot.x),$($doorSnapshot.y), remaining=$($doorSnapshot.explorePath.remaining))." }
         Start-Sleep -Milliseconds 500
-        $exitApproachExpression = if ($entry.map -eq 'shop') { 'exit.x,exit.y-70' } else { 'exit.x-100,exit.y' }
+        $exitApproachExpression = if (@('guild', 'shop') -contains $entry.map) { 'exit.x,exit.y-70' } else { 'exit.x-100,exit.y' }
         $exitData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const exit=api.entityPosition('$($entry.map)-to-world');api.teleport($exitApproachExpression);api.clickMoveTo(exit.x,exit.y);return JSON.stringify({exit,blocked:api.collisionAt(exit.x,exit.y,12),start:api.snapshot()});})()" | ConvertFrom-Json
         $returned = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $returned; $attempt += 1) {
