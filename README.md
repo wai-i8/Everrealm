@@ -48,6 +48,7 @@ npm test
 - 地圖、場景、入口、傳送、探索碰撞、Biome、遭遇及探索 → 戰場生成：`docs/MAP_SYSTEM.md`
 - 寵物／Familiar、捕獲、育成、同行及戰鬥／生產接口：`docs/PET_SYSTEM.md`
 - 怪物 canonical roster、棲地、等級／獎勵、戰鬥技能、遷移及 Codex：`docs/MONSTER_SYSTEM.md`
+- Guild 委託目錄、討伐／送信流程、技能書信封與保存契約：`docs/GUILD_COMMISSION_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`

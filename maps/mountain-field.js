@@ -54,6 +54,9 @@
       { id: "river-cache", kind: "chest", ...point(31, 24), radius: 13, reward: { coins: 55, potions: 1 }, name: "山路鐵箱" },
       { id: "ruin-cache", kind: "chest", ...point(39, 4), radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
     ];
+    const npcs = [
+      { id: "mountain_delivery_recipient", name: "洛安", role: "山地信使", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "explorer", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
+    ];
     const enemySpawns = [
       { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },
       { id: "slime-3", type: "raccoon", ...point(20, 25), level: 1 }, { id: "slime-4", type: "raccoon", ...point(25, 27), level: 2 },
@@ -71,7 +74,7 @@
       id: MAP_IDS.FIELD, name: "霧梅爾山地東南部", shortName: "霧梅爾山地", kind: "field", type: "world", biome: "mountain", theme: "forest-road", ambient: "misty-woodland",
       tileSize: TILE, tileTypes: TILES, width, height, tiles, start,
       spawnPoints: { entrance: start, westGate: point(2, 26), dungeonFront: point(37, 2.6) }, exits: [westExit, dungeonExit], houses: [], trees, rocks: [], flowers, lamps, signs,
-      solidRects: [], furniture: [], decorations: [], boards: [], npcs: [], enemySpawns, chests, shrine: null, waypoint: null, gate,
+      solidRects: [], furniture: [], decorations: [], boards: [], npcs, enemySpawns, chests, shrine: null, waypoint: null, gate,
       worldPortalId: "world-to-field", dungeonPortalId: dungeonExit.id,
       objectives: { crystals: { west: point(16, 25), hollow: point(28, 27), north: point(37, 14) }, gate: point(37, 8), boss: point(37, 4), dungeon: point(37, 1), town: point(1, 26) },
       routeLayout: { style: "east-then-north", entrySide: "west", dungeonSide: "north", waypoints: [point(1, 26), point(29, 26), point(35, 22), point(37, 16), point(37, 1)], solidOutsideRoute: true },

@@ -60,13 +60,12 @@ test("battle position bonus and damage use separate vertical lanes", () => {
   assert.match(game, /const textY = point\.y \+ layout\.cell \* \(Number\(effect\.offsetY\) \|\| 0\)/);
 });
 
-test("guild board always presents one-, two-, and three-star book reward lanes", () => {
+test("guild board uses the fixed five-rank commission catalog and envelope rewards", () => {
   const offers = game.match(/function currentContractOffers\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(offers, /\[1, 2, 3\]\.map/);
-  assert.match(offers, /rewardBookStar: bookStar/);
-  assert.match(offers, /locked: player\.level < offer\.minLevel/);
-  assert.match(game, /contract\?\.rewardBookStar/);
-  assert.match(game, /offer\.locked \? `升到 LV\.\$\{offer\.minLevel\} 解鎖`/);
+  assert.match(offers, /Guild\.listAvailable\(guildCommissionState\)/);
+  assert.match(game, /skill_envelope_star/);
+  assert.match(game, /技能書信封/);
+  assert.doesNotMatch(game, /offer\.locked/);
 });
 
 test("all user-facing source copy uses the renamed city", () => {

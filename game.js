@@ -13,6 +13,7 @@
   const World = window.LanternWorld;
   const Expansion = window.LanternExpansion;
   const ExpansionWorld = window.LanternExpansionWorld;
+  const Guild = window.LanternGuildCommission;
   const MapRegistry = window.LanternMapRegistry;
   const MapTransitions = window.LanternMapTransitions;
   const TRANSITION_TYPES = MapTransitions.TRANSITION_TYPES;
@@ -165,6 +166,7 @@
   let equipped = { weapon: "novice_blade", armor: "traveller_coat", charm: null };
   let activeContracts = [];
   let contractRotation = 0;
+  let guildCommissionState = Guild.normalizeState();
   let guildMarks = 0;
   let guildRenown = 0;
   let inventory = {};
@@ -362,6 +364,32 @@
     return equipmentItem(equipped.weapon)?.name || "見習燈刃";
   }
 
+  function activeGuildCommission() {
+    return Guild.activeCommission(guildCommissionState);
+  }
+
+  function syncGuildCommissionProjection() {
+    guildCommissionState = Guild.normalizeState(guildCommissionState);
+    const commission = activeGuildCommission();
+    activeContracts = commission ? [{
+      id: `${guildCommissionState.cycle}:${commission.id}`,
+      templateId: commission.id,
+      rotation: String(guildCommissionState.cycle),
+      title: commission.title,
+      description: commission.description,
+      minLevel: commission.recommendedLevel,
+      objective: commission.type === "hunt"
+        ? { event: "defeat", target: commission.objective.monster_id, count: commission.objective.count }
+        : { event: "delivery", target: commission.objective.recipient_npc_id, count: 1 },
+      reward: { coins: 0, xp: 0, items: [] },
+      rewardBookStar: commission.reward.skill_envelope_star,
+      progress: guildCommissionState.progress,
+      status: guildCommissionState.status === "ready_to_report" ? "ready" : guildCommissionState.status,
+      type: commission.type,
+    }] : [];
+    contractRotation = guildCommissionState.cycle;
+  }
+
   function makeEnemy(spawn, overrides = {}) {
     const requestedType = overrides.type || spawn.type;
     const type = ExpansionWorld.normalizeMonsterId(requestedType) || requestedType;
@@ -373,8 +401,10 @@
     const hpScale = 1 + levelDelta * .22;
     const damageScale = 1 + levelDelta * .14;
     const maxHp = levelStats?.hp || Math.round(base.hp * hpScale);
+    const id = overrides.id || spawn.id || `enemy-${enemySerial++}`;
     return {
-      id: overrides.id || spawn.id || `enemy-${enemySerial++}`,
+      id,
+      instanceId: `${id}:${enemySerial++}`,
       type,
       name: spawn.name || blueprint?.name_zh || base.name,
       x: overrides.x ?? spawn.x,
@@ -465,7 +495,8 @@
     const starterWeapon = playerClassId === "fighter" ? "novice_gloves" : "novice_blade";
     ownedEquipment = [starterWeapon, "traveller_coat"];
     equipped = { weapon: starterWeapon, armor: "traveller_coat", charm: null };
-    activeContracts = [];
+    guildCommissionState = Guild.emptyState();
+    syncGuildCommissionProjection();
     contractRotation = 0;
     guildMarks = 0;
     guildRenown = 0;
@@ -499,28 +530,9 @@
       armor: gearState.equipped.armor || "traveller_coat",
       charm: gearState.equipped.charm || null,
     };
-    activeContracts = [];
-    if (Array.isArray(data.activeContracts)) {
-      for (const saved of data.activeContracts.slice(0, 1)) {
-        const template = Expansion.DEFAULT_CONTRACT_TEMPLATES.find((item) => item.id === saved?.templateId);
-        if (!template || !["active", "ready"].includes(saved.status)) continue;
-        const count = template.objective.count;
-        const progress = Core.clamp(Math.floor(Number(saved.progress) || 0), 0, count);
-        activeContracts.push({
-          id: `${Math.floor(Number(saved.rotation) || 0)}:${template.id}`,
-          templateId: template.id,
-          rotation: String(Math.floor(Number(saved.rotation) || 0)),
-          title: template.title,
-          description: template.description,
-          minLevel: template.minLevel,
-          objective: { ...template.objective },
-          reward: { ...template.reward, items: template.reward.items.map((item) => ({ ...item })) },
-          progress,
-          status: progress >= count ? "ready" : "active",
-        });
-      }
-    }
-    contractRotation = Core.clamp(Math.floor(Number(data.contractRotation) || 0), 0, 999999);
+    guildCommissionState = Guild.normalizeState(data.guildCommission);
+    syncGuildCommissionProjection();
+    contractRotation = Core.clamp(Math.floor(Number(data.contractRotation) || guildCommissionState.cycle || 0), 0, 999999999);
     guildMarks = Core.clamp(Math.floor(Number(data.guildMarks) || 0), 0, 99999);
     guildRenown = Core.clamp(Math.floor(Number(data.guildRenown) || 0), 0, 999999);
     inventory = {};
@@ -689,6 +701,7 @@
         classId: playerClassId,
         ownedEquipment: [...ownedEquipment],
         equipped: { ...equipped },
+        guildCommission: Guild.normalizeState(guildCommissionState),
         activeContracts,
         contractRotation,
         guildMarks,
@@ -1070,21 +1083,33 @@
     if (enemy.hp <= 0) killEnemy(enemy);
   }
 
+  function recordDefeatedMonster(enemy) {
+    const monsterId = ExpansionWorld.normalizeMonsterId(enemy?.type) || String(enemy?.type || "");
+    if (!monsterId) return { changed: false, reason: "unknown-monster" };
+    monsterKills[monsterId] = (monsterKills[monsterId] || 0) + 1;
+    guildRenown += enemy?.boss ? 8 : enemy?.elite ? 3 : 1;
+    const result = Guild.recordHuntKill(guildCommissionState, {
+      monsterId,
+      instanceId: enemy?.instanceId || enemy?.id,
+    });
+    guildCommissionState = result.state;
+    syncGuildCommissionProjection();
+    if (result.changed) {
+      const commission = result.commission;
+      showToast(commission.type === "hunt" && result.state.status === "ready_to_report"
+        ? `委託完成：${commission.title} · 返公會回報`
+        : `${commission.title}　${result.state.progress} / ${commission.objective.count}`, "good");
+    }
+    return result;
+  }
+
   function killEnemy(enemy) {
     if (!enemy.alive) return;
     enemy.alive = false;
     enemy.respawnTimer = enemy.boss ? Infinity : 11 + Math.random() * 5;
     enemy.windup = 0;
     spawnBurst(enemy.x, enemy.y, enemy.color, enemy.boss ? 70 : 24, enemy.boss ? 150 : 90);
-    monsterKills[enemy.type] = (monsterKills[enemy.type] || 0) + 1;
-    guildRenown += enemy.boss ? 8 : enemy.elite ? 3 : 1;
-    const contractTarget = ExpansionWorld.normalizeMonsterId(enemy.type) || enemy.type;
-    const progress = Expansion.progressContracts(activeContracts, { event: "defeat", target: contractTarget, monster_id: contractTarget, amount: 1 });
-    activeContracts = progress.contracts;
-    if (progress.updatedIds.length) {
-      const contract = activeContracts.find((item) => progress.updatedIds.includes(item.id));
-      if (contract) showToast(contract.status === "ready" ? `委託完成：${contract.title} · 返公會回報` : `${contract.title}　${contract.progress} / ${contract.objective.count}`, "good");
-    }
+    recordDefeatedMonster(enemy);
     const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
     gainXp(rewardXp);
     if (enemy.mainBoss) {
@@ -1488,9 +1513,39 @@
     else if (["siu-moon", "clinic-healer-siu-moon"].includes(npc.id)) interactHealer(npc);
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
+    else if (npc.id === "mountain_delivery_recipient") interactDeliveryRecipient(npc);
     else if (["guildmaster-yin", "guild-clerk-po"].includes(npc.id)) openFacility("guild");
     else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) openFacility("shop");
     else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "霧都今晚比平時熱鬧，多得你周圍探索。"] });
+  }
+
+  function interactDeliveryRecipient(npc) {
+    const commission = activeGuildCommission();
+    if (!commission || commission.type !== "delivery") {
+      return startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: [npc.chatter || "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。"],
+      });
+    }
+    if (guildCommissionState.status === "ready_to_report" && guildCommissionState.deliveryCompleted) {
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["公會封信我已經收妥喇。你返去拾燈公會回報，就可以領取委託報酬。"] });
+    }
+    const result = Guild.deliver(guildCommissionState, npc.id);
+    if (!result.changed) {
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["你手上而家冇要交畀我嘅公會信件。"] });
+    }
+    guildCommissionState = result.state;
+    syncGuildCommissionProjection();
+    questTrackerMode = "contract";
+    sound.crystal();
+    showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
+    saveGame(false);
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返去拾燈公會向阿寶回報，就可以領取技能書信封。"],
+    });
   }
 
   function usePortal(portal) {
@@ -1908,34 +1963,17 @@
   }
 
   function currentContractOffers() {
-    return [1, 2, 3].map((bookStar) => {
-      const tierTemplates = Expansion.DEFAULT_CONTRACT_TEMPLATES.filter((template) => Skills.bookStarForQuestLevel(template.minLevel) === bookStar);
-      const unlockedTemplates = tierTemplates.filter((template) => player.level >= template.minLevel && player.level <= template.maxLevel);
-      const selectionLevel = unlockedTemplates.length
-        ? player.level
-        : Math.min(...tierTemplates.map((template) => template.minLevel));
-      const [offer] = Expansion.createContractOffers({
-        templates: tierTemplates,
-        playerLevel: selectionLevel,
-        count: 1,
-        rotation: contractRotation + bookStar * 1009,
-        seed: `mist-harbour-guild-${bookStar}`,
-      });
-      return offer ? {
-        ...offer,
-        id: `${contractRotation}:${offer.templateId}:book-${bookStar}`,
-        rotation: String(contractRotation),
-        rewardBookStar: bookStar,
-        locked: player.level < offer.minLevel,
-      } : null;
-    }).filter(Boolean);
+    return Guild.listAvailable(guildCommissionState);
   }
 
   function contractTargetName(target) {
-    return ({
-      chick: "山雀仔", fox: "霧狐", raccoon: "燈紋浣熊", wild_boar: "荒野野豬",
-      bear: "岩穴熊", turtle: "苔甲龜", coyote: "灰原郊狼", frog: "霧沼蛙", snake: "毒霧蛇",
-    })[target] || target;
+    const blueprint = ExpansionWorld.monsterBlueprint(target);
+    if (blueprint) return blueprint.name_zh;
+    for (const map of Object.values(maps)) {
+      const npc = map.npcs?.find((candidate) => candidate.id === target);
+      if (npc) return npc.name;
+    }
+    return "指定收件人";
   }
 
   function inventoryItemName(id) {
@@ -1950,13 +1988,9 @@
     return items.length ? items.map((item) => `${item.name} × ${item.quantity}`).join("、") : "公會印記";
   }
 
-  function skillBookStarForContract(contract) {
-    return Core.clamp(Math.floor(Number(contract?.rewardBookStar) || Skills.bookStarForQuestLevel(contract?.minLevel || 1)), 1, 3);
-  }
-
-  function skillBookRewardText(contract) {
-    const star = skillBookStarForContract(contract);
-    return `${"★".repeat(star)} 技能書 × 1`;
+  function skillBookRewardText(commission) {
+    const star = commission?.reward?.skill_envelope_star || commission?.rewardBookStar || 1;
+    return `${"★".repeat(star)} 技能書信封 × 1`;
   }
 
   function guildDiscountRate() {
@@ -1984,40 +2018,51 @@
   }
 
   function renderGuildFacility() {
-    const rank = guildRankInfo();
     const atGuild = currentMapId === "guild";
-    const active = activeContracts[0] || null;
+    const active = activeGuildCommission();
     const offers = currentContractOffers();
-    const activeAction = active?.status === "ready"
-      ? `<button class="facility-action-button" type="button" data-facility-action="claim" data-contract-id="${active.id}" ${atGuild ? "" : "disabled"}>${atGuild ? `回報領取 ${active.reward.coins} 燈幣＋${active.reward.xp} XP＋${skillBookRewardText(active)}` : "要親身返拾燈公會回報"}</button>`
-      : `<div class="facility-action-row"><button class="facility-action-button" type="button" disabled>完成後返嚟回報</button><button class="facility-action-button is-quiet" type="button" data-facility-action="abandon" ${atGuild ? "" : "disabled"}>放棄／換一份</button></div>`;
+    const activeStatus = guildCommissionState.status === "ready_to_report" ? "待回報" : "進行中";
+    const activeAction = active && guildCommissionState.status === "ready_to_report"
+      ? `<button class="facility-action-button" type="button" data-facility-action="claim" data-contract-id="${active.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "回報並領取信封" : "要親身返公會回報"}</button>`
+      : `<button class="facility-action-button" type="button" disabled>完成目標後返公會回報</button>`;
+    const objectiveText = (commission) => commission.type === "hunt"
+      ? `討伐${contractTargetName(commission.objective.monster_id)}`
+      : `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
+    const objectiveProgress = (commission, state) => commission.type === "hunt"
+      ? `${state.progress} / ${commission.objective.count}`
+      : state.deliveryCompleted ? "已送達" : "尚未送達";
     const activeHtml = active ? `
-      <article class="facility-feature-card ${active.status === "ready" ? "is-ready" : ""}">
-        <div class="facility-card-heading"><span class="facility-chip">進行中</span><strong>${active.title}</strong></div>
+      <article class="facility-feature-card ${guildCommissionState.status === "ready_to_report" ? "is-ready" : ""}">
+        <div class="facility-card-heading"><span class="facility-chip">${activeStatus}</span><strong>${"★".repeat(active.star)} ${active.title}</strong></div>
         <p>${active.description}</p>
-        <div class="contract-progress"><i style="width:${Math.min(100, active.progress / active.objective.count * 100)}%"></i></div>
-        <div class="facility-card-meta"><span>討伐 ${contractTargetName(active.objective.target)}</span><b>${active.progress} / ${active.objective.count}</b></div>
-        <div class="facility-card-meta"><span>額外獎品</span><b>${rewardItemText(active.reward)}<br>${skillBookRewardText(active)}</b></div>
+        <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${active.recommendedLevel}</b></div>
+        <div class="facility-card-meta"><span>${objectiveText(active)}</span><b>${objectiveProgress(active, guildCommissionState)}</b></div>
+        <div class="contract-progress"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
+        <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(active)}</b></div>
         ${activeAction}
       </article>` : "";
     const offersHtml = active ? "" : offers.map((offer) => `
-      <article class="facility-list-card ${offer.locked ? "is-locked" : ""}">
-        <div class="facility-card-heading"><span class="facility-chip">LV.${offer.minLevel}</span><strong>${offer.title}</strong></div>
+      <article class="facility-list-card">
+        <div class="facility-card-heading"><span class="facility-chip">${"★".repeat(offer.star)}</span><strong>${offer.title}</strong></div>
         <p>${offer.description}</p>
-        <div class="facility-card-meta"><span>討伐 ${contractTargetName(offer.objective.target)} × ${offer.objective.count}</span><b>${offer.reward.coins} 幣 · ${offer.reward.xp} XP<br>${rewardItemText(offer.reward)} · ${skillBookRewardText(offer)}</b></div>
-        <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild && !offer.locked ? "" : "disabled"}>${offer.locked ? `升到 LV.${offer.minLevel} 解鎖` : atGuild ? "接呢份委託" : "要返拾燈公會接任"}</button>
+        <div class="facility-card-meta"><span>類型</span><b>${offer.type === "hunt" ? "討伐" : "送信"}</b></div>
+        <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${offer.recommendedLevel}</b></div>
+        <div class="facility-card-meta"><span>${objectiveText(offer)}</span><b>${offer.type === "hunt" ? `0 / ${offer.objective.count}` : "尚未送達"}</b></div>
+        <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(offer)}</b></div>
+        <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "接受委託" : "要返拾燈公會接受"}</button>
       </article>`).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>REPEATABLE BOUNTIES</small><h3>今晚嘅委託板</h3></div><span>${rank.next ? `再有 ${rank.next - guildMarks} 枚印記升階` : "最高階級"}</span></div>
-      ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>喺其他設施只可以查看；接任、放棄同回報都要親身返拾燈公會。</span></div>' : ""}
+      <div class="facility-section-heading"><div><small>GUILD COMMISSIONS · V1</small><h3>公會委託板</h3></div><span>${active ? "一份進行中" : "五份固定委託"}</span></div>
+      ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>查看可以喺任何地方；接受、送達及回報要親身返拾燈公會或山地收件人。</span></div>' : ""}
       ${activeHtml || `<div class="facility-card-grid">${offersHtml}</div>`}
-      <div class="facility-note"><b>公會規矩</b><span>同一時間接一份；達成後要親身返嚟回報。委託可以無限輪替。</span></div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">✦</span> 聲望 ${guildRenown} · ${rank.name} · 深窟突破 ${dungeonClears} 次</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+      <div class="facility-note"><b>公會規矩</b><span>同一時間只接一份；完成目標後必須返公會回報。五份委託均可無限重接。</span></div>`;
+    facilityFooter.innerHTML = `<p><span aria-hidden="true">✦</span> 委託獎勵係技能書信封；開封後由 canonical Fighter 技能資料抽取技能書。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
   }
 
   function totalOwnedSkillBooks() {
     const state = Skills.normalizeSkillState(skillState);
-    return Skills.BOOK_STARS.reduce((total, star) => total + (state.books[star] || 0), 0)
+    return Guild.COMMISSION_STARS.reduce((total, star) => total + (guildCommissionState.envelopes[star] || 0), 0)
+      + Skills.BOOK_STARS.reduce((total, star) => total + (state.books[star] || 0), 0)
       + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0);
   }
 
@@ -2091,6 +2136,21 @@
       detail: player.hp >= maxHp ? "目前生命已全滿" : `目前 HP ${Math.ceil(player.hp)} / ${maxHp}`,
       action: "use-potion", actionLabel: player.hp >= maxHp ? "生命已滿" : "使用", disabled: player.hp >= maxHp,
     });
+    for (const star of Guild.COMMISSION_STARS) {
+      const count = guildCommissionState.envelopes[star] || 0;
+      if (!count) continue;
+      const pool = Skills.getFighterGuildBookPool(star);
+      items.push({
+        id: `skill_envelope_${star}`,
+        iconId: "skill_book_1",
+        name: `${"★".repeat(star)} 技能書信封`,
+        category: "公會委託獎勵",
+        quantity: count,
+        description: `開封後從 canonical Fighter 技能資料中抽取同星級技能書（${pool.length} 招）。`,
+        detail: "收到技能書後仍須符合 Fighter 前置才能學習",
+        action: "open-envelope", actionLabel: "開封", envelopeStar: star,
+      });
+    }
     for (const star of Skills.BOOK_STARS) {
       const count = skillState.books[star] || 0;
       if (!count) continue;
@@ -2109,18 +2169,20 @@
     for (const [skillId, count] of Object.entries(skillState.manualCounts || {})) {
       if (!count) continue;
       const skill = Skills.getSkill(skillId);
-      if (!skill || skill.classId !== playerClassId) continue;
-      const learnability = Skills.skillLearnability(skillState, skill.id);
+      if (!skill) continue;
+      const classLocked = skill.classId !== playerClassId;
+      const learnability = classLocked ? { status: "conditionLocked" } : Skills.skillLearnability(skillState, skill.id);
       items.push({
         id: `manual_${skill.id}`,
         iconId: "skill_book_1",
         name: `技能書：${skill.name}`,
-        category: `${skillStars(skill.star)} 技能書`,
+        category: `${skillStars(skill.star)} ${skill.classId === "fighter" ? "格鬥士" : "戰士"}技能書`,
         quantity: count,
         description: skill.description,
         detail: `${skillRangeText(skill)} · 速度 ${skill.speedGrade}`,
         action: "use-manual",
-        actionLabel: learnability.status === "missingPrereq" ? "查看前置" : learnability.status === "learned" ? "處理重複書" : "學習",
+        actionLabel: classLocked ? "職業不符" : learnability.status === "missingPrereq" ? "查看前置" : learnability.status === "learned" ? "處理重複書" : "學習",
+        disabled: classLocked,
         manualSkillId: skill.id,
       });
     }
@@ -2137,7 +2199,7 @@
         <span class="inventory-equipment-action">${item.actionLabel}</span>
       </button>`;
       const iconIndex = ITEM_ICON_INDEX[item.iconId || item.id] ?? 4;
-      const action = item.action ? `<button class="inventory-item-action" type="button" data-facility-action="${item.action}"${item.bookStar ? ` data-book-star="${item.bookStar}"` : ""}${item.manualSkillId ? ` data-skill-id="${item.manualSkillId}"` : ""} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>` : "";
+      const action = item.action ? `<button class="inventory-item-action" type="button" data-facility-action="${item.action}"${item.bookStar ? ` data-book-star="${item.bookStar}"` : ""}${item.envelopeStar ? ` data-envelope-star="${item.envelopeStar}"` : ""}${item.manualSkillId ? ` data-skill-id="${item.manualSkillId}"` : ""} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>` : "";
       return `<article class="inventory-grid-item" data-item-id="${item.id}">
         <div class="inventory-item-art">${atlasIconHtml("item", iconIndex, item.name)}<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b></div>
         <div class="inventory-item-copy"><small>${item.category}</small><strong>${item.name}</strong><p>${item.description}</p><span>${item.detail}</span></div>
@@ -2723,7 +2785,7 @@
       bag: ["ADVENTURER BAG · ITEMS", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
       equipment: ["GEAR LOADOUT · EQUIPMENT", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
       deck: ["DECK", facilityContext === "deck" ? "城門戰技面板" : "戰技面板", facilityContext === "deck" ? "喺城門設定今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換技能先去舊港城門。"],
-      guild: ["GUILD HALL · REPEATABLE JOBS", "拾燈公會", "揀一份委託，討伐後返嚟領取燈幣、獎品同公會印記。"],
+      guild: ["GUILD HALL · COMMISSIONS", "拾燈公會", "接受固定委託，完成討伐或送信後返嚟領取技能書信封。"],
       shop: ["SILVER FLAME · EQUIPMENT", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
       skills: ["SKILL TREE", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
       codex: ["FIELD NOTES · MONSTER CODEX", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
@@ -2794,52 +2856,52 @@
 
   function acceptGuildOffer(offerId) {
     if (currentMapId !== "guild") return showToast("要親身返拾燈公會先接到委託。", "danger");
-    const offer = currentContractOffers().find((item) => item.id === offerId);
-    if (offer?.locked) return showToast(`要升到 LV.${offer.minLevel} 先接到呢份委託。`, "danger");
-    const result = Expansion.acceptContract(activeContracts, offer, { maxActive: 1 });
-    if (!result.ok) return showToast("同一時間只可以接一份委託。", "danger");
-    activeContracts = result.contracts;
+    const result = Guild.accept(guildCommissionState, offerId);
+    if (!result.ok) return showToast(result.reason === "already-active" ? "同一時間只可以接一份委託。" : "搵唔到呢份委託。", "danger");
+    guildCommissionState = result.state;
+    syncGuildCommissionProjection();
     questTrackerMode = "contract";
     sound.crystal();
-    showToast(`已接委託：${result.contract.title}`, "good");
+    showToast(`已接委託：${result.commission.title}`, "good");
     renderFacility();
     saveGame(false);
   }
 
   function claimGuildContract(contractId) {
     if (currentMapId !== "guild") return showToast("要返拾燈公會先可以回報。", "danger");
-    const contract = activeContracts.find((item) => item.id === contractId);
-    const result = Expansion.claimContract(activeContracts, contractId);
-    if (!result.ok || !contract) return showToast("委託仲未完成。", "danger");
-    player.coins += result.reward.coins;
-    for (const item of result.reward.items) {
-      if (item.id === "healing_potion") player.potions = Math.min(9, player.potions + item.quantity);
-      else inventory[item.id] = (inventory[item.id] || 0) + item.quantity;
-    }
-    guildMarks += 1 + Math.floor((contract.minLevel || 1) / 7);
-    guildRenown += 12 + (contract.minLevel || 1) * 2;
-    const deckUpgrade = guildMarks >= 10 ? grantDeckCapacityMilestone("guild:rank-2", { silent: true }) : null;
-    const bookStar = skillBookStarForContract(contract);
-    skillState = Skills.grantSkillBooks(skillState, bookStar, 1).state;
-    activeContracts = [];
+    const active = activeGuildCommission();
+    const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
+    if (contractId && expectedId && contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+    const result = Guild.report(guildCommissionState);
+    if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
+    guildCommissionState = result.state;
+    syncGuildCommissionProjection();
     questTrackerMode = "main";
-    contractRotation += 1;
-    gainXp(result.reward.xp);
     sound.level();
-    showToast(`委託回報完成 · +${result.reward.coins} 燈幣、+${result.reward.xp} XP、${"★".repeat(bookStar)} 技能書${deckUpgrade?.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
+    showToast(`委託回報完成 · ${"★".repeat(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
     renderFacility();
     saveGame(false);
   }
 
-  function abandonGuildContract() {
-    if (currentMapId !== "guild") return showToast("要返拾燈公會先可以放棄委託。", "danger");
-    if (!activeContracts.length) return;
-    const title = activeContracts[0].title;
-    activeContracts = [];
-    questTrackerMode = "main";
-    contractRotation += 1;
-    showToast(`已放棄「${title}」· 委託板已輪替`, "good");
-    renderFacility();
+  function openGuildEnvelope(star) {
+    const safeStar = Number(star);
+    const commissionState = Guild.normalizeState(guildCommissionState);
+    const skill = Skills.drawFighterGuildSkillBook(safeStar, {
+      seed: "everrealm-guild-envelope",
+      serial: commissionState.envelopeDrawSerial,
+    });
+    if (!skill) return showToast("呢個星級暫時冇可抽取嘅格鬥士技能。", "danger");
+    const consumed = Guild.consumeEnvelope(commissionState, safeStar);
+    if (!consumed.ok) return showToast("你冇呢一星級嘅技能書信封。", "danger");
+    const granted = Skills.grantSkillManuals(skillState, skill.id, 1);
+    if (!granted.ok) return showToast("未能將技能書放入物品欄。", "danger");
+    guildCommissionState = consumed.state;
+    skillState = granted.state;
+    sound.crystal();
+    showToast(`開封抽到「${skill.name}」技能書；仍須符合 Fighter 前置先可以學習。`, "good");
+    announce(`獲得格鬥士技能書：${skill.name}`);
+    if (mode === "facility") renderFacility();
+    updateHud(true);
     saveGame(false);
   }
 
@@ -3004,6 +3066,7 @@
     return {
       id: primary ? `battle-${source.id}` : `battle-${source.id}-helper-${index}`,
       sourceId: primary ? source.id : null,
+      instanceId: `${source.instanceId || source.id}:helper-${index}`,
       primary,
       side: "enemy",
       type: canonicalType,
@@ -4036,6 +4099,7 @@
       mode = "playing";
       stage.dataset.gameState = mode;
       killEnemy(finished.source);
+      for (const unit of bonusUnits) recordDefeatedMonster(unit);
       if (bonusXp) gainXp(bonusXp);
       player.coins += bonusCoins;
       encounterGrace = 1;
@@ -4352,11 +4416,11 @@
   }
 
   function contractEnemyTarget(enemy) {
-    return ({ mossbun: "mushroom", mistwing: "moth", "lantern-golem": "golem", hollowmage: "shadow", deepwarden: "shadow" })[enemy.type] || enemy.type;
+    return ExpansionWorld.normalizeMonsterId(enemy?.type) || enemy?.type;
   }
 
   function contractTargetMap(target) {
-    return ["bear", "turtle", "frog", "snake"].includes(target) ? "dungeon" : "field";
+    return ["bear", "snake"].includes(target) ? "dungeon" : "field";
   }
 
   function nearestContractEnemy(target) {
@@ -4370,23 +4434,34 @@
   }
 
   function contractQuestInfo() {
-    const contract = activeContracts[0];
+    const contract = activeGuildCommission();
     const guildBoard = currentMapId === "guild" ? world.boards[0] || world.start : null;
     if (!contract) return {
       title: "未接公會委託",
       detail: currentMapId === "guild" ? "查看委託板，揀一份今晚嘅工作" : "去拾燈公會查看可重複委託",
       target: guildBoard || routeToMap("guild"),
     };
-    if (contract.status === "ready") return {
+    if (guildCommissionState.status === "ready_to_report") return {
       title: "返公會回報",
-      detail: `${contract.title}完成 · 領獎金、獎品同技能書`,
+      detail: `${contract.title}完成 · 領取${skillBookRewardText(contract)}`,
       target: guildBoard || routeToMap("guild"),
     };
-    const targetMapId = contractTargetMap(contract.objective.target);
-    const target = currentMapId === targetMapId ? nearestContractEnemy(contract.objective.target) : null;
+    if (contract.type === "delivery") {
+      const targetMapId = "field";
+      const target = currentMapId === targetMapId
+        ? world.npcs.find((npc) => npc.id === contract.objective.recipient_npc_id)
+        : null;
+      return {
+        title: contract.title,
+        detail: `將公會信件送到${contractTargetName(contract.objective.recipient_npc_id)}手上`,
+        target: target || routeToMap(targetMapId),
+      };
+    }
+    const targetMapId = contractTargetMap(contract.objective.monster_id);
+    const target = currentMapId === targetMapId ? nearestContractEnemy(contract.objective.monster_id) : null;
     return {
       title: contract.title,
-      detail: `${contract.progress} / ${contract.objective.count} · 討伐${contractTargetName(contract.objective.target)}`,
+      detail: `${guildCommissionState.progress} / ${contract.objective.count} · 討伐${contractTargetName(contract.objective.monster_id)}`,
       target: target || routeToMap(targetMapId),
     };
   }
@@ -4424,7 +4499,7 @@
     for (const tab of hud.questTabs) {
       const selected = tab.dataset.questTrack === questTrackerMode;
       tab.setAttribute("aria-selected", String(selected));
-      tab.dataset.ready = String(tab.dataset.questTrack === "contract" && activeContracts[0]?.status === "ready");
+      tab.dataset.ready = String(tab.dataset.questTrack === "contract" && guildCommissionState.status === "ready_to_report");
     }
     const steps = Math.round(Core.distance(player, quest.target) / world.tileSize);
     hud.questDistance.textContent = steps <= 2 ? "目標喺附近" : `距離目標約 ${steps} 步`;
@@ -4438,7 +4513,9 @@
     stage.dataset.bossDefeated = String(bossDefeated);
     stage.dataset.map = currentMapId;
     stage.dataset.guildMarks = String(guildMarks);
-    stage.dataset.contractStatus = activeContracts[0]?.status || "none";
+    stage.dataset.contractStatus = guildCommissionState.status === "ready_to_report"
+      ? "ready"
+      : activeGuildCommission() ? guildCommissionState.status : "none";
     stage.dataset.questTracker = questTrackerMode;
     stage.dataset.skillBooks = String(totalOwnedSkillBooks());
     stage.dataset.facilityTab = facilityTab;
@@ -6431,7 +6508,7 @@
       "ah-ching": "keeper", "uncle-tit": "smith", "siu-moon": "healer", "town-smith": "smith", "town-herbalist": "healer",
       "clinic-healer-siu-moon": "healer", "store-merchant-gin": "merchant", "inn-keeper": "clerk",
       "guildmaster-yin": "guildmaster", "guild-clerk-po": "clerk", "guild-adventurer-nok": "adventurer", "guild-duelist-rhea": "duelist",
-      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer",
+      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer", "mountain_delivery_recipient": "explorer",
     };
     const artBox = Art.drawCharacter(ctx, {
       x: point.x,
@@ -6449,7 +6526,8 @@
     const markerY = artBox?.markerAnchorY ?? point.y - 88 * scale;
     drawNpcName(anchorX, nameY, npc.name);
     if (npc.id === "ah-ching" && [0,4].includes(questStage)) drawQuestMark(markerX, markerY, questStage === 4 ? "!" : "?");
-    if (npc.id === "guild-clerk-po" && (activeContracts[0]?.status === "ready" || !activeContracts.length)) drawQuestMark(markerX, markerY, activeContracts.length ? "!" : "?");
+    if (npc.id === "guild-clerk-po" && (guildCommissionState.status === "ready_to_report" || !activeGuildCommission())) drawQuestMark(markerX, markerY, activeGuildCommission() ? "!" : "?");
+    if (npc.id === "mountain_delivery_recipient" && activeGuildCommission()?.type === "delivery" && guildCommissionState.status === "active") drawQuestMark(markerX, markerY, "!");
     if (nearestInteraction?.id === npc.id) drawInteractDiamond(artBox?.interactAnchorX ?? anchorX + 23 * scale, nameY + 2 * scale);
   }
 
@@ -6925,6 +7003,7 @@
         x: player.x, y: player.y, facing: player.facing, moving: player.moving, locomotion: player.locomotion ? { ...player.locomotion } : null,
         currentMapId, questStage, questTrackerMode, crystals: [...crystals], bossDefeated, pendingLevelUps,
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
+        guildCommission: Guild.normalizeState(guildCommissionState),
         activeContracts, guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
@@ -7079,6 +7158,11 @@
       facilityTab: (tab) => { facilityTab = tab; renderFacility(); },
       acceptOffer: (id) => acceptGuildOffer(id || currentContractOffers()[0]?.id),
       claimContract: (id) => claimGuildContract(id || activeContracts[0]?.id),
+      recordGuildKill: (monsterId, instanceId) => {
+        const result = recordDefeatedMonster({ type: monsterId, instanceId: instanceId || `${monsterId}:debug:${Date.now()}` });
+        updateHud(true);
+        return window.__RPG_DEBUG__.snapshot();
+      },
       grantSkillBook: (star, quantity = 1) => {
         const result = Skills.grantSkillBooks(skillState, star, quantity);
         if (result.ok) skillState = result.state;
@@ -7086,6 +7170,7 @@
         return window.__RPG_DEBUG__.snapshot();
       },
       openSkillBook: (star) => { openGuildSkillBook(Number(star)); return window.__RPG_DEBUG__.snapshot(); },
+      openGuildEnvelope: (star) => { openGuildEnvelope(Number(star)); return window.__RPG_DEBUG__.snapshot(); },
       openSkillManual: (skillId) => { openSkillManualConfirm(skillId); return window.__RPG_DEBUG__.snapshot(); },
       learnSkillManual: () => { confirmSkillManualLearning(); return window.__RPG_DEBUG__.snapshot(); },
       equipSkill: (id) => { changeSkillLoadout(id, true, { force: true }); return window.__RPG_DEBUG__.snapshot(); },
@@ -7214,11 +7299,11 @@
     const action = button.dataset.facilityAction;
     if (action === "accept") acceptGuildOffer(button.dataset.offerId);
     else if (action === "claim") claimGuildContract(button.dataset.contractId);
-    else if (action === "abandon") abandonGuildContract();
     else if (action === "buy") changeEquipment(button.dataset.itemId, true);
     else if (action === "equip") changeEquipment(button.dataset.itemId, false);
     else if (action === "use-potion") useBagPotion();
     else if (action === "open-book") openGuildSkillBook(Number(button.dataset.bookStar));
+    else if (action === "open-envelope") openGuildEnvelope(Number(button.dataset.envelopeStar));
     else if (action === "use-manual") openSkillManualConfirm(button.dataset.skillId);
     else if (action === "skill-detail") openSkillDetail(button.dataset.skillId, button);
     else if (action === "equip-skill") changeSkillLoadout(button.dataset.skillId, true);

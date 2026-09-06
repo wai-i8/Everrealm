@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -824,19 +824,71 @@ try {
       $dungeonWarning = Get-GameSnapshot
       if ($dungeonWarning.mode -ne 'dialogue' -or $dungeonWarning.currentMapId -ne 'field') { throw 'Automatic dungeon portal did not preserve its under-level warning choice.' }
     }
+    'guild-commission' {
+      $commissionIds = @('guild_hunt_chick_1star', 'guild_delivery_mountain_2star', 'guild_hunt_coyote_3star', 'guild_hunt_bear_4star', 'guild_hunt_snake_5star')
+      $targets = @('chick', 'mountain_delivery_recipient', 'coyote', 'bear', 'snake')
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $board = (Invoke-GameExpression -Expression 'JSON.stringify({offers:window.__RPG_DEBUG__.offers().map(o=>({id:o.id,star:o.star,type:o.type})),acceptCards:document.querySelectorAll("[data-facility-action=accept]").length,internalIds:document.body.innerText.includes("mountain_delivery_recipient")})') | ConvertFrom-Json
+      if ($board.offers.Count -ne 5 -or $board.acceptCards -ne 5 -or $board.internalIds) { throw 'Guild V1 board did not render exactly five user-facing commission offers.' }
+      $guildBoardScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-board-$ViewportWidth.png"
+      $guildBoardCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($guildBoardScreenshotPath, [Convert]::FromBase64String($guildBoardCapture.result.data))
+
+      for ($index = 0; $index -lt $commissionIds.Count; $index += 1) {
+        $commissionId = $commissionIds[$index]
+        $targetId = $targets[$index]
+        $star = $index + 1
+        Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.acceptOffer('$commissionId');api.closeFacility();if('$targetId'==='mountain_delivery_recipient'){api.enterMap('field');api.setEncounterGrace(30);const target=api.entityPosition('$targetId');api.clickMoveTo(target.x,target.y);return true;}for(let i=1;i<=5;i++)api.recordGuildKill('$targetId','${commissionId}:'+i);api.enterMap('guild');api.openFacility('guild');return true})()" | Out-Null
+        if ($targetId -eq 'mountain_delivery_recipient') {
+          $nearRecipient = $false
+          for ($attempt = 0; $attempt -lt 20; $attempt += 1) {
+            Start-Sleep -Milliseconds 1000
+            $nearRecipient = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,s=api.snapshot(),p=api.entityPosition('$targetId');return Math.hypot(s.x-p.x,s.y-p.y)<70})()"
+            if ($nearRecipient) { break }
+          }
+          if (-not $nearRecipient) { throw 'Mountain Field delivery route did not reach the far-side recipient.' }
+          Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.interactWith('$targetId');api.enterMap('guild');api.openFacility('guild');return true})()" | Out-Null
+        }
+        Start-Sleep -Milliseconds 120
+        $ready = Get-GameSnapshot
+        $expectedProgress = if ($targetId -eq 'mountain_delivery_recipient') { 1 } else { 5 }
+        if ($ready.guildCommission.status -ne 'ready_to_report' -or $ready.guildCommission.progress -ne $expectedProgress -or $ready.guildCommission.activeCommissionId -ne $commissionId) { throw "Guild commission did not complete: $commissionId (status=$($ready.guildCommission.status), progress=$($ready.guildCommission.progress))." }
+        Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.claimContract(); true' | Out-Null
+        $reported = Get-GameSnapshot
+        if ($reported.guildCommission.activeCommissionId -ne $null -or $reported.guildCommission.envelopes.$star -ne 1) { throw "Guild commission report did not grant the $star-star envelope exactly once: $commissionId." }
+        Invoke-GameExpression -Expression "window.__RPG_DEBUG__.openFacility('bag'); window.__RPG_DEBUG__.openGuildEnvelope($star); true" | Out-Null
+        $opened = Get-GameSnapshot
+        if ($opened.guildCommission.envelopes.$star -ne 0) { throw "Guild $star-star envelope was not consumed." }
+        $manualCount = ($opened.skills.manualCounts.PSObject.Properties | Measure-Object -Property Value -Sum).Sum
+        if ($manualCount -lt $star) { throw "Opening $star-star envelope did not create a Fighter skill manual." }
+      }
+
+      Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.closeFacility();api.enterMap('guild');api.openFacility('guild');api.acceptOffer('guild_hunt_chick_1star');api.closeFacility();for(let i=1;i<=5;i++)api.recordGuildKill('chick','repeat-chick:'+i);api.enterMap('guild');api.openFacility('guild');api.claimContract();return true})()" | Out-Null
+      $repeat = Get-GameSnapshot
+      if ($repeat.guildCommission.envelopes.'1' -ne 1 -or $repeat.guildCommission.cycle -ne 6) { throw 'Repeatable Guild commission did not become available for a second completed cycle.' }
+      Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.save(); window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.load(); true' | Out-Null
+      Start-Sleep -Milliseconds 120
+      $commissionLoaded = Get-GameSnapshot
+      if ($commissionLoaded.guildCommission.envelopes.'1' -ne 1 -or $commissionLoaded.guildCommission.cycle -ne 6) { throw 'Guild commission envelope state did not survive save/load.' }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
+      $guildCommissionScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-commission-$ViewportWidth.png"
+      $guildCommissionCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($guildCommissionScreenshotPath, [Convert]::FromBase64String($guildCommissionCapture.result.data))
+    }
     'expansion' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
       Start-Sleep -Milliseconds 100
       $guildUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),hidden:document.getElementById("facilityPanel").hidden,title:document.getElementById("facilityTitle").textContent,cards:document.querySelectorAll("[data-facility-action=accept]").length})') | ConvertFrom-Json
-      if ($guildUi.snapshot.currentMapId -ne 'guild' -or $guildUi.snapshot.mode -ne 'facility' -or $guildUi.hidden -or $guildUi.cards -lt 1) { throw 'Guild interior or repeatable contract board did not open.' }
+      if ($guildUi.snapshot.currentMapId -ne 'guild' -or $guildUi.snapshot.mode -ne 'facility' -or $guildUi.hidden -or $guildUi.cards -ne 5) { throw 'Guild interior or fixed V1 commission board did not open.' }
 
-      Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.acceptOffer();api.closeFacility();api.enterMap('field');['slime-1','slime-2','slime-3','slime-4'].forEach(id=>api.damageEnemy(id,99999));api.enterMap('guild');api.enterMap('field');api.damageEnemy('slime-1',99999);api.enterMap('guild');api.openFacility('guild');return true})()" | Out-Null
+      Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.acceptOffer('guild_hunt_chick_1star');api.closeFacility();api.enterMap('field');for(let i=1;i<=5;i++)api.recordGuildKill('chick','expansion-chick:'+i);api.enterMap('guild');api.openFacility('guild');return true})()" | Out-Null
       Start-Sleep -Milliseconds 180
       $readyContract = Get-GameSnapshot
-      if ($readyContract.activeContracts.Count -ne 1 -or $readyContract.activeContracts[0].status -ne 'ready' -or $readyContract.activeContracts[0].progress -ne 5) { throw 'Contract kills did not persist and reach ready status.' }
+      if ($readyContract.guildCommission.status -ne 'ready_to_report' -or $readyContract.guildCommission.progress -ne 5) { throw 'Guild commission kills did not persist and reach ready status.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.claimContract(); true" | Out-Null
       $claimed = Get-GameSnapshot
-      if ($claimed.activeContracts.Count -ne 0 -or $claimed.guildMarks -lt 1 -or $claimed.coins -le 12 -or $claimed.skills.books.'1' -lt 1) { throw 'Guild reward claim did not grant coins, marks and a skill book.' }
+      if ($claimed.activeContracts.Count -ne 0 -or $claimed.guildCommission.envelopes.'1' -ne 1 -or $claimed.coins -ne 12) { throw 'Guild report did not grant exactly one 1-star envelope without legacy coin rewards.' }
 
       Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.setPlayer({pendingLevelUps:0});api.closeFacility();api.setPlayer({level:7,coins:1000,pendingLevelUps:0});api.enterMap('shop');api.openFacility('shop');api.buyEquip('lantern_sabre');return true})()" | Out-Null
       Start-Sleep -Milliseconds 100
@@ -967,6 +1019,8 @@ try {
     fighterTreeDetailScreenshot = $fighterTreeDetailScreenshotPath
     fighterTreeBottomScreenshot = $fighterTreeBottomScreenshotPath
     monsterFacingRuntime = $monsterFacingRuntime
+    guildBoardScreenshot = $guildBoardScreenshotPath
+    guildCommissionScreenshot = $guildCommissionScreenshotPath
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count
   } | ConvertTo-Json -Depth 8 -Compress

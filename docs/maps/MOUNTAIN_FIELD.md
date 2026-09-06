@@ -11,6 +11,8 @@
 山地敵人配置在 authored route 與 clearings，避免遮蔽主要導航。山地遭遇沿用既有 `mountain` battlefield context；同一張圖的森林密度與道路可讀性是固定 layout 規則。
 
 入口／出口為 `field-to-world`、`field-to-dungeon`；精確 route、forest mass、enemy spawn、chest 與 gate 由 `maps/mountain-field.js` 定義。
+
+山地另有一名永久 NPC `mountain_delivery_recipient`，作為公會送信委託的收件人。收件人位於遠離主城東門、靠近山路北段的可達區域；exact runtime 座標只由 `maps/mountain-field.js` 擁有。
 # Monster ecology
 
 Runtime enemy spawns use the canonical Monster System IDs: `chick`, `fox`, `raccoon`, `turtle`, `wild_boar`, and `coyote`; the story gatekeeper is a `bear` spawn with map-owned `mainBoss: true`. Old IDs are save compatibility aliases only.

@@ -372,6 +372,9 @@
       damage: damage,
       hitResolution,
       sourceHitJudgement: original.source_hit_judgement || null,
+      guildBookStars: [...new Set((original.acquisition?.guild_reward_books || [])
+        .map((book) => Math.trunc(Number(book?.star_value)))
+        .filter((star) => Number.isFinite(star) && star > 0))],
     };
   }
 
@@ -416,6 +419,7 @@
       damage: spec.damage,
       hitResolution: spec.hitResolution,
       sourceHitJudgement: spec.sourceHitJudgement,
+      guildBookStars: spec.guildBookStars,
       treeGroup: spec.treeGroup,
       treeColumn: spec.treeColumn,
       treeRow: spec.treeRow,
@@ -801,6 +805,7 @@
       damage: source.damage ? { ...source.damage } : null,
       hitResolution: source.hitResolution ? { ...source.hitResolution } : null,
       sourceHitJudgement: source.sourceHitJudgement || null,
+      guildBookStars: Array.isArray(source.guildBookStars) ? source.guildBookStars.map((star) => Math.trunc(Number(star))).filter((star) => star > 0) : [],
     };
   }
 
@@ -870,6 +875,15 @@
   function getSkillsByClass(classId) {
     const safeClass = normalizeClassId(classId, null);
     return safeClass ? SKILL_CATALOG.filter((skill) => skill.classId === safeClass) : [];
+  }
+
+  // Guild envelope ranks are owned by the canonical Fighter acquisition data,
+  // not by Guild. They intentionally remain separate from the existing
+  // one-to-three-star runtime book rarity used by the original skill-book UI.
+  function getFighterGuildBookPool(star) {
+    const safeStar = Math.trunc(Number(star));
+    if (safeStar < 1 || safeStar > 5) return [];
+    return SKILL_CATALOG.filter((skill) => skill.classId === "fighter" && skill.guildBookStars.includes(safeStar));
   }
 
   function speedGradeIndex(value) {
@@ -1524,6 +1538,22 @@
     return pool[pool.length - 1];
   }
 
+  function drawFighterGuildSkillBook(star, seedOrSerial, fallbackSerial = 0) {
+    const pool = getFighterGuildBookPool(star);
+    if (!pool.length) return null;
+    const parts = drawSeedParts(seedOrSerial, fallbackSerial);
+    const safeStar = Math.trunc(Number(star));
+    const random = mulberry32(hashString(`${parts.seed}|fighter-guild|${safeStar}|${parts.serial}`));
+    const totalWeight = pool.reduce((total, skill) => total + Math.max(0, skill.poolWeight), 0);
+    if (totalWeight <= 0) return pool[Math.floor(random() * pool.length)] || pool[0];
+    let roll = random() * totalWeight;
+    for (const skill of pool) {
+      roll -= Math.max(0, skill.poolWeight);
+      if (roll < 0) return skill;
+    }
+    return pool[pool.length - 1];
+  }
+
   function openSkillBook(bookStar, seedOrSerial, rawState) {
     const star = validStar(bookStar);
     const state = normalizeSkillState(rawState);
@@ -1561,6 +1591,17 @@
     const next = cloneState(state);
     next.books[star] = Math.min(9999, next.books[star] + amount);
     return { ok: true, reason: null, star, quantity: amount, state: next };
+  }
+
+  function grantSkillManuals(rawState, skillId, quantity = 1) {
+    const state = normalizeSkillState(rawState);
+    const skill = getSkill(String(skillId || ""));
+    const amount = wholeNumber(quantity);
+    if (!skill) return { ok: false, reason: "not-found", state, skill: null };
+    if (amount < 1) return { ok: false, reason: "invalid-quantity", state, skill };
+    const next = cloneState(state);
+    next.manualCounts[skill.id] = Math.min(9999, wholeNumber(next.manualCounts[skill.id]) + amount);
+    return { ok: true, reason: null, skill, quantity: amount, state: next };
   }
 
   function openOwnedSkillBook(bookStar, seedOrSerial, rawState) {
@@ -1701,6 +1742,7 @@
     getSkill,
     getSkillsByStar,
     getSkillsByClass,
+    getFighterGuildBookPool,
     speedGradeIndex,
     compareSpeedGrades,
     orderActionsBySpeed,
@@ -1723,8 +1765,10 @@
     awardDeckCapacityMilestone,
     skillLearnability,
     drawSkillFromBook,
+    drawFighterGuildSkillBook,
     openSkillBook,
     grantSkillBooks,
+    grantSkillManuals,
     openOwnedSkillBook,
     learnSkillFromManual,
     unlockSkillWithShards,

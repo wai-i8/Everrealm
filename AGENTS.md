@@ -33,6 +33,9 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 - Production / gathering / crafting / recipes / production spirits:
   `docs/PRODUCTION_SYSTEM.md`
 
+- Guild 委託、討伐／送信 state、技能書信封與公會回報流程：
+  `docs/GUILD_COMMISSION_SYSTEM.md`
+
 - Art assets / NPC visual design / battlefield art / Standard Mobile Unit 28-frame locomotion sprites / atlases / transparency / cropping / anchors / visual QA:
   `ART_PIPELINE.md`
 
