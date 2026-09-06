@@ -21,7 +21,11 @@ const REQUIRED_API = [
   "tileAt",
   "isTileSolid",
   "monsterBlueprint",
+  "normalizeMonsterId",
   "hydrateMonsterSpawn",
+  "monsterStatsAtLevel",
+  "xpReward",
+  "retreatChance",
 ];
 
 function circleRectOverlap(circle, rect) {
@@ -362,19 +366,9 @@ test("monster blueprints hydrate tactical stats and rewards without mutating spa
     assert.equal(hydrated.name, blueprint.name);
     assert.equal(hydrated.level, spawn.level);
     assert.equal(hydrated.elite, true);
-    assert.deepEqual(hydrated.stats, {
-      hp: blueprint.hp,
-      attack: blueprint.attack,
-      defense: blueprint.defense,
-      speed: blueprint.speed,
-      moveRange: blueprint.moveRange,
-      attackRange: blueprint.attackRange,
-    });
-    assert.deepEqual(hydrated.reward, {
-      xp: blueprint.xp,
-      coins: blueprint.coins,
-      drop: blueprint.drop,
-    });
+    assert.deepEqual(hydrated.stats, ExpansionWorld.monsterStatsAtLevel(type, spawn.level, { elite: true }));
+    assert.equal(hydrated.reward.xp, ExpansionWorld.xpReward(blueprint.rewards.baseXp, spawn.level, 1));
+    assert.equal(hydrated.reward.drop, blueprint.drop);
   }
 });
 
@@ -388,9 +382,7 @@ test("dungeon advertises its level band and includes a full escalating roster wi
   assert.ok(dungeon.chests.length >= 3);
 
   const roster = new Set(dungeon.enemySpawns.map((spawn) => spawn.type));
-  for (const type of Object.keys(ExpansionWorld.MONSTER_BLUEPRINTS)) {
-    assert.ok(roster.has(type), `dungeon roster should include ${type}`);
-  }
+  assert.deepEqual([...roster].sort(), ["bear", "frog", "raccoon", "snake", "turtle", "wild_boar"].sort());
   for (const spawn of dungeon.enemySpawns) {
     assert.ok(ExpansionWorld.monsterBlueprint(spawn.type), `${spawn.id} needs a blueprint`);
     assert.ok(spawn.level >= dungeon.recommendedLevel);
@@ -399,7 +391,7 @@ test("dungeon advertises its level band and includes a full escalating roster wi
 
   const bosses = dungeon.enemySpawns.filter((spawn) => spawn.boss || ExpansionWorld.monsterBlueprint(spawn.type)?.boss);
   assert.equal(bosses.length, 1);
-  assert.equal(bosses[0].type, "deepwarden");
+  assert.equal(bosses[0].type, "bear");
   assert.equal(bosses[0].respawn, false);
   const lockedTreasure = dungeon.chests.find((chest) => chest.lockedBy === bosses[0].id);
   assert.ok(lockedTreasure, "the dungeon boss should guard a reward chest");

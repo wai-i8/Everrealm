@@ -246,7 +246,7 @@
       title: "暗泥清道夫",
       description: "港外啲暗泥怪又塞住條舊路，幫商隊清走佢哋。",
       minLevel: 1,
-      objective: { event: "defeat", target: "slime", count: 5 },
+      objective: { event: "defeat", target: "raccoon", count: 5 },
       reward: { coins: 65, xp: 45, items: [{ id: "healing_potion", name: "療傷藥", quantity: 1 }] },
     },
     {
@@ -254,7 +254,7 @@
       title: "霧靈驅散令",
       description: "霧靈喺舊路徘徊，唔好畀佢哋引旅人入濃霧。",
       minLevel: 2,
-      objective: { event: "defeat", target: "wisp", count: 4 },
+      objective: { event: "defeat", target: "chick", count: 4 },
       reward: { coins: 85, xp: 60, items: [{ id: "lamp_dust", name: "燈晶粉", quantity: 2 }] },
     },
     {
@@ -262,7 +262,7 @@
       title: "裂牙巡獵",
       description: "霧犬最近特別躁，公會要一位可靠嘅巡林員。",
       minLevel: 3,
-      objective: { event: "defeat", target: "hound", count: 5 },
+      objective: { event: "defeat", target: "fox", count: 5 },
       reward: { coins: 110, xp: 80, items: [{ id: "hound_fang", name: "獵犬牙", quantity: 2 }] },
     },
     {
@@ -270,7 +270,7 @@
       title: "坑道苔災",
       description: "藥師要苔糰子嘅啫喱；小心唔好畀佢哋包圍。",
       minLevel: 5,
-      objective: { event: "defeat", target: "mushroom", count: 6 },
+      objective: { event: "defeat", target: "raccoon", count: 6 },
       reward: { coins: 145, xp: 105, items: [{ id: "bright_spore", name: "亮光孢子", quantity: 3 }] },
     },
     {
@@ -278,7 +278,7 @@
       title: "霧翼滅燈令",
       description: "霧翼蝠不停撞熄古燈，守住坑道嘅回音燈火。",
       minLevel: 7,
-      objective: { event: "defeat", target: "moth", count: 6 },
+      objective: { event: "defeat", target: "frog", count: 6 },
       reward: { coins: 185, xp: 135, items: [{ id: "moth_scale", name: "晶翅鱗粉", quantity: 2 }] },
     },
     {
@@ -286,7 +286,7 @@
       title: "燈偶拆解",
       description: "失控燈偶喺封存庫醒咗，拆低佢哋帶核心返嚟。",
       minLevel: 10,
-      objective: { event: "defeat", target: "golem", count: 4 },
+      objective: { event: "defeat", target: "turtle", count: 4 },
       reward: { coins: 260, xp: 185, items: [{ id: "golem_core", name: "石像核心", quantity: 1 }] },
     },
     {
@@ -294,7 +294,7 @@
       title: "深窟懸賞",
       description: "只畀資深冒險者接嘅深層討伐；記住點亮回音燈。",
       minLevel: 14,
-      objective: { event: "defeat", target: "shadow", count: 5 },
+      objective: { event: "defeat", target: "snake", count: 5 },
       reward: { coins: 390, xp: 260, items: [{ id: "deep_crystal", name: "深層晶石", quantity: 2 }] },
     },
   ];

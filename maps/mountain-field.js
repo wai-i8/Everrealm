@@ -55,10 +55,11 @@
       { id: "ruin-cache", kind: "chest", ...point(39, 4), radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
     ];
     const enemySpawns = [
-      { id: "slime-1", type: "slime", ...point(8, 25), level: 1 }, { id: "slime-2", type: "slime", ...point(12, 27), level: 1 }, { id: "slime-3", type: "slime", ...point(20, 25), level: 1 }, { id: "slime-4", type: "slime", ...point(25, 27), level: 2 },
-      { id: "warden-west", type: "wisp", ...point(16, 25), level: 2, crystal: "west" }, { id: "warden-hollow", type: "wisp", ...point(28, 27), level: 3, crystal: "hollow" }, { id: "warden-north", type: "wisp", ...point(37, 14), level: 2, crystal: "north" },
-      { id: "wisp-1", type: "wisp", ...point(22, 27), level: 2 }, { id: "wisp-2", type: "wisp", ...point(34, 21), level: 2 }, { id: "hound-1", type: "hound", ...point(37, 18), level: 3 }, { id: "hound-2", type: "hound", ...point(37, 10), level: 3 }, { id: "hound-3", type: "hound", ...point(35, 7), level: 4 },
-      { id: "boss-mistfang", type: "boss", ...point(37, 4), level: 5, boss: true },
+      { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },
+      { id: "slime-3", type: "raccoon", ...point(20, 25), level: 1 }, { id: "slime-4", type: "raccoon", ...point(25, 27), level: 2 },
+      { id: "warden-west", type: "turtle", ...point(16, 25), level: 2, crystal: "west" }, { id: "warden-hollow", type: "turtle", ...point(28, 27), level: 3, crystal: "hollow" }, { id: "warden-north", type: "turtle", ...point(37, 14), level: 2, crystal: "north" },
+      { id: "wisp-1", type: "chick", ...point(22, 27), level: 2 }, { id: "wisp-2", type: "fox", ...point(34, 21), level: 2 }, { id: "hound-1", type: "wild_boar", ...point(37, 18), level: 3 }, { id: "hound-2", type: "wild_boar", ...point(37, 10), level: 3 }, { id: "hound-3", type: "coyote", ...point(35, 7), level: 4 },
+      { id: "boss-mistfang", type: "bear", ...point(37, 4), level: 5, boss: true, mainBoss: true },
     ];
     const gate = { id: "ruin-gate", name: "坑道封印", kind: "gate", x: 35 * TILE, y: 7 * TILE + 10, w: 5 * TILE, h: 20 };
     const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回霧都主城", point(32.5, 13), { interactionMode: "gate", transitionType: TRANSITION_TYPES.PHYSICAL_GATE });

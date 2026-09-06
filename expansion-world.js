@@ -44,6 +44,15 @@
     tileAt: helpers.tileAt,
     isTileSolid: helpers.isTileSolid,
     monsterBlueprint: monsters.monsterBlueprint,
+    normalizeMonsterId: monsters.normalizeMonsterId,
     hydrateMonsterSpawn: monsters.hydrateMonsterSpawn,
+    monsterStatsAtLevel: monsters.monsterStatsAtLevel,
+    xpReward: monsters.xpReward,
+    retreatChance: monsters.retreatChance,
+    highestLivingEnemyLevel: monsters.highestLivingEnemyLevel,
+    selectMonsterSkill: monsters.selectMonsterSkill,
+    CANONICAL_MONSTER_IDS: monsters.CANONICAL_MONSTER_IDS,
+    LEGACY_MONSTER_MIGRATION: monsters.LEGACY_MONSTER_MIGRATION,
+    MONSTER_SKILLS: monsters.SKILLS,
   };
 });

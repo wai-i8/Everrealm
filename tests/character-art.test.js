@@ -79,8 +79,8 @@ test("monster visual profiles provide semantic name anchors independent of atlas
     assert.ok(profiles[type].nameLift > 0, `${type} name lift should be above its foot baseline`);
     assert.ok(Number.isFinite(profiles[type].nameOffsetX), `${type} needs a semantic name x offset`);
   }
-  assert.ok(profiles.boss.nameLift > profiles.slime.nameLift, "large monsters need a higher label anchor");
-  assert.ok(profiles.deepwarden.nameLift > profiles.cragboar.nameLift, "deep bosses need a higher label anchor");
+  assert.ok(profiles.bear.nameLift > profiles.fox.nameLift, "large monsters need a higher label anchor");
+  assert.ok(profiles.snake.nameLift > profiles.wild_boar.nameLift, "tall source art needs a higher label anchor");
 });
 
 test("semantic pivots align asymmetric cut-outs without changing their scale", () => {
@@ -112,7 +112,7 @@ test("generated art atlases expose stable manifests and all active assets exist"
   assert.deepEqual([...new Set(Object.values(Art.terrainSpriteIndices))].sort((a, b) => a - b), [...Array(12).keys()]);
   assert.deepEqual([...new Set(Object.values(Art.interiorSpriteIndices))].sort((a, b) => a - b), [...Array(12).keys()]);
   const monsterFrames = Object.values(Art.monsterSpriteIndices);
-  assert.equal(monsterFrames.length, 10);
+  assert.ok(monsterFrames.length >= 19);
   assert.deepEqual(
     [...new Set(monsterFrames.filter((frame) => frame.atlas === "monstersCore").map((frame) => frame.row))].sort((a, b) => a - b),
     [...Array(5).keys()],

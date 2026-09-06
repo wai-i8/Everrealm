@@ -46,6 +46,7 @@ npm test
 - 戰棋戰鬥、同步移動、戰鬥行走動畫狀態、碰撞、面向基準正交攻擊路線、Projectile、AP、技能高低差、AI、高低差戰鬥規則：`docs/BATTLE_SYSTEM.md`
 - 地圖、場景、入口、傳送、探索碰撞、Biome、遭遇及探索 → 戰場生成：`docs/MAP_SYSTEM.md`
 - 寵物／Familiar、捕獲、育成、同行及戰鬥／生產接口：`docs/PET_SYSTEM.md`
+- 怪物 canonical roster、棲地、等級／獎勵、戰鬥技能、遷移及 Codex：`docs/MONSTER_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 幸福 Online / STRUGARDEN 格鬥士原版技能樹、explicit prerequisite graph、射程格／machine-readable relative cells、高低差及入手方法 reference：`docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`

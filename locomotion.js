@@ -17,9 +17,21 @@
   const assets = Object.freeze({
     fighter: "assets/locomotion/fighter-v1.png",
     warrior: "assets/locomotion/warrior-v1.png",
+    raccoon: "assets/locomotion/raccoon-v1.png",
+    chick: "assets/locomotion/chick-v1.png",
+    fox: "assets/locomotion/fox-v1.png",
+    // Save/smoke compatibility aliases; new runtime spawns use canonical IDs.
     slime: "assets/locomotion/raccoon-v1.png",
     wisp: "assets/locomotion/chick-v1.png",
     hound: "assets/locomotion/fox-v1.png",
+  });
+  const sourceArt = Object.freeze({
+    snake: "assets/monster-sources/snake.png",
+    fox: "assets/monster-sources/fox.png",
+    wild_boar: "assets/monster-sources/wild-boar.png",
+    frog: "assets/monster-sources/frog.png",
+    turtle: "assets/monster-sources/turtle.png",
+    bear: "assets/monster-sources/bear.png",
   });
   const direction = (value) => Object.hasOwn(STANDARD_MOBILE_UNIT_SPRITE.directions, value) ? value : "down";
   function facingFromDelta(dx, dy, fallback = "down") {
@@ -71,5 +83,5 @@
     }
     return { state: moving ? "walk" : "idle", facing, time: moving ? Math.max(0, time - times[start]) * movement.stepDuration : 0 };
   }
-  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, assets, create, update, frame, layout, facingFromDelta, sampleMovement });
+  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, assets, sourceArt, create, update, frame, layout, facingFromDelta, sampleMovement });
 });
