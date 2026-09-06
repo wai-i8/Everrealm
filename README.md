@@ -41,6 +41,7 @@ npm test
 ## 文件索引
 
 - Codex / Agent 工作規則、文件 routing、folder 用途：`AGENTS.md`
+- 平行 task 的 Git／worktree 隔離、提交、整合及衝突安全流程：`docs/DEVELOPMENT_WORKFLOW.md`
 - 全局玩法、探索 UX、UI、技能／DECK、成長及跨系統設計：`GAME_DESIGN.md`
 - 戰棋戰鬥、同步移動、戰鬥行走動畫狀態、碰撞、面向基準正交攻擊路線、Projectile、AP、技能高低差、AI、高低差戰鬥規則：`docs/BATTLE_SYSTEM.md`
 - 地圖、場景、入口、傳送、探索碰撞、Biome、遭遇及探索 → 戰場生成：`docs/MAP_SYSTEM.md`
