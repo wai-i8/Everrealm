@@ -6,8 +6,8 @@
 
 - 主專案工作樹 `C:\Users\lauka\Projects\Everrealm` 固定作為 `main` 的穩定整合工作樹。
 - 預設 worktree parent 是 `C:\Users\lauka\Projects\Everrealm-worktrees\`。
-- 每個會修改檔案的獨立 task 都有自己的 worktree 及 branch；不同 thread 絕不共用同一個實體工作目錄。
-- `main` 只在有意識的整合階段被修改；一般開發、測試及 review 都在 task worktree 內完成。
+- 一般功能、較大修改及任何平行開發都使用獨立 worktree + branch；不同 thread 絕不共用同一個實體工作目錄。
+- `main` 主要用於有意識的整合；只有符合本文件「direct-main 小改」全部條件的單線低風險小修改，才可直接編輯並立即 commit。
 - 已存在的未提交工作屬於使用者或其他 task。不可把它當成可丟棄的暫存物，也不可用任何命令覆蓋它。
 - 發生真正衝突時，兩條已提交的 task branch 都必須保留；不可用 `ours`／`theirs`、強制 checkout 或其他手段靜默丟掉一方。
 
@@ -15,7 +15,20 @@
 
 純讀取、研究、檢視 diff 或回答問題，不需要新建 worktree。
 
-只要會新增、修改、移動、刪除或格式化專案檔案，就屬於修改 task。即使目前不知道有沒有其他 active thread，也必須隔離；不能靠對話記憶或人工提醒來判斷 collision risk。
+會新增、修改、移動、刪除或格式化專案檔案，就屬於修改 task。修改 task **預設** 使用獨立 feature branch + worktree；不能只因「看起來沒有其他 thread」就自行跳過隔離。
+
+### Direct-main 小改例外
+
+只有在以下條件 **全部成立** 時，才可有意識地選擇直接在 `main` 完成一個小修改：
+
+- 開始前 `git status --short` 為空，`main` 完全乾淨；
+- 目前 branch 明確是 `main`；
+- 沒有平行 feature 工作正在依賴同一個 `main` 狀態，亦沒有另一個操作同時使用主工作樹；
+- task 明確是單線進行；
+- 變更很小、低風險且範圍清楚，例如純文件小改或同等級的局部調整；
+- 修改完成後會立即檢查 diff、執行適當驗證並直接 commit，不會把 `main` 留在 dirty 狀態。
+
+Direct-main 必須是有意識的例外，而不是 agent 自己因為猜測「應該沒有其他工作」而採用。只要任一條件不成立，改用正常 dedicated worktree + branch 流程。
 
 ## 2. 修改 task 的 Git preflight
 
@@ -30,12 +43,12 @@ git worktree list
 三項輸出都要讀完：
 
 - `git status --short` 用來確認目前是否有既有未提交修改；不可覆蓋它們。
-- `git branch --show-current` 用來確認目前 branch；正常修改 task 不應停留在 `main` 編輯。
-- `git worktree list` 用來查看已有 worktree、路徑及 branch，避免重用其他 task 的工作目錄。
+- `git branch --show-current` 用來確認目前 branch；一般 feature 修改不應停留在 `main` 編輯。若明確採用 direct-main 小改，則必須確認 branch 正是 `main` 且工作樹乾淨。
+- `git worktree list` 用來查看已有 worktree、路徑及 branch，避免重用其他 task 的工作目錄，亦協助確認 direct-main 是否真的適合。
 
-如果主工作樹不乾淨，先檢視並向用戶報告。仍可從當前已提交的 `main` 建立新的隔離 worktree，但要明確說明：主工作樹的未提交修改不會帶入新 task。不可替使用者 stash、reset、clean 或刪除這些修改。
+如果主工作樹不乾淨，direct-main 小改必須停止。一般 feature task 仍可從當前已提交的 `main` 建立新的隔離 worktree，但要明確說明：主工作樹的未提交修改不會帶入新 task。不可替使用者 stash、reset、clean 或刪除這些修改。
 
-## 3. 建立或識別 task worktree
+## 3. 建立或識別一般 task worktree
 
 ### 命名
 
@@ -93,9 +106,105 @@ Set-Location $worktreePath
 
 提交前後都不要使用 `git reset --hard`、`git clean -fd`、強制 checkout／restore 或強制刪 branch 來「整理」工作樹。除非用戶明確要求該項 exact destructive action，任何既有工作都必須保留。
 
-## 5. Main 整合流程
+### Direct-main 小改 lifecycle
 
-整合是獨立且有意識的階段；整合時必須確保只有一個操作正在使用 `main` 工作樹。一般 task 應先完成 branch commit，再回報 ready；沒有清楚的整合 ownership 時，不要自行與另一個可能同時進行的整合操作競爭。
+當第 1 節全部 direct-main 條件都成立，而且 task 明確選擇此模式時：
+
+1. 在 `C:\Users\lauka\Projects\Everrealm` 執行 preflight，確認 `main` 且工作樹乾淨。
+2. 只修改這個小 task 明確需要的檔案，不順手加入 unrelated cleanup。
+3. 檢查 `git diff`、`git diff --check` 及 `git status --short`。
+4. 執行與變更風險相稱的驗證；純文件修改通常只需 diff／格式／文件一致性檢查，不需 unrelated gameplay runtime smoke。
+5. 直接在 `main` `git add` 並 commit。
+6. 再次執行 `git status --short`，必須恢復乾淨狀態。
+
+此流程不建立 feature branch、worktree 或後續 merge。若修改途中 scope 擴大、出現平行工作或發現 main 狀態不再符合條件，停止 direct-main 流程並重新選擇安全的隔離方式。
+
+## 5. 驗證責任與整合層級
+
+本流程的目的不是「少測試」，而是把深度驗證放在最適合的位置，避免平行開發最後被重複的全量回歸抵消時間收益。
+
+### A. Feature verification
+
+每條修改 feature branch 在宣稱 ready for integration 前，負責深度驗證自己的功能。按實際影響包括：
+
+- relevant automated tests；
+- feature-specific runtime smoke；
+- UI／sprite／map／battlefield／animation 等視覺變更的實際 runtime／visual verification；
+- 影響 persistence 時的 save/load 驗證；
+- 影響 battle 時的相關 battle smoke；
+- 文件與 runtime source-of-truth 一致性；
+- 回報已知限制；
+- 最後保持 worktree clean 且完成 commit。
+
+Feature thread 擁有自己功能最昂貴、最詳細的驗證；不能只因「code 寫完」就視為 ready。
+
+### B. Normal integration verification
+
+正常整合一批已完成 branch 時，逐條 merge，但每條只做與該 branch 有關的快速整合檢查：
+
+```text
+Branch A
+→ merge
+→ git diff --check
+→ targeted smoke for A
+
+Branch B
+→ merge
+→ git diff --check
+→ targeted smoke for B
+
+Branch C
+→ merge
+→ git diff --check
+→ targeted smoke for C
+
+全部 selected branches 完成後
+→ npm test 一次
+→ basic combined game-load/runtime smoke
+→ runtimeErrors: 0
+→ final main clean
+```
+
+如果 incoming feature branch 已完成可靠的 feature verification，**不要**在每條 individual merge 後重跑整套 unrelated full regression。例子：
+
+- Monster branch → monster 相關 targeted smoke；
+- Guild branch → Guild commission loop targeted smoke；
+- Main Town branch → Main Town／transition targeted smoke；
+- UI-only branch → affected UI smoke；
+- documentation-only branch → 不需 unrelated gameplay smoke。
+
+整批 merge 完後仍必須跑一次完整 `npm test`，再做基本 combined runtime smoke。
+
+### C. Escalated integration verification
+
+只有出現較高整合風險時，才升級到 broader cross-system／full runtime verification，例如：
+
+- 發生 merge conflict 或需要語意 conflict resolution；
+- shared/core infrastructure 改動；
+- SaveSystem／schema／migration 改動；
+- battle foundation 改動；
+- map engine／transition foundation 改動；
+- 多條 branch 修改同一段 cross-system runtime logic；
+- integration 本身需要 code fix；
+- automated tests 失敗；
+- targeted runtime smoke 暴露 regression；
+- incoming feature branch 的驗證不完整或不可靠。
+
+此時較廣泛驗證是風險驅動的必要措施，而不是每次正常 merge 的預設成本。
+
+### D. Documentation-only verification
+
+純文件修改通常只需要：
+
+- 檢查 `git diff`；
+- `git diff --check`；
+- 文件之間的 source-of-truth／routing／措辭一致性。
+
+除非文件會直接驅動 generated/runtime behaviour 或 executable configuration，否則不需要 unrelated gameplay runtime smoke。
+
+## 6. Main 整合流程
+
+本節描述 feature branch → `main` 的整合流程。整合是獨立且有意識的階段；整合時必須確保只有一個操作正在使用 `main` 工作樹。一般 feature task 應先完成 branch commit，再回報 ready；沒有清楚的整合 ownership 時，不要自行與另一個可能同時進行的整合操作競爭。第 1／4 節允許的 direct-main 小改不屬於此 merge 流程。
 
 開始整合前，在主專案工作樹重新執行 Git preflight：
 
@@ -126,9 +235,9 @@ git diff --check
 git diff HEAD^1 HEAD
 ```
 
-整合後重跑受影響的 automated tests，並按需要重做 runtime／visual verification。確認成功前，不要刪除 task worktree 或 branch。
+每條 branch merge 後按第 5 節執行 `git diff --check` 與該 branch 的 targeted smoke；正常情況不要在每條 individual merge 後重跑整套 unrelated full regression。當本批所有 selected branches 都完成後，再跑一次完整 `npm test` 及 basic combined game-load/runtime smoke。確認整批成功前，不要刪除 task worktree 或 branch。
 
-## 6. Merge 結果與衝突處理
+## 7. Merge 結果與衝突處理
 
 ### A. Git 可以自動 clean merge
 
@@ -136,7 +245,7 @@ git diff HEAD^1 HEAD
 
 1. 檢查整合後的 diff、`git status --short` 及 `git diff --check`；
 2. 確認兩個 task 的意圖都仍存在，不能因為 Git 沒報錯就假定語意正確；
-3. 重跑受影響的 tests 及必要的 runtime／visual verification；
+3. 按第 5 節重跑受影響的 targeted tests／smoke；只有風險條件成立時才升級 broader runtime／visual verification；
 4. 通過後才把整合視為成功，並回報 merge commit／目前 `main` commit。
 
 ### B. Git 報告真正的 conflict
@@ -160,7 +269,7 @@ git diff HEAD^1 HEAD
 
 若已開始 merge 而尚未安全解決，且主樹在 merge 前是乾淨的，可用 `git merge --abort` 回到整合前狀態；這不是丟棄任何已提交 branch。若 abort 的前提不明確，先停止並請用戶決定，絕不可用 reset／clean 來消除 conflict。兩條 task branch 及各自 worktree 必須保留。
 
-## 7. Binary asset conflicts
+## 8. Binary asset conflicts
 
 PNG、WebP、audio 及其他 binary 檔案不能作有意義的 line merge。如果兩個 task 修改同一個 runtime binary：
 
@@ -171,13 +280,13 @@ PNG、WebP、audio 及其他 binary 檔案不能作有意義的 line merge。如
 
 Binary conflict 不可當成普通文字 conflict 處理。
 
-## 8. Shared documentation conflicts
+## 9. Shared documentation conflicts
 
 `AGENTS.md`、`README.md`、`GAME_DESIGN.md`、`ART_PIPELINE.md` 及 system docs 可能被多個 task 修改。整合時要合併彼此獨立且有效的文件變更，不可整份盲選某一 branch；同時遵守既有 source-of-truth hierarchy。
 
 若兩個 task 寫入互不相容的永久規則，這是語意衝突：保留兩個 branch，停止整合並請用戶決定，不可由 agent 靜默選擇。
 
-## 9. Main cleanliness 與完成後清理
+## 10. Main cleanliness 與完成後清理
 
 穩定狀態應該是：
 
@@ -195,7 +304,7 @@ git branch -d task/<slug>
 
 不可使用 `--force` 清理。若清理前發現任何未提交內容，停止並保留 worktree；不要把「清理」當成刪除工作的理由。
 
-## 10. Agent 結束前回報格式
+## 11. Agent 結束前回報格式
 
 每個完成的修改 task 至少回報：
 
@@ -207,4 +316,4 @@ git branch -d task/<slug>
 - 是否曾發生 merge conflict，以及如何處理；
 - 若尚未整合，明確標示等待整合，不宣稱 `main` 已包含該修改。
 
-本流程不允許任何 task 以「看起來沒有其他 thread」作為共用 `main` 或別人 worktree 的理由。
+除第 1／4 節明確定義的 direct-main 小改例外外，本流程不允許任何 task 以「看起來沒有其他 thread」作為共用 `main` 或別人 worktree 的理由。Direct-main 必須先滿足全部條件、明確選擇該模式，並在同一 task 內立即 commit 及恢復 clean `main`。
