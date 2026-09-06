@@ -1,0 +1,394 @@
+﻿<!doctype html>
+<html lang="zh-HK">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="description" content="永恆國度 — 有探索、戰棋回合戰鬥、任務同角色育成嘅短篇 browser RPG。" />
+    <title>永恆國度 · Everrealm</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="gameShell" class="game-shell">
+      <section id="gameStage" class="game-stage" data-game-state="title" data-testid="game-stage">
+        <canvas id="gameCanvas" tabindex="0" aria-label="永恆國度遊戲地圖。探索時撳地面移動，長按半秒可拖住指向角色；遇敵後喺格仔棋盤輪流行動。">
+          你的瀏覽器需要支援 Canvas 才能玩。
+        </canvas>
+
+        <aside id="exploreSidebar" class="explore-sidebar" aria-label="探索功能列">
+          <section id="playerHud" class="player-hud hud-card" role="button" tabindex="0" aria-label="打開角色狀態欄">
+            <div class="portrait art-portrait" aria-hidden="true"><canvas id="playerHudPortraitCanvas" width="112" height="112"></canvas></div>
+            <div class="player-bars">
+              <div class="name-row"><strong>阿巡</strong><span id="levelValue">LV. 1</span></div>
+              <div class="bar hp-bar"><i id="hpFill"></i><span id="hpText">88 / 88</span></div>
+              <div class="bar xp-bar"><i id="xpFill"></i><span id="xpText">0 / 84 XP</span></div>
+            </div>
+          </section>
+
+          <section id="resourceHud" class="resource-hud hud-card" aria-label="物資">
+            <span><i class="coin-icon" aria-hidden="true"></i><b id="coinValue">0</b></span>
+            <span><i class="potion-icon" aria-hidden="true"></i><b id="potionValue">2</b></span>
+            <span><i class="blade-icon" aria-hidden="true"></i><b id="weaponValue">舊刀 +0</b></span>
+          </section>
+
+          <nav class="explore-function-menu" aria-label="角色功能">
+            <button id="statusButton" class="explore-menu-button" type="button" aria-label="打開角色狀態欄">
+              <span class="explore-menu-icon" aria-hidden="true">◎</span>
+              <span class="explore-menu-copy"><b>狀態</b><small>STATUS</small></span>
+            </button>
+            <button id="inventoryButton" class="explore-menu-button" type="button" aria-label="打開物品欄（I）">
+              <span class="explore-menu-icon" aria-hidden="true">▣</span>
+              <span class="explore-menu-copy"><b>物品欄</b><small>I · ITEMS</small></span>
+              <b id="inventoryBookBadge" class="menu-badge" hidden>0</b>
+            </button>
+            <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開戰技面板">
+              <span class="explore-menu-icon" aria-hidden="true">▤</span>
+              <span class="explore-menu-copy"><b>戰技面板</b><small>DECK · 城門設定</small></span>
+            </button>
+            <button id="skillTreeButton" class="explore-menu-button" type="button" aria-label="打開技能樹（L）">
+              <span class="explore-menu-icon" aria-hidden="true">✧</span>
+              <span class="explore-menu-copy"><b>技能樹</b><small>L · SKILLS</small></span>
+            </button>
+            <div id="zoomControl" class="explore-zoom-control" role="group" aria-label="地圖視角">
+              <span>視角</span>
+              <button type="button" data-zoom-level="far" aria-pressed="false">遠</button>
+              <button type="button" data-zoom-level="mid" aria-pressed="true">中</button>
+              <button type="button" data-zoom-level="near" aria-pressed="false">近</button>
+            </div>
+            <div class="sidebar-utility-buttons" aria-label="系統功能">
+              <button id="soundButton" class="round-button" type="button" aria-label="關閉聲效" aria-pressed="true">♪</button>
+              <button id="pauseButton" class="round-button" type="button" aria-label="暫停遊戲">Ⅱ</button>
+            </div>
+          </nav>
+
+          <section id="questHud" class="quest-hud hud-card" aria-label="目前任務">
+            <div class="quest-heading" role="tablist" aria-label="任務追蹤分類">
+              <button type="button" role="tab" data-quest-track="main" aria-selected="true">主線</button>
+              <button type="button" role="tab" data-quest-track="contract" aria-selected="false">公會委託</button>
+              <i aria-hidden="true"></i>
+            </div>
+            <strong id="questTitle">去港口搵阿澄</strong>
+            <p id="questDetail">問下長明燈發生咩事</p>
+            <small id="questDistance">目標喺附近</small>
+          </section>
+        </aside>
+
+        <aside class="minimap-wrap hud-card" aria-label="小地圖">
+          <canvas id="miniMap" width="180" height="180" aria-hidden="true"></canvas>
+          <img class="minimap-art-frame" src="assets/minimap-frame-v1.png" alt="" aria-hidden="true" />
+          <span id="zoneName">舊港村</span>
+        </aside>
+
+        <div id="locationBanner" class="location-banner" aria-live="polite">
+          <small>NOW ENTERING</small>
+          <strong>舊港村</strong>
+        </div>
+
+        <div id="gameToast" class="game-toast" aria-live="assertive" aria-atomic="true"></div>
+        <div id="saveToast" class="save-toast" aria-live="polite"><span aria-hidden="true">✦</span> 燈火已記低</div>
+
+        <div id="interactionPrompt" class="interaction-prompt" hidden>
+          <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
+        </div>
+
+        <section id="battleHud" class="battle-hud" data-battle-ui data-battle-phase="command" aria-label="戰棋戰鬥介面" hidden>
+          <div class="battle-corner battle-corner-left" aria-hidden="true"></div>
+          <div class="battle-corner battle-corner-right" aria-hidden="true"></div>
+
+          <section id="battleEncounterIntro" class="battle-encounter-intro" data-battle-panel="encounter-intro" aria-labelledby="battleEncounterTitle" hidden>
+            <div class="encounter-stamp" aria-hidden="true"><span>!</span></div>
+            <div>
+              <p>TACTICAL ENCOUNTER</p>
+              <h2 id="battleEncounterTitle">霧中有動靜！</h2>
+              <span id="battleEncounterSubtitle">先同步走位，再同步出招。</span>
+            </div>
+            <button id="battleStartButton" class="battle-start-button" type="button" data-battle-action="start">
+              <span>迎戰</span><small>ENTER</small>
+            </button>
+          </section>
+
+          <header id="battleTurnHeader" class="battle-turn-header" data-battle-panel="turn-status">
+            <span id="battleRoundLabel" class="battle-round-label">ROUND 1</span>
+            <strong id="battleTurnLabel">阿巡嘅回合</strong>
+            <span id="battlePhaseLabel" class="battle-phase-label">先部署移動，再選擇行動</span>
+          </header>
+
+          <aside id="selectedUnitCard" class="selected-unit-card battle-card" data-battle-panel="selected-unit" aria-label="目前角色狀態">
+            <div id="selectedUnitPortrait" class="battle-unit-portrait art-portrait" data-unit-team="ally" aria-hidden="true">
+              <canvas id="selectedUnitPortraitCanvas" width="144" height="144"></canvas>
+            </div>
+            <div class="selected-unit-copy">
+              <div class="selected-unit-heading">
+                <span id="selectedUnitRole">巡燈人</span>
+                <b id="selectedUnitLevel">LV. 1</b>
+              </div>
+              <strong id="selectedUnitName">阿巡</strong>
+              <div class="battle-stat-row">
+                <span>HP</span>
+                <div class="battle-stat-bar"><i id="selectedUnitHpFill" style="width: 100%"></i></div>
+                <b id="selectedUnitHpText">88 / 88</b>
+              </div>
+              <div id="selectedUnitStatuses" class="unit-status-list" data-battle-status-list aria-label="角色狀態">
+                <span class="unit-status is-good" data-status="lantern">燈護</span>
+              </div>
+            </div>
+          </aside>
+
+          <nav id="battleTurnOrder" class="battle-turn-order battle-card" data-battle-panel="turn-order" aria-label="行動次序">
+            <span class="turn-order-title">今輪行動</span>
+            <ol id="battleTurnOrderList" data-battle-turn-list>
+              <li class="is-current" data-unit-id="player"><span class="turn-avatar ally-avatar" aria-hidden="true">巡</span><b>阿巡</b></li>
+              <li data-unit-id="enemy-preview"><span class="turn-avatar enemy-avatar" aria-hidden="true">霧</span><b>霧獸</b></li>
+            </ol>
+          </nav>
+
+          <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="戰鬥指令">
+            <div class="battle-action-heading">
+              <span>分段戰鬥指令</span>
+              <small id="battleActionPoints">燈力 AP 10 / 200</small>
+            </div>
+            <div id="battleSkillButtons" class="battle-skill-buttons">
+              <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="move" aria-keyshortcuts="M">
+                <i aria-hidden="true">✣</i><span><b>確認移動</b><small>睇路線 · 揀藍色格</small></span><kbd>M</kbd>
+              </button>
+              <span class="battle-actions-loading">技能卡準備中……</span>
+            </div>
+            <p id="battleHint" class="battle-hint" data-battle-hint aria-live="polite">
+              <span aria-hidden="true">☝</span> 先揀指令，再撳棋盤上發光嘅格仔。
+            </p>
+          </section>
+
+          <div id="battleFacingPicker" class="battle-facing-picker" aria-label="選擇移動後朝向" hidden>
+            <button class="facing-up" type="button" data-battle-facing="up" aria-label="面向上並確認移動">▲</button>
+            <button class="facing-left" type="button" data-battle-facing="left" aria-label="面向左並確認移動">◀</button>
+            <span aria-hidden="true">朝向</span>
+            <button class="facing-right" type="button" data-battle-facing="right" aria-label="面向右並確認移動">▶</button>
+            <button class="facing-down" type="button" data-battle-facing="down" aria-label="面向下並確認移動">▼</button>
+          </div>
+        </section>
+
+        <section id="titleScreen" class="overlay title-screen" aria-labelledby="gameTitle">
+          <div class="title-mist mist-one"></div>
+          <div class="title-mist mist-two"></div>
+          <div class="title-lantern" aria-hidden="true"><i></i><span></span></div>
+          <p class="eyebrow">A SHORT NIGHT-TIME ADVENTURE</p>
+          <h1 id="gameTitle"><span>永恆</span><span>國度</span></h1>
+          <p class="english-title">EVERREALM</p>
+          <p class="title-copy">霧散之前，點亮返呢座城。</p>
+          <div class="title-actions">
+            <button id="newGameButton" class="primary-button" type="button"><span>開始夜巡</span><small>NEW GAME</small></button>
+            <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span><small>CONTINUE</small></button>
+          </div>
+          <div class="control-strip">
+            <span><b>撳地面</b> 移動</span>
+            <span><b>撳角色</b> 互動</span>
+            <span><b>滑鼠 / ENTER</b> 戰鬥揀格</span>
+            <span><b>ESC</b> 戰鬥撤退</span>
+          </div>
+        </section>
+
+        <section id="classSelectPanel" class="overlay modal-overlay class-select-panel" aria-labelledby="classSelectTitle" hidden>
+          <p class="modal-kicker">CHOOSE YOUR FIRST PATH</p>
+          <h2 id="classSelectTitle">選擇初始職業</h2>
+          <p>職業會決定初始武器、技能樹同戰鬥動作。</p>
+          <div class="class-choice-grid">
+            <button class="class-choice-card" type="button" data-class-choice="warrior">
+              <canvas id="warriorClassCanvas" width="220" height="230" aria-hidden="true"></canvas>
+              <strong>戰士</strong><small>刀劍 · 見習燈刃 · 瞬刃</small>
+            </button>
+            <button class="class-choice-card" type="button" data-class-choice="fighter">
+              <canvas id="fighterClassCanvas" width="220" height="230" aria-hidden="true"></canvas>
+              <strong>格鬥士</strong><small>拳套 · 見習拳套 · 正拳</small>
+            </button>
+          </div>
+          <button id="classSelectCancel" class="secondary-button" type="button">返回標題</button>
+        </section>
+
+        <section id="skillBookConfirmPanel" class="overlay modal-overlay skill-book-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="skillBookConfirmTitle" data-modal-backdrop-dismiss="skill-book-confirm" hidden>
+          <button
+            id="skillBookConfirmCloseButton"
+            class="modal-close-button"
+            type="button"
+            data-modal-dismiss="skill-book-confirm"
+            aria-label="關閉技能書視窗"
+            title="關閉"
+          ><span aria-hidden="true">×</span></button>
+          <div class="skill-book-confirm-icon" aria-hidden="true">📖</div>
+          <p class="modal-kicker">SKILL MANUAL</p>
+          <h2 id="skillBookConfirmTitle">技能書</h2>
+          <p id="skillBookConfirmDescription"></p>
+          <dl id="skillBookConfirmStats" class="skill-book-confirm-stats"></dl>
+          <div class="modal-actions">
+            <button id="skillBookLearnButton" class="primary-button" type="button">確認學習</button>
+            <button id="skillBookCancelButton" class="secondary-button" type="button">取消</button>
+          </div>
+        </section>
+
+        <section id="skillDetailPanel" class="overlay modal-overlay skill-book-confirm-panel skill-detail-panel" role="dialog" aria-modal="true" aria-labelledby="skillDetailTitle" data-modal-backdrop-dismiss="skill-detail" hidden>
+          <button
+            id="skillDetailCloseButton"
+            class="modal-close-button"
+            type="button"
+            data-modal-dismiss="skill-detail"
+            aria-label="關閉技能資料視窗"
+            title="關閉"
+          ><span aria-hidden="true">×</span></button>
+          <div id="skillDetailIcon" class="skill-book-confirm-icon" aria-hidden="true">技</div>
+          <p class="modal-kicker">SKILL DETAIL</p>
+          <h2 id="skillDetailTitle">技能資料</h2>
+          <p id="skillDetailDescription"></p>
+          <dl id="skillDetailStats" class="skill-book-confirm-stats"></dl>
+          <div class="modal-actions">
+            <button id="skillDetailLearnButton" class="primary-button" type="button" hidden>學習</button>
+            <button id="skillDetailDismissButton" class="secondary-button" type="button">返回技能樹</button>
+          </div>
+        </section>
+
+        <section id="dialoguePanel" class="dialogue-panel" aria-live="polite" hidden>
+          <div id="dialoguePortrait" class="dialogue-portrait art-portrait" aria-hidden="true">
+            <canvas id="dialoguePortraitCanvas" width="176" height="208"></canvas>
+          </div>
+          <div class="dialogue-body">
+            <span id="speakerName" class="speaker-name">阿澄</span>
+            <p id="dialogueText"></p>
+            <div id="dialogueChoices" class="dialogue-choices" hidden></div>
+            <button id="dialogueNext" class="dialogue-next" type="button"><kbd>E</kbd> 繼續 <i aria-hidden="true">▼</i></button>
+          </div>
+        </section>
+
+        <section id="levelUpPanel" class="overlay modal-overlay" aria-labelledby="levelTitle" hidden>
+          <div class="level-burst" aria-hidden="true"></div>
+          <p class="modal-kicker">LANTERN GROWS BRIGHTER</p>
+          <h2 id="levelTitle">升到 <span id="newLevelValue">LV. 2</span>！</h2>
+          <p>揀一項永久成長</p>
+          <div class="upgrade-grid">
+            <button class="upgrade-card" type="button" data-upgrade="vigor">
+              <i class="upgrade-icon heart-icon" aria-hidden="true">♥</i>
+              <span><b>厚皮袍</b><small>最大生命 +18<br />即時回復生命</small></span>
+              <kbd>1</kbd>
+            </button>
+            <button class="upgrade-card" type="button" data-upgrade="edge">
+              <i class="upgrade-icon sword-icon" aria-hidden="true">╱</i>
+              <span><b>燈火斬</b><small>攻擊 +4<br />暴擊率提升</small></span>
+              <kbd>2</kbd>
+            </button>
+            <button class="upgrade-card" type="button" data-upgrade="swift">
+              <i class="upgrade-icon boot-icon" aria-hidden="true">➜</i>
+              <span><b>追風步</b><small>移速 +7.5%<br />閃身更快回復</small></span>
+              <kbd>3</kbd>
+            </button>
+          </div>
+        </section>
+
+        <section id="pausePanel" class="overlay modal-overlay pause-panel" aria-labelledby="pauseTitle" hidden>
+          <p class="modal-kicker">NIGHT WATCH PAUSED</p>
+          <h2 id="pauseTitle">停一停</h2>
+          <div class="stats-sheet">
+            <div><span>等級</span><b id="pauseLevel">1</b></div>
+            <div><span>攻擊</span><b id="pauseAttack">14</b></div>
+            <div><span>最大生命</span><b id="pauseHp">88</b></div>
+            <div><span>防禦</span><b id="pauseDefense">2</b></div>
+            <div><span>霧晶</span><b id="pauseCrystals">0 / 3</b></div>
+            <div><span>遊玩時間</span><b id="pauseTime">00:00</b></div>
+          </div>
+          <div class="modal-actions">
+            <button id="resumeButton" class="primary-button" type="button"><span>繼續夜巡</span><small>ESC</small></button>
+            <button id="saveButton" class="secondary-button" type="button">儲存進度</button>
+          </div>
+        </section>
+
+        <section id="deathPanel" class="overlay modal-overlay death-panel" aria-labelledby="deathTitle" hidden>
+          <p class="modal-kicker danger">YOUR LIGHT WENT OUT</p>
+          <h2 id="deathTitle">盞燈熄咗。</h2>
+          <p>唔緊要，港口盞燈仲記得你。<br />返去抖一抖，再嚟過。</p>
+          <button id="respawnButton" class="primary-button" type="button"><span>喺燈龕醒返</span><small>ENTER</small></button>
+        </section>
+
+        <section id="victoryPanel" class="overlay victory-panel" aria-labelledby="victoryTitle" hidden>
+          <div class="victory-rays" aria-hidden="true"></div>
+          <p class="modal-kicker">THE NORTH LIGHT BURNS AGAIN</p>
+          <h2 id="victoryTitle">北岸，重光。</h2>
+          <blockquote>「燈唔係因為唔會熄先叫長明；<br />係每次熄咗，都有人肯再點着。」</blockquote>
+          <div class="victory-stats">
+            <div><span>最終等級</span><b id="victoryLevel">LV. 5</b></div>
+            <div><span>夜巡時間</span><b id="victoryTime">18:42</b></div>
+            <div><span>搵到寶箱</span><b id="victoryChests">3 / 3</b></div>
+          </div>
+          <button id="keepPlayingButton" class="primary-button" type="button"><span>繼續探索</span><small>ENDLESS</small></button>
+        </section>
+
+        <section
+          id="facilityPanel"
+          class="overlay facility-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="facilityTitle"
+          aria-describedby="facilitySubtitle"
+          hidden
+        >
+          <div class="facility-window">
+            <header class="facility-header">
+              <div class="facility-heading-copy">
+                <p id="facilityKicker" class="facility-kicker">OLD HARBOUR SERVICES</p>
+                <h2 id="facilityTitle">巡燈人公會</h2>
+                <p id="facilitySubtitle">揀一份委託，等霧都重新熱鬧起來。</p>
+              </div>
+              <button id="facilityCloseButton" class="facility-close-button" type="button" aria-label="關閉設施選單">
+                <span aria-hidden="true">×</span><small>ESC</small>
+              </button>
+            </header>
+
+            <div id="facilityContent" class="facility-content" role="tabpanel" tabindex="0" aria-live="polite">
+              <div class="facility-empty-state">
+                <span aria-hidden="true">✦</span>
+                <strong>公會緊整理今晚嘅委託……</strong>
+                <small>稍等一陣，任務板就會亮起。</small>
+              </div>
+            </div>
+
+            <footer id="facilityFooter" class="facility-footer">
+              <p><span aria-hidden="true">☾</span> 完成委託會提升公會階級，解鎖更好裝備。</p>
+              <span><kbd>ESC</kbd> 返回地圖</span>
+            </footer>
+          </div>
+        </section>
+
+        <div id="ariaLive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+      </section>
+
+      <footer class="footer-hints">
+        <span><b>滑鼠 / 觸控</b> 撳地面移動</span>
+        <span><b>撳 NPC / 設施</b> 靠近或互動</span>
+        <span><b>左側選單</b> 狀態／物品／技能</span>
+        <span><b>戰鬥</b> 揀指令再揀格仔</span>
+        <span><b>ESC</b> 戰鬥撤退</span>
+      </footer>
+    </main>
+
+    <script src="rpg-core.js"></script>
+    <script src="map/map-constants.js"></script>
+    <script src="map/map-helpers.js"></script>
+    <script src="map/monster-blueprints.js"></script>
+    <script src="map/interior-helpers.js"></script>
+    <script src="maps/main-town.js"></script>
+    <script src="maps/mountain-field.js"></script>
+    <script src="maps/mine.js"></script>
+    <script src="maps/interiors/guild.js"></script>
+    <script src="maps/interiors/equipment-shop.js"></script>
+    <script src="maps/interiors/clinic.js"></script>
+    <script src="maps/interiors/general-store.js"></script>
+    <script src="maps/interiors/inn.js"></script>
+    <script src="map/map-transitions.js"></script>
+    <script src="map/map-registry.js"></script>
+    <script src="world.js"></script>
+    <script src="expansion-core.js"></script>
+    <script src="expansion-world.js"></script>
+    <script src="tactics-core.js"></script>
+    <script src="skill-core.js"></script>
+    <script src="fighter-effects.js"></script>
+    <script src="locomotion.js"></script>
+    <script src="character-art.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
+

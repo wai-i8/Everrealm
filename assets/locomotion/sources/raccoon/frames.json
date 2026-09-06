@@ -1,0 +1,421 @@
+﻿{
+  "geometryVersion": 1,
+  "source": "assets\\locomotion\\sources\\raccoon-alpha-v1.png",
+  "normalization": "offline semantic-root proposal; inspect contact sheet",
+  "frames": [
+    {
+      "direction": "down",
+      "column": 0,
+      "file": "down-0.png",
+      "sourceRect": [
+        27,
+        94,
+        210,
+        280
+      ],
+      "sourceAnchor": [
+        89.5,
+        180
+      ],
+      "sourceScale": 0.7111111111111111
+    },
+    {
+      "direction": "down",
+      "column": 1,
+      "file": "down-1.png",
+      "sourceRect": [
+        250,
+        94,
+        445,
+        280
+      ],
+      "sourceAnchor": [
+        90.5,
+        176
+      ],
+      "sourceScale": 0.7272727272727273
+    },
+    {
+      "direction": "down",
+      "column": 2,
+      "file": "down-2.png",
+      "sourceRect": [
+        478,
+        94,
+        673,
+        280
+      ],
+      "sourceAnchor": [
+        91.0,
+        174
+      ],
+      "sourceScale": 0.735632183908046
+    },
+    {
+      "direction": "down",
+      "column": 3,
+      "file": "down-3.png",
+      "sourceRect": [
+        706,
+        94,
+        900,
+        280
+      ],
+      "sourceAnchor": [
+        92.75,
+        186
+      ],
+      "sourceScale": 0.6881720430107527
+    },
+    {
+      "direction": "down",
+      "column": 4,
+      "file": "down-4.png",
+      "sourceRect": [
+        942,
+        94,
+        1134,
+        280
+      ],
+      "sourceAnchor": [
+        98.25,
+        176
+      ],
+      "sourceScale": 0.7272727272727273
+    },
+    {
+      "direction": "down",
+      "column": 5,
+      "file": "down-5.png",
+      "sourceRect": [
+        1166,
+        94,
+        1357,
+        280
+      ],
+      "sourceAnchor": [
+        95.5,
+        180
+      ],
+      "sourceScale": 0.7111111111111111
+    },
+    {
+      "direction": "down",
+      "column": 6,
+      "file": "down-6.png",
+      "sourceRect": [
+        1394,
+        94,
+        1586,
+        280
+      ],
+      "sourceAnchor": [
+        91.5,
+        176
+      ],
+      "sourceScale": 0.7272727272727273
+    },
+    {
+      "direction": "right",
+      "column": 0,
+      "file": "right-0.png",
+      "sourceRect": [
+        27,
+        302,
+        253,
+        458
+      ],
+      "sourceAnchor": [
+        96.5,
+        156
+      ],
+      "sourceScale": 0.8205128205128205
+    },
+    {
+      "direction": "right",
+      "column": 1,
+      "file": "right-1.png",
+      "sourceRect": [
+        260,
+        302,
+        482,
+        458
+      ],
+      "sourceAnchor": [
+        96.75,
+        153
+      ],
+      "sourceScale": 0.8366013071895425
+    },
+    {
+      "direction": "right",
+      "column": 2,
+      "file": "right-2.png",
+      "sourceRect": [
+        497,
+        302,
+        712,
+        458
+      ],
+      "sourceAnchor": [
+        92.25,
+        155
+      ],
+      "sourceScale": 0.8258064516129032
+    },
+    {
+      "direction": "right",
+      "column": 3,
+      "file": "right-3.png",
+      "sourceRect": [
+        720,
+        302,
+        942,
+        458
+      ],
+      "sourceAnchor": [
+        93.5,
+        153
+      ],
+      "sourceScale": 0.8366013071895425
+    },
+    {
+      "direction": "right",
+      "column": 4,
+      "file": "right-4.png",
+      "sourceRect": [
+        950,
+        302,
+        1171,
+        458
+      ],
+      "sourceAnchor": [
+        92.75,
+        153
+      ],
+      "sourceScale": 0.8366013071895425
+    },
+    {
+      "direction": "right",
+      "column": 5,
+      "file": "right-5.png",
+      "sourceRect": [
+        1180,
+        302,
+        1402,
+        458
+      ],
+      "sourceAnchor": [
+        94.5,
+        155
+      ],
+      "sourceScale": 0.8258064516129032
+    },
+    {
+      "direction": "right",
+      "column": 6,
+      "file": "right-6.png",
+      "sourceRect": [
+        1409,
+        302,
+        1631,
+        458
+      ],
+      "sourceAnchor": [
+        91.0,
+        155
+      ],
+      "sourceScale": 0.8258064516129032
+    },
+    {
+      "direction": "up",
+      "column": 0,
+      "file": "up-0.png",
+      "sourceRect": [
+        78,
+        500,
+        207,
+        679
+      ],
+      "sourceAnchor": [
+        65.0,
+        178
+      ],
+      "sourceScale": 0.7191011235955056
+    },
+    {
+      "direction": "up",
+      "column": 1,
+      "file": "up-1.png",
+      "sourceRect": [
+        290,
+        500,
+        423,
+        679
+      ],
+      "sourceAnchor": [
+        67.0,
+        174
+      ],
+      "sourceScale": 0.735632183908046
+    },
+    {
+      "direction": "up",
+      "column": 2,
+      "file": "up-2.png",
+      "sourceRect": [
+        513,
+        500,
+        643,
+        679
+      ],
+      "sourceAnchor": [
+        65.5,
+        177
+      ],
+      "sourceScale": 0.7231638418079096
+    },
+    {
+      "direction": "up",
+      "column": 3,
+      "file": "up-3.png",
+      "sourceRect": [
+        729,
+        500,
+        864,
+        679
+      ],
+      "sourceAnchor": [
+        68.5,
+        177
+      ],
+      "sourceScale": 0.7231638418079096
+    },
+    {
+      "direction": "up",
+      "column": 4,
+      "file": "up-4.png",
+      "sourceRect": [
+        952,
+        500,
+        1092,
+        679
+      ],
+      "sourceAnchor": [
+        67.5,
+        176
+      ],
+      "sourceScale": 0.7272727272727273
+    },
+    {
+      "direction": "up",
+      "column": 5,
+      "file": "up-5.png",
+      "sourceRect": [
+        1174,
+        500,
+        1319,
+        679
+      ],
+      "sourceAnchor": [
+        72.5,
+        179
+      ],
+      "sourceScale": 0.7150837988826816
+    },
+    {
+      "direction": "up",
+      "column": 6,
+      "file": "up-6.png",
+      "sourceRect": [
+        1399,
+        500,
+        1560,
+        679
+      ],
+      "sourceAnchor": [
+        80.5,
+        178
+      ],
+      "sourceScale": 0.7191011235955056
+    },
+    {
+      "direction": "left",
+      "column": 0,
+      "file": "left-0.png",
+      "sourceMirror": "right-0.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 1,
+      "file": "left-1.png",
+      "sourceMirror": "right-1.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 2,
+      "file": "left-2.png",
+      "sourceMirror": "right-2.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 3,
+      "file": "left-3.png",
+      "sourceMirror": "right-3.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 4,
+      "file": "left-4.png",
+      "sourceMirror": "right-4.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 5,
+      "file": "left-5.png",
+      "sourceMirror": "right-5.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    },
+    {
+      "direction": "left",
+      "column": 6,
+      "file": "left-6.png",
+      "sourceMirror": "right-6.png",
+      "sourceAnchor": [
+        128,
+        224
+      ],
+      "sourceScale": 128
+    }
+  ]
+}
+

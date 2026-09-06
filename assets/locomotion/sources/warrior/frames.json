@@ -1,0 +1,456 @@
+﻿{
+  "geometryVersion": 1,
+  "source": "assets\\locomotion\\sources\\warrior-alpha-v1.png",
+  "normalization": "offline semantic-root proposal; inspect contact sheet",
+  "frames": [
+    {
+      "direction": "down",
+      "column": 0,
+      "file": "down-0.png",
+      "sourceRect": [
+        96,
+        51,
+        243,
+        245
+      ],
+      "sourceAnchor": [
+        88.5,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "down",
+      "column": 1,
+      "file": "down-1.png",
+      "sourceRect": [
+        313,
+        51,
+        451,
+        245
+      ],
+      "sourceAnchor": [
+        78.5,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "down",
+      "column": 2,
+      "file": "down-2.png",
+      "sourceRect": [
+        515,
+        51,
+        652,
+        245
+      ],
+      "sourceAnchor": [
+        76.5,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "down",
+      "column": 3,
+      "file": "down-3.png",
+      "sourceRect": [
+        720,
+        51,
+        846,
+        245
+      ],
+      "sourceAnchor": [
+        67.0,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "down",
+      "column": 4,
+      "file": "down-4.png",
+      "sourceRect": [
+        908,
+        51,
+        1042,
+        245
+      ],
+      "sourceAnchor": [
+        76.5,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "down",
+      "column": 5,
+      "file": "down-5.png",
+      "sourceRect": [
+        1107,
+        51,
+        1238,
+        245
+      ],
+      "sourceAnchor": [
+        72.0,
+        192
+      ],
+      "sourceScale": 1.0
+    },
+    {
+      "direction": "down",
+      "column": 6,
+      "file": "down-6.png",
+      "sourceRect": [
+        1308,
+        51,
+        1437,
+        245
+      ],
+      "sourceAnchor": [
+        70.5,
+        193
+      ],
+      "sourceScale": 0.9948186528497409
+    },
+    {
+      "direction": "right",
+      "column": 0,
+      "file": "right-0.png",
+      "sourceRect": [
+        120,
+        700,
+        247,
+        882
+      ],
+      "sourceAnchor": [
+        45.0,
+        182
+      ],
+      "sourceScale": 1.054945054945055
+    },
+    {
+      "direction": "right",
+      "column": 1,
+      "file": "right-1.png",
+      "sourceRect": [
+        313,
+        700,
+        461,
+        882
+      ],
+      "sourceAnchor": [
+        60.0,
+        180
+      ],
+      "sourceScale": 1.0666666666666667
+    },
+    {
+      "direction": "right",
+      "column": 2,
+      "file": "right-2.png",
+      "sourceRect": [
+        502,
+        700,
+        651,
+        882
+      ],
+      "sourceAnchor": [
+        60.0,
+        182
+      ],
+      "sourceScale": 1.054945054945055
+    },
+    {
+      "direction": "right",
+      "column": 3,
+      "file": "right-3.png",
+      "sourceRect": [
+        704,
+        700,
+        846,
+        882
+      ],
+      "sourceAnchor": [
+        59.0,
+        180
+      ],
+      "sourceScale": 1.0666666666666667
+    },
+    {
+      "direction": "right",
+      "column": 4,
+      "file": "right-4.png",
+      "sourceRect": [
+        899,
+        700,
+        1041,
+        882
+      ],
+      "sourceAnchor": [
+        58.25,
+        182
+      ],
+      "sourceScale": 1.054945054945055
+    },
+    {
+      "direction": "right",
+      "column": 5,
+      "file": "right-5.png",
+      "sourceRect": [
+        1095,
+        700,
+        1224,
+        882
+      ],
+      "sourceAnchor": [
+        65.5,
+        180
+      ],
+      "sourceScale": 1.0666666666666667
+    },
+    {
+      "direction": "right",
+      "column": 6,
+      "file": "right-6.png",
+      "sourceRect": [
+        1292,
+        700,
+        1422,
+        882
+      ],
+      "sourceAnchor": [
+        60.0,
+        179
+      ],
+      "sourceScale": 1.0726256983240223
+    },
+    {
+      "direction": "up",
+      "column": 0,
+      "file": "up-0.png",
+      "sourceRect": [
+        129,
+        483,
+        268,
+        668
+      ],
+      "sourceAnchor": [
+        53.5,
+        183
+      ],
+      "sourceScale": 1.0491803278688525
+    },
+    {
+      "direction": "up",
+      "column": 1,
+      "file": "up-1.png",
+      "sourceRect": [
+        340,
+        483,
+        476,
+        668
+      ],
+      "sourceAnchor": [
+        55.75,
+        181
+      ],
+      "sourceScale": 1.0607734806629834
+    },
+    {
+      "direction": "up",
+      "column": 2,
+      "file": "up-2.png",
+      "sourceRect": [
+        546,
+        483,
+        679,
+        668
+      ],
+      "sourceAnchor": [
+        58.0,
+        182
+      ],
+      "sourceScale": 1.054945054945055
+    },
+    {
+      "direction": "up",
+      "column": 3,
+      "file": "up-3.png",
+      "sourceRect": [
+        744,
+        483,
+        869,
+        668
+      ],
+      "sourceAnchor": [
+        55.0,
+        180
+      ],
+      "sourceScale": 1.0666666666666667
+    },
+    {
+      "direction": "up",
+      "column": 4,
+      "file": "up-4.png",
+      "sourceRect": [
+        938,
+        483,
+        1068,
+        668
+      ],
+      "sourceAnchor": [
+        57.0,
+        181
+      ],
+      "sourceScale": 1.0607734806629834
+    },
+    {
+      "direction": "up",
+      "column": 5,
+      "file": "up-5.png",
+      "sourceRect": [
+        1135,
+        483,
+        1265,
+        668
+      ],
+      "sourceAnchor": [
+        52.0,
+        178
+      ],
+      "sourceScale": 1.0786516853932584
+    },
+    {
+      "direction": "up",
+      "column": 6,
+      "file": "up-6.png",
+      "sourceRect": [
+        1337,
+        483,
+        1463,
+        668
+      ],
+      "sourceAnchor": [
+        53.5,
+        179
+      ],
+      "sourceScale": 1.0726256983240223
+    },
+    {
+      "direction": "left",
+      "column": 0,
+      "file": "left-0.png",
+      "sourceRect": [
+        112,
+        275,
+        243,
+        456
+      ],
+      "sourceAnchor": [
+        82.5,
+        179
+      ],
+      "sourceScale": 1.0726256983240223
+    },
+    {
+      "direction": "left",
+      "column": 1,
+      "file": "left-1.png",
+      "sourceRect": [
+        322,
+        275,
+        476,
+        456
+      ],
+      "sourceAnchor": [
+        92.0,
+        179
+      ],
+      "sourceScale": 1.0726256983240223
+    },
+    {
+      "direction": "left",
+      "column": 2,
+      "file": "left-2.png",
+      "sourceRect": [
+        543,
+        275,
+        685,
+        456
+      ],
+      "sourceAnchor": [
+        80.0,
+        177
+      ],
+      "sourceScale": 1.0847457627118644
+    },
+    {
+      "direction": "left",
+      "column": 3,
+      "file": "left-3.png",
+      "sourceRect": [
+        739,
+        275,
+        876,
+        456
+      ],
+      "sourceAnchor": [
+        82.5,
+        178
+      ],
+      "sourceScale": 1.0786516853932584
+    },
+    {
+      "direction": "left",
+      "column": 4,
+      "file": "left-4.png",
+      "sourceRect": [
+        942,
+        275,
+        1068,
+        456
+      ],
+      "sourceAnchor": [
+        72.0,
+        177
+      ],
+      "sourceScale": 1.0847457627118644
+    },
+    {
+      "direction": "left",
+      "column": 5,
+      "file": "left-5.png",
+      "sourceRect": [
+        1139,
+        275,
+        1269,
+        456
+      ],
+      "sourceAnchor": [
+        70.0,
+        178
+      ],
+      "sourceScale": 1.0786516853932584
+    },
+    {
+      "direction": "left",
+      "column": 6,
+      "file": "left-6.png",
+      "sourceRect": [
+        1339,
+        275,
+        1482,
+        456
+      ],
+      "sourceAnchor": [
+        77.0,
+        175
+      ],
+      "sourceScale": 1.0971428571428572
+    }
+  ]
+}
+

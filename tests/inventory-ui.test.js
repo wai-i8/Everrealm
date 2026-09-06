@@ -1,0 +1,59 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const Expansion = require("../expansion-core.js");
+
+const rpgRoot = path.resolve(__dirname, "..");
+const gameSource = fs.readFileSync(path.join(rpgRoot, "game.js"), "utf8");
+const inventoryCss = fs.readFileSync(path.join(rpgRoot, "inventory-overhaul.css"), "utf8");
+
+test("inventory and class-specific equipment atlases exist and every catalog item has an explicit frame", () => {
+  for (const filename of ["item-icon-atlas-v1.png", "equipment-icon-atlas-v1.png", "fighter-equipment-atlas-v1.png"]) {
+    const assetPath = path.join(rpgRoot, "assets", filename);
+    assert.equal(fs.existsSync(assetPath), true, `${filename} should exist`);
+    assert.ok(fs.statSync(assetPath).size > 100_000, `${filename} should contain generated art`);
+  }
+  const mapping = gameSource.match(/const EQUIPMENT_ICON_INDEX = Object\.freeze\(\{([\s\S]*?)\}\);/)?.[1] || "";
+  Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId !== "fighter").forEach((item, index) => {
+    assert.match(mapping, new RegExp(`\\b${item.id}:\\s*${index}(?:,|\\s)`), `${item.id} should map to frame ${index}`);
+  });
+  const fighterMapping = gameSource.match(/const FIGHTER_EQUIPMENT_ICON_INDEX = Object\.freeze\(\{([\s\S]*?)\}\);/)?.[1] || "";
+  Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter").forEach((item, index) => {
+    assert.match(fighterMapping, new RegExp(`\\b${item.id}:\\s*${index}(?:,|\\s)`), `${item.id} should map to fighter frame ${index}`);
+  });
+  assert.match(gameSource, /fighter-equipment/, "fighter weapons should select their dedicated atlas");
+  assert.match(gameSource, /"warden-lens":\s*14/, "the actual boss-drop id should use the warden-lens icon");
+});
+
+test("bag uses an icon grid and paper doll exposes all six requested visual slots", () => {
+  assert.match(gameSource, /class="inventory-icon-grid"/);
+  assert.match(gameSource, /class="inventory-grid-item"/);
+  for (const slot of ["weapon", "head", "body", "hands", "feet", "charm"]) {
+    assert.match(gameSource, new RegExp(`paperdollSlotHtml\\("${slot}"`));
+    assert.match(inventoryCss, new RegExp(`data-paperdoll-slot="${slot}"`));
+  }
+  assert.match(inventoryCss, /\.item-icon-atlas\s*\{/);
+  assert.match(inventoryCss, /\.equipment-icon-atlas\s*\{/);
+});
+
+test("bag is a unified two-column loadout and every owned equipment card equips directly", () => {
+  const bagRenderer = gameSource.match(/function renderBagFacility\(\)\s*\{([\s\S]*?)\n  \}\n\n  function equipmentIconHtml/)?.[1] || "";
+  assert.match(bagRenderer, /class="unified-inventory-layout"/);
+  assert.match(bagRenderer, /class="bag-loadout-panel"/);
+  assert.match(bagRenderer, /class="bag-items-panel"/);
+  assert.match(bagRenderer, /ownedEquipment\.includes\(entry\.id\)/);
+  assert.match(bagRenderer, /inventory-equipment-item/);
+  assert.match(bagRenderer, /data-facility-action="equip"/);
+  assert.match(bagRenderer, /drawEquipmentPaperdoll\(\)/);
+  assert.match(bagRenderer, /裝備、藥水、技能書同素材/);
+  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[^}]*grid-template-columns:\s*minmax\(25rem/s);
+  assert.match(inventoryCss, /@media \(max-width: 900px\)[\s\S]*?\.unified-inventory-layout\s*\{\s*grid-template-columns:\s*1fr/);
+});
+
+test("the extra stylesheet keeps facility text readable at 100% browser zoom", () => {
+  assert.match(gameSource, /stylesheet\.href = "inventory-overhaul\.css"/);
+  assert.match(inventoryCss, /\.inventory-item-copy > p/);
+  assert.match(inventoryCss, /\.inventory-item-copy > p[^}]*font-size:\s*\.74rem/s);
+  assert.match(inventoryCss, /\.facility-content \.facility-action-button\s*\{[^}]*font-size:\s*\.74rem/s);
+});

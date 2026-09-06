@@ -1,0 +1,13 @@
+node_modules/
+test-results/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

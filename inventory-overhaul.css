@@ -1,0 +1,625 @@
+.atlas-icon {
+  display: block;
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-size: 400% 400%;
+  background-position: var(--atlas-x, 0%) var(--atlas-y, 0%);
+  image-rendering: auto;
+}
+
+.item-icon-atlas { background-image: url("assets/item-icon-atlas-v1.png"); }
+.equipment-icon-atlas { background-image: url("assets/equipment-icon-atlas-v1.png"); }
+.fighter-equipment-icon-atlas {
+  background-image: url("assets/fighter-equipment-atlas-v1.png");
+  background-size: 400% 100%;
+  background-position: var(--atlas-x,0%) 50%;
+}
+
+.facility-tabs[data-visible-tabs="status bag equipment skills codex"] { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.facility-tabs[data-visible-tabs="status bag equipment guild skills codex"],
+.facility-tabs[data-visible-tabs="status bag equipment shop skills codex"],
+.facility-tabs[data-visible-tabs="status bag equipment deck skills codex"] { grid-template-columns: repeat(6,minmax(0,1fr)); }
+
+/* Keep the topic strip slim; content carries the visual hierarchy. */
+.facility-header { min-height: 4.35rem; padding: .55rem 1rem .5rem 1.15rem; }
+.facility-kicker { margin-bottom: .16rem; font-size: .48rem; font-weight: 650; letter-spacing: .13em; }
+.facility-header h2 { font-size: clamp(.98rem,1.45vw,1.18rem); font-weight: 780; letter-spacing: -.012em; }
+.facility-header p:last-child { margin-top: .18rem; font-size: .64rem; line-height: 1.4; }
+.facility-close-button { flex-basis: 2.4rem; width: 2.4rem; height: 2.4rem; }
+.facility-summary small { font-size: .65rem; }
+.facility-summary strong { font-size: .76rem; }
+.facility-tab b { font-size: .74rem; }
+.facility-tab small { font-size: .63rem; }
+.facility-content .facility-section-heading small { font-size: .61rem; }
+.facility-content .facility-section-heading h3 { font-size: 1rem; line-height: 1.25; }
+.facility-content .facility-section-heading > span { font-size: .74rem; line-height: 1.4; }
+.facility-content .facility-note { font-size: .74rem; line-height: 1.55; }
+.facility-content .facility-action-button { font-size: .74rem; }
+.facility-content .facility-card-heading strong { font-size: .8rem; }
+.facility-content .facility-chip { font-size: .59rem; }
+.facility-content .facility-list-card p,
+.facility-content .facility-feature-card p,
+.facility-content .equipment-card p,
+.facility-content .codex-card p { font-size: .74rem; }
+.facility-content .facility-card-meta,
+.facility-content .facility-card-meta b { font-size: .74rem; }
+.facility-content .equipment-copy > small,
+.facility-content .skill-book-copy small,
+.facility-content .skill-card-copy small,
+.facility-content .codex-card small { font-size: .72rem; }
+.facility-content .skill-book-copy strong,
+.facility-content .skill-card-copy strong,
+.facility-content .codex-card strong { font-size: .8rem; }
+.facility-content .skill-book-copy p,
+.facility-content .skill-card-copy p { font-size: .74rem; }
+
+/* Status sheet ---------------------------------------------------------- */
+.status-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem,.78fr) minmax(20rem,1.65fr);
+  gap: .8rem;
+  align-items: stretch;
+}
+.status-character-card {
+  min-height: 18rem;
+  display: grid;
+  grid-template-rows: minmax(0,1fr) auto auto;
+  justify-items: center;
+  overflow: hidden;
+  padding: .75rem;
+  border: 1px solid rgba(255,200,87,.34);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(82,220,203,.13),transparent 10rem),
+    linear-gradient(155deg,rgba(34,48,77,.94),rgba(9,17,33,.98));
+  box-shadow: 3px 4px 0 rgba(0,0,0,.3);
+}
+.status-character-card canvas { width: min(100%,12rem); height: 14.2rem; object-fit: contain; }
+.status-character-card strong { color: var(--cream); font-size: .9rem; }
+.status-character-card span { margin-top: .16rem; color: var(--teal); font-size: .68rem; }
+.status-stat-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .55rem;
+  margin: 0;
+}
+.status-stat-grid > div {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: .32rem;
+  min-height: 4rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgba(245,233,202,.19);
+  border-radius: .76rem;
+  background: linear-gradient(145deg,rgba(35,48,77,.84),rgba(10,18,35,.9));
+}
+.status-stat-grid > div.is-hp { border-color: rgba(255,107,107,.45); box-shadow: inset 3px 0 var(--red); }
+.status-stat-grid dt { color: var(--muted); font-size: .72rem; }
+.status-stat-grid dd { margin: 0; color: var(--cream); font: 850 .86rem/1 ui-monospace,monospace; }
+.status-stat-grid > div:not(.is-hp) dd { color: var(--teal); }
+
+/* Skill tree ------------------------------------------------------------ */
+.skill-tree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: .7rem;
+  color: #c9cddd;
+  font-size: .71rem;
+}
+.skill-tree-legend span { display: flex; align-items: center; gap: .34rem; padding: .3rem .5rem; border: 1px solid rgba(245,233,202,.16); border-radius: 999px; background: rgba(5,10,21,.38); }
+.skill-tree-legend i { width: 1.35rem; height: 1.35rem; display: grid; place-items: center; border: 1px solid rgba(255,200,87,.48); border-radius: .4rem; color: var(--gold); font-size: .62rem; font-style: normal; font-weight: 900; }
+.skill-tree-legend .is-equipped { border-color: rgba(82,220,203,.48); color: var(--teal); }
+.skill-tree-legend .is-equipped i { border-color: rgba(82,220,203,.62); color: var(--teal); }
+.skill-tree-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: .2rem .15rem .7rem;
+  scrollbar-color: rgba(255,200,87,.58) rgba(5,10,21,.4);
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+}
+.skill-tree-scroll:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.skill-tree-board {
+  position: relative;
+  width: max(100%,var(--tree-min-width,50rem));
+  height: var(--tree-height);
+  min-height: var(--tree-height);
+  overflow: hidden;
+  border: 1px solid rgba(245,233,202,.12);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 50% 0,rgba(255,200,87,.08),transparent 24rem),
+    linear-gradient(180deg,rgba(8,15,29,.38),rgba(4,9,19,.72));
+}
+.skill-tree-column {
+  position: absolute;
+  z-index: 1;
+  top: var(--tree-tier-y);
+  left: 2.5%;
+  right: 2.5%;
+  height: 1px;
+  border-top: 1px solid rgba(255,200,87,.2);
+  pointer-events: none;
+}
+.skill-tree-column > span {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  min-width: 4.25rem;
+  padding: .25rem .48rem;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(255,200,87,.34);
+  border-radius: 999px;
+  color: var(--gold);
+  background: #101a30;
+  box-shadow: 0 0 0 5px rgba(11,18,34,.86);
+  font: 800 .55rem/1 ui-monospace,monospace;
+  letter-spacing: .1em;
+  text-align: center;
+}
+.skill-tree-links {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.skill-tree-link {
+  fill: none;
+  stroke: rgba(134,143,164,.32);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.skill-tree-link.is-learned {
+  stroke: rgba(82,220,203,.86);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(82,220,203,.38));
+}
+.skill-tree-link.is-canLearn {
+  stroke: rgba(255,200,87,.9);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 5;
+  filter: drop-shadow(0 0 4px rgba(255,200,87,.28));
+}
+.skill-tree-node {
+  position: absolute;
+  z-index: 2;
+  top: var(--tree-y);
+  left: var(--tree-x);
+  width: 5.3rem;
+  height: 2.625rem;
+  box-sizing: border-box;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid rgba(245,233,202,.2);
+  border-radius: .68rem;
+  background: linear-gradient(145deg,rgba(34,47,75,.9),rgba(10,18,35,.96));
+  box-shadow: 3px 4px 0 rgba(0,0,0,.32);
+}
+.skill-tree-node-trigger {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: .34rem .4rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: inherit;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.skill-tree-node-trigger strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--cream);
+  font-size: .7rem;
+  line-height: 1.15;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-tree-node-trigger:hover { background: rgba(255,255,255,.055); }
+.skill-tree-node-trigger:focus-visible { outline: 2px solid var(--cream); outline-offset: 3px; }
+.skill-tree-node.has-manual::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: -.25rem;
+  right: -.25rem;
+  width: .62rem;
+  height: .62rem;
+  border: 2px solid #101a30;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 .6rem rgba(255,200,87,.6);
+  pointer-events: none;
+}
+.skill-tree-node.is-learned { border-color: rgba(82,220,203,.58); background: linear-gradient(145deg,rgba(28,62,72,.94),rgba(9,22,35,.97)); }
+.skill-tree-node.is-equipped { border-color: rgba(82,220,203,.92); box-shadow: 0 0 0 2px rgba(82,220,203,.2),0 0 1.2rem rgba(82,220,203,.15),3px 4px 0 rgba(0,0,0,.32); }
+.skill-tree-node.is-equipped .skill-tree-node-trigger strong { color: #d8fff8; text-shadow: 0 0 .45rem rgba(82,220,203,.5); }
+.skill-tree-node.is-canLearn { border-color: rgba(255,200,87,.82); box-shadow: 0 0 1rem rgba(255,200,87,.08),3px 4px 0 rgba(0,0,0,.32); }
+.skill-tree-node.is-canLearn .skill-tree-node-trigger { background: linear-gradient(145deg,rgba(255,200,87,.24),rgba(84,57,17,.2)); }
+.skill-tree-node.is-canLearn .skill-tree-node-trigger strong { color: #fff0bc; }
+.skill-tree-node.is-missingPrereq,
+.skill-tree-node.is-conditionLocked { opacity: .64; filter: saturate(.42); }
+.skill-tree-node.is-missingPrereq,
+.skill-tree-node.is-conditionLocked { border-style: dashed; background: rgba(13,21,38,.92); }
+
+.skill-detail-panel .skill-book-confirm-stats > div:last-child { grid-column: 1 / -1; }
+
+/* Deck/loadout ---------------------------------------------------------- */
+.deck-slot-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(14rem,1fr)); gap: .65rem; counter-reset: deck; }
+.deck-slot {
+  position: relative;
+  min-width: 0;
+  min-height: 5rem;
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0,1fr) auto;
+  align-items: center;
+  gap: .58rem;
+  padding: .65rem .65rem .65rem 2.3rem;
+  border: 1px solid rgba(245,233,202,.22);
+  border-radius: .85rem;
+  background: linear-gradient(145deg,rgba(34,47,75,.9),rgba(9,17,33,.96));
+  box-shadow: 3px 4px 0 rgba(0,0,0,.28);
+}
+.deck-slot.is-filled { border-color: rgba(82,220,203,.55); box-shadow: inset 0 0 1.5rem rgba(82,220,203,.05),3px 4px 0 rgba(0,0,0,.28); }
+.deck-slot.is-empty { grid-template-columns: minmax(0,1fr); border-style: dashed; }
+.deck-slot-number { position: absolute; left: .55rem; top: .55rem; width: 1.25rem; height: 1.25rem; display: grid; place-items: center; border-radius: 50%; color: #171421; background: var(--gold); font: 900 .58rem/1 ui-monospace,monospace; }
+.deck-slot > div:not(.skill-card-icon),
+.deck-skill-choice > div:not(.skill-card-icon) { min-width: 0; display: grid; gap: .25rem; }
+.deck-slot strong,
+.deck-skill-choice strong { color: var(--cream); font-size: .82rem; }
+.deck-slot small,
+.deck-skill-choice small { color: var(--teal); font-size: .72rem; line-height: 1.45; }
+.deck-slot-empty { padding-left: .3rem; }
+.deck-slot-empty small { color: var(--muted); }
+.deck-slot .facility-action-button { min-width: 4rem; min-height: 2rem; }
+.deck-skill-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .62rem; }
+.deck-skill-choice { min-width: 0; display: grid; grid-template-columns: 2.6rem minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
+.deck-skill-choice .facility-action-button { min-width: 4rem; }
+.deck-readonly-state { justify-self: end; padding: .28rem .48rem; border: 1px solid rgba(82,220,203,.35); border-radius: 999px; color: var(--teal); font: 800 .62rem/1 ui-monospace,monospace; }
+
+.inventory-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: .75rem;
+}
+
+.unified-inventory-layout {
+  display: grid;
+  grid-template-columns: minmax(25rem,.92fr) minmax(19rem,1.08fr);
+  gap: .9rem;
+  align-items: start;
+}
+.bag-loadout-panel,
+.bag-items-panel { min-width: 0; }
+.bag-loadout-panel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  padding: .72rem;
+  border: 1px solid rgba(82,220,203,.24);
+  border-radius: 1rem;
+  background: linear-gradient(155deg,rgba(24,39,63,.94),rgba(8,16,31,.97));
+  box-shadow: 3px 4px 0 rgba(0,0,0,.28);
+}
+.bag-loadout-heading { margin-top: 0; }
+.bag-paperdoll-board {
+  min-height: 16rem;
+  grid-template-columns: minmax(6.7rem,1fr) 8rem minmax(6.7rem,1fr);
+  grid-template-rows: repeat(3,minmax(4.2rem,auto));
+  padding: .52rem;
+  gap: .42rem;
+}
+.bag-paperdoll-board .paperdoll-slot {
+  grid-template-columns: 2.5rem minmax(0,1fr);
+  gap: .42rem;
+  padding: .42rem;
+}
+.bag-paperdoll-board .paperdoll-slot-icon,
+.bag-paperdoll-board .paperdoll-placeholder { width: 2.35rem; height: 2.35rem; }
+.bag-paperdoll-board .paperdoll-avatar canvas { width: 7.2rem; height: 9rem; }
+.bag-loadout-stats {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: .4rem;
+  margin: .6rem 0 0;
+}
+.bag-loadout-stats > div {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: .2rem;
+  padding: .42rem .25rem;
+  border-radius: .55rem;
+  background: rgba(4,8,18,.42);
+}
+.bag-loadout-stats dt { color: var(--muted); font-size: .61rem; }
+.bag-loadout-stats dd { margin: 0; color: var(--teal); font: 850 .67rem/1 ui-monospace,monospace; }
+.bag-items-panel .inventory-heading { margin-top: .05rem; }
+
+.inventory-grid-item {
+  position: relative;
+  min-height: 10.2rem;
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  grid-template-rows: minmax(6.8rem, auto) auto;
+  align-items: start;
+  gap: .65rem;
+  padding: .72rem;
+  border: 1px solid rgba(245,233,202,.23);
+  border-radius: .9rem;
+  background: linear-gradient(145deg,rgba(38,51,82,.9),rgba(12,20,39,.96));
+  box-shadow: 3px 4px 0 rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035);
+}
+
+.inventory-grid-item:hover { border-color: rgba(255,200,87,.52); }
+.inventory-equipment-item {
+  width: 100%;
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.inventory-equipment-item:hover:not(:disabled),
+.inventory-equipment-item:focus-visible { border-color: rgba(255,200,87,.76); transform: translateY(-1px); }
+.inventory-equipment-item.is-equipped {
+  border-color: rgba(82,220,203,.68);
+  background: linear-gradient(145deg,rgba(35,75,79,.82),rgba(14,28,43,.96));
+  box-shadow: inset 0 0 1.4rem rgba(82,220,203,.08),3px 4px 0 rgba(0,0,0,.28);
+}
+.inventory-equipment-item:disabled { cursor: default; }
+.inventory-equipment-item:disabled:not(.is-equipped) { opacity: .6; filter: saturate(.55); }
+.inventory-equipment-action {
+  grid-column: 1 / -1;
+  min-height: 2.15rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,200,87,.5);
+  border-radius: .58rem;
+  color: #171421;
+  background: var(--gold);
+  font-size: .68rem;
+  font-weight: 900;
+}
+.inventory-equipment-item.is-equipped .inventory-equipment-action {
+  color: var(--teal);
+  border-color: rgba(82,220,203,.42);
+  background: rgba(82,220,203,.08);
+}
+.inventory-equipment-item:disabled:not(.is-equipped) .inventory-equipment-action {
+  color: var(--muted);
+  border-color: rgba(245,233,202,.18);
+  background: rgba(245,233,202,.06);
+}
+.inventory-item-art {
+  position: relative;
+  width: 4.6rem;
+  height: 4.6rem;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  border: 1px solid rgba(255,200,87,.32);
+  border-radius: .8rem;
+  background: radial-gradient(circle,rgba(255,200,87,.12),rgba(7,12,25,.55));
+}
+.inventory-item-art .atlas-icon { width: 4.35rem; height: 4.35rem; }
+.inventory-quantity {
+  position: absolute;
+  right: -.35rem;
+  bottom: -.35rem;
+  min-width: 1.55rem;
+  padding: .24rem .34rem;
+  border: 2px solid #17213a;
+  border-radius: 999px;
+  color: #171421;
+  background: var(--gold);
+  font: 900 .67rem/1 ui-monospace,monospace;
+  text-align: center;
+  box-shadow: 1px 2px 0 rgba(0,0,0,.4);
+}
+.inventory-item-copy { min-width: 0; display: grid; align-content: start; gap: .28rem; }
+.inventory-item-copy > small { color: var(--gold); font: 800 .67rem/1.2 ui-monospace,monospace; letter-spacing: .06em; }
+.inventory-item-copy > strong { color: var(--cream); font-size: .78rem; line-height: 1.25; }
+.inventory-item-copy > p { margin: 0; color: var(--muted); font-size: .74rem; line-height: 1.55; }
+.inventory-item-copy > span { color: var(--teal); font-size: .72rem; line-height: 1.4; }
+.inventory-item-action {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 2.15rem;
+  border: 1px solid rgba(255,200,87,.5);
+  border-radius: .58rem;
+  color: #171421;
+  background: var(--gold);
+  font-size: .68rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.inventory-item-action:hover:not(:disabled) { filter: brightness(1.09); transform: translateY(-1px); }
+.inventory-item-action:disabled { opacity: .45; cursor: not-allowed; }
+.inventory-help { margin-top: 1rem; }
+
+.paperdoll-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 10rem;
+  gap: .8rem;
+  align-items: stretch;
+}
+.paperdoll-board {
+  min-height: 18rem;
+  display: grid;
+  grid-template-columns: minmax(9.5rem,1fr) 11rem minmax(9.5rem,1fr);
+  grid-template-rows: repeat(3,minmax(4.8rem,auto));
+  grid-template-areas:
+    "head avatar charm"
+    "weapon avatar hands"
+    "body avatar feet";
+  gap: .5rem;
+  padding: .65rem;
+  border: 1px solid rgba(82,220,203,.3);
+  border-radius: 1rem;
+  background: radial-gradient(circle at 50% 48%,rgba(82,220,203,.13),transparent 15rem),linear-gradient(160deg,rgba(25,42,65,.9),rgba(8,16,31,.95));
+}
+.paperdoll-slot {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0,1fr);
+  align-items: center;
+  gap: .55rem;
+  padding: .5rem;
+  border: 1px solid rgba(245,233,202,.2);
+  border-radius: .78rem;
+  background: rgba(10,18,35,.72);
+}
+.paperdoll-slot[data-paperdoll-slot="head"] { grid-area: head; }
+.paperdoll-slot[data-paperdoll-slot="weapon"] { grid-area: weapon; }
+.paperdoll-slot[data-paperdoll-slot="body"] { grid-area: body; }
+.paperdoll-slot[data-paperdoll-slot="charm"] { grid-area: charm; }
+.paperdoll-slot[data-paperdoll-slot="hands"] { grid-area: hands; }
+.paperdoll-slot[data-paperdoll-slot="feet"] { grid-area: feet; }
+.paperdoll-slot.is-filled { border-color: rgba(255,200,87,.48); box-shadow: inset 0 0 1.2rem rgba(255,200,87,.05); }
+.paperdoll-slot.is-empty { border-color: rgba(82,220,203,.3); }
+.paperdoll-slot.is-locked { opacity: .66; border-style: dashed; }
+.paperdoll-slot-icon, .paperdoll-placeholder { width: 3rem; height: 3rem; }
+.paperdoll-placeholder { display: grid; place-items: center; border-radius: .65rem; color: var(--muted); background: rgba(245,233,202,.06); font-size: 1rem; }
+.paperdoll-slot > div { min-width: 0; display: grid; gap: .22rem; }
+.paperdoll-slot small { color: var(--gold); font-size: .7rem; }
+.paperdoll-slot strong { overflow: hidden; color: var(--cream); font-size: .78rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.paperdoll-slot div > span { color: var(--teal); font-size: .72rem; line-height: 1.35; }
+.paperdoll-slot.is-locked div > span { color: var(--muted); }
+.paperdoll-avatar {
+  grid-area: avatar;
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  border-inline: 1px solid rgba(82,220,203,.12);
+  text-align: center;
+}
+.paperdoll-avatar canvas { width: 9rem; max-width: 100%; height: 11rem; object-fit: contain; }
+.paperdoll-avatar strong { margin-top: -.25rem; color: var(--cream); font-size: .82rem; }
+.paperdoll-avatar span { margin-top: .18rem; color: var(--teal); font-size: .67rem; }
+.paperdoll-stats {
+  display: grid;
+  align-content: start;
+  gap: .4rem;
+  padding: .85rem;
+  border: 1px solid rgba(255,200,87,.28);
+  border-radius: 1rem;
+  background: linear-gradient(160deg,rgba(38,44,68,.9),rgba(10,17,32,.95));
+}
+.paperdoll-stats > small { color: var(--gold); font: 800 .6rem/1 ui-monospace,monospace; letter-spacing: .12em; }
+.paperdoll-stats > strong { font-size: .78rem; }
+.paperdoll-stats dl { display: grid; gap: .35rem; margin: .25rem 0 0; }
+.paperdoll-stats dl div { display: flex; justify-content: space-between; gap: .7rem; padding: .45rem .5rem; border-radius: .5rem; background: rgba(4,8,18,.36); }
+.paperdoll-stats dt { color: var(--muted); font-size: .67rem; }
+.paperdoll-stats dd { margin: 0; color: var(--teal); font: 850 .67rem/1 ui-monospace,monospace; }
+
+.gear-collection-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem; }
+.gear-collection-item {
+  display: grid;
+  grid-template-columns: 4rem minmax(0,1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  padding: .68rem;
+  border: 1px solid rgba(245,233,202,.2);
+  border-radius: .85rem;
+  background: linear-gradient(145deg,rgba(38,51,82,.88),rgba(12,20,39,.95));
+}
+.gear-collection-item.is-equipped { border-color: rgba(82,220,203,.62); background: linear-gradient(145deg,rgba(35,75,79,.8),rgba(14,28,43,.94)); }
+.gear-collection-item.is-locked { opacity: .62; }
+.gear-collection-icon { width: 3.8rem; height: 3.8rem; }
+.gear-collection-item > div { min-width: 0; display: grid; gap: .2rem; }
+.gear-collection-item small { color: var(--gold); font-size: .7rem; }
+.gear-collection-item strong { color: var(--cream); font-size: .8rem; }
+.gear-collection-item p { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.gear-collection-item div > span { color: var(--teal); font-size: .72rem; }
+.gear-collection-item .facility-action-button { min-width: 4.5rem; }
+
+.equipment-card-atlas-icon { width: 3rem; height: 3rem; }
+
+@media (max-width: 900px) {
+  .facility-tabs[data-visible-tabs] { grid-template-columns: none; grid-auto-flow: column; }
+  .unified-inventory-layout { grid-template-columns: 1fr; }
+  .bag-loadout-panel { position: static; }
+  .inventory-icon-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .status-layout { grid-template-columns: 1fr; }
+  .status-character-card { min-height: 13rem; grid-template-columns: 10rem minmax(0,1fr); grid-template-rows: 1fr auto; align-items: center; justify-items: start; }
+  .status-character-card canvas { grid-row: 1 / 3; width: 9rem; height: 11rem; justify-self: center; }
+  .status-character-card strong { align-self: end; }
+  .status-character-card span { align-self: start; }
+  .skill-tree-board { width: max(100%,var(--tree-min-width,50rem)); }
+  .deck-skill-list { grid-template-columns: 1fr; }
+  .paperdoll-layout { grid-template-columns: 1fr; }
+  .paperdoll-stats dl { grid-template-columns: repeat(5,minmax(0,1fr)); }
+  .paperdoll-stats dl div { display: grid; justify-items: center; gap: .25rem; }
+  .gear-collection-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 650px) {
+  .facility-header { min-height: 4.2rem; padding: .5rem .65rem .46rem .78rem; }
+  .facility-kicker { margin-bottom: .12rem; font-size: .46rem; }
+  .facility-header h2 { font-size: .94rem; }
+  .facility-header p:last-child { max-width: min(68vw,18rem); margin-top: .14rem; font-size: .61rem; line-height: 1.35; }
+  .facility-close-button { flex-basis: 2.25rem; width: 2.25rem; height: 2.25rem; }
+  .facility-summary small { font-size: .59rem; }
+  .facility-summary strong, .facility-tab b { font-size: .67rem; }
+  .facility-content .facility-section-heading h3 { font-size: .88rem; }
+  .facility-content .facility-section-heading > span { font-size: .64rem; }
+  .inventory-icon-grid { grid-template-columns: 1fr; }
+  .bag-loadout-panel { padding: .55rem; }
+  .bag-loadout-stats { grid-template-columns: repeat(4,minmax(3.5rem,1fr)); overflow-x: auto; }
+  .inventory-grid-item { min-height: 0; grid-template-columns: 4rem minmax(0,1fr); grid-template-rows: auto auto; }
+  .inventory-item-art { width: 4rem; height: 4rem; }
+  .inventory-item-art .atlas-icon { width: 3.8rem; height: 3.8rem; }
+  .inventory-item-copy > strong { font-size: .74rem; }
+  .inventory-item-copy > p { font-size: .67rem; }
+  .status-character-card { min-height: 10.5rem; grid-template-columns: 7rem minmax(0,1fr); padding: .55rem; }
+  .status-character-card canvas { width: 6.7rem; height: 8.3rem; }
+  .status-stat-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .42rem; }
+  .status-stat-grid > div { min-height: 3.35rem; padding: .5rem .55rem; }
+  .status-stat-grid dt { font-size: .63rem; }
+  .status-stat-grid dd { font-size: .74rem; }
+  .skill-tree-legend { gap: .28rem; }
+  .skill-tree-legend span { padding: .25rem .38rem; font-size: .61rem; }
+  .skill-tree-legend i { width: 1.18rem; height: 1.18rem; }
+  .skill-tree-scroll { margin-inline: -.15rem; }
+  .skill-tree-node { width: 5.3rem; }
+  .skill-tree-node-trigger strong { font-size: .66rem; }
+  .deck-slot-grid { grid-template-columns: 1fr; }
+  .deck-slot,
+  .deck-skill-choice { grid-template-columns: 2.35rem minmax(0,1fr); gap: .48rem; }
+  .deck-slot { padding: .55rem .55rem .55rem 2rem; }
+  .deck-slot .facility-action-button,
+  .deck-skill-choice .facility-action-button { grid-column: 1 / -1; width: 100%; max-width: none; }
+  .deck-slot.is-empty { grid-template-columns: 1fr; }
+  .paperdoll-board {
+    min-height: 0;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-rows: auto;
+    grid-template-areas: "avatar avatar" "head charm" "weapon hands" "body feet";
+    padding: .6rem;
+  }
+  .paperdoll-avatar { min-height: 11rem; border-inline: 0; border-bottom: 1px solid rgba(82,220,203,.12); }
+  .paperdoll-avatar canvas { width: 7.6rem; height: 9.2rem; }
+  .paperdoll-slot { grid-template-columns: 2.5rem minmax(0,1fr); padding: .48rem; }
+  .paperdoll-slot-icon, .paperdoll-placeholder { width: 2.35rem; height: 2.35rem; }
+  .paperdoll-slot strong { font-size: .67rem; }
+  .paperdoll-slot div > span { display: none; }
+  .paperdoll-stats dl { grid-template-columns: repeat(5,minmax(3.4rem,1fr)); overflow-x: auto; }
+  .gear-collection-item { grid-template-columns: 3.2rem minmax(0,1fr); }
+  .gear-collection-icon { width: 3rem; height: 3rem; }
+  .gear-collection-item .facility-action-button { grid-column: 1 / -1; width: 100%; max-width: none; }
+}

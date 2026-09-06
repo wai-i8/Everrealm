@@ -1,0 +1,11 @@
+{
+  "name": "everrealm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "永恆國度 · Everrealm — zero-dependency browser RPG",
+  "scripts": {
+    "start": "python -m http.server 4173",
+    "test": "node --test",
+    "test:cdp": "powershell -ExecutionPolicy Bypass -File .\\tests\\cdp-smoke.ps1"
+  }
+}
