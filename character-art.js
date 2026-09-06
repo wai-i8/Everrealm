@@ -41,6 +41,15 @@
     wisp: Object.freeze({ body: "#b59bf0", shade: "#715aa8", light: "#fff4ff", eye: "#40335e", accent: "#70e7dc", outline: "#493b69" }),
     hound: Object.freeze({ body: "#59677d", shade: "#354052", light: "#9ba9b7", eye: "#ffcf65", accent: "#e66b75", outline: "#202838" }),
     boss: Object.freeze({ body: "#683f72", shade: "#3b294b", light: "#a871a7", eye: "#ffc857", accent: "#ff6b91", outline: "#251b36" }),
+    chick: Object.freeze({ body: "#d89d42", shade: "#9d632e", light: "#ffe0a0", eye: "#28202a", accent: "#fff0b2", outline: "#493020" }),
+    fox: Object.freeze({ body: "#c9783e", shade: "#7d412b", light: "#ffe0ac", eye: "#2b2023", accent: "#f7a64f", outline: "#4b2c24" }),
+    raccoon: Object.freeze({ body: "#7c6656", shade: "#443b3b", light: "#c8b49d", eye: "#242031", accent: "#a8d2c0", outline: "#302737" }),
+    wild_boar: Object.freeze({ body: "#9a684c", shade: "#5a3b34", light: "#d6a47d", eye: "#2a2020", accent: "#f2c084", outline: "#442c2a" }),
+    bear: Object.freeze({ body: "#a66f45", shade: "#67402f", light: "#e1b28c", eye: "#2a2020", accent: "#f0b75c", outline: "#4d302a" }),
+    turtle: Object.freeze({ body: "#817548", shade: "#4f4a31", light: "#d1bb72", eye: "#26221e", accent: "#a8d56e", outline: "#373625" }),
+    coyote: Object.freeze({ body: "#87786f", shade: "#4d4647", light: "#c6b8ae", eye: "#26212d", accent: "#d9a95e", outline: "#37313a" }),
+    frog: Object.freeze({ body: "#7ba15a", shade: "#4d653c", light: "#d2d67d", eye: "#20201d", accent: "#e8ad47", outline: "#35432d" }),
+    snake: Object.freeze({ body: "#d09535", shade: "#7d4c26", light: "#ffe2a0", eye: "#241b18", accent: "#f26f55", outline: "#4c2c22" }),
   });
 
   // Monster labels are anchored to authored body space, never to the top of
@@ -57,6 +66,15 @@
     hollowmage: Object.freeze({ nameLift: 64, nameOffsetX: 0 }),
     "lantern-golem": Object.freeze({ nameLift: 72, nameOffsetX: 0 }),
     deepwarden: Object.freeze({ nameLift: 82, nameOffsetX: 0 }),
+    chick: Object.freeze({ nameLift: 58, nameOffsetX: 0 }),
+    fox: Object.freeze({ nameLift: 62, nameOffsetX: 0 }),
+    raccoon: Object.freeze({ nameLift: 60, nameOffsetX: 0 }),
+    wild_boar: Object.freeze({ nameLift: 68, nameOffsetX: 0 }),
+    bear: Object.freeze({ nameLift: 84, nameOffsetX: 0 }),
+    turtle: Object.freeze({ nameLift: 72, nameOffsetX: 0 }),
+    coyote: Object.freeze({ nameLift: 64, nameOffsetX: 0 }),
+    frog: Object.freeze({ nameLift: 62, nameOffsetX: 0 }),
+    snake: Object.freeze({ nameLift: 78, nameOffsetX: 0 }),
   });
 
   // Every named NPC owns one stable frame in both the map and portrait
@@ -217,6 +235,15 @@
     hollowmage: Object.freeze({ atlas: "monstersDepths", row: 2 }),
     "lantern-golem": Object.freeze({ atlas: "monstersDepths", row: 3 }),
     deepwarden: Object.freeze({ atlas: "monstersDepths", row: 4 }),
+    chick: Object.freeze({ atlas: "monstersCore", row: 1, sourceFallback: true }),
+    fox: Object.freeze({ atlas: "monstersCore", row: 2, sourceFallback: true }),
+    raccoon: Object.freeze({ atlas: "monstersCore", row: 0, sourceFallback: true }),
+    wild_boar: Object.freeze({ atlas: "monstersDepths", row: 1, sourceFallback: true }),
+    bear: Object.freeze({ atlas: "monstersDepths", row: 4, sourceFallback: true }),
+    turtle: Object.freeze({ atlas: "monstersCore", row: 4, sourceFallback: true }),
+    coyote: Object.freeze({ atlas: "monstersCore", row: 2, sourceFallback: true }),
+    frog: Object.freeze({ atlas: "monstersCore", row: 1, sourceFallback: true }),
+    snake: Object.freeze({ atlas: "monstersDepths", row: 2, sourceFallback: true }),
   });
 
   const markerSpriteIndices = Object.freeze({ question: 0, exclamation: 1, interact: 2, portal: 3 });

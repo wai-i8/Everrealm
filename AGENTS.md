@@ -67,6 +67,7 @@ For exact asset filenames, atlas layouts and art-processing rules, use `ART_PIPE
 - `ART_PIPELINE.md` decides how those environments, tiles and props look and how their assets are produced; it also owns the shared Standard Mobile Unit `4×7 / 28-frame` Idle+Walk sprite contract.
 - `docs/PET_SYSTEM.md` plugs Familiar units into the existing battle / map / production systems; it must not duplicate their core resolvers.
 - `docs/PRODUCTION_SYSTEM.md` owns production rules; map placement / interaction of resource nodes and workstations belongs to `docs/MAP_SYSTEM.md`.
+- `docs/MONSTER_SYSTEM.md` owns canonical monster IDs, ecology, level scaling, combat skill data, rewards, migration and Codex contracts.
 
 ### Map source-of-truth routing
 

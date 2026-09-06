@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   "use strict";
 
   if (!document.getElementById("inventoryOverhaulStyles")) {
@@ -112,42 +112,37 @@
     zone: document.getElementById("zoneName"),
   };
 
-  const enemyTypes = {
-    slime: { name: "暗泥怪", hp: 28, damage: 12, speed: 76, moveRange: 4, attackRange: 1, xp: 30, coins: 8, radius: 14, aggro: 190, range: 30, color: "#6c5f9a" },
-    wisp: { name: "霧靈", hp: 38, damage: 15, speed: 88, moveRange: 4, attackRange: 3, xp: 38, coins: 11, radius: 13, aggro: 245, range: 155, color: "#ae91ff" },
-    hound: { name: "霧犬", hp: 52, damage: 18, speed: 118, moveRange: 5, attackRange: 1, xp: 48, coins: 15, radius: 15, aggro: 230, range: 36, color: "#5e7c89" },
-    boss: { name: "吞燈獸", hp: 460, damage: 24, speed: 82, moveRange: 4, attackRange: 2, xp: 210, coins: 130, radius: 28, aggro: 520, range: 52, color: "#ff6b91" },
-  };
-
-  const expansionEnemyColors = {
-    mossbun: "#75a76b",
-    mistwing: "#8fa4dc",
-    cragboar: "#a7836b",
-    hollowmage: "#b38bdd",
-    "lantern-golem": "#d3925f",
-    deepwarden: "#ec6e96",
-  };
-  for (const [type, blueprint] of Object.entries(ExpansionWorld.MONSTER_BLUEPRINTS)) {
+  const expansionEnemyColors = { chick: "#d89d42", fox: "#c9783e", raccoon: "#7c6656", wild_boar: "#9a684c", bear: "#a66f45", turtle: "#817548", coyote: "#87786f", frog: "#7ba15a", snake: "#d09535" };
+  const explorationSpeed = { bird: 92, beast: 104, reptile: 76, amphibian: 88 };
+  const enemyTypes = {};
+  for (const type of ExpansionWorld.CANONICAL_MONSTER_IDS) {
+    const blueprint = ExpansionWorld.monsterBlueprint(type);
+    const stats = ExpansionWorld.monsterStatsAtLevel(type, blueprint.baseLevel);
+    const firstSkill = blueprint.skills[0];
     enemyTypes[type] = {
-      name: blueprint.name,
-      hp: blueprint.hp,
-      damage: blueprint.attack,
-      defence: blueprint.defense,
-      speed: 68 + blueprint.speed * 4,
-      battleSpeed: blueprint.speed,
+      name: blueprint.name_zh,
+      hp: stats.hp,
+      damage: stats.attack,
+      defence: stats.defense,
+      speed: explorationSpeed[blueprint.family] || 86,
+      battleSpeed: firstSkill.speedGrade === "A" ? 14 : firstSkill.speedGrade === "B" ? 11 : firstSkill.speedGrade === "D" ? 7 : 9,
       moveRange: blueprint.moveRange,
-      attackRange: blueprint.attackRange,
-      xp: blueprint.xp,
-      coins: blueprint.coins,
-      radius: blueprint.boss ? 28 : type === "lantern-golem" ? 22 : 15,
+      attackRange: firstSkill.range.max,
+      xp: blueprint.rewards.baseXp,
+      coins: blueprint.rewards.coins,
+      radius: blueprint.id === "bear" ? 28 : blueprint.id === "turtle" ? 22 : 15,
       aggro: blueprint.boss ? 500 : 225,
-      range: blueprint.attackRange > 1 ? 155 : 38,
+      range: firstSkill.range.max > 1 ? 155 : 38,
       color: expansionEnemyColors[type] || "#9b8ab7",
-      artType: blueprint.artType,
+      artType: blueprint.id,
       drop: blueprint.drop,
       ability: blueprint.ability,
+      skills: blueprint.skills,
+      battleRole: blueprint.battleRole,
     };
   }
+  // Legacy exploration/save aliases remain readable, but all new spawns resolve to canonical IDs.
+  for (const [legacy, migration] of Object.entries(ExpansionWorld.LEGACY_MONSTER_MIGRATION)) enemyTypes[legacy] = enemyTypes[migration.id];
 
   const hasMap = (id) => typeof id === "string" && Object.hasOwn(maps, id);
   const keys = new Set();
@@ -368,18 +363,20 @@
   }
 
   function makeEnemy(spawn, overrides = {}) {
-    const type = overrides.type || spawn.type;
-    const base = enemyTypes[type];
+    const requestedType = overrides.type || spawn.type;
+    const type = ExpansionWorld.normalizeMonsterId(requestedType) || requestedType;
+    const base = enemyTypes[type] || enemyTypes[requestedType];
     const level = overrides.level || spawn.level || 1;
     const blueprint = ExpansionWorld.monsterBlueprint(type);
+    const levelStats = blueprint ? ExpansionWorld.monsterStatsAtLevel(type, level, { elite: spawn.elite }) : null;
     const levelDelta = Math.max(0, level - (blueprint?.baseLevel || 1));
     const hpScale = 1 + levelDelta * .22;
     const damageScale = 1 + levelDelta * .14;
-    const maxHp = Math.round(base.hp * hpScale);
+    const maxHp = levelStats?.hp || Math.round(base.hp * hpScale);
     return {
       id: overrides.id || spawn.id || `enemy-${enemySerial++}`,
       type,
-      name: base.name,
+      name: spawn.name || blueprint?.name_zh || base.name,
       x: overrides.x ?? spawn.x,
       y: overrides.y ?? spawn.y,
       homeX: overrides.x ?? spawn.x,
@@ -388,22 +385,23 @@
       level,
       hp: overrides.hp ?? maxHp,
       maxHp,
-      damage: Math.round(base.damage * damageScale),
+      damage: levelStats?.attack || Math.round(base.damage * damageScale),
       speed: base.speed,
-      xp: Math.round(base.xp * (1 + levelDelta * .18)),
-      coins: Math.round(base.coins * (1 + levelDelta * .15)),
+      xp: blueprint ? blueprint.rewards.baseXp : Math.round(base.xp * (1 + levelDelta * .18)),
+      coins: blueprint ? Math.round(blueprint.rewards.coins * (1 + levelDelta * .15)) : Math.round(base.coins * (1 + levelDelta * .15)),
       aggro: base.aggro,
       range: base.range,
       color: base.color,
       artType: spawn.artType || base.artType || type,
-      defence: base.defence || (type === "boss" ? 4 : type === "hound" ? 2 : 1),
+      defence: levelStats?.defense ?? base.defence ?? 1,
       battleSpeed: base.battleSpeed || (type === "hound" ? 15 : type === "wisp" ? 12 : type === "boss" ? 10 : 8),
-      moveRange: Math.max(4, base.moveRange || 4),
-      attackRange: base.attackRange || (type === "wisp" ? 3 : type === "boss" ? 2 : 1),
+      moveRange: Math.max(2, base.moveRange || 4),
+      attackRange: base.attackRange || 1,
       dropInfo: base.drop || null,
       crystal: spawn.crystal || null,
-      boss: Boolean(spawn.boss || type === "boss"),
-      mainBoss: type === "boss",
+      boss: Boolean(spawn.boss || blueprint?.boss),
+      mainBoss: Boolean(spawn.mainBoss || (type === "boss" && !blueprint)),
+      monsterSkills: blueprint?.skills || [],
       elite: Boolean(spawn.elite),
       alive: true,
       respawnTimer: 0,
@@ -1080,14 +1078,15 @@
     spawnBurst(enemy.x, enemy.y, enemy.color, enemy.boss ? 70 : 24, enemy.boss ? 150 : 90);
     monsterKills[enemy.type] = (monsterKills[enemy.type] || 0) + 1;
     guildRenown += enemy.boss ? 8 : enemy.elite ? 3 : 1;
-    const contractTarget = ({ mossbun: "mushroom", mistwing: "moth", "lantern-golem": "golem", hollowmage: "shadow", deepwarden: "shadow" })[enemy.type] || enemy.type;
-    const progress = Expansion.progressContracts(activeContracts, { event: "defeat", target: contractTarget, amount: 1 });
+    const contractTarget = ExpansionWorld.normalizeMonsterId(enemy.type) || enemy.type;
+    const progress = Expansion.progressContracts(activeContracts, { event: "defeat", target: contractTarget, monster_id: contractTarget, amount: 1 });
     activeContracts = progress.contracts;
     if (progress.updatedIds.length) {
       const contract = activeContracts.find((item) => progress.updatedIds.includes(item.id));
       if (contract) showToast(contract.status === "ready" ? `委託完成：${contract.title} · 返公會回報` : `${contract.title}　${contract.progress} / ${contract.objective.count}`, "good");
     }
-    gainXp(enemy.xp);
+    const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
+    gainXp(rewardXp);
     if (enemy.mainBoss) {
       bossDefeated = true;
       questStage = 4;
@@ -1934,8 +1933,8 @@
 
   function contractTargetName(target) {
     return ({
-      slime: "暗泥怪", wisp: "霧靈", hound: "霧犬", mushroom: "苔糰子",
-      moth: "霧翼蝠", golem: "失控燈偶", shadow: "空殼術士／深霧看守者",
+      chick: "山雀仔", fox: "霧狐", raccoon: "燈紋浣熊", wild_boar: "荒野野豬",
+      bear: "岩穴熊", turtle: "苔甲龜", coyote: "灰原郊狼", frog: "霧沼蛙", snake: "毒霧蛇",
     })[target] || target;
   }
 
@@ -2627,19 +2626,16 @@
   }
 
   function renderCodexFacility() {
-    const lore = {
-      slime: "會喺舊路彈來彈去。", wisp: "擅長隔位射擊。", hound: "高速逼近，唔好畀佢包圍。", boss: "吞食北岸燈火嘅巨獸。",
-      mossbun: "坑道入口嘅青苔糰子。", mistwing: "飛得快，戰棋移動範圍大。", cragboar: "甲硬血厚，正面斬會較吃力。",
-      hollowmage: "遠距離施放黯霧彈。", "lantern-golem": "慢，但防禦極高。", deepwarden: "沉燈坑道最深處嘅守門者。",
-    };
-    const cards = Object.entries(enemyTypes).map(([type, data]) => {
-      const count = monsterKills[type] || 0;
+    const ids = ExpansionWorld.CANONICAL_MONSTER_IDS;
+    const cards = ids.map((type) => {
+      const data = enemyTypes[type];
+      const count = monsterKills[type] || Object.entries(ExpansionWorld.LEGACY_MONSTER_MIGRATION).filter(([, migration]) => migration.id === type).reduce((sum, [legacy]) => sum + (monsterKills[legacy] || 0), 0);
       const blueprint = ExpansionWorld.monsterBlueprint(type);
       const hidden = count === 0;
-      return `<article class="codex-card ${hidden ? "is-unknown" : ""}"><span class="codex-count">${count ? `討伐 ${count}` : "未發現"}</span><div class="codex-sigil" aria-hidden="true">${hidden ? "?" : data.artType === "wisp" || type === "wisp" ? "◇" : data.boss || type === "boss" ? "王" : "●"}</div><div><strong>${hidden ? "？？？" : data.name}</strong><p>${hidden ? "繼續探索霧林同沉燈坑道。" : lore[type] || "公會正整理呢種霧獸嘅紀錄。"}</p><small>${hidden ? "能力未明" : `建議級別 ${blueprint?.baseLevel || Math.max(1, Math.round(data.hp / 30))} · ${blueprint?.drop?.name || "燈幣／藥水"}`}</small></div></article>`;
+      return `<article class="codex-card ${hidden ? "is-unknown" : ""}"><span class="codex-count">${count ? `討伐 ${count}` : "未發現"}</span><div class="codex-sigil" aria-hidden="true">${hidden ? "?" : blueprint.battleRole === "poison" ? "✦" : blueprint.battleRole === "tank" ? "◇" : "●"}</div><div><strong>${hidden ? "？？？" : blueprint.name_zh}</strong><p>${hidden ? "繼續探索霧林同沉燈坑道。" : blueprint.codex.summary}</p><small>${hidden ? "能力未明" : `建議級別 ${blueprint.normalLevelRange[0]}-${blueprint.normalLevelRange[1]} · ${blueprint.drop?.name || "燈幣／藥水"}`}</small></div></article>`;
     }).join("");
-    const discovered = Object.keys(enemyTypes).filter((type) => monsterKills[type] > 0).length;
-    facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>MONSTER CODEX</small><h3>霧獸觀察簿</h3></div><span>${discovered} / ${Object.keys(enemyTypes).length} 種</span></div><div class="codex-grid">${cards}</div>`;
+    const discovered = ids.filter((type) => monsterKills[type] > 0).length;
+    facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>MONSTER CODEX</small><h3>霧獸觀察簿</h3></div><span>${discovered} / ${ids.length} 種</span></div><div class="codex-grid">${cards}</div>`;
     facilityFooter.innerHTML = `<p><span aria-hidden="true">◎</span> 每次討伐都會永久記錄；稀有素材可以留畀將來製作裝備。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
   }
 
@@ -2878,10 +2874,7 @@
     obstacleSet: Object.freeze(["rock", "boulder", "bush"]),
     backgroundId: "mountain-battle-background-v1",
   });
-  const ENEMY_SPEED_GRADES = Object.freeze({
-    slime: "C", mossbun: "C", wisp: "B", mistwing: "A", hound: "A",
-    cragboar: "D", hollowmage: "C", "lantern-golem": "E", boss: "D", deepwarden: "E",
-  });
+  const ENEMY_SPEED_GRADES = Object.freeze({ chick: "B", fox: "A", raccoon: "C", wild_boar: "D", bear: "D", turtle: "A", coyote: "A", frog: "B", snake: "A" });
 
   function scheduleBattle(callback, delay = 0) {
     if (!battle) return;
@@ -2911,7 +2904,7 @@
       "lantern-golem": [[3, 2], [3, 4], [5, 1], [5, 5]],
       deepwarden: [[3, 1], [3, 5], [5, 1], [5, 5]],
     };
-    return (layouts[source.type] || layouts.slime).map(([x, y]) => ({ x, y }));
+    return (layouts[source.type] || layouts.raccoon || [[4, 1], [4, 5], [5, 3]]).map(([x, y]) => ({ x, y }));
   }
 
   function battleFieldContextFor(mapId) {
@@ -2924,39 +2917,45 @@
   }
 
   function createBattleEnemy(source, type, index, primary) {
-    const base = enemyTypes[type];
+    const canonicalType = ExpansionWorld.normalizeMonsterId(type) || type;
+    const base = enemyTypes[canonicalType] || enemyTypes[type];
+    const blueprint = ExpansionWorld.monsterBlueprint(canonicalType);
     const level = primary ? source.level : Math.max(1, source.level - 1);
-    const scale = 1 + (level - 1) * .18;
-    const rawHp = primary ? source.maxHp : Math.round(base.hp * scale * .7);
-    const maxHp = Math.max(12, Math.round(rawHp * (type === "boss" ? .4 : 1)));
+    const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(canonicalType, level) : null;
+    const rawHp = primary ? source.maxHp : Math.round((stats?.hp || base.hp) * .7);
+    const maxHp = Math.max(12, Math.round(rawHp));
     const spawnCells = [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }];
-    const boss = Boolean(type === "boss" || type === "deepwarden");
-    const attackRange = primary ? source.attackRange : base.attackRange || (type === "wisp" ? 3 : type === "boss" ? 2 : 1);
+    const boss = Boolean(primary && source.boss);
+    const skill = ExpansionWorld.selectMonsterSkill(canonicalType, { round: battle?.round || 1 });
+    const attackRange = primary ? source.attackRange : skill?.range.max || 1;
     const ranged = attackRange > 1;
     return {
       id: primary ? `battle-${source.id}` : `battle-${source.id}-helper-${index}`,
       sourceId: primary ? source.id : null,
       primary,
       side: "enemy",
-      type,
-      artType: base.artType || type,
+      type: canonicalType,
+      artType: base.artType || canonicalType,
       boss,
       name: primary ? source.name : `幼小${base.name}`,
       level,
       cell: { ...spawnCells[index] },
       hp: maxHp,
       maxHp,
-      attack: Math.max(5, primary ? source.damage : Math.round(base.damage * scale * .8)),
-      defence: primary ? source.defence : base.defence || (type === "boss" ? 4 : type === "hound" ? 2 : 1),
-      moveRange: Math.max(4, primary ? source.moveRange : base.moveRange || 4),
+      attack: Math.max(5, primary ? source.damage : stats?.attack || base.damage),
+      defence: primary ? source.defence : stats?.defense || base.defence || 1,
+      moveRange: Math.max(2, primary ? source.moveRange : stats?.moveRange || base.moveRange || 4),
       turnCost: BATTLE_TURN_COST,
       attackRange,
       minAttackRange: attackRange > 1 ? 2 : 1,
-      initiative: primary ? source.battleSpeed : base.battleSpeed || (type === "hound" ? 15 : type === "wisp" ? 12 : type === "boss" ? 10 : 8),
+      initiative: primary ? source.battleSpeed : base.battleSpeed || (ENEMY_SPEED_GRADES[canonicalType] === "A" ? 14 : ENEMY_SPEED_GRADES[canonicalType] === "B" ? 11 : 8),
       ap: 0,
-      skillCost: boss ? 10 : ranged ? 7 : 5,
-      skillName: base.ability || (ranged ? "凝霧彈" : type === "hound" ? "霧牙突襲" : "霧爪擊"),
-      speedGrade: ENEMY_SPEED_GRADES[type] || "C",
+      skillCost: skill?.apCost || (boss ? 10 : ranged ? 7 : 5),
+      skillId: skill?.id || null,
+      skill: skill || null,
+      skills: blueprint?.skills || [],
+      skillName: skill?.name || base.ability || (ranged ? "凝霧彈" : "霧爪擊"),
+      speedGrade: skill?.speedGrade || ENEMY_SPEED_GRADES[canonicalType] || "C",
       targetArc: ["front", "side"],
       alive: true,
       facing: "left",
@@ -2965,15 +2964,9 @@
   }
 
   function battlePartyFor(source) {
-    const types = [source.type];
-    if (source.type === "deepwarden") types.push("hollowmage", "mistwing");
-    else if (source.boss) types.push("wisp", "wisp");
-    else if (source.type === "wisp") types.push("slime");
-    else if (source.type === "hound") types.push(source.level >= 4 ? "hound" : "slime");
-    else if (source.type === "lantern-golem") types.push("mistwing");
-    else if (source.type === "hollowmage") types.push("mossbun");
-    else if (["mistwing", "cragboar"].includes(source.type) && source.level >= 7) types.push("mossbun");
-    else if (source.level >= 2) types.push("slime");
+    const blueprint = ExpansionWorld.monsterBlueprint(source.type);
+    const types = [source.type, ...(blueprint?.encounterParty || [])];
+    if (source.boss && types.length === 1) types.push("turtle", "snake");
     return types.slice(0, 3).map((type, index) => createBattleEnemy(source, type, index, index === 0));
   }
 
@@ -3099,14 +3092,24 @@
       }
       const action = Tactics.chooseEnemyAction({ grid: battle.grid, enemy, targets: [hero], units: simulated });
       if (!action) continue;
+      const selectedSkill = ExpansionWorld.selectMonsterSkill(actual.type, { round: battle.round, skillId: actual.skillId });
+      if (selectedSkill) {
+        actual.skill = selectedSkill;
+        actual.skillId = selectedSkill.id;
+        actual.skillName = selectedSkill.name;
+        actual.skillCost = selectedSkill.apCost;
+        actual.speedGrade = selectedSkill.speedGrade;
+        actual.attackRange = selectedSkill.range.max;
+        actual.minAttackRange = selectedSkill.range.min;
+      }
       enemy.cell = { ...action.move };
       enemy.facing = action.facing || enemy.facing;
       const target = { ...hero.cell };
       const targetCells = [];
-      const willAttack = Boolean(action.attackTargetId) && (actual.ap || 0) >= actual.skillCost;
+      const willAttack = Boolean(action.attackTargetId) && (actual.ap || 0) >= actual.skillCost && (!actual.skill || actual.skill.actionKind !== "guard");
       if (willAttack) {
         targetCells.push(target);
-        if (actual.boss && battle.round % 3 === 0) {
+        if (actual.skill?.area?.shape === "radius" || (actual.boss && battle.round % 3 === 0)) {
           for (const direction of Tactics.DIRECTIONS) {
             const splash = { x: target.x + direction.x, y: target.y + direction.y };
             if (Tactics.isInside(battle.grid, splash)) targetCells.push(splash);
@@ -3120,6 +3123,8 @@
         targetCells,
         willAttack,
         skillName: actual.skillName,
+        skillId: actual.skillId,
+        skill: actual.skill,
         apCost: actual.skillCost,
         speedGrade: actual.speedGrade || "C",
         facing: action.facing || actual.facing,
@@ -3797,12 +3802,12 @@
       }
       const activeGuard = battle.guardReduction || 0;
       hit.damage = Tactics.calculateDamage(hit.enemy, battle.hero, {
-        multiplier: (hit.enemy.boss && battle.round % 3 === 0 ? 1.25 : 1) * (hit.position === "rear" ? 1 + BATTLE_REAR_DAMAGE_BONUS : hit.position === "side" ? 1 + BATTLE_SIDE_DAMAGE_BONUS : 1),
+        multiplier: (hit.plan.skill?.damageModel?.scale || 1) * (hit.enemy.boss && battle.round % 3 === 0 ? 1.25 : 1) * (hit.position === "rear" ? 1 + BATTLE_REAR_DAMAGE_BONUS : hit.position === "side" ? 1 + BATTLE_SIDE_DAMAGE_BONUS : 1),
         guarded: activeGuard > 0,
         guardMultiplier: 1 - activeGuard,
         minimum: 2,
       });
-      const damageType = hit.enemy.attackRange > 1 ? "mind" : hit.enemy.type === "hound" ? "pierce" : hit.enemy.type === "cragboar" ? "slash" : "impact";
+      const damageType = hit.plan.skill?.effects?.some((effect) => effect.type === "poison") ? "mind" : hit.enemy.battleRole === "charger" ? "impact" : hit.enemy.battleRole === "skirmisher" ? "pierce" : "impact";
       hit.damage = Math.max(1, Math.round(hit.damage * (FighterEffects?.damageMultiplier(battle.hero, battle.round, passiveStats, damageType) ?? 1)));
       if (FighterEffects) {
         const counter = FighterEffects.resolveCounter({ defender: battle.hero, attacker: hit.enemy, damage: hit.damage, isProjectile: hit.enemy.attackRange > 1, round: battle.round });
@@ -3813,6 +3818,10 @@
       hit.damage = result.damage;
       battle.hero.hp = result.hpAfter;
       battle.hero.alive = !result.defeated;
+      if (hit.plan.skill && FighterEffects && hit.plan.skill.effects?.length && battle.hero.alive) {
+        const effectResult = FighterEffects.applySkillEffects({ skill: hit.plan.skill, caster: hit.enemy, targets: [battle.hero], units: battleUnits(), grid: battle.grid, round: battle.round });
+        showFighterEffectEvents(effectResult);
+      }
       executedEnemyHits.push(hit);
     }
     if (!heroExecuted) heroHeal = 0;
@@ -3915,7 +3924,13 @@
 
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
-    if (battle.source.boss) return setBattleMessage("吞燈獸封住咗出口，今場走唔甩。", true);
+    if (battle.source.boss && battle.source.mainBoss) return setBattleMessage("守關霧獸封住咗出口，今場走唔甩。", true);
+    const chance = ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
+    if (Math.random() >= chance) {
+      setBattleMessage(`撤退失敗（成功率 ${Math.round(chance * 100)}%），霧獸逼近咗！`, true);
+      battle.phase = "planning_action";
+      return updateBattleUi();
+    }
     const source = battle.source;
     const away = Core.normalize({ x: player.x - source.x, y: player.y - source.y });
     source.encounterCooldown = 3;
@@ -4006,7 +4021,7 @@
         <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="reset-move" aria-keyshortcuts="M">
           <i aria-hidden="true">↺</i><span><b>重畫路線</b><small>而家 ${routeSteps} / ${battle.hero.moveRange} 步 · 轉向 +0.5</small></span><kbd>1</kbd>
         </button>
-        <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.boss ? "disabled" : ""}>
+        <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.mainBoss ? "disabled" : ""}>
           <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
         </button>`;
       battleUi.potionCount = null;
@@ -4036,7 +4051,7 @@
       <button id="battleEndTurnButton" class="battle-skill-button end-turn-skill" type="button" data-battle-action="end-turn" aria-keyshortcuts="E">
         <i aria-hidden="true">✓</i><span><b>待機</b><small>保留 AP · 無減傷</small></span><kbd>9</kbd>
       </button>
-      <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.boss ? "disabled" : ""}>
+      <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.mainBoss ? "disabled" : ""}>
         <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
       </button>`;
     battleUi.potionCount = document.getElementById("battlePotionCount");
@@ -4201,7 +4216,7 @@
   }
 
   function contractTargetMap(target) {
-    return ["mushroom", "moth", "golem", "shadow"].includes(target) ? "dungeon" : "field";
+    return ["bear", "turtle", "frog", "snake"].includes(target) ? "dungeon" : "field";
   }
 
   function nearestContractEnemy(target) {
