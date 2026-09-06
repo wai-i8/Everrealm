@@ -11,12 +11,46 @@
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
 - 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、燈、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
 - 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及傳送門。
-- 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築。
+- 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築；主城主要服務建築統一遵守下文「主城服務建築統一外觀規格」。
 - 主城門口與閘門：`assets/town-door-marker-v1.png` 係所有實體建築門共用嘅 bitmap 門檻標記；`assets/town-gate-east-v1.png` 係東門唯一嘅實體城門，採用城牆向左延伸、開口向右的 east-side directional composition。兩者都由 `drawStandaloneSprite` 按世界 anchor 繪製，唔以 Canvas 色塊冒充。
 - 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。
 - 裝備圖示：`assets/equipment-icon-atlas-v1.png`，4 × 4。依裝備 catalog 順序排列十五件裝備，最後一格保留透明。
 - 主角舊版多動作 atlas：`hero-anim-down-v3.png`、`hero-anim-up-v3.png`、`hero-anim-right-v3.png` 可保留作 attack／death／特殊動作兼容；**Idle + Walk locomotion 由新統一 28-frame locomotion atlas 接管**。新標準四方向必須各自有正式 frame，唔以向右圖鏡像假扮全部方向。
+
+## 主城服務建築統一外觀規格
+
+呢一節係主城 Guild／Equipment Shop／Clinic／General Store／Inn，以及將來同級主要服務建築嘅正式 exterior bitmap contract。目的係令方正街區城市保持清晰、整齊、可重用，避免每棟建築自行發明比例、方向同入口位置。
+
+### 統一尺寸／街區 envelope
+
+- 所有同級主要服務建築使用同一套標準 exterior canvas／footprint envelope；唔可以因「公會重要」就任意放大，亦唔可以因「商店細」就任意縮細。
+- 建築屋頂、煙囪、旗幟、招牌等可以有造型差異，但主體視覺寬度、接地 footprint、門前留白及整體畫面重量必須保持同級。
+- renderer／map data 應以共用 building profile 保存標準 `spriteWidth`、`spriteHeight`、底座 anchor 及 entrance geometry；新服務建築優先套用同一 profile，而唔係新增一組 magic scale。
+- 若某建築設計無法合理塞入標準 envelope，應重新設計／重新生成 asset；唔好用 runtime 非等比壓縮、拉闊或特殊 offset 硬塞。
+
+### 正面朝向與中央正門
+
+- 所有主要服務建築 exterior 必須以**正面朝下（Down-facing）**方式呈現，底邊係玩家主要接近方向。
+- **正式可用正門固定喺 bitmap 底邊水平正中央。** 門中心 X 必須與建築 semantic centerline 對齊。
+- 禁止將主要入口設計成偏左、偏右、側門、斜門或藏喺附屬攤位後面；呢啲構圖即使美術上有特色，都唔適合標準主城服務建築。
+- `doorAnchor`、門口 marker、threshold、approachPoint 同 exteriorSpawn 必須沿同一條 building centerline 配置，並由同一張 bitmap 嘅底部中央正門推導。
+- 門前台階／平台／地墊可以有風格差異，但必須保持中央入口清晰，並預留足夠透明／地面空間畀角色接近。
+- 如果畫面包含其他裝飾門、側門或開口，必須明顯次要且不可誤導為主要可互動入口；若會造成混淆，應從 final runtime asset 移除。
+
+### 生成與驗收
+
+新生成／重畫主城主要服務建築時，prompt／驗收必須同時確認：
+
+1. genuinely transparent PNG alpha；
+2. front-facing / Down-facing exterior；
+3. single primary entrance at exact bottom-center；
+4. standardized building envelope／visual scale；
+5. complete foundation、steps、door shadow 同接地像素；
+6. 左右輪廓可以唔完全對稱，但門中心不可漂移；
+7. runtime 截圖中門口 marker／threshold 必須對正可見門洞。
+
+如果現有建築 asset 違反中央正門或統一尺寸規格，應重新生成／重畫正式 bitmap，而唔係長期保留 per-building entrance offset 作補救。主城主要服務建築不得以任意 per-building entrance offset 取代共用 contract。
 
 ## 透明底硬規格
 
@@ -32,7 +66,7 @@
 - 人物、NPC、物品等獨立素材預設一件一檔；確實需要 atlas 時，每格四邊至少留約 `8–10%` 真透明安全間距，人物頭髮、武器、法杖、羽毛及裙擺都不可貼住分格線。舊版緊密 NPC atlas 只可透過 renderer 安全 gutter 過渡，任何新版本不得再依賴程式裁走鄰格污染。
 - 建築、樹、燈柱及室內台座的最底像素、地基和接地陰影必須完整留在該格；四邊預留安全透明 padding。禁止以負 source offset 補救被裁走的內容。
 - 繪製定位一律用「腳底／底座中心 anchor」。視覺可向上伸展，但碰撞箱及傳送點不得跟隨圖片外框漂移。
-- 獨立建築圖另外保存 `spriteWidth`、`spriteHeight`、`spriteAnchorY` 同 `doorAnchor {x,y}`。門座標由同一張 bitmap 的縮放矩形推導，再寫入 portal；禁止用「圖片中心／圖片右下角」猜門位。若 bitmap 門洞高於原始 house 碰撞底線，`doorDepth` 必須同步打開實體門洞，確保玩家半徑可以走入。
+- 獨立建築圖另外保存 `spriteWidth`、`spriteHeight`、`spriteAnchorY` 同 `doorAnchor {x,y}`。一般獨立建築門座標由同一張 bitmap 的可見門洞推導；**主城主要服務建築必須按上文 contract 使用底部正中央正門，`doorAnchor` 與 building centerline 對齊**。禁止用圖片右下角或任意 per-building offset 猜門位。若 bitmap 門洞高於原始 house 碰撞底線，`doorDepth` 必須同步打開實體門洞，確保玩家半徑可以走入。
 - 新版場景資產要先在 atlas 單格預覽，再在戶外、公會、商店三種場景各做一次實機截圖；確認無截頂、無截底、無白邊、無跨格污染才可替換舊版。
 - `environment-atlas-v4.png`、`monster-atlas-v1.png` 及各 `*-source-*`／`*-edit-*` 只屬舊版或製作來源；新程式只引用 v5 場景、四方向怪物、清理後格鬥士及小地圖框。
 
