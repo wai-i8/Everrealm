@@ -54,11 +54,11 @@ For exact asset filenames, atlas layouts and art-processing rules, use `ART_PIPE
 
 ## Cross-system ownership
 
-- `MAP_SYSTEM.md` decides what environment / terrain / obstacle / height context a battlefield contains.
-- `BATTLE_SYSTEM.md` decides what those cells, obstacles and heights do mechanically in combat.
+- `docs/MAP_SYSTEM.md` decides what environment / terrain / obstacle / height context a battlefield contains.
+- `docs/BATTLE_SYSTEM.md` decides what those cells, obstacles and heights do mechanically in combat.
 - `ART_PIPELINE.md` decides how those environments, tiles and props look and how their assets are produced; it also owns the shared Standard Mobile Unit `4×7 / 28-frame` Idle+Walk sprite contract.
-- `PET_SYSTEM.md` plugs Familiar units into the existing battle / map / production systems; it must not duplicate their core resolvers.
-- `PRODUCTION_SYSTEM.md` owns production rules; map placement / interaction of resource nodes and workstations belongs to `MAP_SYSTEM.md`.
+- `docs/PET_SYSTEM.md` plugs Familiar units into the existing battle / map / production systems; it must not duplicate their core resolvers.
+- `docs/PRODUCTION_SYSTEM.md` owns production rules; map placement / interaction of resource nodes and workstations belongs to `docs/MAP_SYSTEM.md`.
 
 ### Map source-of-truth routing
 

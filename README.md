@@ -83,9 +83,9 @@ npm test
 
 例如：
 
-- 山地遇敵應該生成山地 battlefield → `MAP_SYSTEM.md`
-- 山地石頭會唔會擋火球 → `BATTLE_SYSTEM.md`
-- 連擊揀左前時點樣生成 `前 → 左` attack path → `BATTLE_SYSTEM.md`
+- 山地遇敵應該生成山地 battlefield → `docs/MAP_SYSTEM.md`
+- 山地石頭會唔會擋火球 → `docs/BATTLE_SYSTEM.md`
+- 連擊揀左前時點樣生成 `前 → 左` attack path → `docs/BATTLE_SYSTEM.md`
 - 原版連擊可選邊幾格／高低差／技能書入手星級 → `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
 - 山地石頭 sprite 點畫／點切 → `ART_PIPELINE.md`
 

@@ -17,8 +17,8 @@
 
 責任分工：
 
-- `MAP_SYSTEM.md`：決定 **戰場係咩地方、由咩環境產生、放咩 terrain／obstacle**。
-- `BATTLE_SYSTEM.md`：決定 **terrain／obstacle／height 對移動、LOS、攻擊路線、projectile 有咩規則影響**。
+- `docs/MAP_SYSTEM.md`：決定 **戰場係咩地方、由咩環境產生、放咩 terrain／obstacle**。
+- `docs/BATTLE_SYSTEM.md`：決定 **terrain／obstacle／height 對移動、LOS、攻擊路線、projectile 有咩規則影響**。
 - `ART_PIPELINE.md`：決定 **地面 tile、背景、石、樹、水、戰場 props 實際點畫、點切、點 render 同點驗收**。
 - `GAME_DESIGN.md`：只保留世界方向同玩家可感知嘅高層概要。
 
@@ -67,7 +67,7 @@
 
 ## 3. 現有主要世界區域
 
-目前主要探索區域只有三個；公會、裝備店、茶館等室內場景屬主城附屬 interior，唔計成獨立大區域。
+目前主要探索區域只有三個；公會、裝備店、療癒所、雜貨舖及旅店等室內場景屬主城附屬 interior，唔計成獨立大區域。
 
 ### 3.1 主城
 
@@ -76,7 +76,9 @@
 - NPC
 - 公會
 - 裝備／商店
-- 茶館
+- 療癒所
+- 雜貨舖
+- 旅店
 - 戰技面板台
 - 任務交收
 - 生產相關工作台／教學入口
@@ -88,7 +90,7 @@
 - 城內以石路、建築、街道、少量裝飾物為主。
 - 城內採用清楚嘅分區：中央石砌廣場、北側療癒街、西南工坊街、南側市集及東南旅店街。
 - 服務建築包括拾燈公會、銀火裝備店、霧草療癒所、霧穀雜貨舖及霧燈旅店；公會係主要地標，其餘建築按功能使用中小型比例。
-- 主路由南側入口經中央廣場直達東門，南北支路分別接駁公會、療癒所、工坊及旅店門口；街燈只沿主路與轉角排列，樹木集中於城牆邊緣作框景。
+- 主路由西側入城，經中央廣場直達東門；南側另有起始／交叉道路，南北支路再接駁公會、療癒所、工坊、雜貨舖及旅店門口。街燈只沿主路與轉角排列，樹木集中於城牆邊緣作框景。
 - 一般情況唔產生普通野外 random encounter。
 - 劇情／特殊戰鬥可以明確指定 `town` battle theme。
 
@@ -381,7 +383,7 @@ NPC、門、工作台、委託板、寶箱等都使用 interaction point／range
 3. 到達後先觸發。
 4. 如果中途場景切換／玩家取消 → 中止。
 
-Production 工作台嘅「可以製作」條件由 `PRODUCTION_SYSTEM.md` 定義；本文件只負責佢喺地圖邊度、點樣接近及互動。
+Production 工作台嘅「可以製作」條件由 `docs/PRODUCTION_SYSTEM.md` 定義；本文件只負責佢喺地圖邊度、點樣接近及互動。
 
 ---
 
@@ -629,7 +631,7 @@ coast: [
 
 > `MAP_SYSTEM` 只負責「可以出現／實際擺咗咩」。
 
-以下由 `BATTLE_SYSTEM.md` 決定：
+以下由 `docs/BATTLE_SYSTEM.md` 決定：
 
 - 可唔可以行。
 - 擋唔擋 Line of Sight。
@@ -701,7 +703,7 @@ BattleContext 先可以將高度語意帶入戰棋。
 - Arc trajectory
 - damage modifier
 
-由 `BATTLE_SYSTEM.md` 定義。
+由 `docs/BATTLE_SYSTEM.md` 定義。
 
 ---
 
@@ -887,9 +889,9 @@ Canvas 可以繼續做 renderer。
 
 加入新 biome 時：
 
-1. `MAP_SYSTEM.md` 增加 biome / battle context。
+1. `docs/MAP_SYSTEM.md` 增加 biome / battle context。
 2. `ART_PIPELINE.md` 增加需要嘅正式素材規格。
-3. `BATTLE_SYSTEM.md` **只喺新 terrain 真係有新 gameplay behaviour 時**先需要更新。
+3. `docs/BATTLE_SYSTEM.md` **只喺新 terrain 真係有新 gameplay behaviour 時**先需要更新。
 
 如果只係換外觀，唔應該改 battle rules。
 
@@ -897,7 +899,7 @@ Canvas 可以繼續做 renderer。
 
 ## 26. Interior Maps
 
-公會、裝備店、茶館等 interior：
+公會、裝備店、療癒所、雜貨舖及旅店等 interior：
 
 - 使用同一 map registry。
 - 有自己 collision／interaction／exit。
@@ -921,7 +923,7 @@ Minimap 係探索地圖嘅縮略視圖。
 
 ## 28. 與 Production 系統
 
-`PRODUCTION_SYSTEM.md` 決定：
+`docs/PRODUCTION_SYSTEM.md` 決定：
 
 - 有咩資源點。
 - 需要咩工具。
@@ -929,7 +931,7 @@ Minimap 係探索地圖嘅縮略視圖。
 - drop table。
 - 工作台類型。
 
-`MAP_SYSTEM.md` 決定：
+`docs/MAP_SYSTEM.md` 決定：
 
 - 資源點擺喺邊張 map／邊個位置。
 - 玩家點樣行近。
@@ -941,12 +943,12 @@ Minimap 係探索地圖嘅縮略視圖。
 
 ## 29. 與 Familiar 系統
 
-`PET_SYSTEM.md` 決定：
+`docs/PET_SYSTEM.md` 決定：
 
 - Active Familiar 跟隨行為嘅寵物規則。
 - Familiar collection／battle participation。
 
-`MAP_SYSTEM.md` 提供：
+`docs/MAP_SYSTEM.md` 提供：
 
 - scene transition。
 - exploration walkable context。

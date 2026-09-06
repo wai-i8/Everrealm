@@ -553,7 +553,7 @@ Height-aware visual contract：目前山地遭遇戰嘅 `heightMap` 仍然全部
 - reef rock
 - driftwood
 
-水面／沙地係 battlefield art；實際 walkable、height、projectile interaction 由 `BATTLE_SYSTEM.md` 根據 `MAP_SYSTEM.md` 提供嘅 terrain semantic 判斷。
+水面／沙地係 battlefield art；實際 walkable、height、projectile interaction 由 `docs/BATTLE_SYSTEM.md` 根據 `docs/MAP_SYSTEM.md` 提供嘅 terrain semantic 判斷。
 
 ### Ground Tiles
 
@@ -593,7 +593,7 @@ Height-aware visual contract：目前山地遭遇戰嘅 `heightMap` 仍然全部
 }
 ```
 
-- `terrainType`：由 `MAP_SYSTEM.md`／`BATTLE_SYSTEM.md` 使用。
+- `terrainType`：由 `docs/MAP_SYSTEM.md`／`docs/BATTLE_SYSTEM.md` 使用。
 - `artId`：由 renderer 映射去實際 asset。
 
 換圖／升 v2、v3 時，只更新 art mapping，唔改 gameplay semantic ID。

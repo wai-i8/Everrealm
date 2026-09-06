@@ -324,13 +324,13 @@ Item catalog：
 - 寶箱。
 - 生產系統製作。
 
-如 `PRODUCTION_SYSTEM.md` 已啟用，建議由鍊金術加入一張中低 Lv recipe：
+如 `docs/PRODUCTION_SYSTEM.md` 已啟用，建議由鍊金術加入一張中低 Lv recipe：
 
 ```text
 封印卡
 ```
 
-但 recipe 詳細材料由 `PRODUCTION_SYSTEM.md` 管理。
+但 recipe 詳細材料由 `docs/PRODUCTION_SYSTEM.md` 管理。
 
 ## 7.2 使用
 
@@ -1234,7 +1234,7 @@ Tank
 
 # 28. 生產支援
 
-`PRODUCTION_SYSTEM.md` 已預留：
+`docs/PRODUCTION_SYSTEM.md` 已預留：
 
 ```js
 productionHelperId
@@ -1291,7 +1291,7 @@ spiritAffinity:
 
 ## 28.3 Cap
 
-Familiar bonus 套入 `PRODUCTION_SYSTEM.md` 嘅 production resolver。
+Familiar bonus 套入 `docs/PRODUCTION_SYSTEM.md` 嘅 production resolver。
 
 禁止 UI 自己另加。
 
