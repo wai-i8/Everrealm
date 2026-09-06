@@ -25,6 +25,7 @@
 ### 統一尺寸／街區 envelope
 
 - 所有同級主要服務建築使用同一套標準 exterior canvas／footprint envelope；唔可以因「公會重要」就任意放大，亦唔可以因「商店細」就任意縮細。
+- 主城 Guild／Equipment Shop／Clinic／General Store／Inn 五棟主要服務建築 exterior 必須 fit 入同一個 **`8 × 7 tiles` 標準 visual box**，並維持同級視覺重量。
 - 建築屋頂、煙囪、旗幟、招牌等可以有造型差異，但主體視覺寬度、接地 footprint、門前留白及整體畫面重量必須保持同級。
 - renderer／map data 應以共用 building profile 保存標準 `spriteWidth`、`spriteHeight`、底座 anchor 及 entrance geometry；新服務建築優先套用同一 profile，而唔係新增一組 magic scale。
 - 若某建築設計無法合理塞入標準 envelope，應重新設計／重新生成 asset；唔好用 runtime 非等比壓縮、拉闊或特殊 offset 硬塞。
