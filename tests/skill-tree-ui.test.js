@@ -67,7 +67,7 @@ test("fighter layout uses every authored row and column without overlap or upwar
 
   assert.equal(layout.authoredColumns, true);
   assert.equal(layout.maxColumn, 9);
-  assert.equal(layout.maxDepth, 10);
+  assert.equal(layout.maxDepth, 9);
   assert.equal(layout.positions.size, 65);
   for (const skill of fighterSkills) {
     const position = layout.positions.get(skill.id);
@@ -82,10 +82,10 @@ test("fighter layout uses every authored row and column without overlap or upwar
       assert.ok(xs[index] - xs[index - 1] >= 70, `same-row nodes overlap at ${xs[index - 1]} and ${xs[index]}`);
     }
   }
-  const psvX = fighterSkills.filter((skill) => skill.treeGroup === "PSV").map((skill) => layout.positions.get(skill.id).x);
-  assert.equal(new Set(psvX).size, 1, "ten independent PSV skills stay in one left column");
-  assert.equal(new Set(["defense_stance", "lightning_punch", "halving_fist", "one_hp_fist", "flash_fist"].map((id) => layout.positions.get(id).x)).size, 1);
-  assert.equal(new Set(["paralysis_release", "mind_release", "sight_release", "sleep_recovery", "poison_recovery"].map((id) => layout.positions.get(id).x)).size, 1);
+  const psvX = fighterSkills.filter((skill) => skill.treeGroup === "body_passive").map((skill) => layout.positions.get(skill.id).x);
+  assert.equal(new Set(psvX).size, 1, "ten body PSV skills stay in one left column");
+  assert.equal(new Set(["bougyo", "denkangeki", "ruka_hanki_ken", "ruka_kouitsu_ken", "kenshaku"].map((id) => layout.positions.get(id).x)).size, 1);
+  assert.equal(new Set(["hijo_tenketsu", "shincha_tenketsu", "kaimoku_tenketsu", "boumin_daha", "kikou_gedoku"].map((id) => layout.positions.get(id).x)).size, 1);
 });
 
 test("facility renders compact name-only SVG/DOM nodes and opens a dismissible detail modal", () => {
@@ -115,16 +115,18 @@ test("facility renders compact name-only SVG/DOM nodes and opens a dismissible d
   assert.doesNotMatch(treeCss, /\.skill-tree-board \{ width: 46rem; \}/);
 });
 
-test("multi-hit damage expands effect.hits into independently calculated hits and floating numbers", () => {
+test("multi-hit damage uses authored total output, hit metadata, and floating numbers", () => {
   const rising = Skills.getSkill("rising_knuckle");
   assert.equal(rising.name, "連擊");
   assert.equal(rising.star, 2);
   assert.equal(rising.apCost, 12);
   assert.equal(rising.speedGrade, "B");
   assert.equal(rising.effects.find((effect) => effect.type === "damage").hits, 2);
-  assert.match(gameSource, /const hitCount = Math\.max\(1, Math\.floor\(Number\(damageEffect\.hits\) \|\| 1\)\)/);
-  assert.match(gameSource, /for \(let hitIndex = 0; hitIndex < hitCount; hitIndex \+= 1\) \{\s*heroHits\.push/s);
-  assert.match(gameSource, /critical: skill\.area\.shape === "single" && Math\.random\(\) < playerStats\(\)\.critChance/);
+  assert.match(gameSource, /const hitCount = Math\.max\(1, Math\.floor\(Number\(skill\.hitResolution\?\.hit_count \|\| damageEffect\.hits\) \|\| 1\)\)/);
+  assert.match(gameSource, /const recheck = Boolean\(skill\.hitResolution\?\.recheck_attack_path_each_hit\)/);
+  assert.match(gameSource, /const split = Skills\.splitDamageLaterHits\(totalDamage, hitCount\)/);
+  assert.match(gameSource, /heroHitResolvers\.push\(\{ hitCount, recheck/);
+  assert.match(gameSource, /critical: skill\.area\.shape === "single" && hitIndex === 0 && Math\.random\(\) < playerStats\(\)\.critChance/);
   assert.match(gameSource, /applyBattleHit\(hit\.target, hit\.damage, hit\.color, hit\.hitIndex, hit\.hitCount\)/);
   assert.match(gameSource, /const spread = \(hitIndex - \(hitCount - 1\) \/ 2\) \* \.18/);
 });

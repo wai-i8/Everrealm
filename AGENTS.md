@@ -16,6 +16,10 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 - Global gameplay direction, exploration UX, UI, skills / DECK, progression and cross-system design:
   `GAME_DESIGN.md`
 
+- Current Everrealm Fighter skill tree, complete data contract, explicit graph,
+  exact range/height metadata and damage/hit behavior:
+  `docs/FIGHTER_SKILL_TREE.md`
+
 - Battle / tactical combat / synchronized movement / collision / targeting / deterministic facing-relative orthogonal attack paths / projectiles / AP / skill height limits / combat AI / combat height rules:
   `docs/BATTLE_SYSTEM.md`
 
@@ -57,6 +61,7 @@ If a task spans systems, read only the affected system documents plus the shared
 - `tools/` — Asset cleanup, atlas repacking, alpha auditing and other development utilities.
 - `docs/` — Detailed specifications for large standalone systems.
 - `docs/references/` — Historical/original-game research references. These preserve source evidence and explicit data graphs but are not current Everrealm gameplay specs.
+- `docs/FIGHTER_SKILL_TREE.md` — Current Everrealm Fighter source of truth. The similarly named file under `docs/references/` is provenance/source evidence only.
 
 For exact asset filenames, atlas layouts and art-processing rules, use `ART_PIPELINE.md`.
 

@@ -136,6 +136,8 @@ try {
   $inventoryUi = $null
   $inventoryScreenshotPath = $null
   $equipmentScreenshotPath = $null
+  $fighterTreeDetailScreenshotPath = $null
+  $fighterTreeBottomScreenshotPath = $null
   $monsterFacingRuntime = $null
   switch ($Scenario) {
     'title' {
@@ -440,14 +442,28 @@ try {
     }
     'fightertree' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); document.getElementById('skillTreeButton').click(); true" | Out-Null
-      $fighterTree = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const nodes=[...document.querySelectorAll(".skill-tree-node")];const boxes=nodes.map(n=>n.getBoundingClientRect());const overlap=boxes.some((a,i)=>boxes.some((b,j)=>j>i&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top));return {count:nodes.length,overlap}})())') | ConvertFrom-Json
-      if ($fighterTree.count -ne 65 -or $fighterTree.overlap) { throw 'Fighter tree is incomplete or has overlapping nodes.' }
-      Invoke-GameExpression -Expression 'document.querySelector("[data-skill-id=rising_knuckle][data-facility-action=skill-detail]").click();true' | Out-Null
+      $fighterTree = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const nodes=[...document.querySelectorAll(".skill-tree-node")];const boxes=nodes.map(n=>n.getBoundingClientRect());const overlap=boxes.some((a,i)=>boxes.some((b,j)=>j>i&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top));const byId=new Map(nodes.map(n=>[n.querySelector("[data-facility-action=skill-detail]").dataset.skillId,n]));const edges=new Set([...document.querySelectorAll(".skill-tree-link")].map(n=>`${n.dataset.from}>${n.dataset.to}`));const has=(from,to)=>edges.has(`${from}>${to}`);const root=byId.get("kentotsu"),rapid=byId.get("jinken"),back=byId.get("haiken");return {count:nodes.length,overlap,rootAboveRapid:root?.dataset.treeDepth==="0"&&rapid?.dataset.treeDepth==="1"&&root?.dataset.treeX===rapid?.dataset.treeX&&root?.dataset.treeX!==back?.dataset.treeX,required:[has("sen_no_sen","choudankyaku"),has("tenpoukyaku","choudankyaku"),has("gouhoukyaku","fuujin_kikoukyaku"),has("kikoudan","fuujin_kikoukyaku"),has("rendan","jisa_kentotsu"),!has("kentotsu","jisa_kentotsu"),has("shuukijutsu","shuuki_hijutsu"),has("kikoudan","kikouhou"),has("gekikoudan","kikou_sakuretsudan"),has("byakkorendan","lusedes_tan"),has("gouhoukyaku","lusedes_tan")]};})())') | ConvertFrom-Json
+      if ($fighterTree.count -ne 65 -or $fighterTree.overlap -or -not $fighterTree.rootAboveRapid -or $fighterTree.required -contains $false) { throw 'Fighter tree is incomplete, overlapping, incorrectly placed, or has a connector mismatch.' }
+      $detailUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const open=(id)=>{document.querySelector(`[data-skill-id="${id}"][data-facility-action="skill-detail"]`).click();const value={title:document.getElementById("skillDetailTitle").textContent,stats:document.getElementById("skillDetailStats").textContent,pattern:document.getElementById("skillDetailRangePattern").textContent};document.getElementById("skillDetailPanel").click();return value;};return {multi:open("rendan"),range:open("fuujin_kikoukyaku"),control:open("houkou"),timed:open("jisa_kentotsu"),areaA:open("shuuki_hijutsu"),areaB:open("kikouhou"),areaC:open("kikou_sakuretsudan")};})())') | ConvertFrom-Json
+      if ($detailUi.multi.title -ne '連擊' -or $detailUi.multi.stats -notmatch 'Hit 數／判定2' -or $detailUi.multi.stats -notmatch '總傷害2×') { throw "Multi-hit skill detail did not expose its hit metadata (stats=$($detailUi.multi.stats))." }
+      if ($detailUi.range.stats -notmatch '射程 9 格' -or $detailUi.range.stats -notmatch '高低差上 2' -or $detailUi.range.stats -notmatch '下 ∞') { throw "Height/range skill detail did not expose the authored range metadata (stats=$($detailUi.range.stats))." }
+      if ($detailUi.control.stats -notmatch '效果妨礙行動') { throw 'Control skill detail did not expose its action interference effect.' }
+      if ($detailUi.timed.stats -notmatch '前置連擊' -or $detailUi.timed.stats -match '正拳') { throw '時差正拳 detail exposed an incorrect prerequisite.' }
+      if ($detailUi.areaA.stats -notmatch '前置集氣術' -or $detailUi.areaB.stats -notmatch '前置氣功彈' -or $detailUi.areaC.stats -notmatch '前置激氣功彈') { throw 'Area-branch skill details exposed incorrect prerequisites.' }
+      Invoke-GameExpression -Expression 'document.querySelector("[data-skill-id=rendan][data-facility-action=skill-detail]").click();true' | Out-Null
       $detailVisible = Invoke-GameExpression -Expression '!document.getElementById("skillDetailPanel").hidden'
       if (-not $detailVisible) { throw 'Skill node did not open its detail dialog.' }
+      $fighterTreeDetailScreenshotPath = Join-Path $runtimeOutputPath "fighter-skill-detail-$ViewportWidth.png"
+      $detailCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($fighterTreeDetailScreenshotPath, [Convert]::FromBase64String($detailCapture.result.data))
       Invoke-GameExpression -Expression 'document.getElementById("skillDetailPanel").click();true' | Out-Null
       $detailClosed = Invoke-GameExpression -Expression 'document.getElementById("skillDetailPanel").hidden'
       if (-not $detailClosed) { throw 'Skill detail backdrop failed to close.' }
+      $fighterTreeBottomScreenshotPath = Join-Path $runtimeOutputPath "fighter-skill-tree-bottom-$ViewportWidth.png"
+      Invoke-GameExpression -Expression 'document.querySelector(".facility-content").scrollTop=9999;true' | Out-Null
+      Start-Sleep -Milliseconds 100
+      $bottomCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($fighterTreeBottomScreenshotPath, [Convert]::FromBase64String($bottomCapture.result.data))
     }
     'entrance' {
       foreach ($approach in @(@(1500,410),@(1435,120),@(1565,120),@(1500,13))) {
@@ -674,7 +690,7 @@ try {
       Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.newGame();api.enterMap('field');api.setSkillLoadout(['gale_step','starfall_array','dragon_crescent','thunder_pillar','oathbreaker','aurora_sanctuary']);api.startBattle('slime-4');api.battleAction('start');api.setBattleAp(200);return true})()" | Out-Null
       Start-Sleep -Milliseconds 120
       $skillRoundOne = Get-GameSnapshot
-      if ($skillRoundOne.battle.phase -ne 'planning_move' -or $skillRoundOne.battle.ap -ne 200 -or $skillRoundOne.skills.equippedSkillIds.Count -ne 6) { throw 'High-tier skill battle did not initialize.' }
+      if ($skillRoundOne.battle.phase -ne 'planning_move' -or $skillRoundOne.battle.ap -ne 200 -or $skillRoundOne.skills.equippedSkillIds.Count -ne 6) { throw "High-tier skill battle did not initialize (phase=$($skillRoundOne.battle.phase), ap=$($skillRoundOne.battle.ap), equipped=$($skillRoundOne.skills.equippedSkillIds -join ','))." }
       Invoke-GameExpression -Expression '(()=>{const api=window.__RPG_DEBUG__;api.battleCommitMove();return true})()' | Out-Null
       Start-Sleep -Milliseconds 1150
       $galeSetup = Get-GameSnapshot
@@ -923,6 +939,8 @@ try {
     inventoryUi = $inventoryUi
     inventoryScreenshot = $inventoryScreenshotPath
     equipmentScreenshot = $equipmentScreenshotPath
+    fighterTreeDetailScreenshot = $fighterTreeDetailScreenshotPath
+    fighterTreeBottomScreenshot = $fighterTreeBottomScreenshotPath
     monsterFacingRuntime = $monsterFacingRuntime
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count

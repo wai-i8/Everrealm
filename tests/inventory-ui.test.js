@@ -38,7 +38,7 @@ test("bag uses an icon grid and paper doll exposes all six requested visual slot
 });
 
 test("bag is a unified two-column loadout and every owned equipment card equips directly", () => {
-  const bagRenderer = gameSource.match(/function renderBagFacility\(\)\s*\{([\s\S]*?)\n  \}\n\n  function equipmentIconHtml/)?.[1] || "";
+  const bagRenderer = gameSource.match(/function renderBagFacility\(\)\s*\{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function equipmentIconHtml/)?.[1] || "";
   assert.match(bagRenderer, /class="unified-inventory-layout"/);
   assert.match(bagRenderer, /class="bag-loadout-panel"/);
   assert.match(bagRenderer, /class="bag-items-panel"/);

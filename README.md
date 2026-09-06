@@ -32,6 +32,7 @@ npm test
 - `tests/`：自動 regression / gameplay tests。
 - `tools/`：資產清理、atlas 重排、透明 alpha audit 等開發工具。
 - `docs/`：大型獨立系統嘅詳細規格。
+- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `fighter-skill-data.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
 - `maps/`：每張地圖唯一 owning JS definition；`maps/interiors/` 放主城室內地圖。
 - `docs/maps/`：每張地圖的語意／設計文件，不是 runtime tile database。
@@ -48,7 +49,8 @@ npm test
 - 寵物／Familiar、捕獲、育成、同行及戰鬥／生產接口：`docs/PET_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
-- 幸福 Online / STRUGARDEN 格鬥士原版技能樹、explicit prerequisite graph、射程格／machine-readable relative cells、高低差及入手方法 reference：`docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
+- 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`
+- 幸福 Online / STRUGARDEN 原版資料、來源證據及研究 provenance：`docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
 
 
 ## Codex Skills
@@ -76,7 +78,8 @@ npm test
 - 修改 exact runtime layout → 只改該地圖的 owning `maps/**/*.js`。
 - 修改永久 semantic/layout rule → 同步更新對應 Markdown。
 - `game.js` 只消費 registry／執行已解析 transition；`world.js`、`expansion-world.js` 只屬薄兼容 API。
-- `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`：保存原版格鬥士技能樹及 `requires: []` 前置 graph；只屬 historical reference，唔等於 Everrealm 現行技能設計。
+- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm Fighter source of truth；完整 runtime 欄位由 `fighter-skill-data.js` 載入。
+- `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`：保存原版格鬥士技能樹、來源證據與研究 provenance；唔覆蓋現行 Everrealm 規格。
 
 ## 核心文件原則
 
@@ -87,7 +90,8 @@ npm test
 - 山地遇敵應該生成山地 battlefield → `docs/MAP_SYSTEM.md`
 - 山地石頭會唔會擋火球 → `docs/BATTLE_SYSTEM.md`
 - 連擊揀左前時點樣生成 `前 → 左` attack path → `docs/BATTLE_SYSTEM.md`
-- 原版連擊可選邊幾格／高低差／技能書入手星級 → `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
+- Everrealm 格鬥士 exact range／高低差／技能書入手與傷害資料 → `docs/FIGHTER_SKILL_TREE.md`
+- 原作來源證據 → `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`
 - 山地石頭 sprite 點畫／點切 → `ART_PIPELINE.md`
 
 普通 bug fix 唔需要新增規格文件，亦唔需要將修 bug 歷史寫入設計規格。
