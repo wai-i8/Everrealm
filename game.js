@@ -7133,7 +7133,8 @@
           transitionMap("field", maps.field.start);
           questStage = 1;
           player.xp = Core.xpRequired(player.level) - 5;
-          const enemy = enemies.find((item) => item.type === "slime");
+          const enemy = enemies.find((item) => item.id === "slime-1");
+          if (!enemy) throw new Error("Combat level-up scenario could not find slime-1.");
           enemy.x = player.x + 38;
           enemy.y = player.y;
           enemy.hp = 1;
