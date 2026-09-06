@@ -4,12 +4,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const Skills = require("../skill-core.js");
+const FighterData = require("../fighter-skill-data.js");
 
 test("UMD build exposes LanternSkills in a browser-like global", () => {
   const filename = path.join(__dirname, "..", "skill-core.js");
+  const dataFilename = path.join(__dirname, "..", "fighter-skill-data.js");
+  const dataSource = fs.readFileSync(dataFilename, "utf8");
   const source = fs.readFileSync(filename, "utf8");
   const sandbox = {};
   sandbox.globalThis = sandbox;
+  vm.runInNewContext(dataSource, sandbox, { filename: dataFilename });
   vm.runInNewContext(source, sandbox, { filename });
   assert.equal(typeof sandbox.LanternSkills.openSkillBook, "function");
   assert.equal(sandbox.LanternSkills.SKILL_CATALOG.length, Skills.SKILL_CATALOG.length);
@@ -28,21 +32,23 @@ test("catalog contains broad, immutable class-aware one-to-three-star pools", ()
   assert.equal(warriorSkills.length, 16);
   assert.equal(fighterSkills.length, 65);
   assert.deepEqual(fighterGroups, {
-    PSV: 10,
-    "正拳列": 11,
-    "迅拳列": 12,
-    "足技": 5,
-    "迴避・反擊": 4,
-    "狀態異常": 6,
-    "氣功・遠距離": 7,
-    "副職・戰士": 5,
-    "副職・守護": 5,
+    body_passive: 10,
+    root: 1,
+    kentotsu_line: 10,
+    jinken_line: 9,
+    kick: 4,
+    kick_ki_hybrid: 1,
+    evade_counter: 4,
+    ki_ranged: 13,
+    side_warrior: 5,
+    side_guardian: 5,
+    ultimate: 3,
   });
   assert.equal(Object.isFrozen(Skills.SKILL_CATALOG), true);
   assert.equal(Object.isFrozen(Skills.SKILL_CATALOG[0].effects), true);
   assert.deepEqual(
     Skills.BOOK_STARS.map((star) => Skills.getSkillsByStar(star).length),
-    [23, 35, 23],
+    [24, 37, 20],
   );
   assert.deepEqual(warriorSkills.map((skill) => skill.id), Skills.SKILL_CATALOG.slice(0, 16).map((skill) => skill.id));
   assert.deepEqual(fighterSkills.map((skill) => skill.id), Skills.SKILL_CATALOG.slice(16).map((skill) => skill.id));
@@ -60,7 +66,7 @@ test("built-in catalog passes AP and content balance validation", () => {
   assert.equal(result.ok, true, result.errors.join("\n"));
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.warnings, []);
-  assert.deepEqual(result.summary.byStar, { 1: 23, 2: 35, 3: 23 });
+  assert.deepEqual(result.summary.byStar, { 1: 24, 2: 37, 3: 20 });
   assert.ok(result.summary.melee >= 4);
   assert.ok(result.summary.ranged >= 4);
   assert.ok(result.summary.support >= 3);
@@ -76,6 +82,7 @@ test("AP bands support cheap combos and saved-AP three-star finishers", () => {
       assert.equal(skill.apCost, 0, skill.id);
       continue;
     }
+    if (skill.classId === "fighter") continue;
     const band = Skills.AP_BANDS[skill.star];
     assert.ok(skill.apCost >= band.min && skill.apCost <= band.max, skill.id);
   }
@@ -124,96 +131,66 @@ test("AP bands support cheap combos and saved-AP three-star finishers", () => {
   assert.ok(Skills.getSkill("oathbreaker").power > Skills.getSkill("quick_slash").power * 2);
 });
 
-test("fighter PSV column contains ten independent passive roots", () => {
+test("fighter PSV column is a data-driven ten-skill passive chain", () => {
   const expectedIds = [
-    "iron_body",
-    "floating_body",
-    "steel_body",
-    "mind_over_heat",
-    "mental_focus",
-    "body_targeting",
-    "supple_body",
-    "striking_body",
-    "guarded_body",
-    "light_body",
+    "psv_tesshin",
+    "psv_ukimi",
+    "psv_koushin",
+    "psv_shintou_mekkyaku",
+    "psv_seishin_touitsu",
+    "psv_soshin_sokutai",
+    "psv_hishin_jutai",
+    "psv_koushin_gekitai",
+    "psv_boushin_goutai",
+    "psv_sokushin_keitai",
   ];
-  const psvSkills = Skills.getSkillsByClass("fighter").filter((skill) => skill.treeGroup === "PSV");
+  const psvSkills = Skills.getSkillsByClass("fighter").filter((skill) => skill.treeGroup === "body_passive");
 
   assert.deepEqual(psvSkills.map((skill) => skill.id), expectedIds);
   assert.ok(psvSkills.every((skill) => skill.apCost === 0));
   assert.ok(psvSkills.every((skill) => skill.speedGrade === "PSV"));
   assert.ok(psvSkills.every((skill) => skill.tags.includes("passive")));
-  assert.ok(psvSkills.every((skill) => skill.prerequisites.length === 0));
+  assert.deepEqual(psvSkills.map((skill) => skill.prerequisites), [
+    [],
+    ["psv_tesshin"],
+    ["psv_ukimi"],
+    ["psv_koushin"],
+    ["psv_shintou_mekkyaku"],
+    ["psv_seishin_touitsu"],
+    ["psv_soshin_sokutai"],
+    ["psv_hishin_jutai"],
+    ["psv_koushin_gekitai"],
+    ["psv_boushin_goutai"],
+  ]);
 });
 
 test("fighter right-side subjob columns are two isolated five-skill chains", () => {
   const chains = [
-    ["defense_stance", "lightning_punch", "halving_fist", "one_hp_fist", "flash_fist"],
-    ["paralysis_release", "mind_release", "sight_release", "sleep_recovery", "poison_recovery"],
+    ["bougyo", "denkangeki", "ruka_hanki_ken", "ruka_kouitsu_ken", "kenshaku"],
+    ["hijo_tenketsu", "shincha_tenketsu", "kaimoku_tenketsu", "boumin_daha", "kikou_gedoku"],
   ];
 
   for (const chain of chains) {
     chain.forEach((id, index) => {
-      assert.deepEqual(Skills.getSkill(id).prerequisites, index === 0 ? [] : [chain[index - 1]], id);
+      assert.deepEqual(Skills.getSkill(id).prerequisites, index === 0 ? ["kentotsu"] : [chain[index - 1]], id);
     });
   }
   assert.deepEqual(chains.map((chain) => Skills.getSkill(chain[0]).treeColumn), [8, 9]);
 });
 
-test("fighter central tree preserves every branch and multi-parent merge", () => {
-  const expected = {
-    straight_punch: [],
-    backfist: ["straight_punch"],
-    one_inch_punch: ["backfist"],
-    fist_cannon: ["one_inch_punch"],
-    rock_fang_strike: ["fist_cannon"],
-    rock_fang_formation: ["rock_fang_strike"],
-    nine_shadow_amber: ["rock_fang_formation"],
-    quaking_nine_shadow_amber: ["nine_shadow_amber"],
-    rock_fang_line: ["rock_fang_strike"],
-    earth_shatter: ["rock_fang_line"],
-    sky_rend: ["earth_shatter"],
-    rapid_fist: ["straight_punch"],
-    rising_knuckle: ["rapid_fist"],
-    delayed_punch: ["rising_knuckle"],
-    scatter_burst: ["delayed_punch"],
-    tiger_chain: ["scatter_burst"],
-    crimson_meteor: ["tiger_chain"],
-    zantetsu_fist: ["crimson_meteor"],
-    poison_hand_fist: ["zantetsu_fist"],
-    hundred_tiger_chain: ["zantetsu_fist"],
-    oni_slayer: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"],
-    oni_cry: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"],
-    oni_lament: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"],
-    turning_cannon_kick: ["rapid_fist"],
-    horizon_kick: ["turning_cannon_kick", "preemptive_counter"],
-    wind_blade_kick: ["horizon_kick"],
-    grand_cannon_kick: ["wind_blade_kick"],
-    wind_god_chi_kick: ["grand_cannon_kick", "chi_blast"],
-    dancing_leaf: ["straight_punch"],
-    preemptive_counter: ["dancing_leaf"],
-    projectile_counter_kick: ["turning_cannon_kick", "preemptive_counter"],
-    dragon_eye: ["projectile_counter_kick"],
-    roar: ["straight_punch"],
-    vanishing_aura: ["roar"],
-    immobility_bind: ["vanishing_aura"],
-    chi_gathering: ["vanishing_aura"],
-    secret_chi_gathering: ["chi_gathering", "immobility_bind"],
-    rending_flash: ["chi_gathering", "immobility_bind"],
-    finger_bullet: ["rending_flash"],
-    chi_blast: ["finger_bullet"],
-    empowered_chi_blast: ["chi_blast"],
-    giant_chi_blast: ["empowered_chi_blast"],
-    dragon_bullet: ["giant_chi_blast"],
-    chi_cannon: ["chi_blast"],
-    explosive_chi_blast: ["chi_cannon"],
-  };
+test("fighter central tree preserves every canonical branch and multi-parent merge", () => {
+  const expected = Object.fromEntries(
+    FighterData.skills
+      .filter((skill) => skill.type !== "PSV" && skill.category !== "side_warrior" && skill.category !== "side_guardian")
+      .map((skill) => [skill.id, skill.requires]),
+  );
   const centralSkills = Skills.getSkillsByClass("fighter")
     .filter((skill) => skill.treeColumn >= 1 && skill.treeColumn <= 7);
   const actual = Object.fromEntries(centralSkills.map((skill) => [skill.id, skill.prerequisites]));
 
   assert.equal(centralSkills.length, 45);
   assert.deepEqual(actual, expected);
+  assert.deepEqual(Skills.getSkill("lusedes_tan").prerequisites, ["byakkorendan", "gouhoukyaku"]);
 });
 
 test("legacy rising_knuckle id now represents the two-hit 連擊", () => {

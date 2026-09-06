@@ -6,8 +6,8 @@
   "use strict";
 
   const STANCES = new Set(["guard", "evasion", "counter", "projectile_counter"]);
-  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "stealth"]);
-  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", stealth: "隱身" };
+  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "stealth", "action_interference"]);
+  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", stealth: "隱身", action_interference: "行動妨礙" };
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
   const roundNumber = (value) => Math.max(0, Math.trunc(Number(value) || 0));
   const cellOf = (unit) => unit?.cell || unit;
@@ -55,6 +55,7 @@
   function isDisabled(unit, round = 0, action = "act") {
     if (!isAlive(unit)) return true;
     if (activeStatus(unit, "paralysis", round) || activeStatus(unit, "sleep", round)) return true;
+    if (action === "act" && activeStatus(unit, "action_interference", round)) return true;
     return (action === "move" || action === "act") && Boolean(activeStatus(unit, "knockdown", round));
   }
 
@@ -163,8 +164,15 @@
     const recipients = [...new Set((targets || []).filter(Boolean))];
     if (!recipients.length && skill.targeting?.team === "self" && skill.area?.shape === "self") recipients.push(caster);
     const allUnits = [...new Set([caster, ...units, ...recipients])];
+    const hasExplicitSelfPoison = (skill.effects || []).some((effect) => effect.type === "self_poison");
     for (const effect of skill.effects || []) {
       if (effect.type === "damage" || effect.type === "passive_stat") continue;
+      if (effect.type === "self_poison") {
+        if (isAlive(caster)) {
+          applyStatus(caster, { ...effect, type: "poison", maxHpRatio: effect.maxHpRatio ?? .05 }, caster, currentRound, output);
+        }
+        continue;
+      }
       for (const target of recipients) {
         if (!isAlive(target)) continue;
         const chance = effect.chance ?? (effect.type === "halve_hp" ? .8 : effect.type === "set_hp" ? .55 : 1);
@@ -182,6 +190,12 @@
             output.applied += 1;
             output.events.push({ unitId: target.id, text: `解除${LABELS[type] || type}`, kind: "cleanse", status: type });
           }
+        } else if (effect.type === "feint") {
+          if (effect.effectiveAgainst === "guarding_target" && activeStatus(target, "guard", currentRound)) {
+            delete target.statusEffects.guard;
+            output.applied += 1;
+            output.events.push({ unitId: target.id, text: "破防", kind: "feint", status: "guard" });
+          }
         } else if (effect.type === "halve_hp" || effect.type === "set_hp") {
           let desired = effect.type === "halve_hp" ? Math.max(1, Math.ceil(target.hp / 2)) : Math.max(1, Number(effect.amount) || 1);
           // A percentage/one-HP move cannot trivialize boss encounters.
@@ -189,7 +203,7 @@
           hpChange(target, Math.min(target.hp, desired), "specialDamage", output);
         }
       }
-      if (effect.type === "poison" && effect.selfDuration && isAlive(caster) && !recipients.includes(caster)) {
+      if (effect.type === "poison" && effect.selfDuration && !hasExplicitSelfPoison && isAlive(caster) && !recipients.includes(caster)) {
         applyStatus(caster, { ...effect, duration: effect.selfDuration }, caster, currentRound, output);
       }
     }

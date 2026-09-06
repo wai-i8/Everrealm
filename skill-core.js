@@ -1,8 +1,10 @@
 (function (root, factory) {
-  const api = factory();
+  const fighterData = root.LanternFighterSkillData
+    || (typeof require === "function" ? require("./fighter-skill-data.js") : null);
+  const api = factory(fighterData);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternSkills = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (fighterData) {
   "use strict";
 
   const STARTING_AP = 10;
@@ -28,12 +30,20 @@
   });
   const DUPLICATE_SHARDS = deepFreeze({ 1: 2, 2: 5, 3: 10 });
   const MASTERY_UNLOCK_COST = deepFreeze({ 1: 12, 2: 28, 3: 55 });
-  const AREA_SHAPES = Object.freeze(["single", "self", "line", "cone", "cross", "radius"]);
+  const AREA_SHAPES = Object.freeze(["single", "self", "line", "cone", "cross", "radius", "relative_cells", "line_to_target", "impact_area"]);
   const DEFAULT_STARTER_SKILLS = Object.freeze(["quick_slash", "lantern_shot", "guard_stance"]);
+  // The promoted Fighter specification uses the original romanized ids.  A
+  // small compatibility map keeps saves, debug commands and old Warrior-era
+  // integrations readable without adding duplicate skills to the catalog.
+  const LEGACY_ID_ALIASES = Object.freeze(fighterData?.legacyIds || {});
+  const CANONICAL_ID_ALIASES = Object.freeze(Object.fromEntries(
+    Object.entries(LEGACY_ID_ALIASES).map(([legacyId, canonicalId]) => [canonicalId, legacyId]),
+  ));
   const CLASS_STARTER_SKILLS = deepFreeze({
     warrior: [...DEFAULT_STARTER_SKILLS],
-    fighter: ["straight_punch"],
+    fighter: ["kentotsu"],
   });
+  const COMPATIBILITY_STARTER_SKILLS = Object.freeze({ fighter: ["straight_punch"] });
 
   function fighterBookTier(apCost) {
     if (apCost <= 16) return 1;
@@ -43,19 +53,7 @@
 
   // Layout follows the supplied chart. Empty cells are intentional: shared
   // prerequisites join across columns, while independent roots have no links.
-  const FIGHTER_TREE_GRID = deepFreeze([
-    [null, null, "straight_punch"],
-    ["iron_body", null, "backfist", "rapid_fist", null, "dancing_leaf", "roar", null, "defense_stance", "paralysis_release"],
-    ["floating_body", null, "one_inch_punch", "rising_knuckle", "turning_cannon_kick", "preemptive_counter", "vanishing_aura", null, "lightning_punch", "mind_release"],
-    ["steel_body", null, "fist_cannon", "delayed_punch", "horizon_kick", "projectile_counter_kick", "chi_gathering", "immobility_bind", "halving_fist", "sight_release"],
-    ["mind_over_heat", null, "rock_fang_strike", "scatter_burst", "wind_blade_kick", "dragon_eye", "rending_flash", "secret_chi_gathering", "one_hp_fist", "sleep_recovery"],
-    ["mental_focus", "rock_fang_line", "rock_fang_formation", "tiger_chain", "grand_cannon_kick", null, "finger_bullet", null, "flash_fist", "poison_recovery"],
-    ["body_targeting", "earth_shatter", "nine_shadow_amber", "crimson_meteor", null, null, "chi_blast"],
-    ["supple_body", "sky_rend", "quaking_nine_shadow_amber", "zantetsu_fist", null, "wind_god_chi_kick", "empowered_chi_blast", "chi_cannon"],
-    ["striking_body", null, "poison_hand_fist", "hundred_tiger_chain", null, null, "giant_chi_blast", "explosive_chi_blast"],
-    ["guarded_body", null, "oni_slayer", "oni_cry", "oni_lament", null, "dragon_bullet"],
-    ["light_body"],
-  ]);
+  const FIGHTER_TREE_GRID = deepFreeze(fighterData?.display?.layout?.grid || []);
   const FIGHTER_TREE_POSITIONS = Object.fromEntries(FIGHTER_TREE_GRID.flatMap((row, treeRow) =>
     row.flatMap((id, treeColumn) => id ? [[id, { treeColumn, treeRow }]] : [])));
 
@@ -98,7 +96,7 @@
     };
   }
 
-  const FIGHTER_SKILL_SPECS = deepFreeze([
+  const LEGACY_FIGHTER_SKILL_SPECS = deepFreeze([
     // 左側 PSV 欄：圖上垂直排列，但每一招都係獨立技能，絕無前置。
     fighterSkillSpec("iron_body", "鐵身", "時刻將氣息注入身體，提升斬擊防禦力。", 0, "PSV", "PSV", 0, 0, { passive: true, passiveStat: "slash_defence", star: 1 }),
     fighterSkillSpec("floating_body", "浮身", "時刻將氣息注入身體，提升衝擊防禦力。", 0, "PSV", "PSV", 0, 1, { passive: true, passiveStat: "impact_defence", star: 1 }),
@@ -176,6 +174,209 @@
     fighterSkillSpec("poison_recovery", "氣孔解毒", "受到天使加護，中毒後會自動解除。", 0, "PSV", "副職・守護", 8, 4, { passive: true, prerequisites: ["sleep_recovery"], passiveStat: "poison_recovery", star: 3 }),
   ]);
 
+  const CLEANSE_STATUS_ALIASES = Object.freeze({
+    "放心": "panic",
+    "混亂": "confusion",
+    "激怒": "rage",
+  });
+
+  function sourceStar(raw) {
+    // Current Everrealm skill-book pools use the agreed AP bands for command
+    // skills.  The original source's 1–14 reward tier is retained under
+    // acquisition metadata; it is not the three-tier runtime book rarity.
+    if (raw.type !== "PSV") {
+      const ap = Number(raw.original_reference?.ap);
+      if (Number.isFinite(ap)) return fighterBookTier(ap);
+    }
+    const books = raw.original_reference?.acquisition?.guild_reward_books || [];
+    const sourceStar = Number(books[0]?.star_value);
+    if (Number.isFinite(sourceStar)) return Math.min(3, Math.max(1, Math.ceil(sourceStar / 5)));
+    const ap = Number(raw.original_reference?.ap);
+    return Number.isFinite(ap) ? fighterBookTier(ap) : 1;
+  }
+
+  function relativeRangeBounds(cells) {
+    if (!Array.isArray(cells) || !cells.length) return { min: null, max: null };
+    const distances = cells.map(([lateral, depth]) => Math.max(Math.abs(Number(lateral) || 0), Math.abs(Number(depth) || 0)));
+    return { min: Math.min(...distances), max: Math.max(...distances) };
+  }
+
+  function runtimeRange(raw) {
+    const source = raw.original_reference?.range || {};
+    const cells = Array.isArray(source.range_cells_relative)
+      ? source.range_cells_relative.map((cell) => [Number(cell[0]), Number(cell[1])])
+      : null;
+    const bounds = relativeRangeBounds(cells);
+    const heightDifference = { ...(source.height_difference || { status: "uncertain" }) };
+    // The source marks this skill's upward value as uncertain, while its
+    // source text explicitly confirms unlimited downward reach. Keep that
+    // distinction instead of turning infinity into an arbitrary integer.
+    if (heightDifference.down == null && /下∞/.test(String(heightDifference.source_text || ""))) {
+      heightDifference.down = "unlimited";
+    }
+    return {
+      min: source.type === "self" ? 0 : bounds.min,
+      max: source.type === "self" ? 0 : bounds.max,
+      type: source.type || "unknown",
+      sourcePattern: source.source_pattern ?? null,
+      rangeDescription: source.range_description || "原始資料未確認射程。",
+      rangeCellsRelative: cells,
+      heightDifference,
+    };
+  }
+
+  function runtimeArea(raw) {
+    const source = raw.original_reference?.effect_area || {};
+    const cells = Array.isArray(source.cells_relative)
+      ? source.cells_relative.map((cell) => [Number(cell[0]), Number(cell[1])])
+      : null;
+    let shape = "single";
+    if (source.type === "passive" || source.type === "self_only") shape = "self";
+    else if (source.type === "area_all_units" || source.type === "area_all_enemy_units") shape = "relative_cells";
+    else if (source.type === "line_to_selected_target") shape = "line_to_target";
+    else if (source.type === "impact_area_all_units") shape = "impact_area";
+    return {
+      shape,
+      sourceType: source.type || "selected_target_only",
+      sourcePattern: source.source_pattern ?? null,
+      coordinateOrigin: source.coordinate_origin || null,
+      areaDescription: source.area_description || null,
+      relativeCells: cells,
+      heightDifference: source.height_difference ? { ...source.height_difference } : null,
+    };
+  }
+
+  function cleanseStatuses(statuses) {
+    return (statuses || []).map((status) => CLEANSE_STATUS_ALIASES[status] || status);
+  }
+
+  function runtimeEffects(raw) {
+    const original = raw.original_reference || {};
+    const everrealm = raw.everrealm || {};
+    const utilities = everrealm.utility_effects || [];
+    const effects = [];
+    const damage = everrealm.damage || {};
+    const hitCount = everrealm.hit_resolution?.hit_count || 0;
+    if (everrealm.deals_damage && damage.formula_applied) {
+      effects.push({ type: "damage", scale: Number(damage.final_total_multiplier) || 0, hits: Math.max(1, Number(hitCount) || 1) });
+    }
+    if (everrealm.deals_damage && damage.model?.type === "set_remaining_hp_fraction") {
+      effects.push({ type: "halve_hp", fraction: Number(damage.model.fraction) || .5 });
+    } else if (everrealm.deals_damage && damage.model?.type === "set_remaining_hp_value") {
+      effects.push({ type: "set_hp", amount: Number(damage.model.value) || 1 });
+    }
+    for (const utility of utilities) {
+      const type = utility.type;
+      if (type === "knockback") effects.push({ type, amount: Number(utility.cells) || 1 });
+      else if (type === "knockdown") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "feint") effects.push({ type, effectiveAgainst: utility.effective_against || "guarding_target" });
+      else if (type === "self_poison") effects.push({ type: "self_poison", duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "poison") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1), sourceUncertain: utility.status === "uncertain" });
+      else if (type === "evasion_stance") effects.push({ type: "evasion", amount: .55, duration: 1 });
+      else if (type === "super_evasion_stance") effects.push({ type: "evasion", amount: .72, duration: 1 });
+      else if (type === "counter_stance") effects.push({ type: "counter", amount: .9, duration: 1 });
+      else if (type === "projectile_reflect_stance") effects.push({ type: "projectile_counter", amount: 1, duration: 1 });
+      else if (type === "action_interference") effects.push({ type, amount: Number(utility.value) || 0, duration: 1 });
+      else if (type === "invisible") effects.push({ type: "stealth", duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "heal_hp") effects.push({ type: "heal", maxHpRatio: utility.magnitude === "large" ? .38 : .18, flat: utility.magnitude === "large" ? 12 : 6 });
+      else if (type === "paralysis") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "blind") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "cleanse") effects.push({ type, statuses: cleanseStatuses(utility.statuses) });
+      else if (type === "damage_reduction_stance") effects.push({ type: "guard", amount: .38, duration: 1 });
+      else if (type === "auto_cleanse") effects.push({ type: "passive_stat", stat: utility.statuses?.[0] === "poison" ? "poison_recovery" : "sleep_recovery" });
+      else if (type === "slash_defense_up") effects.push({ type: "passive_stat", stat: "slash_defence", amount: .06 });
+      else if (type === "impact_defense_up") effects.push({ type: "passive_stat", stat: "impact_defence", amount: .06 });
+      else if (type === "piercing_defense_up") effects.push({ type: "passive_stat", stat: "pierce_defence", amount: .06 });
+      else if (type === "heat_defense_up") effects.push({ type: "passive_stat", stat: "heat_defence", amount: .06 });
+      else if (type === "mental_defense_up") effects.push({ type: "passive_stat", stat: "mind_defence", amount: .06 });
+      else if (type === "defense_up") effects.push({ type: "passive_stat", stat: "defence", amount: .06 });
+      else if (type === "accuracy_up") effects.push({ type: "passive_stat", stat: "accuracy", amount: .06 });
+      else if (type === "evasion_up") effects.push({ type: "passive_stat", stat: "evasion", amount: .06 });
+      else if (type === "physical_attack_up") effects.push({ type: "passive_stat", stat: "attack", amount: .06 });
+      else if (type === "action_speed_up") effects.push({ type: "passive_stat", stat: "speed", amount: .06 });
+    }
+    const selfPoison = utilities.find((utility) => utility.type === "self_poison");
+    const poison = effects.find((effect) => effect.type === "poison");
+    if (poison && selfPoison) poison.selfDuration = Math.max(1, Number(selfPoison.duration_turns) || 1);
+    return effects.length ? effects : (raw.type === "PSV" ? [{ type: "passive_stat", stat: "utility", amount: .06 }] : []);
+  }
+
+  function fighterSkillSpecFromData(raw) {
+    const original = raw.original_reference || {};
+    const everrealm = raw.everrealm || {};
+    const damage = everrealm.damage || {};
+    const hitResolution = everrealm.hit_resolution || {};
+    const range = runtimeRange(raw);
+    const area = runtimeArea(raw);
+    const effects = runtimeEffects(raw);
+    const passive = raw.type === "PSV";
+    const selectedTarget = area.shape === "single";
+    const cleanse = everrealm.action_kind === "cleanse";
+    const selfTargeted = passive || range.type === "self";
+    const areaTargetTeam = area.sourceType === "area_all_units" || area.sourceType === "area_all_enemy_units" ? "enemy" : null;
+    const tags = passive ? ["passive", "utility"] : [range.max != null && range.max > 1 ? "ranged" : "melee", raw.category === "ki_ranged" ? "magic" : "physical"];
+    if (everrealm.deals_damage && Number(hitResolution.hit_count) > 1) tags.push("combo");
+    if (cleanse || effects.some((effect) => ["heal", "guard", "evasion", "counter", "projectile_counter", "passive_stat"].includes(effect.type))) tags.push("utility");
+    if (area.shape !== "single" && !tags.includes("aoe")) tags.push("aoe");
+    const targetTeam = cleanse ? "ally" : selfTargeted ? "self" : "enemy";
+    const mode = passive || range.type === "self" ? "self" : selectedTarget ? "unit" : "cell";
+    const positions = FIGHTER_TREE_POSITIONS[raw.id] || {};
+    return {
+      id: raw.id,
+      name: raw.name_zh,
+      description: original.description_zh || raw.name_zh,
+      star: sourceStar(raw),
+      apCost: Number.isFinite(Number(original.ap)) ? Number(original.ap) : 0,
+      ap: original.ap ?? null,
+      interrupt: original.interrupt ?? null,
+      durability: original.durability ?? null,
+      range,
+      rangeCellsRelative: range.rangeCellsRelative,
+      heightDifference: range.heightDifference,
+      area,
+      effectArea: original.effect_area || null,
+      power: Number(damage.final_total_multiplier) || 0,
+      effects,
+      targeting: {
+        team: targetTeam,
+        mode,
+        lineOfSight: false,
+        ...(mode === "cell" ? { allowsEmpty: true } : {}),
+        ...(areaTargetTeam ? { areaTargetTeam } : {}),
+        ...(cleanse ? { allowsSelf: true } : {}),
+      },
+      tags,
+      poolWeight: passive ? 7 : 14,
+      speedGrade: original.speed || "PSV",
+      prerequisites: Array.isArray(raw.requires) ? [...raw.requires] : [],
+      targetArc: selfTargeted ? ["self"] : ["front", "left", "right", "rear"],
+      treeGroup: raw.category,
+      treeColumn: positions.treeColumn ?? null,
+      treeRow: positions.treeRow ?? null,
+      type: raw.type,
+      category: raw.category,
+      sourceNameJa: raw.source_name_ja,
+      requiresStatus: raw.requires_status,
+      sourceNote: raw.source_note || null,
+      requirements: original.requirements || null,
+      originalReference: original,
+      everrealm,
+      actionKind: everrealm.action_kind,
+      dealsDamage: everrealm.deals_damage === true,
+      deliveryMode: everrealm.delivery_mode || null,
+      pathMode: everrealm.path_mode || null,
+      blocksByTerrain: everrealm.delivery_mode === "linear",
+      blocksByUnits: everrealm.delivery_mode === "linear",
+      stopOnFirstUnit: everrealm.delivery_mode === "linear",
+      utilityEffects: everrealm.utility_effects || [],
+      damage: damage,
+      hitResolution,
+      sourceHitJudgement: original.source_hit_judgement || null,
+    };
+  }
+
+  const FIGHTER_SKILL_SPECS = deepFreeze((fighterData?.skills || []).map(fighterSkillSpecFromData));
+
   function fighterRawSkill(spec) {
     return {
       id: spec.id,
@@ -183,13 +384,41 @@
       description: spec.description,
       star: spec.star,
       apCost: spec.apCost,
+      ap: spec.ap,
+      interrupt: spec.interrupt,
+      durability: spec.durability,
       range: spec.range,
+      rangeCellsRelative: spec.rangeCellsRelative,
+      heightDifference: spec.heightDifference,
       area: spec.area,
+      effectArea: spec.effectArea,
       power: spec.power,
       effects: spec.effects,
       targeting: spec.targeting,
       tags: spec.tags,
       poolWeight: spec.poolWeight,
+      type: spec.type,
+      category: spec.category,
+      sourceNameJa: spec.sourceNameJa,
+      requiresStatus: spec.requiresStatus,
+      sourceNote: spec.sourceNote,
+      requirements: spec.requirements,
+      originalReference: spec.originalReference,
+      everrealm: spec.everrealm,
+      actionKind: spec.actionKind,
+      dealsDamage: spec.dealsDamage,
+      deliveryMode: spec.deliveryMode,
+      pathMode: spec.pathMode,
+      blocksByTerrain: spec.blocksByTerrain,
+      blocksByUnits: spec.blocksByUnits,
+      stopOnFirstUnit: spec.stopOnFirstUnit,
+      utilityEffects: spec.utilityEffects,
+      damage: spec.damage,
+      hitResolution: spec.hitResolution,
+      sourceHitJudgement: spec.sourceHitJudgement,
+      treeGroup: spec.treeGroup,
+      treeColumn: spec.treeColumn,
+      treeRow: spec.treeRow,
     };
   }
 
@@ -509,6 +738,10 @@
     return `${cell.x},${cell.y}`;
   }
 
+  function sameCell(left, right) {
+    return Boolean(left && right && Number(left.x) === Number(right.x) && Number(left.y) === Number(right.y));
+  }
+
   function manhattan(a, b) {
     if (!validCell(a) || !validCell(b)) return Infinity;
     return Math.abs(Math.trunc(Number(a.x)) - Math.trunc(Number(b.x)))
@@ -528,7 +761,11 @@
       star: Math.trunc(Number(source.star)),
       apCost: Math.trunc(Number(source.apCost)),
       range: { ...(source.range || {}) },
+      rangeCellsRelative: Array.isArray(source.rangeCellsRelative)
+        ? source.rangeCellsRelative.map((cell) => [...cell]) : null,
+      heightDifference: source.heightDifference ? { ...source.heightDifference } : null,
       area: { ...(source.area || {}) },
+      effectArea: source.effectArea ? { ...source.effectArea } : null,
       power: finiteNumber(source.power),
       effects: Array.isArray(source.effects) ? source.effects.map((effect) => ({ ...effect })) : [],
       targeting: { ...(source.targeting || {}) },
@@ -542,14 +779,79 @@
       treeGroup: String(progression.treeGroup || ""),
       treeColumn: Number.isInteger(progression.treeColumn) ? progression.treeColumn : null,
       treeRow: Number.isInteger(progression.treeRow) ? progression.treeRow : null,
+      ap: source.ap ?? null,
+      interrupt: source.interrupt ?? null,
+      durability: source.durability ?? null,
+      type: source.type || null,
+      category: source.category || null,
+      sourceNameJa: source.sourceNameJa || null,
+      requiresStatus: source.requiresStatus || null,
+      sourceNote: source.sourceNote || null,
+      requirements: source.requirements || null,
+      originalReference: source.originalReference ? { ...source.originalReference } : null,
+      everrealm: source.everrealm ? { ...source.everrealm } : null,
+      actionKind: source.actionKind || null,
+      dealsDamage: source.dealsDamage === true,
+      deliveryMode: source.deliveryMode || null,
+      pathMode: source.pathMode || null,
+      blocksByTerrain: source.blocksByTerrain === true,
+      blocksByUnits: source.blocksByUnits === true,
+      stopOnFirstUnit: source.stopOnFirstUnit === true,
+      utilityEffects: Array.isArray(source.utilityEffects) ? source.utilityEffects.map((effect) => ({ ...effect })) : [],
+      damage: source.damage ? { ...source.damage } : null,
+      hitResolution: source.hitResolution ? { ...source.hitResolution } : null,
+      sourceHitJudgement: source.sourceHitJudgement || null,
     };
   }
 
   const SKILL_CATALOG = deepFreeze(RAW_SKILLS.map(cloneSkill));
   const SKILLS_BY_ID = new Map(SKILL_CATALOG.map((skill) => [skill.id, skill]));
 
+  function canonicalSkillId(value) {
+    const id = String(value || "").trim();
+    return LEGACY_ID_ALIASES[id] || id;
+  }
+
+  function idsEquivalent(left, right) {
+    return canonicalSkillId(left) === canonicalSkillId(right);
+  }
+
+  function stateHasSkill(unlocked, skillId) {
+    const canonical = canonicalSkillId(skillId);
+    return (Array.isArray(unlocked) ? unlocked : []).some((id) => canonicalSkillId(id) === canonical);
+  }
+
+  const LEGACY_SKILL_ALIASES = new Map();
+  for (const [legacyId, canonicalId] of Object.entries(LEGACY_ID_ALIASES)) {
+    const canonical = SKILLS_BY_ID.get(canonicalId);
+    if (!canonical) continue;
+    const legacyPrerequisites = canonical.prerequisites.map((id) => CANONICAL_ID_ALIASES[id] || id);
+    // Preserve the old API's independent side-job roots while the promoted
+    // canonical tree keeps the explicit source edge back to 正拳. This only
+    // applies to legacy ids; the current catalog remains canonical.
+    if (legacyId === "defense_stance" || legacyId === "paralysis_release") legacyPrerequisites.length = 0;
+    const legacyEffects = legacyId === "roar"
+      ? [{ type: "move_down", amount: 2, duration: 1 }]
+      : canonical.effects;
+    LEGACY_SKILL_ALIASES.set(legacyId, deepFreeze({
+      ...canonical,
+      id: legacyId,
+      // The old imported catalog labelled rising_knuckle as a two-star
+      // manual. Keep that presentation for old callers; canonical `rendan`
+      // uses the current AP-band pool classification.
+      ...(legacyId === "rising_knuckle" ? { star: 2, pool: { ...canonical.pool, star: 2 } } : {}),
+      prerequisites: legacyPrerequisites,
+      effects: legacyEffects,
+      range: { ...canonical.range },
+      targetArc: legacyId === "backfist" ? ["rear"] : canonical.targetArc,
+      // Old callers used a broad one-cell arc for the legacy names.  Keep
+      // those calls working while canonical ids use exact authored cells.
+      legacyAlias: true,
+    }));
+  }
+
   function getSkill(skillOrId) {
-    if (typeof skillOrId === "string") return SKILLS_BY_ID.get(skillOrId) || null;
+    if (typeof skillOrId === "string") return SKILLS_BY_ID.get(skillOrId) || LEGACY_SKILL_ALIASES.get(skillOrId) || null;
     if (skillOrId && typeof skillOrId === "object") return skillOrId;
     return null;
   }
@@ -595,9 +897,45 @@
     return (dx === 0) !== (dy === 0);
   }
 
-  function isTargetInRange(skillOrId, origin, target) {
+  function facingRelativeCell(origin, target, facing = "down") {
+    const dx = Math.trunc(Number(target.x)) - Math.trunc(Number(origin.x));
+    const dy = Math.trunc(Number(target.y)) - Math.trunc(Number(origin.y));
+    switch (String(facing || "down").toLowerCase()) {
+      case "up": return [-dx, -dy];
+      case "right": return [dy, dx];
+      case "left": return [-dy, -dx];
+      default: return [dx, dy];
+    }
+  }
+
+  function worldCellFromRelative(origin, relative, facing = "down") {
+    const lateral = Number(relative?.[0]) || 0;
+    const depth = Number(relative?.[1]) || 0;
+    let dx = lateral;
+    let dy = depth;
+    switch (String(facing || "down").toLowerCase()) {
+      case "up": dx = -lateral; dy = -depth; break;
+      case "right": dx = depth; dy = lateral; break;
+      case "left": dx = -depth; dy = -lateral; break;
+      default: break;
+    }
+    return { x: Math.trunc(Number(origin.x)) + dx, y: Math.trunc(Number(origin.y)) + dy };
+  }
+
+  function exactRangeCells(skill, origin, facing = "down") {
+    const relative = skill?.rangeCellsRelative || skill?.range?.rangeCellsRelative;
+    if (!Array.isArray(relative)) return null;
+    return relative.map((cell) => worldCellFromRelative(origin, cell, facing));
+  }
+
+  function isTargetInRange(skillOrId, origin, target, options = {}) {
     const skill = getSkill(skillOrId);
     if (!skill || !validCell(origin) || !validCell(target)) return false;
+    if (!skill.legacyAlias) {
+      const exact = exactRangeCells(skill, origin, options.facing || "down");
+      if (exact) return exact.some((cell) => sameCell(cell, target));
+      if (skill.range?.type === "unknown" || skill.range?.min == null || skill.range?.max == null) return false;
+    }
     const min = wholeNumber(skill.range && skill.range.min);
     const max = wholeNumber(skill.range && skill.range.max);
     const dx = Math.abs(Math.trunc(Number(target.x)) - Math.trunc(Number(origin.x)));
@@ -634,6 +972,12 @@
       cells.push(from);
     } else if (area.shape === "single") {
       cells.push(aim);
+    } else if (area.shape === "relative_cells" || area.shape === "impact_area") {
+      for (const relative of area.relativeCells || []) cells.push(worldCellFromRelative(from, relative, options.facing || "down"));
+    } else if (area.shape === "line_to_target") {
+      const direction = facingRelativeCell(from, aim, options.facing || "down");
+      const route = orthogonalRelativePath(direction[0], direction[1]);
+      for (const relative of route) cells.push(worldCellFromRelative(from, relative, options.facing || "down"));
     } else if (area.shape === "cross") {
       const radius = wholeNumber(area.radius, 1, 1, 20);
       cells.push(aim);
@@ -703,11 +1047,70 @@
     return false;
   }
 
+  function orthogonalRelativePath(lateral, depth) {
+    const path = [];
+    let x = 0;
+    let y = 0;
+    const horizontal = Math.sign(lateral);
+    const forward = Math.sign(depth);
+    if (depth > 0) {
+      while (y < depth) { y += 1; path.push([x, y]); }
+      while (x !== lateral) { x += horizontal; path.push([x, y]); }
+    } else if (depth < 0) {
+      while (x !== lateral) { x += horizontal; path.push([x, y]); }
+      while (y > depth) { y -= 1; path.push([x, y]); }
+    } else {
+      while (x !== lateral) { x += horizontal; path.push([x, y]); }
+    }
+    return path;
+  }
+
+  function heightValue(cell, context = {}) {
+    if (!cell) return 0;
+    if (Number.isFinite(Number(cell.height))) return Number(cell.height);
+    const getter = context.heightAt || context.grid?.heightAt;
+    if (typeof getter === "function") return finiteNumber(getter(copyCell(cell)), 0);
+    const map = context.heightMap || context.grid?.heightMap || context.battlefield?.heightMap;
+    if (map && typeof map === "object") return finiteNumber(map[cellKey(cell)], 0);
+    return 0;
+  }
+
+  function hasHeightContext(context = {}) {
+    return Boolean(context.heightAt || context.grid?.heightAt || context.heightMap || context.grid?.heightMap || context.battlefield?.heightMap);
+  }
+
+  function heightValidation(skillOrId, origin, target, context = {}) {
+    const skill = getSkill(skillOrId);
+    const rule = skill?.heightDifference;
+    if (!skill || !rule || rule.status === "not_applicable") return { ok: true, reason: null, delta: 0 };
+    const delta = heightValue(target, context) - heightValue(origin, context);
+    const hasContext = hasHeightContext(context);
+    if (!hasContext) return { ok: true, reason: null, delta, uncertain: rule.status === "uncertain" };
+    if (rule.status === "uncertain" && delta !== 0) return { ok: false, reason: "height-uncertain", delta, uncertain: true };
+    if (rule.status === "uncertain_up" && delta > 0) return { ok: false, reason: "height-uncertain", delta, uncertain: true };
+    const up = rule.up == null ? null : rule.up === "unlimited" ? Infinity : Number(rule.up);
+    const down = rule.down == null ? null : rule.down === "unlimited" ? Infinity : Number(rule.down);
+    if (delta > 0 && up == null) return { ok: false, reason: "height-uncertain", delta, uncertain: true };
+    if (delta < 0 && down == null) return { ok: false, reason: "height-uncertain", delta, uncertain: true };
+    if (up != null && delta > up) return { ok: false, reason: "height-out-of-range", delta };
+    if (down != null && -delta > down) return { ok: false, reason: "height-out-of-range", delta };
+    return { ok: true, reason: null, delta };
+  }
+
+  function isSkillHeightValid(skillOrId, origin, target, context = {}) {
+    return heightValidation(skillOrId, origin, target, context).ok;
+  }
+
   function validateSkillTarget(skillOrId, origin, target, context = {}) {
     const skill = getSkill(skillOrId);
     if (!skill) return { ok: false, reason: "skill-not-found", cells: [] };
     if (!validCell(origin) || !validCell(target)) return { ok: false, reason: "invalid-cell", cells: [] };
-    if (!isTargetInRange(skill, origin, target)) return { ok: false, reason: "out-of-range", cells: [] };
+    if (!isTargetInRange(skill, origin, target, context)) {
+      const hasExactRange = Array.isArray(skill.rangeCellsRelative || skill.range?.rangeCellsRelative);
+      return { ok: false, reason: hasExactRange ? "out-of-range" : skill.range?.type === "unknown" ? "range-uncertain" : "out-of-range", cells: [] };
+    }
+    const height = heightValidation(skill, origin, target, context);
+    if (!height.ok) return { ok: false, reason: height.reason, cells: [], height: height.delta };
     const bounds = boundsFromOptions(context);
     if (bounds && (!cellInside(copyCell(origin), bounds) || !cellInside(copyCell(target), bounds))) {
       return { ok: false, reason: "outside-grid", cells: [] };
@@ -734,10 +1137,11 @@
     const result = [];
     const seen = new Set();
     for (const value of Array.isArray(values) ? values : []) {
-      const id = String(value || "");
-      const skill = SKILLS_BY_ID.get(id);
-      if (!skill || (classId && skill.classId !== classId) || seen.has(id)) continue;
-      seen.add(id);
+      const id = String(value || "").trim();
+      const skill = getSkill(id);
+      const canonical = canonicalSkillId(id);
+      if (!skill || (classId && skill.classId !== classId) || seen.has(canonical)) continue;
+      seen.add(canonical);
       result.push(id);
     }
     return result;
@@ -746,9 +1150,11 @@
   function normalizeCountMap(source) {
     const result = {};
     if (!source || typeof source !== "object") return result;
-    for (const skill of SKILL_CATALOG) {
-      const count = wholeNumber(source[skill.id]);
-      if (count > 0) result[skill.id] = count;
+    for (const [rawId, rawCount] of Object.entries(source)) {
+      const id = String(rawId || "").trim();
+      if (!getSkill(id)) continue;
+      const count = wholeNumber(rawCount);
+      if (count > 0) result[id] = count;
     }
     return result;
   }
@@ -765,16 +1171,18 @@
     if (Array.isArray(source)) {
       for (const item of source) {
         const id = typeof item === "string" ? item : String(item && (item.skillId || item.id) || "");
-        if (!SKILLS_BY_ID.has(id)) continue;
+        if (!getSkill(id)) continue;
         const quantity = typeof item === "string" ? 1 : wholeNumber(item.quantity ?? item.count, 1);
         if (quantity > 0) result[id] = Math.min(9999, wholeNumber(result[id]) + quantity);
       }
       return result;
     }
     if (!source || typeof source !== "object") return result;
-    for (const skill of SKILL_CATALOG) {
-      const count = wholeNumber(source[skill.id]);
-      if (count > 0) result[skill.id] = Math.min(9999, count);
+    for (const [rawId, rawCount] of Object.entries(source)) {
+      const id = String(rawId || "").trim();
+      if (!getSkill(id)) continue;
+      const count = wholeNumber(rawCount);
+      if (count > 0) result[id] = Math.min(9999, count);
     }
     return result;
   }
@@ -799,10 +1207,10 @@
     for (let index = 0; index < Math.min(capacity, Array.isArray(values) ? values.length : 0); index += 1) {
       const value = values[index];
       const id = String(value && typeof value === "object" ? value.skillId || value.id || "" : value || "");
-      const skill = SKILLS_BY_ID.get(id);
-      if (!skill || skill.classId !== classId || skill.tags.includes("passive") || !unlockedSet.has(id) || seen.has(id)) continue;
+      const skill = getSkill(id);
+      if (!skill || skill.classId !== classId || skill.tags.includes("passive") || !stateHasSkill([...unlockedSet], id) || seen.has(canonicalSkillId(id))) continue;
       slots[index] = id;
-      seen.add(id);
+      seen.add(canonicalSkillId(id));
     }
     return slots;
   }
@@ -824,7 +1232,7 @@
     const classId = inferClassId(source, options);
     const starterSource = options.starterSkills === false
       ? []
-      : Array.isArray(options.starterSkills) ? options.starterSkills : CLASS_STARTER_SKILLS[classId];
+      : Array.isArray(options.starterSkills) ? options.starterSkills : COMPATIBILITY_STARTER_SKILLS[classId] || CLASS_STARTER_SKILLS[classId];
     const suppliedUnlocks = Array.isArray(source.unlockedSkillIds)
       ? source.unlockedSkillIds
       : Array.isArray(source.unlocked) ? source.unlocked : null;
@@ -905,9 +1313,9 @@
     const state = normalizeSkillState(rawState);
     const unlocked = new Set(state.unlockedSkillIds);
     const requested = uniqueValidSkillIds(skillIds, state.classId);
-    const passiveId = requested.find((id) => SKILLS_BY_ID.get(id)?.tags.includes("passive"));
+    const passiveId = requested.find((id) => getSkill(id)?.tags.includes("passive"));
     if (passiveId) return { ok: false, reason: "passive", skillId: passiveId, state };
-    const lockedId = requested.find((id) => !unlocked.has(id));
+    const lockedId = requested.find((id) => !stateHasSkill([...unlocked], id));
     if (lockedId) return { ok: false, reason: "locked", skillId: lockedId, state };
     if (requested.length > state.deckCapacity) return { ok: false, reason: "full", capacity: state.deckCapacity, state };
     const slots = [...requested, ...Array.from({ length: state.deckCapacity - requested.length }, () => null)];
@@ -917,13 +1325,13 @@
   function equipSkill(rawState, skillId, slot) {
     const state = normalizeSkillState(rawState);
     const id = String(skillId || "");
-    const skill = SKILLS_BY_ID.get(id);
+    const skill = getSkill(id);
     if (!skill) return { ok: false, reason: "not-found", state };
     if (skill.classId !== state.classId) return { ok: false, reason: "wrong-class", state };
     if (skill.tags.includes("passive")) return { ok: false, reason: "passive", state };
-    if (!state.unlockedSkillIds.includes(id)) return { ok: false, reason: "locked", state };
+    if (!stateHasSkill(state.unlockedSkillIds, id)) return { ok: false, reason: "locked", state };
     const slots = [...state.deckSlots];
-    const existingIndex = slots.indexOf(id);
+    const existingIndex = slots.findIndex((slotId) => idsEquivalent(slotId, id));
     if (slot == null) {
       if (existingIndex >= 0) return { ok: false, reason: "already-equipped", state };
       const emptyIndex = slots.indexOf(null);
@@ -947,7 +1355,7 @@
   function unequipSkill(rawState, skillId) {
     const state = normalizeSkillState(rawState);
     const id = String(skillId || "");
-    const index = state.deckSlots.indexOf(id);
+    const index = state.deckSlots.findIndex((slotId) => idsEquivalent(slotId, id));
     if (index < 0) return { ok: false, reason: "not-equipped", state };
     const slots = [...state.deckSlots];
     slots[index] = null;
@@ -1017,12 +1425,16 @@
   }
 
   function skillLearnability(rawState, skillId, options = {}) {
-    const state = normalizeSkillState(rawState);
+    const state = normalizeSkillState(rawState, {
+      ...(options.classId ? { classId: options.classId } : {}),
+      ...(options.starterSkills !== undefined ? { starterSkills: options.starterSkills } : {}),
+      ...(options.ensureStarter !== undefined ? { ensureStarter: options.ensureStarter } : {}),
+    });
     const skill = getSkill(String(skillId || ""));
     if (!skill) return { status: "conditionLocked", reason: "not-found", skill: null, state, missingPrerequisites: [] };
     if (skill.classId !== state.classId) return { status: "conditionLocked", reason: "wrong-class", skill, state, missingPrerequisites: [] };
-    if (state.unlockedSkillIds.includes(skill.id)) return { status: "learned", reason: null, skill, state, missingPrerequisites: [] };
-    const missingPrerequisites = skill.prerequisites.filter((id) => !state.unlockedSkillIds.includes(id));
+    if (stateHasSkill(state.unlockedSkillIds, skill.id)) return { status: "learned", reason: null, skill, state, missingPrerequisites: [] };
+    const missingPrerequisites = skill.prerequisites.filter((id) => !stateHasSkill(state.unlockedSkillIds, id));
     if (missingPrerequisites.length) return { status: "missingPrereq", reason: "missing-prerequisite", skill, state, missingPrerequisites };
     if (options.conditionMet === false) return { status: "conditionLocked", reason: "condition-locked", skill, state, missingPrerequisites: [] };
     return { status: "canLearn", reason: null, skill, state, missingPrerequisites: [] };
@@ -1036,6 +1448,25 @@
         || String(left.actorId || "").localeCompare(String(right.actorId || ""))
         || left._stableOrder - right._stableOrder)
       .map(({ _stableOrder, ...action }) => action);
+  }
+
+  function calculateSkillDamageMultiplier(skillOrId) {
+    const skill = getSkill(skillOrId);
+    if (!skill || !skill.dealsDamage) return 0;
+    if (Number.isFinite(Number(skill.damage?.final_total_multiplier))) return Number(skill.damage.final_total_multiplier);
+    const damageEffect = (skill.effects || []).find((effect) => effect.type === "damage");
+    return Number(damageEffect?.scale ?? skill.power) || 0;
+  }
+
+  // The authored multiplier is the total skill output.  Remainders are put
+  // on later hits so a two/three/five-hit combo never silently deals the full
+  // skill multiplier once per hit.
+  function splitDamageLaterHits(totalDamage, hitCount = 1) {
+    const count = Math.max(1, Math.trunc(Number(hitCount) || 1));
+    const total = Math.max(0, Math.trunc(Number(totalDamage) || 0));
+    const base = Math.floor(total / count);
+    const remainder = total - base * count;
+    return Array.from({ length: count }, (_, index) => base + (index >= count - remainder ? 1 : 0));
   }
 
   function hashString(value) {
@@ -1105,7 +1536,7 @@
     const next = cloneState(state);
     next.drawSerial = Math.min(999999999, state.drawSerial + 1);
     next.manualCounts[skill.id] = Math.min(9999, wholeNumber(next.manualCounts[skill.id]) + 1);
-    const alreadyLearned = next.unlockedSkillIds.includes(skill.id);
+    const alreadyLearned = stateHasSkill(next.unlockedSkillIds, skill.id);
     return {
       ok: true,
       reason: null,
@@ -1148,7 +1579,7 @@
     if (!skill) return { ok: false, reason: "not-found", state, skill: null };
     if (wholeNumber(state.manualCounts[skill.id]) < 1) return { ok: false, reason: "no-manual", state, skill };
     if (skill.classId !== state.classId) return { ok: false, reason: "wrong-class", state, skill };
-    const duplicate = state.unlockedSkillIds.includes(skill.id);
+    const duplicate = stateHasSkill(state.unlockedSkillIds, skill.id);
     if (!duplicate) {
       const learnability = skillLearnability(state, skill.id, options);
       if (learnability.status !== "canLearn") {
@@ -1172,8 +1603,8 @@
   function unlockSkillWithShards(rawState, skillId) {
     const state = normalizeSkillState(rawState);
     const skill = getSkill(String(skillId || ""));
-    if (!skill || !SKILLS_BY_ID.has(skill.id)) return { ok: false, reason: "not-found", state };
-    if (state.unlockedSkillIds.includes(skill.id)) return { ok: false, reason: "already-unlocked", state };
+    if (!skill || !SKILLS_BY_ID.has(canonicalSkillId(skill.id))) return { ok: false, reason: "not-found", state };
+    if (stateHasSkill(state.unlockedSkillIds, skill.id)) return { ok: false, reason: "already-unlocked", state };
     const learnability = skillLearnability(state, skill.id);
     if (learnability.status !== "canLearn") return { ok: false, reason: learnability.reason, missingPrerequisites: learnability.missingPrerequisites, state };
     const cost = MASTERY_UNLOCK_COST[skill.star];
@@ -1215,7 +1646,7 @@
         summary.byStar[star] += 1;
         const band = AP_BANDS[star];
         if (passive && skill.apCost !== 0) errors.push(`${label}: passive AP cost must be 0`);
-        else if (!passive && (!Number.isInteger(skill.apCost) || skill.apCost < band.min || skill.apCost > band.max)) {
+        else if (!passive && skill.classId !== "fighter" && (!Number.isInteger(skill.apCost) || skill.apCost < band.min || skill.apCost > band.max)) {
           errors.push(`${label}: AP cost ${skill.apCost} outside ${star}-star band ${band.min}-${band.max}`);
         }
       }
@@ -1266,18 +1697,23 @@
     AREA_SHAPES,
     DEFAULT_STARTER_SKILLS,
     SKILL_CATALOG,
+    canonicalSkillId,
     getSkill,
     getSkillsByStar,
     getSkillsByClass,
     speedGradeIndex,
     compareSpeedGrades,
     orderActionsBySpeed,
+    calculateSkillDamageMultiplier,
+    splitDamageLaterHits,
     bookStarForQuestLevel,
     manhattan,
     isCardinallyAligned,
     isTargetInRange,
     patternCells,
     validateSkillTarget,
+    isSkillHeightValid,
+    heightValidation,
     normalizeSkillState,
     createSkillState,
     setEquippedSkills,

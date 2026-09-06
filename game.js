@@ -2277,9 +2277,61 @@
 
   function skillRangeText(skill) {
     if (skill.tags.includes("passive")) return "PSV · 自動生效";
-    const range = skill.range.min === skill.range.max ? `${skill.range.max}` : `${skill.range.min}–${skill.range.max}`;
-    const shapes = { single: "單體", self: "自身", line: "直線", cone: "扇形", cross: "十字", radius: "範圍" };
+    const range = Array.isArray(skill.rangeCellsRelative)
+      ? `${skill.rangeCellsRelative.length} 格`
+      : skill.range?.min == null || skill.range?.max == null
+        ? "未確定"
+        : skill.range.min === skill.range.max ? `${skill.range.max}` : `${skill.range.min}–${skill.range.max}`;
+    const shapes = { single: "單體", self: "自身", line: "直線", cone: "扇形", cross: "十字", radius: "範圍", relative_cells: "範圍", line_to_target: "直線", impact_area: "爆發範圍" };
     return `${skill.apCost} AP · ${shapes[skill.area.shape] || skill.area.shape} · 射程 ${range}`;
+  }
+
+  function skillTypeText(skill) {
+    if (skill.tags.includes("passive")) return "PSV 被動";
+    if (skill.actionKind === "cleanse") return "CMD · 淨化";
+    if (skill.dealsDamage && skill.deliveryMode === "linear") return "CMD · 線性攻擊";
+    if (skill.dealsDamage && skill.deliveryMode === "arc") return "CMD · 弧線攻擊";
+    if (skill.dealsDamage) return "CMD · 無路線效果";
+    return "CMD · 輔助／控制";
+  }
+
+  function skillDamageText(skill) {
+    if (skill.damage?.model?.type === "set_remaining_hp_fraction") return "特殊：目標剩餘生命比例";
+    if (skill.damage?.model?.type === "set_remaining_hp_value") return "特殊：目標剩餘生命固定值";
+    if (!skill.dealsDamage) return "無直接傷害";
+    const multiplier = Skills.calculateSkillDamageMultiplier(skill);
+    const utility = Number(skill.damage?.utility_multiplier);
+    return `${multiplier.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}× 總傷害${utility < 1 ? ` · 輔助修正 ${utility}×` : ""}`;
+  }
+
+  function skillHeightText(skill) {
+    const rule = skill.heightDifference;
+    if (!rule || rule.status === "not_applicable") return "不適用";
+    const value = (part) => part === "unlimited" ? "∞" : part == null ? "?" : part;
+    return `上 ${value(rule.up)} · 下 ${value(rule.down)}${rule.status === "uncertain" ? "（來源未確定）" : ""}`;
+  }
+
+  function skillRangePatternMarkup(skill) {
+    const cells = Array.isArray(skill.rangeCellsRelative) ? skill.rangeCellsRelative : [];
+    if (!cells.length) return `<div class="skill-range-pattern-empty">${skill.tags.includes("passive") ? "被動技能，無可選目標格" : "此技能沒有可視化的相對射程"}</div>`;
+    const lateral = cells.map((cell) => Number(cell[0]) || 0);
+    const depth = cells.map((cell) => Number(cell[1]) || 0);
+    const minL = Math.min(0, ...lateral);
+    const maxL = Math.max(0, ...lateral);
+    const minD = Math.min(0, ...depth);
+    const maxD = Math.max(0, ...depth);
+    const selected = new Set(cells.map((cell) => `${cell[0]},${cell[1]}`));
+    const rows = [];
+    for (let currentDepth = maxD; currentDepth >= minD; currentDepth -= 1) {
+      const row = [];
+      for (let currentLateral = minL; currentLateral <= maxL; currentLateral += 1) {
+        const key = `${currentLateral},${currentDepth}`;
+        const origin = currentLateral === 0 && currentDepth === 0;
+        row.push(`<span class="skill-range-cell ${origin ? "is-origin" : selected.has(key) ? "is-selectable" : "is-empty"}" title="${origin ? "施術者" : selected.has(key) ? `相對位置 ${key}` : "不可選"}">${origin ? "↑" : selected.has(key) ? "◆" : "·"}</span>`);
+      }
+      rows.push(`<div class="skill-range-pattern-row">${row.join("")}</div>`);
+    }
+    return `<div class="skill-range-pattern" aria-label="${skill.name}可選範圍"><small>面向基準：↑施術者 · ◆可選</small>${rows.join("")}</div>`;
   }
 
   function renderStatusFacility() {
@@ -2409,7 +2461,7 @@
 
   function renderSkillsFacility() {
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
-    const equipped = new Set(skillState.equippedSkillIds);
+    const equipped = new Set(skillState.equippedSkillIds.map((id) => Skills.canonicalSkillId(id)));
     const classSkills = Skills.getSkillsByClass(playerClassId);
     const layout = buildSkillTreeLayout(classSkills);
     const treeNodeTop = (depth) => 28 + depth * 78;
@@ -2433,7 +2485,7 @@
     const nodes = classSkills.map((skill) => {
       const learnability = states.get(skill.id);
       const manualCount = skillState.manualCounts?.[skill.id] || 0;
-      const active = equipped.has(skill.id);
+      const active = equipped.has(Skills.canonicalSkillId(skill.id));
       const stateLabel = skillTreeStateLabel(learnability.status, active, manualCount);
       const position = layout.positions.get(skill.id);
       return `<article class="skill-tree-node is-${learnability.status} ${active ? "is-equipped" : ""} ${manualCount ? "has-manual" : ""}" role="treeitem" aria-level="${position.depth + 1}" data-tree-state="${learnability.status}" data-tree-depth="${position.depth}" data-tree-x="${position.x.toFixed(2)}" style="--tree-x:${(position.x / 10).toFixed(3)}%;--tree-y:${treeNodeTop(position.depth)}px">
@@ -2454,17 +2506,31 @@
 
   function skillEffectSummary(skill) {
     if (skill.tags.includes("passive")) return "習得後持續生效";
-    const damage = skill.effects.find((effect) => effect.type === "damage");
-    const heal = skill.effects.find((effect) => effect.type === "heal");
-    const guard = skill.effects.find((effect) => effect.type === "guard");
-    const evasion = skill.effects.find((effect) => effect.type === "evasion");
-    const statuses = skill.effects.filter((effect) => !["damage", "heal", "guard", "evasion"].includes(effect.type));
+    const labels = {
+      damage: (effect) => `${Math.max(1, Math.floor(effect.hits || 1))} 段攻擊`,
+      heal: () => "回復生命",
+      guard: (effect) => `減傷 ${Math.round((effect.amount || 0) * 100)}%`,
+      evasion: (effect) => `提升迴避 ${Math.round((effect.amount || 0) * 100)}%`,
+      knockback: (effect) => `擊退 ${effect.amount || 1} 格`,
+      knockdown: () => "高機率跌倒",
+      paralysis: () => "麻痺",
+      poison: () => "中毒（來源標記未完全確定）",
+      self_poison: () => "自身中毒",
+      feint: () => "對防禦架式有效",
+      action_interference: () => "妨礙行動",
+      blind: () => "黑暗",
+      stealth: () => "隱身",
+      counter: () => "反擊架式",
+      projectile_counter: () => "投射反擊",
+      cleanse: (effect) => `解除 ${(effect.statuses || []).join("／")}`,
+      halve_hp: () => "特殊：生命減半",
+      set_hp: () => "特殊：生命降至 1",
+    };
     const parts = [];
-    if (damage) parts.push(`${Math.max(1, Math.floor(damage.hits || 1))} 段攻擊`);
-    if (heal) parts.push("回復生命");
-    if (guard) parts.push("減輕傷害");
-    if (evasion) parts.push("提升迴避");
-    if (statuses.length) parts.push("附加狀態效果");
+    for (const effect of skill.effects) {
+      const label = labels[effect.type];
+      if (label) parts.push(label(effect));
+    }
     return parts.join(" · ") || "特殊效果";
   }
 
@@ -2475,20 +2541,26 @@
     skillDetailReturnTarget = returnTarget instanceof HTMLElement ? returnTarget : null;
     const learnability = Skills.skillLearnability(skillState, skill.id);
     const manualCount = skillState.manualCounts?.[skill.id] || 0;
-    const active = skillState.equippedSkillIds.includes(skill.id);
+    const active = skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id));
     const missingNames = (learnability.missingPrerequisites || []).map((id) => Skills.getSkill(id)?.name || id);
     const stateLabel = skillTreeStateLabel(learnability.status, active, manualCount);
     document.getElementById("skillDetailIcon").textContent = learnability.status === "learned" ? skillIcon(skill) : "技";
     document.getElementById("skillDetailTitle").textContent = skill.name;
     document.getElementById("skillDetailDescription").textContent = skill.description;
     document.getElementById("skillDetailStats").innerHTML = `
-      <div><dt>系別</dt><dd>${skill.treeGroup || (skill.tags.includes("passive") ? "被動技能" : "戰鬥技能")}</dd></div>
-      <div><dt>消耗</dt><dd>${skill.tags.includes("passive") ? "PSV" : `${skill.apCost} AP`}</dd></div>
+      <div><dt>類型／系別</dt><dd>${skillTypeText(skill)} · ${skill.treeGroup || "戰鬥技能"}</dd></div>
+      <div><dt>消耗 AP</dt><dd>${skill.tags.includes("passive") ? "PSV" : `${skill.apCost} AP`}</dd></div>
       <div><dt>速度</dt><dd>${skill.tags.includes("passive") ? "自動" : skill.speedGrade}</dd></div>
-      <div><dt>範圍</dt><dd>${skillRangeText(skill)}</dd></div>
+      <div><dt>中斷／耐久</dt><dd>${skill.interrupt ?? "—"} ／ ${skill.durability ?? "—"}</dd></div>
+      <div><dt>總傷害</dt><dd>${skillDamageText(skill)}</dd></div>
+      <div><dt>Hit 數／判定</dt><dd>${skill.hitResolution?.hit_count || 0} · ${skill.hitResolution?.hit_judgement_mode || "—"}</dd></div>
+      <div><dt>可選範圍</dt><dd>${skillRangeText(skill)}</dd></div>
+      <div><dt>高低差</dt><dd>${skillHeightText(skill)}</dd></div>
       <div><dt>效果</dt><dd>${skillEffectSummary(skill)}</dd></div>
       <div><dt>前置</dt><dd>${skill.prerequisites.length ? skill.prerequisites.map((id) => Skills.getSkill(id)?.name || id).join(" ＋ ") : "無"}</dd></div>
       <div><dt>狀態</dt><dd>${stateLabel}</dd></div>`;
+    const detailPattern = document.getElementById("skillDetailRangePattern");
+    if (detailPattern) detailPattern.innerHTML = skillRangePatternMarkup(skill);
     const learnButton = document.getElementById("skillDetailLearnButton");
     learnButton.hidden = manualCount < 1;
     learnButton.disabled = learnability.status === "missingPrereq" || learnability.status === "conditionLocked";
@@ -2526,7 +2598,7 @@
         ? `<div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><strong>${skill.name}</strong><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">移除</button>` : ""}`
         : `<div class="deck-slot-empty"><strong>沒有技能</strong><small>${canEdit ? "從下方已學技能揀一招" : "呢一格尚未裝設技能"}</small></div>`}</article>`;
     }).join("");
-    const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.includes(skill.id) && !skill.tags.includes("passive"));
+    const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
     const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><strong>${skill.name}</strong><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button>` : `<span class="deck-readonly-state">${equipped.has(skill.id) ? "使用中" : "已學會"}</span>`}</article>`).join("");
     facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "城門戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-grid">${slots}</div><div class="facility-section-heading skill-list-heading"><div><small>LEARNED ARTS</small><h3>已學技能</h3></div><span>初始 3 格 · 已獲 ${skillState.deckUpgradeMilestones.length} / 3 次擴充</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他已學技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div>`;
     facilityFooter.innerHTML = `<p><span aria-hidden="true">▤</span> ${canEdit ? "撳技能即可更換；戰鬥只會顯示 DECK 入面嘅技能。" : "任何地方都可以查看；要更換技能先去舊港城門戰技面板台。"}</p><span><kbd>ESC</kbd> 返回地圖</span>`;
@@ -3321,6 +3393,10 @@
 
   function skillArcAllowsCell(skill, cell) {
     if (!skill || !cell) return false;
+    // Canonical Fighter skills own their selectable cells in data; in
+    // particular Backfist and rear/side patterns must not be erased by the
+    // old generic front-arc gate.
+    if (Array.isArray(skill.rangeCellsRelative)) return true;
     const relative = sameBattleCell(battle.hero.cell, cell) ? "self" : Tactics.relativePosition(battle.hero.cell, battle.hero.facing, cell);
     return relative === "side"
       ? skill.targetArc.includes("side") || skill.targetArc.includes("left") || skill.targetArc.includes("right")
@@ -3335,7 +3411,9 @@
       for (let x = 0; x < BATTLE_WIDTH; x += 1) {
         const cell = { x, y };
         if (battle.grid.blocked.has(Tactics.cellKey(cell))) continue;
-        if (Skills.isTargetInRange(skill, battle.hero.cell, cell) && (!damaging || skillArcAllowsCell(skill, cell))) cells.push(cell);
+        if (Skills.isTargetInRange(skill, battle.hero.cell, cell, { facing: battle.hero.facing })
+          && Skills.isSkillHeightValid(skill, battle.hero.cell, cell, { battlefield: battle.battlefield, grid: battle.grid })
+          && (!damaging || skillArcAllowsCell(skill, cell))) cells.push(cell);
       }
     }
     return cells;
@@ -3345,6 +3423,9 @@
     const targetUnit = battleTargetUnitAt(cell, skill?.targeting?.team);
     const validation = Skills.validateSkillTarget(skill, battle.hero.cell, cell, {
       grid: battle.grid,
+      battlefield: battle.battlefield,
+      heightMap: battle.battlefield?.heightMap,
+      heightAt: battleCellHeight,
       facing: battle.hero.facing,
       actorTeam: "ally",
       actorId: battle.hero.id,
@@ -3376,7 +3457,7 @@
       return setBattleMessage("今輪移動已經完成；請揀攻擊、技能、飲藥或者待機。", true);
     } else if (action.startsWith("skill:")) {
       const skill = battleSkillFromAction(action);
-      if (!skill || !skillState.unlockedSkillIds.includes(skill.id) || !skillState.equippedSkillIds.includes(skill.id)) return setBattleMessage("呢招未裝備喺技能欄。", true);
+      if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id)) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id))) return setBattleMessage("呢招未裝備喺技能欄。", true);
       if (battle.ap < skill.apCost) return setBattleMessage(`${skill.name}要 ${skill.apCost} AP；可以待機儲力。`, true);
       battle.selectedAction = action;
       battle.message = `${skillStars(skill.star)} ${skill.name} · ${skillRangeText(skill)}。${skill.description}`;
@@ -3547,6 +3628,9 @@
     if (!skill || battle.ap < skill.apCost) return setBattleMessage("AP 唔夠。", true);
     battle.ap -= skill.apCost;
     const centre = targetCell || battle.hero.cell;
+    const attackPath = skill.deliveryMode === "linear"
+      ? Tactics.facingOrthogonalPriority(battle.hero.cell, centre, battle.hero.facing)
+      : [];
     beginActionResolution({
       type: "skill",
       skillId: skill.id,
@@ -3554,6 +3638,7 @@
       targetId: targetUnit?.id || null,
       targetCell: copyBattleCell(centre),
       pattern: (pattern || Skills.patternCells(skill, battle.hero.cell, centre, { grid: battle.grid, facing: battle.hero.facing })).map(copyBattleCell),
+      attackPath: attackPath.map(copyBattleCell),
       cost: skill.apCost,
     });
   }
@@ -3645,6 +3730,7 @@
     let effectTargets = [];
     let specialEffectsApplied = false;
     const statusTargets = [];
+    const heroHitResolvers = [];
     if (heroAction.type === "skill") {
       skill = Skills.getSkill(heroAction.skillId);
       const cells = heroAction.pattern?.length ? heroAction.pattern : Skills.patternCells(skill, battle.hero.cell, heroAction.targetCell, { grid: battle.grid, facing: battle.hero.facing });
@@ -3657,31 +3743,64 @@
       const evasionEffect = skill?.effects.find((effect) => effect.type === "evasion");
       const defenceDownEffect = skill?.effects.find((effect) => effect.type === "defense_down");
       const moveDownEffect = skill?.effects.find((effect) => effect.type === "move_down");
-      const affectedEnemies = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
+      let affectedEnemies = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
+      const linearTrace = skill?.deliveryMode === "linear"
+        ? Tactics.traceAttackPath({
+          origin: battle.hero.cell,
+          target: heroAction.targetCell,
+          path: heroAction.attackPath,
+          facing: battle.hero.facing,
+          grid: battle.grid,
+          units: battleUnits(),
+          actorId: battle.hero.id,
+          deliveryMode: skill.deliveryMode,
+          blocksByTerrain: skill.blocksByTerrain,
+          blocksByUnits: skill.blocksByUnits,
+        })
+        : null;
+      // A normal Linear attack resolves the first occupied cell, even when a
+      // farther cell was selected.  Area/pathless skills retain their full
+      // authored effect area.
+      if (linearTrace) affectedEnemies = linearTrace.actualTarget ? [linearTrace.actualTarget] : [];
       effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedEnemies;
       if (damageEffect) {
-        const hitCount = Math.max(1, Math.floor(Number(damageEffect.hits) || 1));
-        for (const target of affectedEnemies) {
+        const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
+        const recheck = Boolean(skill.hitResolution?.recheck_attack_path_each_hit);
+        const makeHeroHit = (target, hitIndex) => {
+          if (!target) return null;
           const existingDebuff = target.defenceDownUntilRound >= battle.round ? target.defenceDown || 0 : 0;
           const defence = Math.max(0, (target.defence || 0) * (1 - existingDebuff) * (1 - (pierceEffect?.amount || 0)));
           const positional = Tactics.positionalAttack(battle.hero, target, {
             side: 1 + BATTLE_SIDE_DAMAGE_BONUS,
             rear: 1 + BATTLE_REAR_DAMAGE_BONUS,
           });
-          for (let hitIndex = 0; hitIndex < hitCount; hitIndex += 1) {
-            heroHits.push({
-              target,
-              damage: Tactics.calculateDamage(battle.hero, target, {
-                defence,
-                multiplier: (damageEffect.scale || skill.power || 1) * positional.multiplier,
-                critical: skill.area.shape === "single" && Math.random() < playerStats().critChance,
-                minimum: skill.star + 1,
-              }),
-              color: skill.star === 3 ? "#ff9dd3" : skill.star === 2 ? "#a9c9ff" : "#ffc857",
-              position: positional.position,
-              hitIndex,
-              hitCount,
-            });
+          const authoredMultiplier = skill.damage
+            ? Skills.calculateSkillDamageMultiplier(skill)
+            : (damageEffect.scale || skill.power || 1);
+          const totalDamage = Tactics.calculateDamage(battle.hero, target, {
+            defence,
+            multiplier: authoredMultiplier * positional.multiplier,
+            critical: skill.area.shape === "single" && hitIndex === 0 && Math.random() < playerStats().critChance,
+            minimum: skill.star + 1,
+          });
+          const split = Skills.splitDamageLaterHits(totalDamage, hitCount);
+          return {
+            target,
+            damage: split[hitIndex] || 0,
+            color: skill.star === 3 ? "#ff9dd3" : skill.star === 2 ? "#a9c9ff" : "#ffc857",
+            position: positional.position,
+            hitIndex,
+            hitCount,
+          };
+        };
+        if (linearTrace) {
+          heroHitResolvers.push({ hitCount, recheck, path: linearTrace.path, initialTarget: linearTrace.actualTarget, makeHeroHit });
+        } else {
+          for (const target of affectedEnemies) {
+            for (let hitIndex = 0; hitIndex < hitCount; hitIndex += 1) {
+              const hit = makeHeroHit(target, hitIndex);
+              if (hit) heroHits.push(hit);
+            }
           }
         }
       }
@@ -3746,7 +3865,28 @@
         battle.moveBonusNext = Math.max(battle.moveBonusNext || 0, moveBonusNext);
         battle.evasionNext = Math.max(battle.evasionNext || 0, evasionNext);
         battle.evasion = Math.max(battle.evasion || 0, evasionNext);
-        for (const hit of heroHits) {
+        const executionHits = [...heroHits];
+        for (const resolver of heroHitResolvers) {
+          for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
+            const trace = resolver.recheck
+              ? Tactics.traceAttackPath({
+                origin: battle.hero.cell,
+                target: heroAction.targetCell,
+                path: resolver.path,
+                grid: battle.grid,
+                units: battleUnits(),
+                actorId: battle.hero.id,
+                deliveryMode: "linear",
+                blocksByTerrain: skill.blocksByTerrain,
+                blocksByUnits: skill.blocksByUnits,
+              })
+              : null;
+            const target = resolver.recheck ? trace?.actualTarget : resolver.initialTarget;
+            const hit = resolver.makeHeroHit(target, hitIndex);
+            if (hit) executionHits.push(hit);
+          }
+        }
+        for (const hit of executionHits) {
           if (!hit.target.alive || hit.target.hp <= 0) continue;
           const missChance = Math.max(0, (FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) - (learnedFighterPassives().accuracy || 0));
           if (missChance > 0 && Math.random() < missChance) {
@@ -3994,7 +4134,7 @@
         const action = `skill:${skill.id}`;
         const targets = battleTargetTiles(action).map((cell) => ({
           cell,
-          hits: Skills.patternCells(skill, battle.hero.cell, cell, { grid: battle.grid }).filter((areaCell) => enemiesAlive.some((enemy) => sameBattleCell(enemy.cell, areaCell))).length,
+          hits: Skills.patternCells(skill, battle.hero.cell, cell, { grid: battle.grid, facing: battle.hero.facing }).filter((areaCell) => enemiesAlive.some((enemy) => sameBattleCell(enemy.cell, areaCell))).length,
         })).filter((item) => item.hits > 0).sort((a, b) => b.hits - a.hits);
         return { skill, target: targets[0] || null };
       })
@@ -4667,8 +4807,13 @@
       : []);
     const areaPreview = new Set();
     if (selectedSkill && battle.phase === "planning_action" && skillTargetValidation(selectedSkill, battle.cursor).ok) {
-      for (const cell of Skills.patternCells(selectedSkill, battle.hero.cell, battle.cursor, { grid: battle.grid })) areaPreview.add(Tactics.cellKey(cell));
+      for (const cell of Skills.patternCells(selectedSkill, battle.hero.cell, battle.cursor, { grid: battle.grid, facing: battle.hero.facing })) areaPreview.add(Tactics.cellKey(cell));
     }
+    const attackPathPreview = selectedSkill?.deliveryMode === "linear"
+      && battle.phase === "planning_action"
+      && skillTargetValidation(selectedSkill, battle.cursor).ok
+      ? Tactics.facingOrthogonalPriority(battle.hero.cell, battle.cursor, battle.hero.facing)
+      : [];
     for (let y = 0; y < BATTLE_HEIGHT; y += 1) {
       for (let x = 0; x < BATTLE_WIDTH; x += 1) {
         const cell = { x, y };
@@ -4714,6 +4859,23 @@
         ctx.strokeRect(px + .5, py + .5, layout.cell - 1, layout.cell - 1);
         if (blocked) drawBattleObstacle(cell, layout, mountainBattle);
       }
+    }
+
+    if (attackPathPreview.length) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,157,211,.82)";
+      ctx.lineWidth = Math.max(2, layout.cell * .045);
+      ctx.setLineDash([Math.max(4, layout.cell * .12), Math.max(3, layout.cell * .08)]);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      const start = battleCellCentre(battle.hero.cell, layout);
+      ctx.moveTo(start.x, start.y);
+      for (const cell of attackPathPreview) {
+        const point = battleCellCentre(cell, layout);
+        ctx.lineTo(point.x, point.y);
+      }
+      ctx.stroke();
+      ctx.restore();
     }
 
     if (battle.phase === "planning_move") {
@@ -6929,7 +7091,13 @@
       equipSkill: (id) => { changeSkillLoadout(id, true, { force: true }); return window.__RPG_DEBUG__.snapshot(); },
       setSkillLoadout: (ids = []) => {
         const unlockedSkillIds = Skills.SKILL_CATALOG.map((skill) => skill.id);
-        skillState = Skills.normalizeSkillState({ ...skillState, unlockedSkillIds, equippedSkillIds: ids });
+        skillState = Skills.normalizeSkillState({
+          ...skillState,
+          unlockedSkillIds,
+          equippedSkillIds: ids,
+          deckSlots: ids,
+          deckCapacity: Math.max(skillState.deckCapacity, Math.min(Skills.MAX_EQUIPPED_SKILLS, ids.length)),
+        });
         if (mode === "facility") renderFacility();
         return window.__RPG_DEBUG__.snapshot();
       },

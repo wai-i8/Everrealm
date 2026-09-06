@@ -81,7 +81,7 @@
   | 小星星 | 條件不足 | 預留等級／任務等額外條件，首階段暫不啟用 |
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
-- 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。Reference 文件會另外保存原日文說明、繁體中文翻譯、`action_kind`、`deals_damage`、hit count、判定方式、射程、高低差、入手方法及 Everrealm damage balance。詳見 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
+- 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
 - DECK 可由左側選單在任何地方以唯讀方式查看，但只可在主城東門旁的「戰技面板台」編輯；開啟唯讀頁不會自動把玩家帶去城門。空槽統一顯示「沒有技能」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
 

@@ -705,6 +705,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .skill-book-confirm-stats dt { color: var(--muted); font-size: .68rem; }
 .skill-book-confirm-stats dd { margin: 0; color: var(--teal); font: 850 .7rem/1.25 ui-monospace,monospace; text-align: right; }
+.skill-detail-range-pattern { width: min(25rem,calc(100vw - 3rem)); margin: .15rem 0 .8rem; padding: .62rem; border: 1px solid rgba(82,220,203,.24); border-radius: .65rem; background: rgba(5,10,21,.48); }
+.skill-range-pattern { display: grid; justify-items: center; gap: .16rem; }
+.skill-range-pattern > small { width: 100%; margin-bottom: .15rem; color: var(--muted); font-size: .64rem; text-align: center; }
+.skill-range-pattern-row { display: flex; gap: .16rem; }
+.skill-range-cell { width: 1.32rem; height: 1.32rem; display: grid; place-items: center; border: 1px solid rgba(245,233,202,.12); border-radius: .22rem; color: rgba(245,233,202,.24); font: 800 .68rem/1 ui-monospace,monospace; }
+.skill-range-cell.is-selectable { color: #171421; border-color: rgba(255,200,87,.7); background: rgba(255,200,87,.8); }
+.skill-range-cell.is-origin { color: var(--teal); border-color: rgba(82,220,203,.7); background: rgba(82,220,203,.18); }
+.skill-range-pattern-empty { color: var(--muted); font-size: .68rem; text-align: center; }
 .skill-book-confirm-panel .modal-actions { width: min(25rem,calc(100vw - 3rem)); }
 .skill-book-confirm-panel .modal-actions > button {
   flex: 1 1 0;

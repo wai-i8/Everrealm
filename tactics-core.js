@@ -144,6 +144,100 @@
     return keys;
   }
 
+  function localRelativeCell(origin, target, facing = "down") {
+    const dx = Math.trunc(Number(target.x)) - Math.trunc(Number(origin.x));
+    const dy = Math.trunc(Number(target.y)) - Math.trunc(Number(origin.y));
+    switch (normalizeFacing(facing)) {
+      case "up": return { lateral: -dx, depth: -dy };
+      case "right": return { lateral: dy, depth: dx };
+      case "left": return { lateral: -dy, depth: -dx };
+      default: return { lateral: dx, depth: dy };
+    }
+  }
+
+  function localToWorld(origin, lateral, depth, facing = "down") {
+    let dx = lateral;
+    let dy = depth;
+    switch (normalizeFacing(facing)) {
+      case "up": dx = -lateral; dy = -depth; break;
+      case "right": dx = depth; dy = lateral; break;
+      case "left": dx = -depth; dy = -lateral; break;
+      default: break;
+    }
+    return { x: Math.trunc(Number(origin.x)) + dx, y: Math.trunc(Number(origin.y)) + dy };
+  }
+
+  // Shared deterministic route for ordinary Linear skills.  The route does
+  // not include the caster, but always includes the intended target cell.
+  function facingOrthogonalPriority(originOrOptions, target, facing = "down") {
+    let origin = originOrOptions;
+    let destination = target;
+    let direction = facing;
+    if (originOrOptions && originOrOptions.origin) {
+      ({ origin, target: destination, facing: direction = "down" } = originOrOptions);
+    }
+    if (!validCell(origin) || !validCell(destination)) return [];
+    const relative = localRelativeCell(origin, destination, direction);
+    const path = [];
+    let lateral = 0;
+    let depth = 0;
+    const push = () => path.push(localToWorld(origin, lateral, depth, direction));
+    if (relative.depth > 0) {
+      while (depth < relative.depth) { depth += 1; push(); }
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+    } else if (relative.depth < 0) {
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+      while (depth > relative.depth) { depth -= 1; push(); }
+    } else {
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+    }
+    return path;
+  }
+
+  function traceAttackPath(options = {}) {
+    const origin = cellOf(options.origin || options.caster);
+    const target = cellOf(options.target || options.intendedTarget);
+    if (!origin || !target) return { path: [], intendedTarget: null, actualTarget: null, firstImpactCell: null, blocked: false, stoppedReason: "invalid-cell" };
+    const deliveryMode = options.deliveryMode || "linear";
+    const path = deliveryMode === "pathless"
+      ? []
+      : Array.isArray(options.path) && options.path.length ? options.path.filter(validCell).map(copyCell)
+        : facingOrthogonalPriority(origin, target, options.facing || options.caster?.facing || "down");
+    const units = Array.isArray(options.units) ? options.units : [];
+    const ignoreUnitId = options.actorId ?? options.caster?.id;
+    const result = {
+      path,
+      intendedTarget: copyCell(target),
+      actualTarget: null,
+      firstImpactCell: null,
+      blocked: false,
+      blockedBy: null,
+      stoppedReason: null,
+      friendlyFire: options.friendlyFire === true,
+    };
+    if (deliveryMode === "pathless") return result;
+    for (const cell of path) {
+      if (options.blocksByTerrain !== false && options.grid && terrainIsBlocked(options.grid, cell)) {
+        result.firstImpactCell = copyCell(cell);
+        result.blocked = true;
+        result.stoppedReason = "terrain";
+        break;
+      }
+      const unit = options.blocksByUnits === false ? null : units.find((candidate) => unitIsAlive(candidate)
+        && (ignoreUnitId == null || String(candidate.id) !== String(ignoreUnitId))
+        && sameCell(cellOf(candidate), cell));
+      if (unit) {
+        result.firstImpactCell = copyCell(cell);
+        result.actualTarget = unit;
+        result.blocked = true;
+        result.blockedBy = unit;
+        result.stoppedReason = "unit";
+        break;
+      }
+    }
+    return result;
+  }
+
   function isWalkable(grid, cell, occupants = [], options = {}) {
     if (terrainIsBlocked(grid, cell)) return false;
     return !occupiedKeys(occupants, options.ignoreUnitId).has(cellKey(copyCell(cell)));
@@ -1047,6 +1141,9 @@
     isInAttackRange,
     facingVector,
     facingFromStep,
+    localRelativeCell,
+    facingOrthogonalPriority,
+    traceAttackPath,
     relativePosition,
     isInFacingArc,
     positionalAttack,
