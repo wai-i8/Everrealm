@@ -11,7 +11,7 @@
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
 - 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、燈、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
 - 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及傳送門。
-- 主城建築獨立 bitmap：`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。四張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築。
+- 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築。
 - 主城門口與閘門：`assets/town-door-marker-v1.png` 係所有實體建築門共用嘅 bitmap 門檻標記；`assets/town-gate-east-v1.png` 係東門唯一嘅實體城門，採用城牆向左延伸、開口向右的 east-side directional composition。兩者都由 `drawStandaloneSprite` 按世界 anchor 繪製，唔以 Canvas 色塊冒充。
 - 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。

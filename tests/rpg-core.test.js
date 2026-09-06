@@ -201,17 +201,18 @@ test("world generator returns the expanded walled starting town", () => {
   const world = World.createWorld();
   assert.equal(world.id, "world");
   assert.equal(world.kind, "town");
-  assert.equal(world.width, 44);
-  assert.equal(world.height, 30);
-  assert.equal(world.tiles.length, 30);
-  assert.equal(world.tiles[0].length, 44);
+  assert.equal(world.width, 50);
+  assert.equal(world.height, 42);
+  assert.equal(world.tiles.length, 42);
+  assert.equal(world.tiles[0].length, 50);
   assert.deepEqual(world.houses.map((house) => house.id), ["keeper-house", "forge", "tea-house", "clinic", "general-store"]);
   assert.equal(world.enemySpawns.length, 0, "monsters belong in the separate field map");
-  assert.equal(world.townLayout.style, "districted-walled-town");
-  assert.equal(world.townLayout.districts.length, 5);
+  assert.equal(world.townLayout.style, "canonical-orthogonal-block-town");
+  assert.deepEqual(world.townLayout.map, { widthTiles: 50, heightTiles: 42 });
+  assert.deepEqual(world.townLayout.centralPlaza.rect, [19, 20, 12, 12]);
 });
 
-test("town perimeter is solid except for its explicit three-tile east gate", () => {
+test("town perimeter is solid except for its explicit five-tile east gate", () => {
   const world = World.createWorld();
   const gate = world.townLayout.eastGate;
   for (let tx = 0; tx < world.width; tx += 1) {
@@ -222,7 +223,7 @@ test("town perimeter is solid except for its explicit three-tile east gate", () 
     assert.equal(World.isTileSolid(World.tileAt(world, 0, ty)), true, `west wall ${ty} must be solid`);
     assert.equal(
       World.isTileSolid(World.tileAt(world, world.width - 1, ty)),
-      ty < gate.minTy || ty > gate.maxTy,
+      ty < gate.opening[1] || ty >= gate.opening[1] + gate.opening[3],
       `east edge ${ty} must match the authored gate opening`,
     );
   }
