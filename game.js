@@ -830,6 +830,15 @@
   function isBlocked(circle, activeWorld = world, activeMapId = currentMapId) {
     if (!Number.isFinite(circle.x) || !Number.isFinite(circle.y)) return true;
     if (circle.x - circle.radius < 0 || circle.y - circle.radius < 0 || circle.x + circle.radius > activeWorld.pixelWidth || circle.y + circle.radius > activeWorld.pixelHeight) return true;
+    if (activeMapId === "world" && activeWorld.navigation?.authoritative && typeof Art.mainTownNavigationMask === "function") {
+      const feetRadius = Number(activeWorld.navigation.feetRadiusPx) || 3;
+      const walkable = Art.mainTownNavigationMask("walkable", circle.x, circle.y, feetRadius);
+      const collision = Art.mainTownNavigationMask("collision", circle.x, circle.y, 0);
+      // While the bitmaps are decoding, keep the map inside its authored
+      // image bounds. Once ready, the supplied walkable allowlist is the
+      // complete movement source and collision is only supplemental.
+      if (walkable !== null && collision !== null) return walkable !== true || collision === true;
+    }
     const left = Math.floor((circle.x - circle.radius) / activeWorld.tileSize);
     const right = Math.floor((circle.x + circle.radius) / activeWorld.tileSize);
     const top = Math.floor((circle.y - circle.radius) / activeWorld.tileSize);
@@ -1594,6 +1603,9 @@
         // Ordinary doors use the authored feet/threshold rectangle. A nearby
         // sprite or label is never sufficient to enter a building.
         return MapTransitions.pointInThreshold(candidate, player);
+      }
+      if (candidate.trigger && typeof MapTransitions.pointInTrigger === "function") {
+        return MapTransitions.pointInTrigger(candidate, player);
       }
       return Core.distance(player, candidate) <= player.radius + (candidate.radius || 20) + 3;
     });
@@ -4608,19 +4620,7 @@
       if (tx <= 7) return "霧梅爾山地 · 西口";
       return "霧梅爾山地 · 林間道";
     }
-    const tx = position.x / world.tileSize;
-    const ty = position.y / world.tileSize;
-    if (tx >= 46 && ty >= 32 && ty <= 37) return "霧都主城 · 東門";
-    if (ty >= 32 && ty <= 37) return "霧都主城 · Main Street";
-    if (ty >= 16 && ty <= 20) return "霧都主城 · Main Street";
-    if (tx >= 16 && tx <= 19) return "霧都主城 · West Avenue";
-    if (tx >= 31 && tx <= 34) return "霧都主城 · East Avenue";
-    if (tx >= 4 && tx <= 16 && ty >= 4 && ty <= 16) return "霧都主城 · 公會街區";
-    if (tx >= 19 && tx <= 31 && ty >= 4 && ty <= 16) return "霧都主城 · 療癒街區";
-    if (tx >= 34 && tx <= 46 && ty >= 4 && ty <= 16) return "霧都主城 · 旅店街區";
-    if (tx >= 4 && tx <= 16 && ty >= 20 && ty <= 32) return "霧都主城 · 裝備街區";
-    if (tx >= 34 && tx <= 46 && ty >= 20 && ty <= 32) return "霧都主城 · 雜貨街區";
-    return "霧都主城 · 中央廣場";
+    return "霧都主城";
   }
 
   function showLocation(name, immediate = false) {
@@ -5547,14 +5547,17 @@
     const centreX = mapWidth / 2;
     const centreY = mapHeight / 2;
     const radius = Math.min(mapWidth, mapHeight) * .485;
+    const flattenedTownArt = currentMapId === "world" && world.art?.flattened;
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 22 : 18;
-    const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
-    const originX = centreX - player.x * scale;
-    const originY = centreY - player.y * scale;
-    const minTileX = Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
-    const maxTileX = Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
-    const minTileY = Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
-    const maxTileY = Core.clamp(Math.ceil((player.y + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
+    const scale = flattenedTownArt
+      ? Math.min((mapWidth - 12) / world.pixelWidth, (mapHeight - 12) / world.pixelHeight)
+      : Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
+    const originX = flattenedTownArt ? (mapWidth - world.pixelWidth * scale) / 2 : centreX - player.x * scale;
+    const originY = flattenedTownArt ? (mapHeight - world.pixelHeight * scale) / 2 : centreY - player.y * scale;
+    const minTileX = flattenedTownArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
+    const maxTileX = flattenedTownArt ? -1 : Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
+    const minTileY = flattenedTownArt ? 0 : Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
+    const maxTileY = flattenedTownArt ? -1 : Core.clamp(Math.ceil((player.y + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
     miniCtx.clearRect(0, 0, mapWidth, mapHeight);
     miniCtx.save();
     miniCtx.beginPath();
@@ -5562,25 +5565,36 @@
     miniCtx.clip();
     miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
+    if (flattenedTownArt) {
+      Art.drawMainTownBackground(miniCtx, {
+        x: originX,
+        y: originY,
+        width: world.pixelWidth * scale,
+        height: world.pixelHeight * scale,
+        alpha: .9,
+      });
+    }
     const tilePixels = world.tileSize * scale + .7;
-    for (let ty = minTileY; ty <= maxTileY; ty += 1) {
-      for (let tx = minTileX; tx <= maxTileX; tx += 1) {
-        const tile = visualTerrainTile(world.tiles[ty][tx]);
-        const noise = Core.hash2D(tx, ty, 211);
-        const x = originX + tx * world.tileSize * scale;
-        const y = originY + ty * world.tileSize * scale;
-        const terrainSprite = terrainSpriteFor(tile);
-        if (!Art.drawTerrainTile(miniCtx, {
-          sprite: terrainSprite,
-          x,
-          y,
-          width: tilePixels,
-          height: tilePixels,
-          flipX: noise > .5,
-          flipY: ((tx + ty) & 1) === 1,
-        })) {
-          miniCtx.fillStyle = tile === world.tileTypes.WATER ? "#20495f" : tile === world.tileTypes.PATH ? "#8e704d" : tile === world.tileTypes.WOOD ? "#9a633c" : tile === world.tileTypes.STONE || tile === world.tileTypes.WALL ? "#586474" : "#315d4d";
-          miniCtx.fillRect(x, y, tilePixels, tilePixels);
+    if (!flattenedTownArt) {
+      for (let ty = minTileY; ty <= maxTileY; ty += 1) {
+        for (let tx = minTileX; tx <= maxTileX; tx += 1) {
+          const tile = visualTerrainTile(world.tiles[ty][tx]);
+          const noise = Core.hash2D(tx, ty, 211);
+          const x = originX + tx * world.tileSize * scale;
+          const y = originY + ty * world.tileSize * scale;
+          const terrainSprite = terrainSpriteFor(tile);
+          if (!Art.drawTerrainTile(miniCtx, {
+            sprite: terrainSprite,
+            x,
+            y,
+            width: tilePixels,
+            height: tilePixels,
+            flipX: noise > .5,
+            flipY: ((tx + ty) & 1) === 1,
+          })) {
+            miniCtx.fillStyle = tile === world.tileTypes.WATER ? "#20495f" : tile === world.tileTypes.PATH ? "#8e704d" : tile === world.tileTypes.WOOD ? "#9a633c" : tile === world.tileTypes.STONE || tile === world.tileTypes.WALL ? "#586474" : "#315d4d";
+            miniCtx.fillRect(x, y, tilePixels, tilePixels);
+          }
         }
       }
     }
@@ -5639,6 +5653,7 @@
       queueEnvironment(sprite, point.x, point.y, Math.max(12, 88 * renderScale * scale), point.y);
     }
     for (const house of world.houses || []) {
+      if (house.masterArt) continue;
       const w = house.w * scale;
       const h = house.h * scale;
       const sprite = house.id === "keeper-house" ? "guildHouse" : house.bitmap ? house.sprite : house.id === "tea-house" ? "teaHouse" : "cottage";
@@ -5742,6 +5757,16 @@
   }
 
   function drawTiles(shakeX, shakeY) {
+    if (currentMapId === "world" && world.art?.flattened) {
+      const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
+      Art.drawMainTownBackground(ctx, {
+        x: topLeft.x,
+        y: topLeft.y,
+        width: world.pixelWidth * camera.zoom,
+        height: world.pixelHeight * camera.zoom,
+      });
+      return;
+    }
     const tileSize = world.tileSize;
     const halfWorldW = width / (2 * camera.zoom);
     const halfWorldH = height / (2 * camera.zoom);
@@ -5872,7 +5897,7 @@
   }
 
   function drawTownWallOverlay(shakeX, shakeY) {
-    if (currentMapId !== "world" || !world.townLayout?.perimeter) return;
+    if (currentMapId !== "world" || world.art?.flattened || !world.townLayout?.perimeter) return;
     const { left, top, right, bottom } = world.townLayout.perimeter;
     const wallTiles = new Map();
     for (let tx = left; tx <= right; tx += 1) {

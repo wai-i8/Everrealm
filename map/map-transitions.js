@@ -129,8 +129,20 @@
     return { shape: "rect", x: centre.x - width / 2, y: centre.y - depth / 2, w: width, h: depth, outward };
   }
 
-  // Shared data contract for a physical doorway. Authoring is tile-based;
-  // only the visible bitmap's doorAnchor is resolved in pixels at runtime.
+  function normalizeAuthoredRect(rect) {
+    if (!rect || ![rect.x, rect.y, rect.w ?? rect.width, rect.h ?? rect.height].every(Number.isFinite)) return null;
+    return {
+      shape: "rect",
+      x: rect.x,
+      y: rect.y,
+      w: Math.max(1, rect.w ?? rect.width),
+      h: Math.max(1, rect.h ?? rect.height),
+    };
+  }
+
+  // Shared data contract for a physical doorway. Authored pixel rectangles
+  // remain exact at runtime; legacy callers may still provide tile-derived
+  // threshold metadata and receive the same normalized contract.
   function resolveEntranceContract(doorAnchor, rawEntrance = {}, exteriorSpawn = null) {
     const door = copyPoint(doorAnchor);
     if (!door) return null;
@@ -144,10 +156,12 @@
       y: door.y + vector.y * approachDistance,
     };
     const marker = { ...DEFAULT_ENTRANCE_MARKER, ...(rawEntrance.marker || {}) };
+    const trigger = normalizeAuthoredRect(rawEntrance.trigger);
     return {
       doorAnchor: door,
       approachPoint,
       threshold,
+      ...(trigger ? { trigger } : {}),
       exteriorSpawn: copyPoint(exteriorSpawn) || copyPoint(rawEntrance.exteriorSpawn),
       entryFacing: rawEntrance.entryFacing || oppositeDirection(outward),
       returnFacing: rawEntrance.returnFacing || null,
@@ -163,6 +177,7 @@
     transition.doorAnchor = contract.doorAnchor;
     transition.approachPoint = contract.approachPoint;
     transition.threshold = contract.threshold;
+    transition.trigger = contract.trigger || transition.trigger || null;
     transition.exteriorSpawn = contract.exteriorSpawn;
     transition.entryFacing = contract.entryFacing;
     transition.returnFacing = contract.returnFacing;
@@ -179,9 +194,18 @@
     if (!threshold || !position) return false;
     if (threshold.shape !== "rect") return false;
     return position.x >= threshold.x
-      && position.x <= threshold.x + threshold.w
+      && position.x < threshold.x + threshold.w
       && position.y >= threshold.y
-      && position.y <= threshold.y + threshold.h;
+      && position.y < threshold.y + threshold.h;
+  }
+
+  function pointInTrigger(transition, position) {
+    const trigger = transition?.trigger || entranceFor(transition)?.trigger;
+    if (!trigger || trigger.shape !== "rect" || !position) return false;
+    return position.x >= trigger.x
+      && position.x < trigger.x + trigger.w
+      && position.y >= trigger.y
+      && position.y < trigger.y + trigger.h;
   }
 
   function copyPosition(position) {
@@ -327,6 +351,7 @@
     applyEntranceContract,
     entranceFor,
     pointInThreshold,
+    pointInTrigger,
     resolveHouseDoorAnchor,
     resolveMapTransitions,
     resolveDestination,

@@ -35,7 +35,7 @@ npm test
 - `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `fighter-skill-data.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
 - `maps/`：每張地圖唯一 owning JS definition；`maps/interiors/` 放主城室內地圖。
-- `docs/maps/`：每張地圖的語意／設計文件，不是 runtime tile database；其中 `docs/maps/MAIN_TOWN.md` 是主城 canonical blueprint。
+- `docs/maps/`：每張地圖的語意／設計文件，不是 runtime tile database；其中 `docs/maps/MAIN_TOWN.md` 是主城 authored navigation package contract。
 - `docs/references/`：原作／歷史研究資料；用作參考及核對，唔會覆蓋 Everrealm 現行 system spec。
 - `.codex/skills/`：Codex 可重用 workflow；Skill 定義「點做」，唔取代設計規格 source of truth。
 

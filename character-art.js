@@ -276,6 +276,10 @@
     npcPortraits: { src: "assets/npc-dialogue-portraits-v4.png", columns: 4, rows: 3, cellGutterX: 16, cellInsets: { 2: { right: 32 } }, image: null, ready: false, failed: false },
     environment: { src: "assets/environment-atlas-v5.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     terrain: { src: "assets/terrain-atlas-v1.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
+    mainTownBackground: { src: "assets/main-town/main-town-final.png", background: true, image: null, ready: false, failed: false },
+    mainTownWalkableMask: { src: "assets/main-town/main-town-walkable-mask.png", navigationMask: "walkable", image: null, ready: false, failed: false },
+    mainTownCollisionMask: { src: "assets/main-town/main-town-collision-mask.png", navigationMask: "collision", image: null, ready: false, failed: false },
+    mainTownTriggerMask: { src: "assets/main-town/main-town-trigger-mask.png", navigationMask: "triggers", image: null, ready: false, failed: false },
     battleMountainBackground: { src: "assets/battle/mountain/mountain-battle-background-v1.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v2.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
@@ -307,7 +311,13 @@
         const m = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
         atlas.ready = !atlas.standard || (image.naturalWidth === m.columns * m.cellWidth && image.naturalHeight === m.rows * m.cellHeight);
         atlas.failed = !atlas.ready;
-        if (!atlas.standard) atlas.alphaBounds = scanAtlasAlphaBounds(atlas);
+        if (atlas.navigationMask) {
+          atlas.mask = scanNavigationMask(atlas);
+          atlas.ready = Boolean(atlas.mask);
+          atlas.failed = !atlas.ready;
+        } else if (!atlas.standard && !atlas.background) {
+          atlas.alphaBounds = scanAtlasAlphaBounds(atlas);
+        }
         if (typeof globalThis.dispatchEvent === "function" && typeof CustomEvent === "function") {
           globalThis.dispatchEvent(new CustomEvent("lantern-art-ready", { detail: { src: atlas.src } }));
         }
@@ -534,6 +544,55 @@
       markerAnchorX: nameAnchorX,
       markerAnchorY: profile ? nameAnchorY - 20 * scale : box.y - 23 * scale,
       atlas: atlas.src, frame: selected.index, facing: selected.facing };
+  }
+
+  function scanNavigationMask(atlas) {
+    if (!atlas?.image) return null;
+    const width = atlas.image.naturalWidth || atlas.image.width;
+    const height = atlas.image.naturalHeight || atlas.image.height;
+    if (!width || !height) return null;
+    let surface = null;
+    try {
+      if (typeof OffscreenCanvas === "function") surface = new OffscreenCanvas(width, height);
+      else if (typeof document !== "undefined" && document.createElement) {
+        surface = document.createElement("canvas");
+        surface.width = width;
+        surface.height = height;
+      }
+      const scan = surface?.getContext?.("2d", { willReadFrequently: true });
+      if (!scan) return null;
+      scan.clearRect(0, 0, width, height);
+      scan.drawImage(atlas.image, 0, 0);
+      const pixels = scan.getImageData(0, 0, width, height).data;
+      const values = new Uint8Array(width * height);
+      for (let index = 0; index < values.length; index += 1) {
+        const offset = index * 4;
+        values[index] = pixels[offset] > 127 && pixels[offset + 3] > 0 ? 1 : 0;
+      }
+      return { width, height, values };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function navigationMaskDisk(mask, x, y, radius, mode) {
+    if (!mask || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const actualRadius = Math.max(0, Number(radius) || 0);
+    const minX = Math.floor(x - actualRadius);
+    const maxX = Math.ceil(x + actualRadius);
+    const minY = Math.floor(y - actualRadius);
+    const maxY = Math.ceil(y + actualRadius);
+    const wantAllWhite = mode === "all-white";
+    let hit = false;
+    for (let py = minY; py <= maxY; py += 1) {
+      for (let px = minX; px <= maxX; px += 1) {
+        if ((px - x) ** 2 + (py - y) ** 2 > actualRadius ** 2) continue;
+        const inside = px >= 0 && py >= 0 && px < mask.width && py < mask.height && mask.values[py * mask.width + px] === 1;
+        if (wantAllWhite && !inside) return false;
+        if (!wantAllWhite && inside) hit = true;
+      }
+    }
+    return wantAllWhite ? true : hit;
   }
 
   // The mountain courier is a standalone cutout so the recipient never
@@ -974,6 +1033,49 @@
     const settings = options || {};
     const atlas = settings.theme === "mountain" ? spriteAtlases.battleMountainGround : null;
     return drawBattleBitmap(ctx, atlas, settings, true);
+  }
+
+  function drawMainTownBackground(ctx, options) {
+    const settings = options || {};
+    const atlas = spriteAtlases.mainTownBackground;
+    if (!atlas?.ready || !atlas.image) return false;
+    const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
+    const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    const width = Math.max(1, Number(settings.width) || sourceWidth);
+    const height = Math.max(1, Number(settings.height) || sourceHeight);
+    const x = Number(settings.x) || 0;
+    const y = Number(settings.y) || 0;
+    ctx.save();
+    try {
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
+    } finally {
+      ctx.restore();
+    }
+    return true;
+  }
+
+  function mainTownNavigationStatus() {
+    const masks = [spriteAtlases.mainTownWalkableMask, spriteAtlases.mainTownCollisionMask, spriteAtlases.mainTownTriggerMask];
+    return {
+      ready: masks.every((atlas) => atlas.ready && atlas.mask),
+      failed: masks.some((atlas) => atlas.failed),
+      backgroundReady: Boolean(spriteAtlases.mainTownBackground.ready),
+      masks: Object.fromEntries(masks.map((atlas) => [atlas.navigationMask, { ready: atlas.ready, failed: atlas.failed }])),
+    };
+  }
+
+  function mainTownNavigationMask(kind, x, y, radius = 0) {
+    const atlas = {
+      walkable: spriteAtlases.mainTownWalkableMask,
+      collision: spriteAtlases.mainTownCollisionMask,
+      triggers: spriteAtlases.mainTownTriggerMask,
+    }[kind];
+    if (!atlas?.ready || !atlas.mask) return null;
+    if (kind === "walkable") return navigationMaskDisk(atlas.mask, x, y, radius, "all-white");
+    return navigationMaskDisk(atlas.mask, x, y, radius, "any-white");
   }
 
   function drawBattleBitmap(ctx, atlas, settings, cover) {
@@ -1727,6 +1829,9 @@
     drawTerrainTile,
     drawBattleBackground,
     drawBattleGround,
+    drawMainTownBackground,
+    mainTownNavigationStatus,
+    mainTownNavigationMask,
     drawInteriorSprite,
     drawMarker,
   });

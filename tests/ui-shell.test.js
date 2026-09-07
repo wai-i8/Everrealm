@@ -51,10 +51,12 @@ test("click-only exploration plans a collision-aware path and carries no mobile 
   assert.doesNotMatch(css, /\.dpad\s*\{|\.mobile-dash\s*\{/);
 });
 
-test("east-passage DECK console and minimap use world art instead of primitive scenery", () => {
+test("flattened town art, exact east passage and DECK console are wired", () => {
   assert.match(mainTownSource, /harbour-gate-deck-console/);
-  assert.match(mainTownSource, /id:\s*"harbour-gate-deck-console"[\s\S]*?\.\.\.point\(44\.5, 15\)/);
-  assert.match(mainTownSource, /eastGateInside: worldPoint\(47, 20\.5\)/);
+  assert.match(mainTownSource, /id:\s*"harbour-gate-deck-console"[\s\S]*?x:\s*1110,\s*y:\s*598/);
+  assert.match(mainTownSource, /authoredAnchor\("East exit"\)/);
+  assert.match(mainTownSource, /rendering:\s*"flattened"/);
+  assert.match(mainTownSource, /navigationPackageId/);
   assert.match(mainTownSource, /transitionType: TRANSITION_TYPES\.PHYSICAL_PASSAGE/);
   assert.doesNotMatch(mainTownSource, /townGateEast|east-city-gate/);
   assert.match(game, /Art\.drawTerrainTile\(miniCtx/);

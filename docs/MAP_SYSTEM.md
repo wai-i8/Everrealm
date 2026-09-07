@@ -89,13 +89,11 @@
 
 主要特徵：
 
-- 主城詳細 blueprint、block、道路、城牆、東門、建築尺寸及門口 anchor 以 `docs/maps/MAIN_TOWN.md` 為 canonical；本節只保留 map-system 層級規則。
-- 城牆包圍。
-- 東門連接山地野外西口。
-- 城內以石路、建築、街道、少量裝飾物為主。
-- 城內採用固定嘅六個 block 配置：北列為拾燈公會、霧草療癒所及霧燈旅店；南列為銀火裝備店、中央石砌廣場及霧穀雜貨舖。
-- 五個服務建築使用同一套標準建築模組與實體門互動；唔因為公會係地標而任意放大，亦唔因為商店係服務點而任意縮細。
-- 城內由一條中央 Main Street 組成連續步行路網；樹木集中於城牆邊緣作框景，唔另設平行服務街。完整幾何以 `docs/maps/MAIN_TOWN.md` 為準。
+- 主城詳細 authored package、flattened art、mask、入口 trigger 同東側 passage 以 `docs/maps/MAIN_TOWN.md` 及其列出嘅 package files 為準；本節只保留 map-system 層級規則。
+- 主城係服務型探索地圖，視覺上由 authored master art 表達城鎮、城牆、道路、建築、植被及海岸環境。
+- 東側 `world-to-field` physical passage 連接山地野外西口。
+- 五個服務建築使用 authored 實體門 trigger，分別連接對應室內 map。
+- 主城步行路網由 walkable allowlist 決定；唔由 tile inversion、舊 block geometry 或 render-only scenery 推導。
 - 一般情況唔產生普通野外 random encounter。
 - 劇情／特殊戰鬥可以明確指定 `town` battle theme。
 
@@ -103,7 +101,7 @@
 
 主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口使用 `marker-atlas-v1` 左下角（`interact`）實體互動 marker，唔使用魔法傳送圓陣。
 
-建築入口座標由 `maps/main-town.js` 保存 bitmap `doorAnchor`，再由 `map/map-transitions.js` 的 `resolveHouseDoorAnchor()` 統一推導成 world-space doorway。建築圖片係視覺層，house collision 係物理層；`doorDepth` 只負責讓角色半徑能通過門洞，唔會改變室內 map 或 spawn 目標。東側則保留清楚嘅 passage 開口及 `world-to-field` 出口，唔再依賴大型 East Gate bitmap；城牆其餘邊界保持實體。
+主城入口與東側 passage 由 `assets/main-town/main-town-navigation.json` 及配套 mask authored；`maps/main-town.js` 將 exact trigger／threshold／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable mask 係完整 allowlist，collision mask 只作 supplemental solid objects；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 collision inversion 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
 
 ### 3.2 山地野外
 
@@ -202,8 +200,8 @@ special
 
 `map/map-transitions.js` 擁有 connection authoring 與 link resolution。它會：
 
-- 讀取主城 house 的 `doorAnchor`、`spriteWidth`、`spriteHeight`、`spriteAnchorY`。
-- 將 semantic anchor 解析成實際 doorway，建立 physical `interactionMode: "door"` transition。
+- 讀取主城 authored navigation package 的 building trigger、threshold、approach anchor。
+- 將 exact authored doorway contract 解析成 physical `interactionMode: "door"` transition；舊 bitmap sprite anchor 只保留畀 legacy map consumers。
 - 建立主城五個服務入口與室內 `*-to-world` 回程的對應。
 - 將 `field ↔ world`、`field ↔ dungeon` 保持為 physical gate/cave passage。
 - 以 `targetSpawn` 優先解析 arrival；`targetPosition` 只作兼容 fallback。
@@ -317,6 +315,7 @@ Biome data 最低：
 {
   doorAnchor,      // 可見建築門口的 world-space anchor
   approachPoint,   // 點擊入口後先行到的安全接近點
+  trigger,         // optional exact activation rect；可與 threshold 相同
   threshold,       // 小型 rect：x、y、w、h、shape: "rect"
   exteriorSpawn,   // 離開室內後的 owning-map 安全出生點
   entryFacing,
@@ -325,7 +324,7 @@ Biome data 最低：
 }
 ```
 
-`threshold` 以門錨為中心、以 tile 寬深 authored；角色的 feet/world pivot 進入矩形後才可以觸發 physical door。鄰近距離、建築圖片外框、label 或 transparent padding 都不會觸發普通門。室內出口沿用同一 contract；它們仍然是 physical door，絕不使用 magic-circle VFX。
+`threshold` 可以由 legacy tile metadata 推導，亦可以直接使用 authored world-pixel rect；主城 navigation package 採用後者，並以同一個 exact rect 保存 `trigger`。角色的 feet/world pivot 進入矩形後才可以觸發 physical door。鄰近距離、建築圖片外框、label 或 transparent padding 都不會觸發普通門。室內出口沿用同一 contract；它們仍然是 physical door，絕不使用 magic-circle VFX。
 
 ### 7.1 核心規則
 

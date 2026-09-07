@@ -1,11 +1,28 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const Registry = require("../map/map-registry.js");
 const Transitions = require("../map/map-transitions.js");
+const MainTownNavigation = require("../map/main-town-navigation.js");
 const game = fs.readFileSync(path.resolve(__dirname, "..", "game.js"), "utf8");
+
+test("final main-town navigation package is complete and hash-locked", () => {
+  const root = path.resolve(__dirname, "..");
+  const packagePath = path.join(root, "assets", "main-town", "main-town-navigation.json");
+  const packageData = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+  assert.deepEqual(packageData.source, MainTownNavigation.data.source);
+  for (const filename of ["main-town-final.png", "main-town-walkable-mask.png", "main-town-collision-mask.png", "main-town-trigger-mask.png", "main-town-navigation-review.png"]) {
+    const filePath = path.join(root, "assets", "main-town", filename);
+    assert.equal(fs.existsSync(filePath), true, `${filename} should be present in the authored package`);
+  }
+  const masterArt = fs.readFileSync(path.join(root, "assets", "main-town", "main-town-final.png"));
+  assert.equal(crypto.createHash("sha256").update(masterArt).digest("hex"), packageData.source.sha256);
+  assert.deepEqual(packageData.qa.all_image_dimensions, [packageData.source.width, packageData.source.height]);
+  assert.equal(packageData.qa.six_destinations_reachable, true);
+});
 
 test("map registry exposes every current map without game-side construction", () => {
   const maps = Registry.createMapRegistry();
@@ -44,17 +61,28 @@ test("transition linker preserves the authored physical route graph", () => {
   assert.equal(maps.world.portals, maps.world.exits);
 });
 
-test("bitmap doorway anchors resolve to the visible physical doors", () => {
+test("authored bitmap doorway triggers resolve to physical doors", () => {
   const maps = Registry.createMapRegistry();
-  for (const [houseId, portalId] of [["forge", "world-to-shop"], ["clinic", "world-to-clinic"], ["general-store", "world-to-general-store"], ["tea-house", "world-to-inn"]]) {
+  const expectedTriggers = new Map(MainTownNavigation.data.building_triggers.map((entry) => [entry.name, entry]));
+  for (const [houseId, portalId, triggerName] of [
+    ["keeper-house", "world-to-guild", "Guild"],
+    ["forge", "world-to-shop", "Weapon Shop"],
+    ["clinic", "world-to-clinic", "Hospital / Clinic"],
+    ["general-store", "world-to-general-store", "Item / General Store"],
+    ["tea-house", "world-to-inn", "Inn"],
+  ]) {
     const house = maps.world.houses.find((candidate) => candidate.id === houseId);
     const portal = maps.world.exits.find((candidate) => candidate.id === portalId);
-    const settings = Transitions.houseSpriteSettings(house);
-    const expected = {
-      x: settings.x + settings.width * (house.doorAnchor.x - settings.anchorX),
-      y: settings.y - settings.height * settings.anchorY + settings.height * house.doorAnchor.y,
-    };
-    assert.deepEqual({ x: portal.x, y: portal.y }, expected);
+    const authored = expectedTriggers.get(triggerName);
+    const expectedRect = { shape: "rect", x: authored.rectangle.x, y: authored.rectangle.y, w: authored.rectangle.width, h: authored.rectangle.height };
+    const expectedThreshold = { ...expectedRect, outward: "south" };
+    assert.equal(house.masterArt, true);
+    assert.equal(house.render, false);
+    assert.deepEqual(house.doorway.trigger, expectedRect);
+    assert.deepEqual(portal.entrance.trigger, expectedRect);
+    assert.deepEqual(portal.entrance.threshold, expectedThreshold);
+    assert.deepEqual(portal.entrance.approachPoint, { x: authored.rectangle.x, y: MainTownNavigation.data.connectivity.results[triggerName].example_anchor[1] });
+    assert.deepEqual({ x: portal.x, y: portal.y }, { x: authored.doorway_center_x, y: authored.rectangle.y + authored.rectangle.height / 2 });
     const link = maps.world.transitionLinks.find((candidate) => candidate.portalId === portal.id);
     assert.ok(link?.returnSpawn, `${portal.id} should declare an exterior return spawn`);
     assert.deepEqual(portal.returnPosition, maps.world.spawnPoints[link.returnSpawn]);

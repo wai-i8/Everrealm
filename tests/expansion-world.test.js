@@ -153,6 +153,7 @@ test("exports the same UMD API to Node and a browser-like global", () => {
     "map/map-helpers.js",
     "map/monster-blueprints.js",
     "map/interior-helpers.js",
+    "map/main-town-navigation.js",
     "maps/main-town.js",
     "maps/mountain-field.js",
     "maps/mine.js",

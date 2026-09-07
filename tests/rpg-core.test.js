@@ -197,51 +197,43 @@ test("old saves default to no pending level-up choices", () => {
   assert.equal(clean.pendingLevelUps, 0);
 });
 
-test("world generator returns the expanded walled starting town", () => {
+test("world generator returns the authored flattened navigation town", () => {
   const world = World.createWorld();
   assert.equal(world.id, "world");
   assert.equal(world.kind, "town");
-  assert.equal(world.width, 50);
-  assert.equal(world.height, 42);
-  assert.equal(world.tiles.length, 42);
-  assert.equal(world.tiles[0].length, 50);
+  assert.equal(world.width, 48);
+  assert.equal(world.height, 36);
+  assert.equal(world.tiles.length, 36);
+  assert.equal(world.tiles[0].length, 48);
   assert.deepEqual(world.houses.map((house) => house.id), ["keeper-house", "forge", "tea-house", "clinic", "general-store"]);
   assert.equal(world.enemySpawns.length, 0, "monsters belong in the separate field map");
-  assert.equal(world.townLayout.style, "canonical-orthogonal-block-town");
-  assert.deepEqual(world.townLayout.map, { widthTiles: 50, heightTiles: 42 });
-  assert.deepEqual(world.townLayout.centralPlaza.rect, [19, 26, 12, 12]);
-  assert.equal(world.lamps.length, 0, "the main town has no street lamps");
+  assert.equal(world.rendering, "flattened");
+  assert.equal(world.art.flattened, true);
+  assert.equal(world.navigation.authoritative, true);
+  assert.deepEqual(world.navigation.connectivity.central_seed, [687, 698]);
+  assert.equal(world.townLayout.style, "flattened-final-navigation-package");
+  assert.deepEqual(world.townLayout.sourceDimensions, { width: 1536, height: 1152 });
+  assert.equal(world.townLayout.roadNetwork, null);
   assert.equal(world.townGate, null, "the east exit is a passage, not a gate facade");
 });
 
-test("town perimeter is solid except for its explicit five-tile east passage", () => {
+test("the authored east passage is a physical bitmap trigger", () => {
   const world = World.createWorld();
   const passage = world.townLayout.eastPassage;
-  for (let tx = 0; tx < world.width; tx += 1) {
-    assert.equal(World.isTileSolid(World.tileAt(world, tx, 0)), true, `north wall ${tx} must be solid`);
-    assert.equal(World.isTileSolid(World.tileAt(world, tx, world.height - 1)), true, `south wall ${tx} must be solid`);
-  }
-  for (let ty = 0; ty < world.height; ty += 1) {
-    assert.equal(World.isTileSolid(World.tileAt(world, 0, ty)), true, `west wall ${ty} must be solid`);
-    assert.equal(
-      World.isTileSolid(World.tileAt(world, world.width - 1, ty)),
-      ty < passage.opening[1] || ty >= passage.opening[1] + passage.opening[3],
-      `east edge ${ty} must match the authored passage opening`,
-    );
-  }
+  assert.deepEqual(passage.trigger, { shape: "rect", x: 1180, y: 518, w: 12, h: 28 });
+  assert.equal(passage.destination, "field");
+  assert.equal(passage.transitionType, "physical-passage");
+  assert.deepEqual(world.portals[0].trigger, passage.trigger);
 });
 
-test("town square, services, DECK console and east exit share one walkable component", () => {
+test("authored service and east anchors are connected to the central seed", () => {
   const world = World.createWorld();
-  const start = toTile(world, world.start);
   const deckConsole = world.boards.find((board) => board.id === "harbour-gate-deck-console");
   const eastExit = world.portals.find((portal) => portal.id === "world-to-field");
   assert.equal(deckConsole.boardId, "deck-loadout");
   assert.equal(eastExit.targetMap, "field");
   assert.equal(eastExit.targetSpawn, "westGate");
-  for (const destination of [world.objectives.elder, ...world.npcs, deckConsole, eastExit]) {
-    assert.equal(tileReachable(world, start, toTile(world, destination)), true, `unreachable town point ${JSON.stringify(toTile(world, destination))}`);
-  }
+  for (const [name, result] of Object.entries(world.navigation.connectivity.results)) assert.equal(result.reachable, true, `${name} should be reachable`);
 });
 
 test("normal town services use physical door entries and the east passage uses a physical exit", () => {
@@ -250,8 +242,8 @@ test("normal town services use physical door entries and the east passage uses a
   assert.equal(eastPassage.interactionMode, "passage");
   assert.equal(eastPassage.transitionType, "physical-passage");
   assert.equal(eastPassage.passageId, "east-town-passage");
-  assert.deepEqual(world.houses.map((house) => house.frontage), ["south", "north", "south", "south", "north"]);
-  assert.deepEqual(world.houses.map((house) => house.doorAnchor.y), [1, 0, 1, 1, 0]);
+  assert.deepEqual(world.houses.map((house) => house.doorway.centerX), [687, 378, 1004, 1016, 378]);
+  assert.deepEqual(world.houses.map((house) => house.doorway.trigger.h), [8, 8, 8, 8, 8]);
   assert.deepEqual(world.houses.map((house) => house.entryPortalId), [
     "world-to-guild", "world-to-shop", "world-to-inn", "world-to-clinic", "world-to-general-store",
   ]);
@@ -296,43 +288,3 @@ test("hash2D is stable and stays in range", () => {
   assert.ok(first >= 0 && first <= 1);
   assert.notEqual(first, Core.hash2D(18, 42, 9));
 });
-
-function toTile(world, point) {
-  return { x: Math.floor(point.x / world.tileSize), y: Math.floor(point.y / world.tileSize) };
-}
-
-function tileReachable(world, start, goal, blocked = new Set()) {
-  const queue = [start];
-  const seen = new Set([`${start.x},${start.y}`]);
-  for (let index = 0; index < queue.length; index += 1) {
-    const current = queue[index];
-    if (current.x === goal.x && current.y === goal.y) return true;
-    for (const direction of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
-      const next = { x: current.x + direction[0], y: current.y + direction[1] };
-      const key = `${next.x},${next.y}`;
-      if (seen.has(key) || blocked.has(key) || World.isTileSolid(World.tileAt(world, next.x, next.y))) continue;
-      seen.add(key);
-      queue.push(next);
-    }
-  }
-  return false;
-}
-
-function tileReachableWithGate(world, start, goal, gateOpen) {
-  const queue = [start];
-  const seen = new Set([`${start.x},${start.y}`]);
-  for (let index = 0; index < queue.length; index += 1) {
-    const current = queue[index];
-    if (current.x === goal.x && current.y === goal.y) return true;
-    for (const direction of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
-      const next = { x: current.x + direction[0], y: current.y + direction[1] };
-      const key = `${next.x},${next.y}`;
-      const tile = World.tileAt(world, next.x, next.y);
-      const inClosedGate = !gateOpen && next.x === 49 && next.y >= 14 && next.y <= 16;
-      if (seen.has(key) || World.isTileSolid(tile) || inClosedGate) continue;
-      seen.add(key);
-      queue.push(next);
-    }
-  }
-  return false;
-}

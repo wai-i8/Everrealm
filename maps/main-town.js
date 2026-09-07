@@ -1,331 +1,234 @@
 (function (root, factory) {
   const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
   const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
-  const api = factory(constants, helpers);
+  const navigationApi = root.LanternMainTownNavigation || (typeof require === "function" ? require("../map/main-town-navigation.js") : null);
+  const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternMainTownMap = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi) {
   "use strict";
 
-  const { TILE, TILES, MAP_IDS, TRANSITION_TYPES } = constants;
-  const { mulberry32, point, paintPath } = helpers;
-  const WIDTH = 50;
-  const HEIGHT = 42;
-  const PHYSICAL_BUILDING_ENTRANCE = Object.freeze({
-    outward: "south",
-    threshold: Object.freeze({ shape: "rect", widthTiles: 1.5, depthTiles: 1 }),
-    approachDistanceTiles: 2,
-    entryFacing: "up",
-    returnFacing: "down",
-    marker: Object.freeze({ kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 }),
+  const { TILES, MAP_IDS, TRANSITION_TYPES } = constants;
+  const { makeTiles } = helpers;
+  const navigationPackage = navigationApi.data;
+  const TILE = 32;
+  const WIDTH = navigationPackage.source.width / TILE;
+  const HEIGHT = navigationPackage.source.height / TILE;
+  const ART_BACKGROUND = "assets/main-town/main-town-final.png";
+  const ART_REVIEW = "assets/main-town/main-town-navigation-review.png";
+  const NAVIGATION_JSON = "assets/main-town/main-town-navigation.json";
+  const NAVIGATION_ASSETS = Object.freeze({
+    walkable: "assets/main-town/main-town-walkable-mask.png",
+    collision: "assets/main-town/main-town-collision-mask.png",
+    triggers: "assets/main-town/main-town-trigger-mask.png",
   });
 
-  function createMainTownMapLegacy() {
-    const random = mulberry32(0x71a5cafe);
-    const tiles = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(TILES.GRASS));
+  const BUILDINGS = Object.freeze([
+    Object.freeze({ id: "keeper-house", role: "guild", triggerName: "Guild", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", label: "✦ 拾燈公會", mapLabel: "公會", name: "拾燈公會", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "forge", role: "equipment-shop", triggerName: "Weapon Shop", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", label: "⚒ 銀火裝備店", mapLabel: "裝備店", name: "銀火裝備店", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "tea-house", role: "inn", triggerName: "Inn", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", label: "▰ 霧燈旅店", mapLabel: "旅店", name: "霧燈旅店", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "clinic", role: "clinic", triggerName: "Hospital / Clinic", portalId: "world-to-clinic", targetMap: MAP_IDS.CLINIC, targetSpawn: "entrance", returnSpawn: "clinicFront", label: "✚ 霧草療癒所", mapLabel: "療癒所", name: "霧草療癒所", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "general-store", role: "general-store", triggerName: "Item / General Store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", label: "◇ 霧穀雜貨舖", mapLabel: "雜貨舖", name: "霧穀雜貨舖", entryFacing: "up", returnFacing: "down" }),
+  ]);
 
-    function setTile(tx, ty, type) {
-      if (tx >= 0 && ty >= 0 && tx < WIDTH && ty < HEIGHT) tiles[ty][tx] = type;
-    }
-    function fillTownTiles(x, y, width, height, type) {
-      for (let ty = y; ty < y + height; ty += 1) {
-        for (let tx = x; tx < x + width; tx += 1) setTile(tx, ty, type);
-      }
-    }
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
 
-    // The town is deliberately wider and deeper than the old compressed grid.
-    // Roads are painted after the plaza so the civic space reads as one connected
-    // street plan instead of a stone island with decorative strips around it.
-    for (let tx = 0; tx < WIDTH; tx += 1) {
-      setTile(tx, 0, TILES.WALL);
-      setTile(tx, HEIGHT - 1, TILES.WALL);
-    }
-    for (let ty = 0; ty < HEIGHT; ty += 1) {
-      setTile(0, ty, TILES.WALL);
-      setTile(WIDTH - 1, ty, TILES.WALL);
-    }
+  function triggerFor(name) {
+    const trigger = navigationPackage.building_triggers.find((entry) => entry.name === name);
+    if (!trigger) throw new Error(`Missing Main Town trigger: ${name}`);
+    return trigger;
+  }
 
-    // A compact civic plaza leaves breathing room for the five service districts.
-    fillTownTiles(17, 11, 11, 7, TILES.STONE);
+  function triggerRect(trigger) {
+    return { shape: "rect", x: trigger.rectangle.x, y: trigger.rectangle.y, w: trigger.rectangle.width, h: trigger.rectangle.height };
+  }
 
-    // Main street: west arrival -> plaza -> east gate. Branches are authored to
-    // meet each bitmap doorway's approach point rather than merely decorating grass.
-    paintPath(tiles, [{ x: 1, y: 15 }, { x: 43, y: 15 }], 1.45);
-    paintPath(tiles, [{ x: 22, y: 2 }, { x: 22, y: 10 }], .95);
-    paintPath(tiles, [{ x: 22, y: 18 }, { x: 22, y: 28 }], .95);
-    paintPath(tiles, [{ x: 9, y: 15 }, { x: 9, y: 9.65 }], .95);
-    paintPath(tiles, [{ x: 34, y: 15 }, { x: 34, y: 9.6 }], .95);
-    paintPath(tiles, [{ x: 7, y: 15 }, { x: 7, y: 27 }], .95);
-    paintPath(tiles, [{ x: 20, y: 15 }, { x: 20, y: 27 }], .95);
-    paintPath(tiles, [{ x: 37, y: 15 }, { x: 37, y: 27 }], .95);
+  function authoredAnchor(triggerName) {
+    const result = navigationPackage.connectivity.results[triggerName];
+    if (!result?.example_anchor) throw new Error(`Missing Main Town connectivity anchor: ${triggerName}`);
+    return { x: result.example_anchor[0], y: result.example_anchor[1] };
+  }
 
-    // Keep the wall solid everywhere except the three-tile physical east gate.
-    for (let tx = 0; tx < WIDTH; tx += 1) {
-      setTile(tx, 0, TILES.WALL);
-      setTile(tx, HEIGHT - 1, TILES.WALL);
-    }
-    for (let ty = 0; ty < HEIGHT; ty += 1) {
-      setTile(0, ty, TILES.WALL);
-      if (ty < 14 || ty > 16) setTile(WIDTH - 1, ty, TILES.WALL);
-    }
-    for (let ty = 14; ty <= 16; ty += 1) setTile(WIDTH - 1, ty, TILES.PATH);
-
-    const houses = [
-      {
-        id: "keeper-house", kind: "house", x: 2 * TILE, y: 3 * TILE, w: 10 * TILE, h: 7 * TILE,
-        sprite: "guildHouse", label: "✦ 拾燈公會", district: "civic", entryPortalId: "world-to-guild", doorWidth: 50, doorDepth: 64,
-        doorAnchor: { x: 254 / 384, y: 354 / 384 },
-        roof: "#263452", light: "#ffc857",
-      },
-      {
-        id: "forge", kind: "house", x: 2 * TILE, y: 20 * TILE, w: 10 * TILE, h: 7 * TILE,
-        sprite: "equipmentShopBuilding", bitmap: true, label: "⚒ 銀火裝備店", district: "craft", entryPortalId: "world-to-shop", doorWidth: 54, doorDepth: 88,
-        spriteWidth: 440, spriteHeight: 410, spriteAnchorY: 1, doorAnchor: { x: .46, y: .86 },
-        roof: "#472f38", light: "#ff8b62",
-      },
-      {
-        id: "tea-house", kind: "house", sprite: "innBuilding", bitmap: true, label: "▰ 霧燈旅店", district: "life", entryPortalId: "world-to-inn",
-        x: 31 * TILE, y: 20 * TILE, w: 10 * TILE, h: 7 * TILE, doorWidth: 54, doorDepth: 82,
-        spriteWidth: 430, spriteHeight: 380, spriteAnchorY: 1, doorAnchor: { x: .57, y: .87 },
-        roof: "#294846", light: "#87db82",
-      },
-      {
-        id: "clinic", kind: "house", role: "clinic", sprite: "clinicBuilding", bitmap: true, label: "✚ 霧草療癒所", district: "care", entryPortalId: "world-to-clinic",
-        x: 30 * TILE, y: 3 * TILE, w: 9 * TILE, h: 7 * TILE, doorWidth: 54,
-        spriteWidth: 420, spriteHeight: 390, spriteAnchorY: 1, doorAnchor: { x: .47, y: .85 }, doorDepth: 88,
-        roof: "#3f5360", light: "#82d6c7", accent: "#82d6c7",
-      },
-      {
-        id: "general-store", kind: "house", role: "general-store", sprite: "generalStoreBuilding", bitmap: true, label: "◇ 霧穀雜貨舖", district: "trade", entryPortalId: "world-to-general-store",
-        x: 14 * TILE, y: 21 * TILE, w: 9 * TILE, h: 6 * TILE, doorWidth: 54, doorDepth: 82,
-        spriteWidth: 420, spriteHeight: 340, spriteAnchorY: 1, doorAnchor: { x: .63, y: .86 },
-        roof: "#6a4c3d", light: "#f0c36a", accent: "#f0c36a",
-      },
-    ];
-
-    const npcs = [
-      { id: "ah-ching", name: "阿澄", role: "守燈星術師", kind: "npc", ...point(21, 14), radius: 12, color: "#ffc857", facing: "down", actor: "keeper", gender: "female", age: 25, appearance: "銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、月輪法杖與藍色精靈同伴", referenceAsset: "assets/ah-ching-v1.png" },
-      { id: "town-smith", name: "鐵叔", role: "街坊鍛刀匠", kind: "npc", ...point(8, 19), radius: 12, color: "#ff8b62", facing: "right", actor: "smith", gender: "male", age: 43 },
-      { id: "town-herbalist", name: "草姨", role: "街坊草藥師", kind: "npc", ...point(34, 10), radius: 12, color: "#87db82", facing: "left", actor: "healer", gender: "female", age: 47 },
-    ];
-
-    const shrine = { id: "harbour-shrine", name: "中央燈龕", kind: "shrine", ...point(22, 14), radius: 18 };
-    const legacyPassage = { id: "east-town-passage", kind: "passage", side: "east", opening: { minTileY: 14, maxTileY: 16 } };
-    const boards = [{ id: "harbour-gate-deck-console", kind: "questBoard", name: "城門戰技面板台", ...point(38.5, 12), radius: 22, boardId: "deck-loadout", prompt: "設定戰技面板", passageId: legacyPassage.id }];
-    const portals = [{
-      id: "world-to-field", kind: "portal", interactionMode: "gate", transitionType: TRANSITION_TYPES.PHYSICAL_GATE, name: "前往霧梅爾山地", mapLabel: "東門",
-      alwaysVisible: true, markerSize: 38, ...point(42.5, 15), radius: 23,
-      targetMap: MAP_IDS.FIELD, targetSpawn: "westGate", targetPosition: point(2, 26), prompt: "離開主城", passageId: legacyPassage.id, direction: "east",
-    }];
-    const signs = [
-      { id: "town-sign-square", kind: "sign", name: "中央廣場路牌", ...point(26, 18.8), radius: 10, text: "北側：療癒所　西側：拾燈公會　南側：雜貨舖" },
-      { id: "town-sign-gate", kind: "sign", name: "東門告示", ...point(39, 17.5), radius: 10, text: "東門 → 霧梅爾山地。出發前請先整理戰技面板。" },
-    ];
-    const chests = [{ id: "town-supply-chest", kind: "chest", name: "城防補給箱", ...point(38.5, 10.5), radius: 13, reward: { coins: 24, potions: 1 } }];
-
-    // Boundary groves frame the town and the top district without spilling into
-    // the authored road corridors. All variants come from the cleaned v5 atlas.
-    const trees = [];
-    for (const [tx, ty, variant, renderScale] of [
-      [2, 2, "pineTree", 1.25], [15, 2, "blossomTree", 1.15], [24, 2, "broadleafTree", 1.1], [41, 3, "pineTree", 1.25],
-      [2, 14, "autumnTree", 1.15], [2, 28, "broadleafTree", 1.15], [13, 28, "blossomTree", 1.1], [28, 28, "autumnTree", 1.1],
-      [41, 19, "broadleafTree", 1.15], [41, 28, "blossomTree", 1.2], [29, 11, "pineTree", 1.05], [12, 19, "broadleafTree", 1.05],
-    ]) {
-      trees.push({ id: `town-tree-${trees.length}`, kind: "tree", ...point(tx, ty), tileX: tx, tileY: ty, radius: 23, seed: random(), variant, groveId: "town-greenery", renderScale });
-    }
-    const rocks = [
-      { id: "town-rock-west", kind: "rock", ...point(3, 27.5), radius: 10, seed: random() },
-      { id: "town-rock-north", kind: "rock", ...point(28, 2.4), radius: 9, seed: random() },
-      { id: "town-rock-east", kind: "rock", ...point(41, 27), radius: 10, seed: random() },
-    ];
-    const flowers = [[15, 10], [16, 10], [27, 10], [28, 10], [16, 19], [17, 19], [27, 19], [28, 19], [30, 17], [31, 17], [39, 18], [40, 18], [4, 16], [5, 16], [12, 16], [13, 16], [29, 11], [30, 11]].map(([tx, ty], index) => {
-      const base = point(tx, ty);
-      return { id: `town-flower-${index}`, x: base.x + (random() - .5) * 10, y: base.y + (random() - .5) * 10, color: random() > .5 ? "#f5e9ca" : "#ae91ff", seed: random() };
-    });
-    // Lamps sit on the verge of the route, with a deliberate pair at each civic
-    // threshold instead of occupying the street centerline.
-    const lamps = [];
-    const staticObjects = [...houses, ...trees, ...rocks, shrine, ...signs, ...chests, ...boards];
-    // Keep the default arrival in the open south road between the market and
-    // inn districts; the old x22 spawn landed inside the market building's
-    // collision shell after the district resize.
-    const start = point(25, 23);
+  function makeHouse(definition) {
+    const trigger = triggerFor(definition.triggerName);
+    const rect = triggerRect(trigger);
+    const doorY = rect.y + rect.h / 2;
     return {
-      id: MAP_IDS.WORLD, name: "霧都主城", shortName: "霧都", kind: "town", type: "world", biome: "town", theme: "walled-town",
-      tileSize: TILE, width: WIDTH, height: HEIGHT, pixelWidth: WIDTH * TILE, pixelHeight: HEIGHT * TILE,
-      tiles, tileTypes: TILES, houses, trees, rocks, flowers, lamps, npcs, shrine, townGate: null,
-      gate: { id: "world-no-quest-gate", kind: "gate", x: -9999, y: -9999, w: 0, h: 0 },
-      signs, boards, portals, exits: portals, chests, staticObjects, collisionObjects: [], decorations: [], furniture: [], enemySpawns: [], start,
-      // Exterior returns are authored spawn data, not a renderer-relative offset.
-      // They sit on the road-facing side of each facade after the redesign.
-      spawnPoints: {
-        start,
-        guildFront: { x: 352, y: 386 },
-        shopFront: { x: 262.4, y: 1065 },
-        clinicFront: { x: 1367.4, y: 384 },
-        generalStoreFront: { x: 794.6, y: 1074.4 },
-        innFront: { x: 1470.1, y: 1068.6 },
-        eastGateInside: point(41.4, 15),
-      },
-      spawnFacings: {
-        guildFront: "down",
-        shopFront: "down",
-        clinicFront: "down",
-        generalStoreFront: "down",
-        innFront: "down",
-        eastGateInside: "right",
-      },
-      objectives: { elder: point(21, 13.5), townGate: point(41, 15), gate: point(41, 15), boss: point(41, 15), crystals: {} },
-      questDestinations: {
-        crystals: { mapId: MAP_IDS.FIELD, objectiveGroup: "crystals" },
-        seal: { mapId: MAP_IDS.FIELD, objectiveId: "gate" },
-        boss: { mapId: MAP_IDS.FIELD, objectiveId: "boss" },
-        dungeon: { mapId: MAP_IDS.FIELD, objectiveId: "dungeon" },
-      },
-      townLayout: {
-        style: "districted-walled-town", wallTile: TILES.WALL, perimeter: { left: 0, top: 0, right: WIDTH - 1, bottom: HEIGHT - 1 },
-        eastPassage: { tx: WIDTH - 1, minTy: 14, maxTy: 16 }, serviceBuildingIds: houses.map((house) => house.id), deckConsoleId: boards[0].id,
-        districts: [
-          { id: "civic", label: "中央燈龕廣場", bounds: { x: 17, y: 11, w: 11, h: 7 } },
-          { id: "care", label: "北側療癒街", bounds: { x: 29, y: 2, w: 11, h: 9 } },
-          { id: "craft", label: "西南工坊街", bounds: { x: 2, y: 19, w: 11, h: 9 } },
-          { id: "trade", label: "南側市集", bounds: { x: 14, y: 20, w: 10, h: 8 } },
-          { id: "life", label: "東南旅店街", bounds: { x: 30, y: 19, w: 11, h: 9 } },
-        ],
-        roadNetwork: { main: "east-west-gate-route", cross: "north-south-plaza-route", branches: ["guild-approach", "clinic-approach", "forge-approach", "market-approach", "inn-approach"], laneCount: 2 },
-      },
-      forestLayout: { style: "town-greenery", treePattern: "authored-boundary-groves", collisionRadius: 23, roadClearanceTiles: 1, objectiveClearanceTiles: 1, groves: [{ id: "town-greenery", variant: "cleaned-v5-mixed", blocks: [] }] },
-      transitionLinks: [
-        { houseId: "keeper-house", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "拾燈公會", mapLabel: "公會", prompt: "進入拾燈公會" },
-        { houseId: "forge", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", entryFacing: "down", returnFacing: "up", entrance: { ...PHYSICAL_BUILDING_ENTRANCE, outward: "north", entryFacing: "down", returnFacing: "up" }, name: "銀火裝備店", mapLabel: "裝備店", prompt: "進入裝備店" },
-        { houseId: "clinic", portalId: "world-to-clinic", targetMap: MAP_IDS.CLINIC, targetSpawn: "entrance", returnSpawn: "clinicFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "霧草療癒所", mapLabel: "療癒所", prompt: "進入療癒所" },
-        { houseId: "general-store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", entryFacing: "down", returnFacing: "up", entrance: { ...PHYSICAL_BUILDING_ENTRANCE, outward: "north", entryFacing: "down", returnFacing: "up" }, name: "霧穀雜貨舖", mapLabel: "雜貨舖", prompt: "進入雜貨舖" },
-        { houseId: "tea-house", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "霧燈旅店", mapLabel: "旅店", prompt: "進入旅店" },
-      ],
+      id: definition.id,
+      kind: "house",
+      role: definition.role,
+      label: definition.label,
+      name: definition.name,
+      entryPortalId: definition.portalId,
+      // Buildings are baked into the final flattened master art. This record
+      // is semantic doorway data only; no old bitmap footprint is rendered.
+      masterArt: true,
+      render: false,
+      x: trigger.doorway_center_x,
+      y: doorY,
+      w: 0,
+      h: 0,
+      doorX: trigger.doorway_center_x,
+      doorY,
+      doorway: { centerX: trigger.doorway_center_x, trigger: rect },
     };
   }
 
-  const BLOCK_MODULE = Object.freeze({ widthTiles: 12, heightTiles: 12 });
-  const STANDARD_BUILDING = Object.freeze({
-    offsetTiles: Object.freeze({ x: 2, y: 1 }),
-    widthTiles: 8,
-    heightTiles: 7,
-    spriteWidth: 8 * TILE,
-    spriteHeight: 7 * TILE,
-    spriteAnchorY: 1,
-    doorAnchor: Object.freeze({ x: .5, y: 1 }),
-  });
-  const BLOCKS = Object.freeze({
-    A1: Object.freeze({ id: "A1", rect: Object.freeze([4, 4, 12, 12]), use: "guild" }),
-    A2: Object.freeze({ id: "A2", rect: Object.freeze([19, 4, 12, 12]), use: "clinic" }),
-    A3: Object.freeze({ id: "A3", rect: Object.freeze([34, 4, 12, 12]), use: "inn" }),
-    B1: Object.freeze({ id: "B1", rect: Object.freeze([4, 26, 12, 12]), use: "equipment_shop" }),
-    B2: Object.freeze({ id: "B2", rect: Object.freeze([19, 26, 12, 12]), use: "central_plaza", civicBlock: true }),
-    B3: Object.freeze({ id: "B3", rect: Object.freeze([34, 26, 12, 12]), use: "general_store" }),
-  });
-  const BLUEPRINT_ROADS = Object.freeze({
-    main_street: Object.freeze({ rect: Object.freeze([2, 18, 46, 5]), role: "primary", connectsDirectlyTo: "east_passage" }),
-  });
-  function worldPoint(tx, ty) { return { x: tx * TILE, y: ty * TILE }; }
-  function setRect(tiles, rect, type) {
-    const [x, y, width, height] = rect;
-    for (let ty = y; ty < y + height; ty += 1) for (let tx = x; tx < x + width; tx += 1) if (tiles[ty]?.[tx] !== undefined) tiles[ty][tx] = type;
-  }
-  function copyBlock(blockId) {
-    const block = BLOCKS[blockId];
-    return { id: block.id, rect: [...block.rect], use: block.use, civicBlock: Boolean(block.civicBlock) };
-  }
-  function makeServiceBuilding({ id, blockId, sprite, label, district, entryPortalId, role }) {
-    const [blockX, blockY] = BLOCKS[blockId].rect;
-    const x = (blockX + STANDARD_BUILDING.offsetTiles.x) * TILE;
-    const y = (blockY + STANDARD_BUILDING.offsetTiles.y) * TILE;
-    const northFacing = blockId.startsWith("B");
+  function makeDoorEntrance(definition) {
+    const trigger = triggerFor(definition.triggerName);
+    const exactRect = triggerRect(trigger);
     return {
-      id, kind: "house", role, blockId, block: copyBlock(blockId), bitmap: true, sprite, label, district, entryPortalId,
-      x, y, w: STANDARD_BUILDING.spriteWidth, h: STANDARD_BUILDING.spriteHeight,
-      spriteWidth: STANDARD_BUILDING.spriteWidth, spriteHeight: STANDARD_BUILDING.spriteHeight, spriteAnchorY: STANDARD_BUILDING.spriteAnchorY,
-      doorAnchor: { x: STANDARD_BUILDING.doorAnchor.x, y: northFacing ? 0 : STANDARD_BUILDING.doorAnchor.y },
-      frontage: northFacing ? "north" : "south", doorWidth: 72, doorDepth: 76,
+      outward: "south",
+      trigger: exactRect,
+      threshold: exactRect,
+      approachPoint: authoredAnchor(definition.triggerName),
+      entryFacing: definition.entryFacing,
+      returnFacing: definition.returnFacing,
+      marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 },
     };
   }
+
+  function makeTransitionLink(definition) {
+    return {
+      houseId: definition.id,
+      portalId: definition.portalId,
+      targetMap: definition.targetMap,
+      targetSpawn: definition.targetSpawn,
+      returnSpawn: definition.returnSpawn,
+      entryFacing: definition.entryFacing,
+      returnFacing: definition.returnFacing,
+      entrance: makeDoorEntrance(definition),
+      name: definition.name,
+      mapLabel: definition.mapLabel,
+      prompt: `進入${definition.name}`,
+    };
+  }
+
   function createMainTownMap() {
-    const random = mulberry32(0x71a5cafe);
-    const tiles = Array.from({ length: 42 }, () => Array(50).fill(TILES.GRASS));
-    setRect(tiles, [0, 0, 50, 2], TILES.WALL);
-    setRect(tiles, [0, 40, 50, 2], TILES.WALL);
-    setRect(tiles, [0, 0, 2, 42], TILES.WALL);
-    setRect(tiles, [48, 0, 2, 18], TILES.WALL);
-    setRect(tiles, [48, 23, 2, 19], TILES.WALL);
-    setRect(tiles, BLUEPRINT_ROADS.main_street.rect, TILES.STONE);
-    setRect(tiles, [46, 18, 4, 5], TILES.STONE);
-    setRect(tiles, BLOCKS.B2.rect, TILES.STONE);
-
-    const houses = [
-      makeServiceBuilding({ id: "keeper-house", blockId: "A1", sprite: "guildBuilding", label: "✦ 拾燈公會", district: "guild", entryPortalId: "world-to-guild", role: "guild" }),
-      makeServiceBuilding({ id: "forge", blockId: "B1", sprite: "equipmentShopBuilding", label: "⚒ 銀火裝備店", district: "equipment", entryPortalId: "world-to-shop", role: "equipment-shop" }),
-      makeServiceBuilding({ id: "tea-house", blockId: "A3", sprite: "innBuilding", label: "▰ 霧燈旅店", district: "inn", entryPortalId: "world-to-inn", role: "inn" }),
-      makeServiceBuilding({ id: "clinic", blockId: "A2", sprite: "clinicBuilding", label: "✚ 霧草療癒所", district: "clinic", entryPortalId: "world-to-clinic", role: "clinic" }),
-      makeServiceBuilding({ id: "general-store", blockId: "B3", sprite: "generalStoreBuilding", label: "◇ 霧穀雜貨舖", district: "general-store", entryPortalId: "world-to-general-store", role: "general-store" }),
-    ];
-    for (const [blockId, tx] of [["A1", 10], ["A2", 25], ["A3", 40]]) {
-      setRect(tiles, [tx - 1, 12, 3, 6], TILES.STONE);
-    }
-    for (const tx of [10, 40]) {
-      setRect(tiles, [tx - 1, 23, 3, 5], TILES.STONE);
-    }
-    setRect(tiles, [19, 23, 12, 3], TILES.STONE);
-
+    const eastExit = navigationPackage.east_exit;
+    const eastTrigger = { shape: "rect", x: eastExit.x, y: eastExit.y, w: eastExit.width, h: eastExit.height };
+    const eastAnchor = authoredAnchor("East exit");
+    const eastCentre = { x: eastExit.x + eastExit.width / 2, y: eastExit.y + eastExit.height / 2 };
+    const houses = BUILDINGS.map(makeHouse);
+    const spawnPoints = {
+      start: { x: navigationPackage.connectivity.central_seed[0], y: navigationPackage.connectivity.central_seed[1] },
+      guildFront: authoredAnchor("Guild"),
+      shopFront: authoredAnchor("Weapon Shop"),
+      clinicFront: authoredAnchor("Hospital / Clinic"),
+      generalStoreFront: authoredAnchor("Item / General Store"),
+      innFront: authoredAnchor("Inn"),
+      eastGateInside: eastAnchor,
+    };
+    const spawnFacings = { guildFront: "down", shopFront: "down", clinicFront: "down", generalStoreFront: "down", innFront: "down", eastGateInside: "right" };
     const npcs = [
-      { id: "ah-ching", name: "阿澄", role: "守燈星術師", kind: "npc", ...point(25.2, 28.1), radius: 12, color: "#ffc857", facing: "down", actor: "keeper", gender: "female", age: 25, appearance: "銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、月輪法杖與藍色精靈同伴", referenceAsset: "assets/ah-ching-v1.png" },
-      { id: "town-smith", name: "鐵叔", role: "街坊鍛刀匠", kind: "npc", ...point(14.1, 18.5), radius: 12, color: "#ff8b62", facing: "right", actor: "smith", gender: "male", age: 43 },
-      { id: "town-herbalist", name: "草姨", role: "街坊草藥師", kind: "npc", ...point(33.5, 18.5), radius: 12, color: "#87db82", facing: "left", actor: "healer", gender: "female", age: 47 },
+      { id: "ah-ching", name: "阿澄", role: "守燈星術師", kind: "npc", x: 687, y: 650, radius: 12, color: "#ffc857", facing: "down", actor: "keeper", gender: "female", age: 25, appearance: "銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、月輪法杖與藍色精靈同伴", referenceAsset: "assets/ah-ching-v1.png" },
+      { id: "town-smith", name: "鐵叔", role: "街坊鍛刀匠", kind: "npc", x: 300, y: 550, radius: 12, color: "#ff8b62", facing: "right", actor: "smith", gender: "male", age: 43 },
+      { id: "town-herbalist", name: "草姨", role: "街坊草藥師", kind: "npc", x: 1050, y: 550, radius: 12, color: "#87db82", facing: "left", actor: "healer", gender: "female", age: 47 },
     ];
-    const shrine = { id: "harbour-shrine", name: "中央燈龕", kind: "shrine", ...point(25, 30), radius: 18 };
-    const boards = [{ id: "harbour-gate-deck-console", kind: "questBoard", name: "城門戰技面板台", ...point(44.5, 15), radius: 22, boardId: "deck-loadout", prompt: "設定戰技面板", passageId: "east-town-passage" }];
-    const portals = [{ id: "world-to-field", kind: "portal", interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE, name: "前往霧梅爾山地", mapLabel: "東側出口", alwaysVisible: true, markerSize: 38, ...worldPoint(48.5, 20.5), radius: 23, targetMap: MAP_IDS.FIELD, targetSpawn: "westGate", targetPosition: point(2, 26), prompt: "離開主城", passageId: "east-town-passage", direction: "east" }];
-    const signs = [
-      { id: "town-sign-plaza", kind: "sign", name: "中央廣場路牌", ...point(28, 24.5), radius: 10, text: "北側：公會、療癒所、旅店　南側：裝備店、雜貨舖" },
-      { id: "town-sign-passage", kind: "sign", name: "東側出口告示", ...point(45.5, 17), radius: 10, text: "東側出口 → 霧梅爾山地。出發前請先整理戰技面板。" },
-    ];
-    const chests = [{ id: "town-supply-chest", kind: "chest", name: "城防補給箱", ...point(46, 29), radius: 13, reward: { coins: 24, potions: 1 } }];
-    const trees = [];
-    for (const [tx, ty, variant, renderScale] of [[3, 3, "pineTree", 1.05], [17, 3, "broadleafTree", .98], [32, 3, "blossomTree", .98], [47, 3, "pineTree", 1.05], [3, 38, "broadleafTree", .9], [47, 38, "blossomTree", .9]]) {
-      trees.push({ id: `town-tree-${trees.length}`, kind: "tree", ...point(tx, ty), tileX: tx, tileY: ty, radius: 23, seed: random(), variant, groveId: "town-edge-greenery", renderScale });
-    }
-    const rocks = [{ id: "town-rock-northwest", kind: "rock", ...point(3.2, 38.5), radius: 10, seed: random() }, { id: "town-rock-southeast", kind: "rock", ...point(46.2, 38.5), radius: 10, seed: random() }];
-    const flowers = [[3, 5], [17, 5], [32, 5], [47, 5], [3, 27], [47, 27], [3, 39], [47, 39], [7, 18.8], [13, 18.8], [37, 18.8], [43, 18.8]].map(([tx, ty], index) => { const base = point(tx, ty); return { id: `town-flower-${index}`, x: base.x, y: base.y, color: random() > .5 ? "#f5e9ca" : "#ae91ff", seed: random() }; });
-    const start = worldPoint(25, 35);
-    const spawnPoints = { start, guildFront: worldPoint(10, 14.5), clinicFront: worldPoint(25, 14.5), innFront: worldPoint(40, 14.5), shopFront: worldPoint(10, 24.5), generalStoreFront: worldPoint(40, 24.5), eastGateInside: worldPoint(47, 20.5) };
-    const spawnFacings = { guildFront: "down", clinicFront: "down", innFront: "down", shopFront: "up", generalStoreFront: "up", eastGateInside: "right" };
+    const shrine = { id: "harbour-shrine", name: "中央燈龕", kind: "shrine", x: 687, y: 698, radius: 18 };
+    const boards = [{ id: "harbour-gate-deck-console", kind: "questBoard", name: "城門戰技面板台", x: 1110, y: 598, radius: 22, boardId: "deck-loadout", prompt: "設定戰技面板", passageId: "east-town-passage" }];
+    const eastPortal = {
+      id: "world-to-field",
+      kind: "portal",
+      interactionMode: "passage",
+      transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
+      name: "前往霧梅爾山地",
+      mapLabel: "東側出口",
+      alwaysVisible: true,
+      markerSize: 38,
+      x: eastCentre.x,
+      y: eastCentre.y,
+      radius: 18,
+      trigger: eastTrigger,
+      authoredTrigger: clone(eastTrigger),
+      targetMap: MAP_IDS.FIELD,
+      targetSpawn: "westGate",
+      targetPosition: { x: 2 * 40 + 20, y: 26 * 40 + 20 },
+      prompt: "離開主城",
+      passageId: "east-town-passage",
+      direction: "east",
+    };
+    const signs = [];
+    const chests = [];
+    const tiles = makeTiles(WIDTH, HEIGHT, TILES.GRASS);
+    const transitionLinks = BUILDINGS.map(makeTransitionLink);
+    const navigation = {
+      packageId: "main-town-navigation-final",
+      source: clone(navigationPackage.source),
+      coordinateSystem: navigationPackage.coordinate_system,
+      rendering: navigationPackage.rendering,
+      movementRule: navigationPackage.movement_rule,
+      feetRadiusPx: navigationPackage.connectivity.feet_radius_px,
+      sourceJson: NAVIGATION_JSON,
+      files: { json: NAVIGATION_JSON, walkable: NAVIGATION_ASSETS.walkable, collision: NAVIGATION_ASSETS.collision, triggers: NAVIGATION_ASSETS.triggers, review: ART_REVIEW },
+      masks: { ...NAVIGATION_ASSETS },
+      buildingTriggers: clone(navigationPackage.building_triggers),
+      eastExit: clone(navigationPackage.east_exit),
+      connectivity: clone(navigationPackage.connectivity),
+      authoritative: true,
+    };
     return {
-      id: MAP_IDS.WORLD, name: "霧都主城", shortName: "霧都", kind: "town", type: "world", biome: "town", theme: "walled-town", tileSize: TILE, width: 50, height: 42, pixelWidth: WIDTH * TILE, pixelHeight: HEIGHT * TILE, tiles, tileTypes: TILES,
-      houses, trees, rocks, flowers, lamps: [], npcs, shrine, townGate: null, gate: { id: "world-no-quest-gate", kind: "gate", x: -9999, y: -9999, w: 0, h: 0 }, signs, boards, portals, exits: portals, chests,
-      staticObjects: [...houses, ...trees, ...rocks, shrine, ...signs, ...chests, ...boards], collisionObjects: [], decorations: [], furniture: [], enemySpawns: [], start, spawnPoints, spawnFacings,
-      objectives: { elder: point(25.2, 28.1), townGate: worldPoint(48.5, 20.5), gate: worldPoint(48.5, 20.5), boss: worldPoint(48.5, 20.5), crystals: {} },
+      id: MAP_IDS.WORLD,
+      name: "霧都主城",
+      shortName: "霧都",
+      kind: "town",
+      type: "world",
+      biome: "town",
+      theme: "walled-town",
+      rendering: "flattened",
+      tileSize: TILE,
+      width: WIDTH,
+      height: HEIGHT,
+      pixelWidth: navigationPackage.source.width,
+      pixelHeight: navigationPackage.source.height,
+      tiles,
+      tileTypes: TILES,
+      art: { flattened: true, background: ART_BACKGROUND, master: ART_BACKGROUND, masterSha256: navigationPackage.source.sha256, review: ART_REVIEW },
+      navigation,
+      houses,
+      trees: [],
+      rocks: [],
+      flowers: [],
+      lamps: [],
+      npcs,
+      shrine,
+      townGate: null,
+      gate: { id: "world-no-quest-gate", kind: "gate", x: -9999, y: -9999, w: 0, h: 0 },
+      signs,
+      boards,
+      portals: [eastPortal],
+      exits: [eastPortal],
+      chests,
+      staticObjects: [...boards],
+      collisionObjects: [],
+      decorations: [],
+      furniture: [],
+      enemySpawns: [],
+      start: spawnPoints.start,
+      spawnPoints,
+      spawnFacings,
+      objectives: { elder: { x: npcs[0].x, y: npcs[0].y }, townGate: eastCentre, gate: eastCentre, boss: eastCentre, crystals: {} },
       questDestinations: { crystals: { mapId: MAP_IDS.FIELD, objectiveGroup: "crystals" }, seal: { mapId: MAP_IDS.FIELD, objectiveId: "gate" }, boss: { mapId: MAP_IDS.FIELD, objectiveId: "boss" }, dungeon: { mapId: MAP_IDS.FIELD, objectiveId: "dungeon" } },
       townLayout: {
-        blueprintVersion: 1, style: "canonical-orthogonal-block-town", tileSizePx: TILE, map: { widthTiles: 50, heightTiles: 42 }, blockModule: { ...BLOCK_MODULE }, blocks: Object.fromEntries(Object.entries(BLOCKS).map(([id]) => [id, copyBlock(id)])),
-        serviceBuildingTemplate: {
-          containingBlock: [12, 12], visualBox: { offsetFromBlock: [2, 1], sizeTiles: [8, 7] }, doorAxis: { xFromBlockLeft: 6 },
-          northFront: { doorAnchorRelative: [6, 0], approachPointRelative: [6, -2], exteriorSpawnRelative: [6, -2.5], entryFacing: "down", returnFacing: "up" },
-          southFront: { doorAnchorRelative: [6, 8], approachPointRelative: [6, 10], exteriorSpawnRelative: [6, 10.5], entryFacing: "up", returnFacing: "down" },
-        },
-        roads: Object.fromEntries(Object.entries(BLUEPRINT_ROADS).map(([id, road]) => [id, { ...road, rect: [...road.rect] }])),
-        centralPlaza: { rect: [19, 26, 12, 12], pavedAsOneSpace: true, focalReserve: { rect: [24, 28, 2, 2] } },
-        cityWall: { north: [0, 0, 50, 2], west: [0, 0, 2, 42], south: [0, 40, 50, 2], eastNorth: [48, 0, 2, 18], eastSouth: [48, 23, 2, 19] },
-        eastPassage: { corridor: [46, 18, 4, 5], opening: [48, 18, 2, 5], exitDirection: "east", destination: "field", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE }, perimeter: { left: 0, top: 0, right: WIDTH - 1, bottom: HEIGHT - 1 }, wallTile: TILES.WALL, serviceBuildingIds: houses.map((house) => house.id), deckConsoleId: boards[0].id,
-        roadNetwork: { main: "main_street", secondary: null, connectors: [], intersections: [] },
+        style: "flattened-final-navigation-package",
+        sourceDimensions: { width: navigationPackage.source.width, height: navigationPackage.source.height },
+        coordinateSystem: navigationPackage.coordinate_system,
+        rendering: navigationPackage.rendering,
+        navigationPackageId: navigation.packageId,
+        navigationJson: NAVIGATION_JSON,
+        buildingTriggers: clone(navigationPackage.building_triggers),
+        eastPassage: { trigger: eastTrigger, destination: "field", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE },
+        serviceBuildingIds: houses.map((house) => house.id),
+        deckConsoleId: boards[0].id,
+        roadNetwork: null,
+        perimeter: null,
       },
-      forestLayout: { style: "controlled-edge-groves", treePattern: "authored-boundary-groves", collisionRadius: 23, roadClearanceTiles: 1, objectiveClearanceTiles: 1, groves: [{ id: "town-edge-greenery", variant: "cleaned-v5-mixed", blocks: [] }] },
-      transitionLinks: [
-        { houseId: "keeper-house", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "拾燈公會", mapLabel: "公會", prompt: "進入拾燈公會" },
-        { houseId: "forge", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "銀火裝備店", mapLabel: "裝備店", prompt: "進入裝備店" },
-        { houseId: "clinic", portalId: "world-to-clinic", targetSpawn: "entrance", targetMap: MAP_IDS.CLINIC, returnSpawn: "clinicFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "霧草療癒所", mapLabel: "療癒所", prompt: "進入療癒所" },
-        { houseId: "general-store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "霧穀雜貨舖", mapLabel: "雜貨舖", prompt: "進入雜貨舖" },
-        { houseId: "tea-house", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", entryFacing: "up", returnFacing: "down", entrance: PHYSICAL_BUILDING_ENTRANCE, name: "霧燈旅店", mapLabel: "旅店", prompt: "進入旅店" },
-      ],
+      forestLayout: { style: "flattened-master-art", treePattern: "baked-into-master-art", collisionRadius: 0, roadClearanceTiles: 0, objectiveClearanceTiles: 0, groves: [] },
+      transitionLinks,
     };
   }
 
-  return { TILE, WIDTH, HEIGHT, TILES, BLOCKS, STANDARD_BUILDING, point, worldPoint, createMainTownMap };
+  return { TILE, WIDTH, HEIGHT, TILES, point: (x, y) => ({ x, y }), worldPoint: (x, y) => ({ x, y }), createMainTownMap, createWorld: createMainTownMap };
 });

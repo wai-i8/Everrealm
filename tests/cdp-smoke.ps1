@@ -213,7 +213,7 @@ try {
       )) {
         $approachOffset = if ($entry.map -eq 'general-store') { 300 } else { -300 }
         $approachExpression = if (@('guild', 'clinic', 'inn') -contains $entry.map) { 'door.x,door.y+70' } else { 'door.x,door.y-70' }
-        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const door=api.entityPosition('$($entry.portal)');api.teleport($approachExpression);const blocked=api.collisionAt(door.x,door.y,12);api.clickMoveTo(door.x,door.y);return JSON.stringify({door,blocked,start:api.snapshot()});})()" | ConvertFrom-Json
+        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const door=api.entityPosition('$($entry.portal)');api.teleport($approachExpression);const blocked=api.collisionAt(door.x,door.y,12);api.clickPortal('$($entry.portal)');return JSON.stringify({door,blocked,start:api.snapshot()});})()" | ConvertFrom-Json
         $arrived = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $arrived; $attempt += 1) {
           Start-Sleep -Milliseconds 250
