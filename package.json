@@ -5,6 +5,7 @@
   "description": "永恆國度 · Everrealm — zero-dependency browser RPG",
   "scripts": {
     "start": "python -m http.server 4173",
+    "generate:main-town-navigation": "node tools/generate-main-town-navigation.js",
     "test": "node --test",
     "test:cdp": "powershell -ExecutionPolicy Bypass -File .\\tests\\cdp-smoke.ps1"
   }

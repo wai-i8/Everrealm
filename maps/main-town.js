@@ -162,6 +162,8 @@
       movementRule: navigationPackage.movement_rule,
       feetRadiusPx: navigationPackage.connectivity.feet_radius_px,
       sourceJson: NAVIGATION_JSON,
+      generatedRuntime: "map/main-town-navigation.generated.js",
+      resolver: "LanternMainTownNavigation.isWorldPositionWalkable",
       files: { json: NAVIGATION_JSON, walkable: NAVIGATION_ASSETS.walkable, collision: NAVIGATION_ASSETS.collision, triggers: NAVIGATION_ASSETS.triggers, review: ART_REVIEW },
       masks: { ...NAVIGATION_ASSETS },
       buildingTriggers: clone(navigationPackage.building_triggers),

@@ -27,6 +27,8 @@ movement:
 
 導航規則係：玩家 feet disk 必須完全留喺 walkable mask 白色 allowlist 之內；collision mask 只係 supplemental solid objects，唔係完整 blocked map，亦唔可以由 collision mask inversion 推算可行走區域。所有矩形採 half-open `[x,x+width), [y,y+height)`。
 
+主城導航 mask 只喺 development time 由 `tools/generate-main-town-navigation.js` 讀取，生成 `map/main-town-navigation.generated.js`。瀏覽器 runtime 直接同步讀取 generated JavaScript data，唔會載入 PNG、使用 Canvas／OffscreenCanvas pixel scan，亦唔會依賴 `fetch()`。`map/main-town-navigation.js` 提供唯一 `isWorldPositionWalkable()` resolver；default 係 blocked，feet disk 必須完全位於 walkable allowlist 並且唔重疊 supplemental collision。generated data 缺失、尺寸錯誤或初始化失敗時，主城普通移動 fail closed。
+
 ## 2. Navigation package files
 
 以下檔案必須保持同一個 `1536 × 1152` source canvas：
@@ -37,9 +39,10 @@ movement:
 - `assets/main-town/main-town-trigger-mask.png` — binary doorway／east-exit review mask
 - `assets/main-town/main-town-navigation-review.png` — 人工檢查 overlay
 - `assets/main-town/main-town-navigation.json` — authored coordinates、connectivity、QA metadata
-- `map/main-town-navigation.js` — browser-loadable projection，供同步 map registry 使用
+- `map/main-town-navigation.generated.js` — 由 package masks deterministic 生成、不可手改嘅 synchronous runtime data
+- `map/main-town-navigation.js` — 唯一 browser-loadable walkability resolver 及 package metadata API
 
-`maps/main-town.js` 只負責將 package 接入既有 map／transition API；唔應複製另一套主城 geometry。mask 圖片載入前可以使用 compatibility tile data 建立 map shape，但 runtime movement 一旦 mask ready，就必須使用 package mask。
+`maps/main-town.js` 只負責將 package metadata 接入既有 map／transition API；唔應複製另一套主城 geometry。PNG mask 係 authored input／QA source，唔係 browser collision runtime；legacy grass tile、zero-size house、tree／rock／object fallback 亦唔再擁有主城 walkability。
 
 ## 3. Authored building entrances
 
@@ -95,5 +98,5 @@ direction: east
 - package 內嘅 source dimensions、walkable／collision／trigger masks、building rectangles、east exit 同 connectivity metadata 係本地 authored source of truth。
 - `docs/MAP_SYSTEM.md` 只保留 map-system 層級規則；本文件負責主城 package contract。
 - `maps/main-town.js` 負責 runtime object shape、map registry compatibility、portal linkage，同 package 座標接駁。
-- `game.js`／`character-art.js` 負責使用 shared mask movement、flattened rendering、minimap rendering；唔應重新發明主城碰撞或入口座標。
-- 如果要改主城永久 geometry，必須同時更新 package assets、JSON、browser projection、runtime owner、相關測試及本文件，並重新做 automated／runtime／visual QA。
+- `game.js` 負責將 pathfinding、line-clear、movement substeps 及正常 arrival validation 接到 `LanternMainTownNavigation.isWorldPositionWalkable()`；`character-art.js` 只負責 flattened rendering，唔再掃描主城 navigation PNG。
+- 如果要改主城永久 geometry，必須更新 package assets／JSON、重新執行 generator、檢查 generated runtime、相關測試及本文件，並重新做 automated／runtime／visual QA。exact mask geometry 唔應複製到 Markdown。

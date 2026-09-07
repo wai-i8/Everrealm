@@ -19,6 +19,14 @@
 - 裝備圖示：`assets/equipment-icon-atlas-v1.png`，4 × 4。依裝備 catalog 順序排列十五件裝備，最後一格保留透明。
 - 主角舊版多動作 atlas：`hero-anim-down-v3.png`、`hero-anim-up-v3.png`、`hero-anim-right-v3.png` 可保留作 attack／death／特殊動作兼容；**Idle + Walk locomotion 由新統一 28-frame locomotion atlas 接管**。新標準四方向必須各自有正式 frame，唔以向右圖鏡像假扮全部方向。
 
+## Main Town flattened navigation package
+
+主城使用 flattened master art；建築、道路、城牆、植被及其他環境視覺已經烘焙入背景，唔存在 foreground／occlusion navigation layer。導航 geometry 由 `assets/main-town/main-town-navigation.json`、walkable allowlist、supplemental collision mask 同 trigger mask 共同組成 authored package；review overlay 只供人工 QA，唔係 runtime collision source。
+
+PNG mask 係 development-time authoring input，由 `tools/generate-main-town-navigation.js` deterministic 轉成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔應載入主城 mask PNG、使用 Canvas／OffscreenCanvas pixel readback，亦唔應由 bitmap alpha 或視覺物件自動推導 collision。walkable mask 係完整 allowlist，collision mask 唔係其 inverse，trigger mask 亦唔會令普通移動位置自動變成 walkable。
+
+主城玩家定位採用 shared exploration feet pivot；`feet_radius_px` 由 authored package 提供，目前係 3 px。視覺 sprite 可以伸入建築上方，但 feet disk 必須由 shared navigation resolver 驗證。pathfinding、line-clear、實際 movement substeps 同正常 arrival validation 都使用同一 resolver；navigation 缺失／驗證失敗時 default blocked。
+
 ## 主城服務建築統一外觀規格
 
 呢一節係主城 Guild／Equipment Shop／Clinic／General Store／Inn，以及將來同級主要服務建築嘅正式 exterior bitmap contract。目的係令方正街區城市保持清晰、整齊、可重用，避免每棟建築自行發明比例、方向同入口位置。

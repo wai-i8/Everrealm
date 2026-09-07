@@ -103,6 +103,8 @@
 
 主城入口與東側 passage 由 `assets/main-town/main-town-navigation.json` 及配套 mask authored；`maps/main-town.js` 將 exact trigger／threshold／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable mask 係完整 allowlist，collision mask 只作 supplemental solid objects；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 collision inversion 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
 
+主城 navigation package 嘅 PNG 只係 authored inputs，由 development-time generator 編譯成 `map/main-town-navigation.generated.js`。零 build／`file://` browser runtime 直接同步使用 generated data，唔會以 Canvas、OffscreenCanvas、`fetch()` 或 XHR 讀取 PNG／JSON。`map/main-town-navigation.js` 擁有唯一主城 walkability resolver：walkable allowlist 係完整白色可行走來源，collision mask 只作 supplemental solid objects，trigger mask 只作 transition／interaction metadata；任何未明確 authored 嘅位置都 blocked。runtime data 缺失或初始化失敗時必須 fail closed，唔得 fallback 到舊 grass／tile／house collision。
+
 ### 3.2 山地野外
 
 目前主要戶外探索地圖。

@@ -1,79 +1,124 @@
 (function (root, factory) {
-  const api = factory();
+  const generated = root.LanternMainTownNavigationGenerated || (typeof require === "function"
+    ? require("./main-town-navigation.generated.js")
+    : null);
+  const api = factory(generated);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternMainTownNavigation = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (generated) {
   "use strict";
 
-  // This is the checked-in, browser-loadable projection of
-  // assets/main-town/main-town-navigation.json.  The JSON and bitmap files
-  // remain the package source; this small projection lets the synchronous map
-  // registry use the same authored coordinates before any images decode.
-  const DATA = {
-    source: {
-      filename: "01-1000186771.png",
-      width: 1536,
-      height: 1152,
-      sha256: "7dc2aaf968cbcbdb337c332a5a736997a6e0f115a86790f78762f45cefee1819",
-    },
-    coordinate_system: "original image pixels; origin top-left; x right, y down; rectangles half-open [x,x+width), [y,y+height)",
-    rendering: "flattened; no foreground or depth sorting",
-    movement_rule: "A feet disk must be completely inside the white walkable allowlist. Collision mask is supplemental solid objects, NOT the complete blocked map. Never derive walkability by inverting collision.",
-    building_triggers: [
-      { name: "Weapon Shop", doorway_center_x: 378, trigger_center_x: 378, rectangle: { x: 358, y: 427, width: 40, height: 8 } },
-      { name: "Guild", doorway_center_x: 687, trigger_center_x: 687, rectangle: { x: 665, y: 350, width: 44, height: 8 } },
-      { name: "Hospital / Clinic", doorway_center_x: 1016, trigger_center_x: 1016, rectangle: { x: 996, y: 430, width: 40, height: 8 } },
-      { name: "Item / General Store", doorway_center_x: 378, trigger_center_x: 378, rectangle: { x: 358, y: 766, width: 40, height: 8 } },
-      { name: "Inn", doorway_center_x: 1004, trigger_center_x: 1004, rectangle: { x: 984, y: 768, width: 40, height: 8 } },
-    ],
-    east_exit: {
-      x: 1180,
-      y: 518,
-      width: 12,
-      height: 28,
-      destination: "Mountain Field",
-    },
-    other_exits: [],
-    files: {
-      walkable: "main-town-walkable-mask.png",
-      collision: "main-town-collision-mask.png",
-      triggers: "main-town-trigger-mask.png",
-      review: "main-town-navigation-review.png",
-    },
-    connectivity: {
-      feet_radius_px: 3,
-      method: "Euclidean distance transform >3; 4-connected flood fill; anchor intersects trigger rectangle; conservative no diagonal corner cutting",
-      central_seed: [687, 698],
-      results: {
-        "Weapon Shop": { reachable: true, reachable_anchor_pixels: 200, example_anchor: [358, 430] },
-        Guild: { reachable: true, reachable_anchor_pixels: 220, example_anchor: [665, 353] },
-        "Hospital / Clinic": { reachable: true, reachable_anchor_pixels: 181, example_anchor: [996, 433] },
-        "Item / General Store": { reachable: true, reachable_anchor_pixels: 200, example_anchor: [358, 769] },
-        Inn: { reachable: true, reachable_anchor_pixels: 160, example_anchor: [984, 772] },
-        "East exit": { reachable: true, reachable_anchor_pixels: 253, example_anchor: [1180, 518] },
-      },
-    },
-    ambiguities: [
-      "Painterly/soft curb and vegetation boundaries have several pixels of visual uncertainty; manually traced, not pixel-perfect.",
-      "Flattened silhouettes of bottom shop/inn and vegetation remain blocked; hidden ground is not inferred.",
-      "East path edge is soft and irregular; rectangle spans outgoing path and includes blocked edge pixels. Trigger activates only for a valid feet anchor.",
-      "Guild steps are treated as traversable exposed stone; threshold is at the top landing.",
-    ],
-    qa: {
-      all_image_dimensions: [1536, 1152],
-      binary_masks: true,
-      walkable_solid_overlap_pixels: 0,
-      six_destinations_reachable: true,
-      manual_visual_review_required_for_pixel_exactness: true,
-    },
-  };
+  const EXPECTED_WIDTH = 1536;
+  const EXPECTED_HEIGHT = 1152;
+  const MAIN_TOWN_ID = "world";
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function validRuntime(candidate) {
+    const validValues = (mask, maximum) => {
+      if (!(mask instanceof Uint8Array) || mask.length !== EXPECTED_WIDTH * EXPECTED_HEIGHT) return false;
+      for (const value of mask) if (value > maximum) return false;
+      return true;
+    };
+    return Boolean(
+      candidate && candidate.width === EXPECTED_WIDTH && candidate.height === EXPECTED_HEIGHT &&
+      candidate.masks && validValues(candidate.masks.walkable, 1) &&
+      validValues(candidate.masks.collision, 1) && validValues(candidate.masks.triggers, 2),
+    );
+  }
+
+  function createResolver(source = generated) {
+    const data = source?.package || null;
+    const runtime = source && validRuntime(source) ? source : null;
+    const sourceDimensionsValid = data?.source?.width === EXPECTED_WIDTH && data?.source?.height === EXPECTED_HEIGHT;
+    const feetRadius = Number(data?.connectivity?.feet_radius_px);
+    const sourceContractValid = sourceDimensionsValid && feetRadius === 3 &&
+      typeof data?.movement_rule === "string" && data.movement_rule.includes("feet disk") &&
+      Array.isArray(data?.building_triggers) && data.building_triggers.length === 5 &&
+      data?.east_exit && Number.isFinite(data.east_exit.x) && Number.isFinite(data.east_exit.y);
+    const ready = Boolean(runtime && sourceContractValid);
+    const failure = ready
+      ? null
+      : !source
+        ? "generated Main Town navigation data is unavailable"
+        : !validRuntime(source)
+          ? "generated Main Town navigation data is malformed"
+          : !sourceContractValid
+            ? "Main Town navigation source contract is invalid"
+            : "Main Town navigation failed to initialize";
+
+    function insideDisk(mask, x, y, radius, mode) {
+      if (!ready || !mask || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const actualRadius = Math.max(0, Number(radius) || 0);
+      const minX = Math.floor(x - actualRadius);
+      const maxX = Math.ceil(x + actualRadius);
+      const minY = Math.floor(y - actualRadius);
+      const maxY = Math.ceil(y + actualRadius);
+      const wantAllWhite = mode === "all-white";
+      let hit = false;
+      for (let py = minY; py <= maxY; py += 1) {
+        for (let px = minX; px <= maxX; px += 1) {
+          if ((px - x) ** 2 + (py - y) ** 2 > actualRadius ** 2) continue;
+          const inside = px >= 0 && py >= 0 && px < EXPECTED_WIDTH && py < EXPECTED_HEIGHT && mask[py * EXPECTED_WIDTH + px] !== 0;
+          if (wantAllWhite && !inside) return false;
+          if (!wantAllWhite && inside) hit = true;
+        }
+      }
+      return wantAllWhite ? true : hit;
+    }
+
+    function isWorldPositionWalkable(mapOrId, position, footprint = {}) {
+      const mapId = typeof mapOrId === "string" ? mapOrId : mapOrId?.id;
+      if (mapId !== MAIN_TOWN_ID || !ready) return false;
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      const radius = Number.isFinite(Number(footprint?.radius)) ? Number(footprint.radius) : feetRadius;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || radius < 0) return false;
+      return insideDisk(runtime.masks.walkable, x, y, radius, "all-white") &&
+        !insideDisk(runtime.masks.collision, x, y, radius, "any-white");
+    }
+
+    function triggerValueAt(x, y) {
+      if (!ready || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      const px = Math.floor(x);
+      const py = Math.floor(y);
+      if (px < 0 || py < 0 || px >= EXPECTED_WIDTH || py >= EXPECTED_HEIGHT) return 0;
+      return runtime.masks.triggers[py * EXPECTED_WIDTH + px] || 0;
+    }
+
+    return Object.freeze({
+      data,
+      runtime,
+      ready,
+      failure,
+      feetRadiusPx: ready ? feetRadius : 3,
+      status() {
+        return {
+          ready,
+          failed: !ready,
+          failure,
+          source: data?.source ? clone(data.source) : null,
+          dimensions: { width: EXPECTED_WIDTH, height: EXPECTED_HEIGHT },
+          feetRadiusPx: ready ? feetRadius : 3,
+        };
+      },
+      isWorldPositionWalkable,
+      triggerValueAt,
+    });
+  }
+
+  const resolver = createResolver(generated);
   return Object.freeze({
-    data: Object.freeze(DATA),
-    cloneData: () => clone(DATA),
+    data: resolver.data,
+    runtime: resolver.runtime,
+    ready: resolver.ready,
+    failure: resolver.failure,
+    feetRadiusPx: resolver.feetRadiusPx,
+    status: resolver.status,
+    isWorldPositionWalkable: resolver.isWorldPositionWalkable,
+    triggerValueAt: resolver.triggerValueAt,
+    createResolver,
   });
 });

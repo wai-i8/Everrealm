@@ -23,6 +23,7 @@
   const Guild = window.LanternGuildCommission;
   const MapRegistry = window.LanternMapRegistry;
   const MapTransitions = window.LanternMapTransitions;
+  const MainTownNavigation = window.LanternMainTownNavigation;
   const TRANSITION_TYPES = MapTransitions.TRANSITION_TYPES;
   const houseSpriteSettings = MapTransitions.houseSpriteSettings;
   const Tactics = window.LanternTactics;
@@ -31,6 +32,9 @@
   const Art = window.LanternArt;
   const Locomotion = window.LanternLocomotion;
   const maps = MapRegistry.createMapRegistry();
+  if (!MainTownNavigation?.ready) {
+    console.error("Main Town navigation failed closed", MainTownNavigation?.failure || "generated runtime data unavailable");
+  }
   const overworld = maps.world;
   const expansionMaps = Object.fromEntries(Object.entries(maps).filter(([id]) => id !== "world"));
   let currentMapId = "world";
@@ -829,15 +833,14 @@
 
   function isBlocked(circle, activeWorld = world, activeMapId = currentMapId) {
     if (!Number.isFinite(circle.x) || !Number.isFinite(circle.y)) return true;
-    if (circle.x - circle.radius < 0 || circle.y - circle.radius < 0 || circle.x + circle.radius > activeWorld.pixelWidth || circle.y + circle.radius > activeWorld.pixelHeight) return true;
-    if (activeMapId === "world" && activeWorld.navigation?.authoritative && typeof Art.mainTownNavigationMask === "function") {
-      const feetRadius = Number(activeWorld.navigation.feetRadiusPx) || 3;
-      const walkable = Art.mainTownNavigationMask("walkable", circle.x, circle.y, feetRadius);
-      const collision = Art.mainTownNavigationMask("collision", circle.x, circle.y, 0);
-      // While the bitmaps are decoding, keep the map inside its authored
-      // image bounds. Once ready, the supplied walkable allowlist is the
-      // complete movement source and collision is only supplemental.
-      if (walkable !== null && collision !== null) return walkable !== true || collision === true;
+    const isMainTown = activeMapId === "world" && activeWorld.navigation?.authoritative;
+    const radius = isMainTown ? Number(activeWorld.navigation.feetRadiusPx) || 3 : Number(circle.radius) || 0;
+    if (circle.x - radius < 0 || circle.y - radius < 0 || circle.x + radius > activeWorld.pixelWidth || circle.y + radius > activeWorld.pixelHeight) return true;
+    if (isMainTown) {
+      // Main Town owns one fail-closed resolver. Missing or invalid generated
+      // data blocks movement; it must never reopen the legacy tile fallback.
+      if (typeof MainTownNavigation?.isWorldPositionWalkable !== "function") return true;
+      return !MainTownNavigation.isWorldPositionWalkable(activeMapId, circle, { radius });
     }
     const left = Math.floor((circle.x - circle.radius) / activeWorld.tileSize);
     const right = Math.floor((circle.x + circle.radius) / activeWorld.tileSize);
@@ -893,14 +896,22 @@
       y: Core.clamp(Number(destination?.y) || player.y, player.radius, world.pixelHeight - player.radius),
     };
     if (Core.distance(player, goal) <= Math.max(5, player.radius * .45)) return true;
+    const navigationRadius = currentMapId === "world"
+      ? Number(world.navigation?.feetRadiusPx) || MainTownNavigation?.feetRadiusPx || 3
+      : player.radius;
     const path = Core.findOverworldPath(player, goal, {
       bounds: { x: 0, y: 0, w: world.pixelWidth, h: world.pixelHeight },
-      cellSize: Math.max(20, world.tileSize * .6),
-      radius: player.radius,
+      // The authored Main Town allowlist has narrow but valid approaches
+      // (notably the Inn). Sample the shared pathfinder from the same feet
+      // contract instead of skipping over those corridors at tile scale.
+      cellSize: currentMapId === "world"
+        ? Math.max(12, navigationRadius * 4)
+        : Math.max(20, world.tileSize * .6),
+      radius: navigationRadius,
       directions: 8,
       maxVisited: 14000,
       nearestReachable: true,
-      isWalkable: (point) => !isBlocked({ x: point.x, y: point.y, radius: player.radius }),
+      isWalkable: (point) => !isBlocked({ x: point.x, y: point.y, radius: navigationRadius }),
     });
     if (!path.length) return false;
     exploreMovePath = path.map((point) => ({ x: point.x, y: point.y }));
@@ -1078,7 +1089,8 @@
     const steps = Math.max(2, Math.ceil(Core.distance(from, to) / 10));
     for (let index = 1; index < steps; index += 1) {
       const t = index / steps;
-      if (isBlocked({ x: Core.lerp(from.x, to.x, t), y: Core.lerp(from.y, to.y, t), radius: 2 })) return false;
+      const radius = currentMapId === "world" ? Number(world.navigation?.feetRadiusPx) || 3 : 2;
+      if (isBlocked({ x: Core.lerp(from.x, to.x, t), y: Core.lerp(from.y, to.y, t), radius })) return false;
     }
     return true;
   }
@@ -1629,6 +1641,10 @@
     clearExploreMovePath();
     pendingClickInteractionId = null;
     const destination = targetPosition && Number.isFinite(targetPosition.x) ? targetPosition : target.start;
+    if (targetMapId === "world" && isBlocked({ x: destination.x, y: destination.y, radius: target.navigation?.feetRadiusPx || 3 }, target, targetMapId)) {
+      console.error("Main Town transition arrival is not a valid navigation position", { targetMapId, destination });
+      return false;
+    }
     player.x = destination.x;
     player.y = destination.y;
     if (["up", "down", "left", "right"].includes(targetFacing)) player.facing = targetFacing;
