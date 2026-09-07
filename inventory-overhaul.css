@@ -351,7 +351,7 @@
 
 .inventory-grid-item {
   position: relative;
-  min-height: 10.2rem;
+  min-height: 0;
   display: grid;
   grid-template-columns: 4.6rem minmax(0, 1fr);
   grid-template-rows: minmax(6.8rem, auto) auto;
@@ -363,6 +363,11 @@
   background: linear-gradient(145deg,rgba(38,51,82,.9),rgba(12,20,39,.96));
   box-shadow: 3px 4px 0 rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035);
 }
+.inventory-grid-item .inventory-item-copy > p,
+.inventory-grid-item .inventory-item-copy > span,
+.inventory-grid-item .inventory-item-action,
+.inventory-grid-item .inventory-equipment-action { display: none; }
+.inventory-grid-item .inventory-item-copy { align-self: center; }
 
 .inventory-grid-item:hover { border-color: rgba(255,200,87,.52); }
 .inventory-equipment-item {

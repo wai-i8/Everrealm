@@ -161,6 +161,22 @@ generic popup background。
 
 ## 9. Ownership and production
 
+### 9.1 Focused window patterns
+
+Decorative UI bitmaps are never the sizing system: frames use stretch-safe border
+composition (9-slice/border-image or repeat-safe pieces), while HTML/CSS owns
+layout, typography, containment and scrolling. Major windows share one top-right
+bitmap-backed close control and one shell; nested detail dialogs use a lighter
+hierarchy instead of repeating a page header. Skill Detail metadata is a
+single-column label/value row pattern with bounded, non-breaking labels and
+wrapping values. Inventory uses a contained character/equipment region beside a
+compact item grid and a separate selected-item detail region; grid content must
+never overlap the character region. Grid/Flex tracks use `minmax(0, 1fr)` and
+narrow layouts stack rather than introduce horizontal overflow. Canvas remains
+limited to genuinely dynamic diagrams such as range patterns and prerequisite
+connectors. These screens require desktop and narrow-viewport runtime screenshots
+and visual inspection, not automated tests alone.
+
 - 本文件擁有 major UI 組合、層級、狀態、dynamic sizing 同 responsive 規則。
 - `ART_PIPELINE.md` 擁有 UI bitmap 透明底、atlas safe area、9-slice crop、export
   同 alpha audit 規則。

@@ -169,6 +169,7 @@
   let elapsed = 0;
   let playTime = 0;
   let autosaveTimer = 0;
+  let persistenceFingerprint = "";
   let questStage = 0;
   let questTrackerMode = "main";
   let crystals = new Set();
@@ -729,6 +730,7 @@
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+      persistenceFingerprint = getPersistenceFingerprint();
       continueButton.hidden = false;
       if (showNotice) {
         saveToast.classList.remove("show");
@@ -1124,6 +1126,14 @@
     addDamageNumber(enemy.x, enemy.y - enemy.radius, `${critical ? "✦ " : ""}${amount}`, critical ? "#ffc857" : "#f5e9ca", critical);
     spawnBurst(enemy.x, enemy.y, critical ? "#ffc857" : enemy.color, critical ? 16 : 8, critical ? 95 : 58);
     if (enemy.hp <= 0) killEnemy(enemy);
+  }
+
+  function getPersistenceFingerprint() {
+    return JSON.stringify({
+      player: { x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
+      questStage, pendingLevelUps, crystals: [...crystals].sort(), bossDefeated, openedChests: [...openedChests].sort(),
+      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, activeContracts, contractRotation, guildMarks, guildRenown, inventory, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
+    });
   }
 
   function recordDefeatedMonster(enemy) {
@@ -2612,7 +2622,7 @@
       </article>`;
     }).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>SKILL TREE</small><h3>${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
+      <div class="facility-section-heading"><div><small>SKILL TREE CONTROLS</small><h3>學習狀態</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
       <div class="skill-tree-legend"><span class="is-learned"><i>技</i> 已學會</span><span class="is-ready"><i>★</i> 可學習</span><span class="is-locked"><i>?</i> 尚未解鎖</span><span class="is-equipped"><i>裝</i> DECK 使用中</span><span><i>按</i> 撳招名睇資料</span></div>
       <div class="skill-tree-scroll" tabindex="0" aria-label="技能樹，可橫向捲動查看所有分支">
         <div class="skill-tree-board" role="tree" aria-label="${playerClassId === "fighter" ? "格鬥士" : "戰士"}向下發展技能樹" style="--tree-height:${treeHeight}px;--tree-min-width:${treeMinWidth}rem">
@@ -2666,7 +2676,7 @@
     document.getElementById("skillDetailTitle").textContent = skill.name;
     document.getElementById("skillDetailDescription").textContent = skill.description;
     document.getElementById("skillDetailStats").innerHTML = `
-      <div><dt>類型／系別</dt><dd>${skillTypeText(skill)} · ${skill.treeGroup || "戰鬥技能"}</dd></div>
+      <div class="ui-detail-row"><dt>類型／系別</dt><dd>${skillTypeText(skill)} · ${skill.treeGroup || "戰鬥技能"}</dd></div>
       <div><dt>消耗 AP</dt><dd>${skill.tags.includes("passive") ? "PSV" : `${skill.apCost} AP`}</dd></div>
       <div><dt>速度</dt><dd>${skill.tags.includes("passive") ? "自動" : skill.speedGrade}</dd></div>
       <div><dt>中斷／耐久</dt><dd>${skill.interrupt ?? "—"} ／ ${skill.durability ?? "—"}</dd></div>
@@ -4441,9 +4451,10 @@
     playTime += dt;
     encounterGrace = Math.max(0, encounterGrace - dt);
     autosaveTimer += dt;
-    if (autosaveTimer >= 14) {
+    if (autosaveTimer >= 5) {
       autosaveTimer = 0;
-      saveGame(false);
+      const nextFingerprint = getPersistenceFingerprint();
+      if (nextFingerprint !== persistenceFingerprint) saveGame(false);
     }
     updatePlayer(dt);
     updateEnemies(dt);
@@ -7350,7 +7361,6 @@
   document.addEventListener("visibilitychange", () => {
     keys.clear();
     cancelExplorePointerTracking();
-    if (document.hidden && ["playing", "battle"].includes(mode)) togglePause(true);
     previousTime = performance.now();
   });
   window.addEventListener("beforeunload", () => { if (mode !== "title") saveGame(false); });
