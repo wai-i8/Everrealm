@@ -101,11 +101,15 @@ test("facility renders compact name-only SVG/DOM nodes and opens a dismissible d
   assert.doesNotMatch(indexSource, />技</);
 
   assert.match(indexSource, /id="skillDetailPanel"[^>]*data-modal-backdrop-dismiss="skill-detail"/);
-  assert.match(indexSource, /id="skillDetailCloseButton"[^>]*class="modal-close-button"/s);
+  assert.match(indexSource, /id="skillDetailCloseButton"[^>]*class="ui-close-button modal-close-button"/s);
+  assert.match(indexSource, /id="skillDetailStats"[^>]*class="ui-detail-list"/s);
   assert.match(gameSource, /skillDetailPanel\.addEventListener\("click", \(event\) => \{\s*if \(event\.target === skillDetailPanel\) closeSkillDetail\(\)/s);
   assert.match(gameSource, /skillDetailLearnButton"\)\.addEventListener\("click", learnFromSkillDetail\)/);
+  assert.match(gameSource, /class="ui-detail-row"><dt>可選範圍/);
+  assert.doesNotMatch(gameSource, /skillDetailStats[\s\S]*grid-template-columns: repeat\(2/);
 
   assert.match(treeCss, /\.skill-tree-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(treeCss, /\.skill-tree-scroll\s*\{[^}]*max-height:\s*min\(32rem,62vh\)/s);
   assert.match(treeCss, /\.skill-tree-board\s*\{[^}]*width:\s*max\(100%,var\(--tree-min-width,50rem\)\)[^}]*height:\s*var\(--tree-height\)/s);
   assert.match(treeCss, /\.skill-tree-links\s*\{[^}]*z-index:\s*0/s);
   assert.match(treeCss, /\.skill-tree-node\s*\{[^}]*position:\s*absolute[^}]*z-index:\s*2[^}]*height:\s*2\.625rem/s);

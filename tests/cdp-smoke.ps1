@@ -400,7 +400,8 @@ try {
       if ($deckRewards.four -ne 4 -or $deckRewards.five -ne 5 -or $deckRewards.six -ne 6 -or $deckRewards.milestones -ne 3 -or $deckRewards.slots -ne 6) { throw 'Main/guild DECK milestone rewards did not expand the city-gate panel from three to six slots.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.grantSkillBook(1); window.__RPG_DEBUG__.openSkillBook(1); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
       Start-Sleep -Milliseconds 90
-      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=use-manual]').click(); true" | Out-Null
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id^=manual_]').click(); true" | Out-Null
+      Invoke-GameExpression -Expression "document.querySelector('.inventory-selected-detail [data-facility-action=use-manual]').click(); true" | Out-Null
       $manualUi = (Invoke-GameExpression -Expression 'JSON.stringify({dialogHidden:document.getElementById("skillBookConfirmPanel").hidden,manuals:Object.values(window.__RPG_DEBUG__.snapshot().skills.manualCounts).reduce((sum,value)=>sum+value,0),learned:window.__RPG_DEBUG__.snapshot().skills.unlockedSkillIds.length,stats:document.querySelectorAll("#skillBookConfirmStats>div").length})') | ConvertFrom-Json
       if ($manualUi.dialogHidden -or $manualUi.manuals -ne 1 -or $manualUi.learned -ne 1 -or $manualUi.stats -lt 4) { throw 'Named skill book did not wait for confirmation with range/AP/speed details.' }
       Invoke-GameExpression -Expression "document.getElementById('skillBookCancelButton').click(); window.__RPG_DEBUG__.facilityTab('skills'); true" | Out-Null
@@ -717,11 +718,6 @@ try {
       }
       $plannedMove = $roundOne.battle.plans[0].move
 
-      Invoke-GameExpression -Expression "document.getElementById('pauseButton').click(); true" | Out-Null
-      Start-Sleep -Milliseconds 420
-      $pausedBattle = Get-GameSnapshot
-      if ($pausedBattle.mode -ne 'paused' -or $pausedBattle.battle.phase -ne 'resolving_move') { throw "Battle pause did not freeze simultaneous movement (mode=$($pausedBattle.mode), phase=$($pausedBattle.battle.phase))." }
-      Invoke-GameExpression -Expression "document.getElementById('resumeButton').click(); true" | Out-Null
       Start-Sleep -Milliseconds 1050
       $actionPlanning = Get-GameSnapshot
       if ($actionPlanning.battle.phase -ne 'planning_action' -or $actionPlanning.battle.hero.cell.x -ne 2 -or $actionPlanning.battle.hero.cell.y -ne 3 -or $actionPlanning.battle.ap -ne 10) {
@@ -868,9 +864,12 @@ try {
       $granted = Get-GameSnapshot
       if ($granted.skills.books.'1' -ne 1 -or $granted.skills.books.'2' -ne 1 -or $granted.skills.books.'3' -ne 1) { throw 'Skill books were not added to inventory.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.facilityTab('bag'); true" | Out-Null
-      $inventoryUi = (Invoke-GameExpression -Expression 'JSON.stringify({books:document.querySelectorAll("[data-item-id^=skill_book]").length,badge:document.getElementById("inventoryBookBadge").textContent,badgeHidden:document.getElementById("inventoryBookBadge").hidden,potions:document.querySelectorAll("[data-facility-action=use-potion]").length,cards:document.querySelectorAll(".inventory-grid-item").length,icons:document.querySelectorAll(".inventory-grid-item .atlas-icon").length,bodyFont:parseFloat(getComputedStyle(document.querySelector(".inventory-item-copy > p")).fontSize),titleFont:parseFloat(getComputedStyle(document.getElementById("facilityTitle")).fontSize)})') | ConvertFrom-Json
-      if ($inventoryUi.books -ne 3 -or $inventoryUi.badge -ne '3' -or $inventoryUi.badgeHidden -or $inventoryUi.potions -ne 1 -or $inventoryUi.cards -lt 4 -or $inventoryUi.icons -ne $inventoryUi.cards) { throw 'Inventory did not expose a complete icon grid for potions and three book tiers.' }
+      $inventoryUi = (Invoke-GameExpression -Expression 'JSON.stringify({books:document.querySelectorAll("[data-item-id^=skill_book]").length,badge:document.getElementById("inventoryBookBadge").textContent,badgeHidden:document.getElementById("inventoryBookBadge").hidden,potions:document.querySelectorAll("[data-facility-action=use-potion]").length,cards:document.querySelectorAll(".inventory-grid-item").length,icons:document.querySelectorAll(".inventory-grid-item .atlas-icon").length,bodyFont:parseFloat(getComputedStyle(document.querySelector(".inventory-item-copy strong")).fontSize),titleFont:parseFloat(getComputedStyle(document.getElementById("facilityTitle")).fontSize)})') | ConvertFrom-Json
+      if ($inventoryUi.books -ne 3 -or $inventoryUi.badge -ne '3' -or $inventoryUi.badgeHidden -or $inventoryUi.potions -ne 0 -or $inventoryUi.cards -lt 4 -or $inventoryUi.icons -ne $inventoryUi.cards) { throw 'Inventory did not expose a complete icon grid for potions and three book tiers.' }
       if ($inventoryUi.bodyFont -lt 11 -or $inventoryUi.titleFont -gt 35 -or $inventoryUi.titleFont / $inventoryUi.bodyFont -gt 2.8) { throw 'Facility title and inventory typography remained disproportionate.' }
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=skill_book_1]').click(); true" | Out-Null
+      $selectedInventoryUi = (Invoke-GameExpression -Expression 'JSON.stringify({detail:!!document.querySelector(".inventory-selected-detail"),action:!!document.querySelector(".inventory-selected-detail [data-facility-action=open-book]"),description:document.querySelector(".inventory-selected-detail p")?.textContent||""})') | ConvertFrom-Json
+      if (-not $selectedInventoryUi.detail -or -not $selectedInventoryUi.action -or -not $selectedInventoryUi.description) { throw 'Inventory selection did not reveal the item detail and its contextual action.' }
       $inventoryScreenshotPath = Join-Path $runtimeOutputPath "smoke-inventory-grid-$ViewportWidth.png"
       $inventoryCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($inventoryScreenshotPath, [Convert]::FromBase64String($inventoryCapture.result.data))

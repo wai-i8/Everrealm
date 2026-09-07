@@ -54,7 +54,10 @@ controls 疊在上面。
 └──────┴────────────────┴──────┘
 ```
 
-四角保留原比例；直邊只作 repeat / stretch；中心填充可以延伸。唔為 Status、
+四角保留原比例；直邊只作 repeat-safe stretch；中心填充可以延伸。runtime 必須
+使用 `border-image` 9-slice、獨立 corner/edge pieces 或同等 stretch-safe 組合，
+不可用 `background-size: 100% 100%` 把一張小框圖拉到整個窗口。bitmap 只係
+decoration，HTML/CSS 才係內容尺寸、對齊同 scroll 嘅 sizing system。唔為 Status、
 Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要同時具備：
 
 - `min-width` / `min-height` 只保證最小可讀性；
@@ -72,8 +75,12 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 ### Header
 
 每個 major window 只有一個主標題。header 依次包含小型 uppercase kicker、
-主標題、短 subtitle 同一個清晰 close button。標題不可依賴裝飾 glyph 才能辨識
-功能；裝飾唔可以佔用 content 空間。
+主標題、短 subtitle 同一個位於右上角嘅 shared bitmap-backed close button。
+close button 由 `ui-close-button`/`facility-close-button` 共用，裝飾 bitmap 與
+可 keyboard focus 嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或
+ESC 位置。標題不可依賴裝飾 glyph 才能辨識功能；裝飾唔可以佔用 content 空間。
+Top-level page 用 cream topic header；Skill Detail 等 nested modal 用較輕量嘅
+層級，唔重複整個 top-level page header。
 
 ### Buttons and tabs
 
@@ -116,8 +123,17 @@ header、close button 同 action hierarchy 仍屬 shared base。Skill Tree conne
 bitmap/CSS 提供。
 
 Skill Detail 必須 content-driven：技能名、rank、prerequisite、damage、hits、
-speed、range、height、effects 逐項落入 inset metadata grid；大型 range pattern
-可以令 content 變高，但唔得超出 panel，亦唔需要大型「技」字裝飾。
+speed、range、height、effects 逐項落入單欄 vertical metadata rows。每行係
+bounded label + `minmax(0, 1fr)` value；label 保持完整，value 自然換行，唔用
+per-label `<br>`。大型 range pattern 可以令 content 變高，但唔得超出 panel，亦
+唔需要大型「技」字裝飾。
+
+Inventory 必須以 contained two-region shell 組合：左側固定 character/equipment
+paper doll，右側 compact item slot grid 同 selected-item detail。slot 只顯示 icon、
+quantity、rarity/equipped state 及短名稱；description、stats 同 action 只喺
+selected detail 出現。兩側都設 `min-width: 0`，grid tracks 使用 `minmax(0, 1fr)`，
+右側內容不可用 absolute positioning、z-index 或 margin hack 覆蓋左側；窄屏改為
+上下堆疊。
 
 ## 6. State language
 
@@ -152,8 +168,10 @@ generic popup background。
 ## 8. Responsive and accessibility rules
 
 - desktop 使用兩欄或多欄內容；窄屏改為單欄，唔縮到文字不可讀；
-- window content 以 `overflow-y: auto` containment，horizontal overflow 只限於
-  明確需要橫向瀏覽嘅 Skill Tree board；
+- window content 以 `overflow-y: auto` containment；Skill Tree 另有內部可捲動／
+  pannable viewport，outer frame 保持穩定，唔因樹內容變大；
+- Grid/Flex child 必須設 `min-width: 0`，可換行 value 使用 `minmax(0, 1fr)`，
+  避免長中文標籤、item 名稱或 description 造成橫向 overflow；
 - close、cancel、primary action 永遠留喺 frame 內並可 keyboard focus；
 - modal 背景、標題、controls 保持既有 `aria-labelledby` / `aria-modal` contract；
 - focus ring 不可被 bitmap pseudo-element 蓋住；
@@ -166,7 +184,7 @@ generic popup background。
 Decorative UI bitmaps are never the sizing system: frames use stretch-safe border
 composition (9-slice/border-image or repeat-safe pieces), while HTML/CSS owns
 layout, typography, containment and scrolling. Major windows share one top-right
-bitmap-backed close control and one shell; nested detail dialogs use a lighter
+bitmap-backed `ui-close-button` and one shell; nested detail dialogs use a lighter
 hierarchy instead of repeating a page header. Skill Detail metadata is a
 single-column label/value row pattern with bounded, non-breaking labels and
 wrapping values. Inventory uses a contained character/equipment region beside a
@@ -174,8 +192,10 @@ compact item grid and a separate selected-item detail region; grid content must
 never overlap the character region. Grid/Flex tracks use `minmax(0, 1fr)` and
 narrow layouts stack rather than introduce horizontal overflow. Canvas remains
 limited to genuinely dynamic diagrams such as range patterns and prerequisite
-connectors. These screens require desktop and narrow-viewport runtime screenshots
-and visual inspection, not automated tests alone.
+connectors; window chrome, slots, rows and buttons remain DOM/CSS. These screens
+require desktop and narrow-viewport runtime screenshots, inspection of the actual
+rendered result, and a final `runtimeErrors: 0` check; automated tests alone are
+insufficient.
 
 - 本文件擁有 major UI 組合、層級、狀態、dynamic sizing 同 responsive 規則。
 - `ART_PIPELINE.md` 擁有 UI bitmap 透明底、atlas safe area、9-slice crop、export

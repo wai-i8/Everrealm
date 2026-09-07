@@ -115,14 +115,17 @@
 .skill-tree-legend .is-equipped i { border-color: rgba(82,220,203,.62); color: var(--teal); }
 .skill-tree-scroll {
   max-width: 100%;
+  max-height: min(32rem,62vh);
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   padding: .2rem .15rem .7rem;
   scrollbar-color: rgba(255,200,87,.58) rgba(5,10,21,.4);
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
   touch-action: pan-x pan-y;
 }
+.skill-tree-scroll::-webkit-scrollbar { width: .45rem; height: .45rem; }
+.skill-tree-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,200,87,.58); }
 .skill-tree-scroll:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .skill-tree-board {
   position: relative;
@@ -555,6 +558,153 @@
 
 .equipment-card-atlas-icon { width: 3rem; height: 3rem; }
 
+/* Inventory architecture -------------------------------------------------
+   The paper doll is a contained region; the right side is a real slot grid
+   with a separate detail surface. Slots never carry long descriptions or
+   actions, so item growth cannot change the grid's geometry. */
+.unified-inventory-layout {
+  grid-template-columns: minmax(15rem, .38fr) minmax(0, 1fr);
+  align-items: start;
+}
+.bag-loadout-panel,
+.bag-items-panel { min-width: 0; }
+.bag-loadout-panel { overflow: hidden; }
+.bag-items-panel { display: grid; gap: .7rem; }
+.inventory-heading { margin-bottom: 0; }
+.inventory-filter-bar {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin: 0;
+}
+.inventory-filter {
+  min-width: 3.6rem;
+  padding: .35rem .55rem;
+  border: 1px solid rgba(245,233,202,.2);
+  border-radius: .5rem;
+  color: var(--muted);
+  background: rgba(5,10,21,.42);
+  font: 750 .67rem/1.1 inherit;
+  cursor: pointer;
+}
+.inventory-filter:hover,
+.inventory-filter:focus-visible,
+.inventory-filter[aria-selected="true"] {
+  color: #171421;
+  border-color: var(--gold);
+  background: var(--gold);
+}
+.inventory-icon-grid {
+  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(5.25rem, 1fr));
+  gap: .48rem;
+}
+.inventory-grid-item {
+  min-width: 0;
+  min-height: 7rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 4.35rem minmax(0, 1fr);
+  justify-items: center;
+  align-items: start;
+  gap: .35rem;
+  padding: .42rem;
+  border: 1px solid rgba(245,233,202,.2);
+  border-radius: .72rem;
+  color: inherit;
+  background: linear-gradient(145deg,rgba(38,51,82,.9),rgba(12,20,39,.96));
+  box-shadow: 2px 3px 0 rgba(0,0,0,.26);
+  cursor: pointer;
+  text-align: center;
+}
+.inventory-grid-item:hover,
+.inventory-grid-item:focus-visible { border-color: rgba(255,200,87,.76); transform: translateY(-1px); }
+.inventory-grid-item.is-selected {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(82,220,203,.2), 0 0 1rem rgba(82,220,203,.13), 2px 3px 0 rgba(0,0,0,.26);
+}
+.inventory-grid-item.is-equipped { border-color: rgba(82,220,203,.72); }
+.inventory-grid-item .inventory-item-art {
+  width: 4.25rem;
+  height: 4.25rem;
+  flex: 0 0 auto;
+}
+.inventory-grid-item .inventory-item-art .atlas-icon { width: 4rem; height: 4rem; }
+.inventory-grid-item .inventory-item-copy {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: .18rem;
+  justify-items: center;
+  align-content: start;
+}
+.inventory-grid-item .inventory-item-copy > small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--gold);
+  font-size: .55rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inventory-grid-item .inventory-item-copy > strong {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--cream);
+  font-size: .68rem;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.inventory-grid-item .inventory-item-copy > p,
+.inventory-grid-item .inventory-item-copy > span,
+.inventory-grid-item .inventory-item-action,
+.inventory-grid-item .inventory-equipment-action { display: none; }
+.inventory-grid-item > .inventory-quantity { right: -.28rem; bottom: -.28rem; }
+.inventory-equipped-mark {
+  position: absolute;
+  top: .28rem;
+  left: .28rem;
+  padding: .18rem .28rem;
+  border-radius: 999px;
+  color: #171421;
+  background: var(--teal);
+  font: 900 .48rem/1 ui-monospace, monospace;
+}
+.inventory-selected-detail {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 4.8rem minmax(0, 1fr);
+  gap: .7rem;
+  padding: .72rem;
+  border: 1px solid rgba(82,220,203,.38);
+  border-radius: .82rem;
+  background: linear-gradient(155deg,rgba(24,48,65,.86),rgba(8,16,31,.96));
+  box-shadow: inset 0 0 1.3rem rgba(82,220,203,.04), 2px 3px 0 rgba(0,0,0,.24);
+}
+.inventory-selected-detail .inventory-item-art { width: 4.7rem; height: 4.7rem; }
+.inventory-selected-detail .inventory-item-art .atlas-icon { width: 4.4rem; height: 4.4rem; }
+.inventory-selected-copy { min-width: 0; display: grid; align-content: start; gap: .3rem; }
+.inventory-selected-copy > small { color: var(--gold); font: 800 .61rem/1.25 ui-monospace, monospace; }
+.inventory-selected-copy > strong { color: var(--cream); font-size: .92rem; line-height: 1.2; }
+.inventory-selected-copy > p { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
+.inventory-selected-copy > span { color: var(--teal); font-size: .68rem; line-height: 1.4; }
+.inventory-selected-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .15rem; }
+.inventory-selected-actions > button { min-width: 5.3rem; min-height: 2rem; }
+.inventory-empty-selection {
+  grid-column: 1 / -1;
+  min-height: 4.7rem;
+  display: grid;
+  place-content: center;
+  gap: .25rem;
+  color: var(--muted);
+  text-align: center;
+}
+.inventory-empty-selection strong { color: var(--cream); font-size: .76rem; }
+.inventory-empty-selection small { font-size: .66rem; }
+
 @media (max-width: 900px) {
   .facility-tabs[data-visible-tabs] { grid-template-columns: none; grid-auto-flow: column; }
   .unified-inventory-layout { grid-template-columns: 1fr; }
@@ -571,6 +721,16 @@
   .paperdoll-stats dl { grid-template-columns: repeat(5,minmax(0,1fr)); }
   .paperdoll-stats dl div { display: grid; justify-items: center; gap: .25rem; }
   .gear-collection-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 650px) {
+  .inventory-icon-grid { grid-template-columns: repeat(auto-fill, minmax(4.75rem, 1fr)); gap: .38rem; }
+  .inventory-grid-item { min-height: 6.55rem; grid-template-rows: 3.9rem minmax(0, 1fr); padding: .32rem; }
+  .inventory-grid-item .inventory-item-art { width: 3.8rem; height: 3.8rem; }
+  .inventory-grid-item .inventory-item-art .atlas-icon { width: 3.55rem; height: 3.55rem; }
+  .inventory-selected-detail { grid-template-columns: 3.85rem minmax(0, 1fr); gap: .5rem; padding: .55rem; }
+  .inventory-selected-detail .inventory-item-art { width: 3.75rem; height: 3.75rem; }
+  .inventory-selected-detail .inventory-item-art .atlas-icon { width: 3.5rem; height: 3.5rem; }
 }
 
 @media (max-width: 650px) {

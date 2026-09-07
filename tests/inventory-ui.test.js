@@ -28,7 +28,7 @@ test("inventory and class-specific equipment atlases exist and every catalog ite
 
 test("bag uses an icon grid and paper doll exposes all six requested visual slots", () => {
   assert.match(gameSource, /class="inventory-icon-grid"/);
-  assert.match(gameSource, /class="inventory-grid-item"/);
+  assert.match(gameSource, /class="inventory-grid-item\s/);
   for (const slot of ["weapon", "head", "body", "hands", "feet", "charm"]) {
     assert.match(gameSource, new RegExp(`paperdollSlotHtml\\("${slot}"`));
     assert.match(inventoryCss, new RegExp(`data-paperdoll-slot="${slot}"`));
@@ -37,18 +37,23 @@ test("bag uses an icon grid and paper doll exposes all six requested visual slot
   assert.match(inventoryCss, /\.equipment-icon-atlas\s*\{/);
 });
 
-test("bag is a unified two-column loadout and every owned equipment card equips directly", () => {
+test("bag keeps a contained loadout beside a compact selectable grid", () => {
   const bagRenderer = gameSource.match(/function renderBagFacility\(\)\s*\{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function equipmentIconHtml/)?.[1] || "";
   assert.match(bagRenderer, /class="unified-inventory-layout"/);
   assert.match(bagRenderer, /class="bag-loadout-panel"/);
   assert.match(bagRenderer, /class="bag-items-panel"/);
   assert.match(bagRenderer, /ownedEquipment\.includes\(entry\.id\)/);
   assert.match(bagRenderer, /inventory-equipment-item/);
-  assert.match(bagRenderer, /data-facility-action="equip"/);
+  assert.match(bagRenderer, /data-facility-action="select-item"/);
+  assert.match(bagRenderer, /inventory-selected-detail/);
+  assert.match(bagRenderer, /inventory-filter/);
+  assert.match(bagRenderer, /actionMarkup/);
   assert.match(bagRenderer, /drawEquipmentPaperdoll\(\)/);
-  assert.match(bagRenderer, /裝備、藥水、技能書同素材/);
-  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[^}]*grid-template-columns:\s*minmax\(25rem/s);
+  assert.match(bagRenderer, /完整描述與可用動作/);
+  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[^}]*grid-template-columns:\s*minmax\(15rem/s);
   assert.match(inventoryCss, /@media \(max-width: 900px\)[\s\S]*?\.unified-inventory-layout\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(inventoryCss, /\.inventory-grid-item\.is-selected/);
+  assert.match(inventoryCss, /\.inventory-selected-detail/);
 });
 
 test("the extra stylesheet keeps facility text readable at 100% browser zoom", () => {

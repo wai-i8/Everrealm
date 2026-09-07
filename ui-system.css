@@ -10,6 +10,7 @@
   --ui-slot-selected-image: url("assets/ui/ui-slot-selected-v1.png");
   --ui-slot-disabled-image: url("assets/ui/ui-slot-disabled-v1.png");
   --ui-node-image: url("assets/ui/ui-skill-node-v1.png");
+  --ui-close-image: url("assets/ui/ui-slot-selected-v1.png");
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -38,6 +39,64 @@
 .ui-window > *,
 .ui-modal-window > * { position: relative; z-index: 1; }
 
+/* One shared bitmap-backed close control. The bitmap provides the ornament;
+   the CSS glyph stays crisp and the hit area remains generous. */
+.ui-close-button {
+  position: relative;
+  min-width: 2.7rem;
+  min-height: 2.7rem;
+  display: inline-grid;
+  place-items: center;
+  padding: .35rem;
+  border: 0 !important;
+  border-radius: .62rem !important;
+  color: var(--cream);
+  background: transparent var(--ui-close-image) center / cover no-repeat !important;
+  box-shadow: 0 .3rem .8rem rgba(0,0,0,.34);
+  cursor: pointer;
+  transition: transform .14s ease, filter .14s ease;
+}
+.ui-close-button:hover,
+.ui-close-button:focus-visible { transform: scale(1.05); filter: brightness(1.12); }
+.ui-close-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.ui-close-glyph {
+  position: relative;
+  width: .88rem;
+  height: .88rem;
+  display: block;
+  transform: none !important;
+  font: initial !important;
+}
+.ui-close-glyph::before,
+.ui-close-glyph::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.05rem;
+  height: .13rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 1px 1px rgba(0,0,0,.55);
+}
+.ui-close-glyph::before { transform: translate(-50%, -50%) rotate(45deg); }
+.ui-close-glyph::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.facility-close-button.ui-close-button { flex: 0 0 2.7rem; width: 2.7rem; height: 2.7rem; gap: .05rem; color: #171421; }
+.facility-close-button.ui-close-button small { color: #70552f; font: 750 .58rem/1 ui-monospace, monospace; }
+.ui-modal-window > .ui-close-button { position: absolute; z-index: 2; top: .65rem; right: .65rem; }
+
+/* Shared semantic hooks. Domain styles can add their own modifier while
+   these names keep the shell, scroll and content vocabulary consistent. */
+.ui-header { min-width: 0; }
+.ui-body,
+.ui-content { min-width: 0; min-height: 0; }
+.ui-footer { min-width: 0; }
+.ui-inset { min-width: 0; border-radius: .62rem; background: rgba(5,10,21,.45); }
+.ui-button,
+.ui-tab,
+.ui-slot { min-width: 0; }
+.ui-scroll { min-width: 0; min-height: 0; overscroll-behavior: contain; }
+
 /* Modal panels use a content-sized inner window instead of a fixed-height
    pseudo background, so range-heavy skill details remain contained. */
 .ui-modal-window {
@@ -58,6 +117,8 @@
 .skill-detail-panel > .ui-modal-window > .modal-kicker,
 .skill-detail-panel > .ui-modal-window > h2 { text-align: center; }
 .skill-detail-panel > .ui-modal-window > .modal-actions { margin-inline: auto; }
+.skill-detail-panel > .ui-modal-window > h2 { font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -.025em; }
+.skill-detail-panel .skill-detail-range-pattern { width: min(100%, 34rem); margin-inline: auto; }
 .abandon-commission-panel { z-index: 21; }
 .abandon-commission-icon { color: var(--red); border-color: rgba(255,107,107,.5); }
 
@@ -169,11 +230,41 @@
 .facility-note,
 .skill-tree-legend span { border-radius: .48rem; }
 .skill-book-confirm-stats { max-height: none; }
-.skill-detail-panel .skill-book-confirm-stats { display: grid; grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr); gap: .35rem .7rem; text-align: left; }
-.skill-detail-panel .skill-book-confirm-stats > div { min-width: 0; display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: start; gap: .7rem; padding: .45rem .55rem; border-bottom: 1px solid rgba(245,233,202,.13); }
-.skill-detail-panel .skill-book-confirm-stats dt { min-width: 0; white-space: nowrap; color: var(--gold); }
-.skill-detail-panel .skill-book-confirm-stats dd { min-width: 0; overflow-wrap: anywhere; }
-.modal-close-button { background-image: var(--ui-button-default-image) !important; background-size: cover !important; border: 0 !important; }
+.ui-detail-list {
+  width: min(100%, 34rem);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(7.2rem, 10rem) minmax(0, 1fr);
+  gap: 0;
+  margin: .25rem auto 1rem;
+  text-align: left;
+}
+.ui-detail-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: start;
+  gap: .75rem;
+  padding: .5rem .35rem;
+  border-bottom: 1px solid rgba(245,233,202,.13);
+}
+.ui-detail-row dt {
+  min-width: 0;
+  color: var(--gold);
+  font-size: .7rem;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.ui-detail-row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--teal);
+  font: 750 .72rem/1.45 ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.ui-detail-list + .modal-actions { margin-inline: auto; }
 
 @media (max-width: 530px) {
   .ui-modal-window {
@@ -184,4 +275,7 @@
   }
   .ui-modal-window > .modal-close-button { top: .5rem; right: .5rem; }
   .skill-detail-panel > .ui-modal-window { text-align: left; }
+  .ui-detail-list { grid-template-columns: minmax(5.8rem, 34%) minmax(0, 1fr); }
+  .ui-detail-row { gap: .5rem; padding-inline: .15rem; }
+  .ui-detail-row dt { white-space: normal; }
 }

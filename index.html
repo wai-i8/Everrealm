@@ -57,7 +57,6 @@
             </div>
             <div class="sidebar-utility-buttons" aria-label="系統功能">
               <button id="soundButton" class="round-button" type="button" aria-label="關閉聲效" aria-pressed="true">♪</button>
-              <button id="pauseButton" class="round-button" type="button" aria-label="暫停遊戲">Ⅱ</button>
             </div>
           </nav>
 
@@ -208,12 +207,12 @@
           <div class="ui-modal-window ui-window--skill">
             <button
               id="skillBookConfirmCloseButton"
-              class="modal-close-button"
+              class="ui-close-button modal-close-button"
               type="button"
               data-modal-dismiss="skill-book-confirm"
               aria-label="關閉技能書視窗"
               title="關閉"
-            ><span aria-hidden="true">×</span></button>
+            ><span class="ui-close-glyph" aria-hidden="true"></span></button>
             <div class="skill-book-confirm-icon" aria-hidden="true">📖</div>
             <p class="modal-kicker">SKILL MANUAL</p>
             <h2 id="skillBookConfirmTitle">技能書</h2>
@@ -230,17 +229,17 @@
           <div class="ui-modal-window ui-window--skill">
             <button
               id="skillDetailCloseButton"
-              class="modal-close-button"
+              class="ui-close-button modal-close-button"
               type="button"
               data-modal-dismiss="skill-detail"
               aria-label="關閉技能資料視窗"
               title="關閉"
-            ><span aria-hidden="true">×</span></button>
+            ><span class="ui-close-glyph" aria-hidden="true"></span></button>
             <p class="modal-kicker">SKILL DETAIL</p>
             <h2 id="skillDetailTitle">技能資料</h2>
             <p id="skillDetailDescription"></p>
             <div id="skillDetailRangePattern" class="skill-detail-range-pattern" aria-live="polite"></div>
-            <dl id="skillDetailStats" class="skill-book-confirm-stats"></dl>
+            <dl id="skillDetailStats" class="ui-detail-list" aria-label="技能資料"></dl>
             <div class="modal-actions">
               <button id="skillDetailLearnButton" class="primary-button" type="button" hidden>學習</button>
               <button id="skillDetailDismissButton" class="secondary-button" type="button">返回技能樹</button>
@@ -250,7 +249,7 @@
 
         <section id="abandonCommissionPanel" class="overlay modal-overlay skill-book-confirm-panel abandon-commission-panel" role="dialog" aria-modal="true" aria-labelledby="abandonCommissionTitle" data-modal-backdrop-dismiss="abandon-commission" hidden>
           <div class="ui-modal-window ui-window--skill">
-            <button id="abandonCommissionCloseButton" class="modal-close-button" type="button" data-modal-dismiss="abandon-commission" aria-label="關閉放棄委託視窗" title="關閉"><span aria-hidden="true">×</span></button>
+            <button id="abandonCommissionCloseButton" class="ui-close-button modal-close-button" type="button" data-modal-dismiss="abandon-commission" aria-label="關閉放棄委託視窗" title="關閉"><span class="ui-close-glyph" aria-hidden="true"></span></button>
             <div class="skill-book-confirm-icon abandon-commission-icon" aria-hidden="true">⚑</div>
             <p class="modal-kicker danger">COMMISSION RESET</p>
             <h2 id="abandonCommissionTitle">確定放棄此委託？</h2>
@@ -298,23 +297,6 @@
           </div>
         </section>
 
-        <section id="pausePanel" class="overlay modal-overlay pause-panel" aria-labelledby="pauseTitle" hidden>
-          <p class="modal-kicker">NIGHT WATCH PAUSED</p>
-          <h2 id="pauseTitle">停一停</h2>
-          <div class="stats-sheet">
-            <div><span>等級</span><b id="pauseLevel">1</b></div>
-            <div><span>攻擊</span><b id="pauseAttack">14</b></div>
-            <div><span>最大生命</span><b id="pauseHp">88</b></div>
-            <div><span>防禦</span><b id="pauseDefense">2</b></div>
-            <div><span>霧晶</span><b id="pauseCrystals">0 / 3</b></div>
-            <div><span>遊玩時間</span><b id="pauseTime">00:00</b></div>
-          </div>
-          <div class="modal-actions">
-            <button id="resumeButton" class="primary-button" type="button"><span>繼續夜巡</span><small>ESC</small></button>
-            <button id="saveButton" class="secondary-button" type="button">儲存進度</button>
-          </div>
-        </section>
-
         <section id="deathPanel" class="overlay modal-overlay death-panel" aria-labelledby="deathTitle" hidden>
           <p class="modal-kicker danger">YOUR LIGHT WENT OUT</p>
           <h2 id="deathTitle">盞燈熄咗。</h2>
@@ -345,18 +327,18 @@
           hidden
         >
           <div class="facility-window ui-window">
-            <header class="facility-header">
+            <header class="facility-header ui-header">
               <div class="facility-heading-copy">
                 <p id="facilityKicker" class="facility-kicker">OLD HARBOUR SERVICES</p>
                 <h2 id="facilityTitle">巡燈人公會</h2>
                 <p id="facilitySubtitle">揀一份委託，等霧都重新熱鬧起來。</p>
               </div>
-              <button id="facilityCloseButton" class="facility-close-button" type="button" aria-label="關閉設施選單">
-                <span aria-hidden="true">×</span><small>ESC</small>
+              <button id="facilityCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="關閉設施選單">
+                <span class="ui-close-glyph" aria-hidden="true"></span><small>ESC</small>
               </button>
             </header>
 
-            <div id="facilityContent" class="facility-content" role="tabpanel" tabindex="0" aria-live="polite">
+            <div id="facilityContent" class="facility-content ui-content" role="tabpanel" tabindex="0" aria-live="polite">
               <div class="facility-empty-state">
                 <span aria-hidden="true">✦</span>
                 <strong>公會緊整理今晚嘅委託……</strong>
@@ -364,7 +346,7 @@
               </div>
             </div>
 
-            <footer id="facilityFooter" class="facility-footer">
+            <footer id="facilityFooter" class="facility-footer ui-footer">
               <p><span aria-hidden="true">☾</span> 完成委託會提升公會階級，解鎖更好裝備。</p>
               <span><kbd>ESC</kbd> 返回地圖</span>
             </footer>
@@ -418,6 +400,7 @@
     <script src="tactics-core.js"></script>
     <script src="fighter-skill-data.js"></script>
     <script src="skill-core.js"></script>
+    <script src="save-system.js"></script>
     <script src="fighter-effects.js"></script>
     <script src="locomotion.js"></script>
     <script src="character-art.js"></script>

@@ -31,6 +31,7 @@
   const FighterEffects = window.LanternFighterEffects;
   const Art = window.LanternArt;
   const Locomotion = window.LanternLocomotion;
+  const SaveSystem = window.EverrealmSaveSystem;
   const maps = MapRegistry.createMapRegistry();
   if (!MainTownNavigation?.ready) {
     console.error("Main Town navigation failed closed", MainTownNavigation?.failure || "generated runtime data unavailable");
@@ -60,7 +61,6 @@
   const titleScreen = document.getElementById("titleScreen");
   const dialoguePanel = document.getElementById("dialoguePanel");
   const levelUpPanel = document.getElementById("levelUpPanel");
-  const pausePanel = document.getElementById("pausePanel");
   const deathPanel = document.getElementById("deathPanel");
   const victoryPanel = document.getElementById("victoryPanel");
   const facilityPanel = document.getElementById("facilityPanel");
@@ -160,7 +160,6 @@
   const hasMap = (id) => typeof id === "string" && Object.hasOwn(maps, id);
   const keys = new Set();
   let mode = "title";
-  let modeBeforePause = "playing";
   let width = 1;
   let height = 1;
   let dpr = 1;
@@ -168,8 +167,8 @@
   let accumulator = 0;
   let elapsed = 0;
   let playTime = 0;
-  let autosaveTimer = 0;
   let persistenceFingerprint = "";
+  let persistence = null;
   let questStage = 0;
   let questTrackerMode = "main";
   let crystals = new Set();
@@ -199,6 +198,8 @@
   let pendingManualSkillId = null;
   let pendingSkillDetailId = null;
   let skillDetailReturnTarget = null;
+  let selectedInventoryItemId = null;
+  let inventoryCategory = "all";
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .78, mid: 1, near: 1.22 });
@@ -523,6 +524,8 @@
     checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
     facilityTab = "bag";
     facilityContext = "portable";
+    selectedInventoryItemId = null;
+    inventoryCategory = "all";
   }
 
   function loadExpansionProgress(raw) {
@@ -611,7 +614,6 @@
     openedChests = new Set();
     pendingLevelUps = 0;
     playTime = 0;
-    autosaveTimer = 0;
     resetEnemies();
     camera.x = player.x;
     camera.y = player.y;
@@ -625,7 +627,7 @@
     if (!skipIntro) showToast("撳地面行入公會，再同妍姐傾偈。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
-    if (!testingMode) saveGame(false);
+    if (!testingMode) saveImportant(false);
   }
 
   function requestNewGame() {
@@ -682,6 +684,7 @@
     titleScreen.hidden = true;
     mode = "playing";
     player.invulnerable = 1;
+    persistence?.markLoaded(getPersistenceFingerprint());
     sound.start();
     showLocation(zoneForPosition(player), true);
     showToast("歡迎返嚟，守燈人。", "good");
@@ -691,6 +694,7 @@
 
   function saveGame(showNotice = true, force = false) {
     if (testingMode && !force) return true;
+    if (!force && persistence && !persistence.needsSave()) return true;
     const payload = {
       version: 1,
       player: {
@@ -731,6 +735,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
       persistenceFingerprint = getPersistenceFingerprint();
+      persistence?.markSaved(persistenceFingerprint);
       continueButton.hidden = false;
       if (showNotice) {
         saveToast.classList.remove("show");
@@ -747,7 +752,6 @@
   function hideAllOverlays() {
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
-    pausePanel.hidden = true;
     deathPanel.hidden = true;
     victoryPanel.hidden = true;
     facilityPanel.hidden = true;
@@ -1108,6 +1112,7 @@
     player.potions -= 1;
     const healed = Math.min(maxHp - player.hp, Math.round(maxHp * .46));
     player.hp += healed;
+    markPersistenceDirty();
     spawnBurst(player.x, player.y, "#87db82", 22, 68);
     addDamageNumber(player.x, player.y - 18, `+${healed}`, "#87db82", true);
     sound.heal();
@@ -1136,11 +1141,27 @@
     });
   }
 
+  function markPersistenceDirty() {
+    return persistence?.markDirty() || false;
+  }
+
+  function saveImportant(showNotice = false) {
+    markPersistenceDirty();
+    return saveGame(showNotice);
+  }
+
+  persistence = SaveSystem.create({
+    intervalMs: 5000,
+    fingerprint: getPersistenceFingerprint,
+    save: () => saveGame(false),
+  });
+
   function recordDefeatedMonster(enemy) {
     const monsterId = ExpansionWorld.normalizeMonsterId(enemy?.type) || String(enemy?.type || "");
     if (!monsterId) return { changed: false, reason: "unknown-monster" };
     monsterKills[monsterId] = (monsterKills[monsterId] || 0) + 1;
     guildRenown += enemy?.boss ? 8 : enemy?.elite ? 3 : 1;
+    markPersistenceDirty();
     const result = Guild.recordHuntKill(guildCommissionState, {
       monsterId,
       instanceId: enemy?.instanceId || enemy?.id,
@@ -1173,7 +1194,7 @@
       sound.crystal();
       showToast(`吞燈獸倒下咗！返去公會搵妍姐。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
       announce(`擊敗吞燈獸。任務更新：返回公會搵妍姐${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
-      saveGame();
+      saveImportant(false);
       return;
     }
     if (enemy.boss) {
@@ -1185,7 +1206,7 @@
       sound.crystal();
       showToast(`沉燈坑道突破！第 ${dungeonClears} 次 · +2 公會印記`, "good");
       announce(`擊敗${enemy.name}，沉燈坑道突破。`);
-      saveGame();
+      saveImportant(false);
       return;
     }
     drops.push({ id: `drop-${Date.now()}-${Math.random()}`, kind: "coin", x: enemy.x, y: enemy.y, value: enemy.coins, radius: 8, life: 22, phase: Math.random() * Core.TAU });
@@ -1209,6 +1230,7 @@
     const result = Expansion.grantExperience(player.level, player.xp, amount);
     player.level = result.level;
     player.xp = result.xp;
+    if (amount > 0) markPersistenceDirty();
     if (result.levelsGained > 0) {
       pendingLevelUps = 0;
       const newStats = playerStats();
@@ -1219,7 +1241,7 @@
       const defenceGain = newStats.defence - oldStats.defence;
       showToast(`升到 LV.${player.level} · 生命 +${hpGain} · 攻擊 +${attackGain} · 防禦 +${defenceGain}`, "good");
       announce(`升到 ${player.level} 級。職業能力已自動成長。`);
-      saveGame(false);
+      saveImportant(false);
     }
     updateHud();
   }
@@ -1242,6 +1264,7 @@
   function damagePlayer(amount, source, direction) {
     if (mode !== "playing" || player.invulnerable > 0) return;
     player.hp = Math.max(0, player.hp - amount);
+    markPersistenceDirty();
     player.invulnerable = .68;
     const push = direction || Core.normalize({ x: player.x - source.x, y: player.y - source.y });
     player.knockback.x += push.x * 180;
@@ -1289,7 +1312,7 @@
     camera.y = player.y;
     showLocation(zoneForPosition(player), true);
     showToast(currentMapId === "dungeon" ? "回音燈將你帶返坑道落腳點。" : "跌咗少少燈幣，但你仲有成身本領。", "good");
-    saveGame(false);
+    saveImportant(false);
     canvas.focus({ preventScroll: true });
   }
 
@@ -1443,9 +1466,12 @@
   }
 
   function collectDrops() {
+    let changed = false;
+    let important = false;
     for (const drop of drops) {
       if (drop.life <= 0 || Core.distance(player, drop) > player.radius + drop.radius + 10) continue;
       drop.life = 0;
+      changed = true;
       if (drop.kind === "coin") {
         player.coins += drop.value;
         sound.coin();
@@ -1462,9 +1488,13 @@
         if (crystals.size >= 3 && questStage === 1) {
           questStage = 2;
           showToast("三粒霧晶齊晒！去北岸封印。", "good");
-          saveGame();
+          important = true;
         }
       }
+    }
+    if (changed) {
+      markPersistenceDirty();
+      if (important) saveGame(false);
     }
     updateHud();
   }
@@ -1593,7 +1623,7 @@
     questTrackerMode = "contract";
     sound.crystal();
     showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
-    saveGame(false);
+    saveImportant(false);
     startDialogue({
       speaker: npc.name,
       color: npc.color,
@@ -1683,7 +1713,7 @@
     const dungeonLevelText = dungeonLevels.length ? ` · 霧獸 LV.${Math.min(...dungeonLevels)}–${Math.max(...dungeonLevels)}` : "";
     showToast(targetMapId === "dungeon" ? `沉燈坑道${dungeonLevelText}` : target.name, "good");
     updateHud(true);
-    saveGame(false);
+    saveImportant(false);
     canvas.focus({ preventScroll: true });
     return true;
   }
@@ -1702,7 +1732,7 @@
         onClose: () => {
           questStage = 1;
           showToast("新任務：搵齊三粒霧晶", "good");
-          saveGame();
+          saveImportant(false);
         },
       });
     } else if (questStage === 1) {
@@ -1761,7 +1791,7 @@
             player.potions = Math.min(9, player.potions + 1);
             sound.heal();
             showToast("暖返晒。", "good");
-            saveGame(false);
+            saveImportant(false);
           },
         },
         { label: "唔使住", action: () => {} },
@@ -1782,7 +1812,7 @@
             player.coins -= 12;
             player.potions = Math.min(9, player.potions + 1);
             showToast("買到一支回燈藥。", "good");
-            saveGame(false);
+            saveImportant(false);
           },
         },
         { label: "先睇下貨架", action: () => {} },
@@ -1803,7 +1833,7 @@
             player.coins -= 6;
             player.hp = playerStats().maxHp;
             showToast("你喺旅店好好休息過。", "good");
-            saveGame(false);
+            saveImportant(false);
           },
         },
         { label: "再諗下", action: () => {} },
@@ -1836,7 +1866,7 @@
     const potionText = chest.reward.potions ? `、${chest.reward.potions} 支回燈藥` : "";
     showToast(`寶箱：${chest.reward.coins || 0} 燈幣${potionText}${itemText}`, "good");
     announce(`打開${chest.name}，獲得 ${chest.reward.coins} 燈幣。`);
-    saveGame();
+    saveImportant(false);
     updateNearestInteraction();
   }
 
@@ -1846,7 +1876,7 @@
     sound.heal();
     spawnBurst(world.shrine.x, world.shrine.y, "#ffc857", 22, 62);
     showToast(currentMapId === "dungeon" ? "回音燈已點亮 · 死亡會喺呢度醒返" : "燈火暖返晒 · 進度已儲存", "good");
-    saveGame();
+    saveImportant(false);
     updateHud();
   }
 
@@ -1865,7 +1895,7 @@
         showToast(`北岸封印已解除 · 擊敗吞燈獸${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
         sound.crystal();
         screenFlash = .5;
-        saveGame();
+        saveImportant(false);
       },
     });
   }
@@ -2192,13 +2222,16 @@
         description: item.description,
         detail: `${statText(item.stats)} · LV.${item.requiredLevel}`,
         equipment: item,
+        categoryKey: "equipment",
         isEquipped,
         disabled: isEquipped || levelLocked || classLocked,
+        action: "equip",
         actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "撳一下換上",
       });
     }
     if (player.potions > 0) items.push({
       id: "healing_potion", name: "回燈藥", category: "消耗品", quantity: player.potions,
+      categoryKey: "consumable",
       description: "回復大約 46% 最大生命；探索同戰鬥都用得到。",
       detail: player.hp >= maxHp ? "目前生命已全滿" : `目前 HP ${Math.ceil(player.hp)} / ${maxHp}`,
       action: "use-potion", actionLabel: player.hp >= maxHp ? "生命已滿" : "使用", disabled: player.hp >= maxHp,
@@ -2212,6 +2245,7 @@
         iconId: "skill_book_1",
         name: `${"★".repeat(star)} 技能書信封`,
         category: "公會委託獎勵",
+        categoryKey: "skillbook",
         quantity: count,
         description: `開封後從 canonical Fighter 技能資料中抽取同星級技能書（${pool.length} 招）。`,
         detail: "收到技能書後仍須符合 Fighter 前置才能學習",
@@ -2227,6 +2261,7 @@
         id: `skill_book_${star}`,
         name: `${star === 1 ? "初階" : star === 2 ? "進階" : "奧義"}技能書`,
         category: `${"★".repeat(star)} 技能書`,
+        categoryKey: "skillbook",
         quantity: count,
         description: `開封後會抽出 ${pool.length} 本對應職業技能書；唔會直接學識。`,
         detail: `技能消耗範圍 ${apBand.min}–${apBand.max} AP`,
@@ -2244,6 +2279,7 @@
         iconId: "skill_book_1",
         name: `技能書：${skill.name}`,
         category: `${skillStars(skill.star)} ${skill.classId === "fighter" ? "格鬥士" : "戰士"}技能書`,
+        categoryKey: "skillbook",
         quantity: count,
         description: skill.description,
         detail: `${skillRangeText(skill)} · 速度 ${skill.speedGrade}`,
@@ -2256,23 +2292,38 @@
     for (const [id, amount] of Object.entries(inventory)
       .filter(([, quantity]) => quantity > 0)
       .sort(([left], [right]) => inventoryItemName(left).localeCompare(inventoryItemName(right), "zh-HK"))) {
-      items.push({ id, name: inventoryItemName(id), category: "素材", quantity: amount, description: materialDescription(id), detail: "冒險素材" });
+      items.push({ id, name: inventoryItemName(id), category: "素材", categoryKey: "material", quantity: amount, description: materialDescription(id), detail: "冒險素材" });
     }
-    const totalQuantity = items.reduce((total, item) => total + item.quantity, 0);
-    const itemCards = items.map((item) => {
-      if (item.equipment) return `<button class="inventory-grid-item inventory-equipment-item ${item.isEquipped ? "is-equipped" : ""}" type="button" data-item-id="${item.id}" data-facility-action="equip" aria-pressed="${item.isEquipped ? "true" : "false"}" ${item.disabled ? "disabled" : ""}>
-        <div class="inventory-item-art">${equipmentIconHtml(item.equipment)}<b class="inventory-quantity" aria-label="數量 1">×1</b></div>
-        <div class="inventory-item-copy"><small>${item.category}</small><strong>${item.name}</strong><p>${item.description}</p><span>${item.detail}</span></div>
-        <span class="inventory-equipment-action">${item.actionLabel}</span>
-      </button>`;
-      const iconIndex = ITEM_ICON_INDEX[item.iconId || item.id] ?? 4;
-      const action = item.action ? `<button class="inventory-item-action" type="button" data-facility-action="${item.action}"${item.bookStar ? ` data-book-star="${item.bookStar}"` : ""}${item.envelopeStar ? ` data-envelope-star="${item.envelopeStar}"` : ""}${item.manualSkillId ? ` data-skill-id="${item.manualSkillId}"` : ""} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>` : "";
-      return `<article class="inventory-grid-item" data-item-id="${item.id}">
-        <div class="inventory-item-art">${atlasIconHtml("item", iconIndex, item.name)}<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b></div>
-        <div class="inventory-item-copy"><small>${item.category}</small><strong>${item.name}</strong><p>${item.description}</p><span>${item.detail}</span></div>
-        ${action}
-      </article>`;
-    }).join("");
+    const categoryLabels = { all: "全部", equipment: "裝備", consumable: "消耗品", skillbook: "技能書", material: "素材" };
+    const visibleItems = items.filter((item) => inventoryCategory === "all" || item.categoryKey === inventoryCategory);
+    if (!visibleItems.some((item) => item.id === selectedInventoryItemId)) selectedInventoryItemId = null;
+    const selectedItem = visibleItems.find((item) => item.id === selectedInventoryItemId) || null;
+    const iconMarkup = (item, extraClass = "") => item.equipment
+      ? equipmentIconHtml(item.equipment, extraClass)
+      : atlasIconHtml("item", ITEM_ICON_INDEX[item.iconId || item.id] ?? 4, item.name, extraClass);
+    const actionMarkup = (item) => {
+      if (!item.action) return "";
+      const attrs = [
+        `data-facility-action="${item.action}"`,
+        item.bookStar ? `data-book-star="${item.bookStar}"` : "",
+        item.envelopeStar ? `data-envelope-star="${item.envelopeStar}"` : "",
+        item.manualSkillId ? `data-skill-id="${item.manualSkillId}"` : "",
+        item.equipment ? `data-item-id="${item.id}"` : "",
+      ].filter(Boolean).join(" ");
+      return `<button class="facility-action-button" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`;
+    };
+    const itemCards = visibleItems.map((item) => `<button class="inventory-grid-item ui-slot ${item.equipment ? "inventory-equipment-item" : ""} ${item.isEquipped ? "is-equipped" : ""} ${selectedItem?.id === item.id ? "is-selected" : ""}" type="button" data-item-id="${item.id}" data-facility-action="select-item" aria-pressed="${selectedItem?.id === item.id ? "true" : "false"}" aria-label="選取${item.name}，數量 ${item.quantity}">
+      <div class="inventory-item-art">${iconMarkup(item)}<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b>${item.isEquipped ? '<span class="inventory-equipped-mark">已裝備</span>' : ""}</div>
+      <div class="inventory-item-copy"><small>${item.category}</small><strong>${item.name}</strong></div>
+    </button>`).join("");
+    const filters = Object.entries(categoryLabels).map(([key, label]) => `<button class="inventory-filter" type="button" data-facility-action="inventory-filter" data-inventory-category="${key}" aria-selected="${inventoryCategory === key ? "true" : "false"}">${label}</button>`).join("");
+    const detail = selectedItem
+      ? `<section class="inventory-selected-detail" aria-label="已選物品詳情" aria-live="polite">
+          <div class="inventory-item-art">${iconMarkup(selectedItem)}<b class="inventory-quantity" aria-label="數量 ${selectedItem.quantity}">×${selectedItem.quantity}</b></div>
+          <div class="inventory-selected-copy"><small>${selectedItem.category}</small><strong>${selectedItem.name}</strong><span>持有數量：${selectedItem.quantity}</span><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
+        </section>`
+      : `<section class="inventory-selected-detail inventory-empty-selection" aria-label="已選物品詳情"><strong>選取一件物品查看詳情</strong><small>完整描述與可用動作會喺呢度顯示。</small></section>`;
+    const totalQuantity = visibleItems.reduce((total, item) => total + item.quantity, 0);
     facilityContent.innerHTML = `
       <section class="unified-inventory-layout" aria-label="角色裝備與隨身物品">
         <aside class="bag-loadout-panel" aria-label="角色目前裝備">
@@ -2288,14 +2339,16 @@
           </div>
           <dl class="bag-loadout-stats" aria-label="裝備後能力"><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>移動</dt><dd>${stats.moveRange} 格</dd></div></dl>
         </aside>
-        <section class="bag-items-panel" aria-label="隨身物品">
-          <div class="facility-section-heading inventory-heading"><div><small>ALL CARRIED ITEMS</small><h3>隨身物品</h3></div><span>${items.length} 種 · 合共 ${totalQuantity} 件</span></div>
-          ${items.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><span aria-hidden="true">◇</span><strong>物品欄仲係空嘅</strong><small>討伐霧獸、探索寶箱同完成委託就會取得物品。</small></div>`}
-          <div class="facility-note inventory-help"><b>直接換裝</b><span>撳右邊任何可用裝備就會即時換上；藥水、技能書同素材亦全部放喺同一欄。</span></div>
+          <section class="bag-items-panel" aria-label="隨身物品">
+          <div class="facility-section-heading inventory-heading"><div><small>ALL CARRIED ITEMS</small><h3>隨身物品</h3></div><span>${visibleItems.length} 種 · 合共 ${totalQuantity} 件</span></div>
+          <div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div>
+          ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><span aria-hidden="true">◇</span><strong>呢類物品仲係空嘅</strong><small>切換分類或探索、討伐取得更多物品。</small></div>`}
+          ${detail}
+          <div class="facility-note inventory-help"><b>選取後操作</b><span>先撳物品查看完整資料，再喺詳情區執行換裝、使用、開封或學習。</span></div>
         </section>
       </section>`;
     drawEquipmentPaperdoll();
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">▣</span> 左邊睇目前裝備；右邊統一管理裝備、藥水、技能書同素材。</p><span><kbd>I</kbd> 關閉 · <kbd>ESC</kbd> 返回地圖</span>`;
+    facilityFooter.innerHTML = `<p><span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。</p><span><kbd>I</kbd> 關閉 · <kbd>ESC</kbd> 返回地圖</span>`;
   }
 
   function equipmentIconHtml(item, extraClass = "") {
@@ -2624,7 +2677,7 @@
     facilityContent.innerHTML = `
       <div class="facility-section-heading"><div><small>SKILL TREE CONTROLS</small><h3>學習狀態</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
       <div class="skill-tree-legend"><span class="is-learned"><i>技</i> 已學會</span><span class="is-ready"><i>★</i> 可學習</span><span class="is-locked"><i>?</i> 尚未解鎖</span><span class="is-equipped"><i>裝</i> DECK 使用中</span><span><i>按</i> 撳招名睇資料</span></div>
-      <div class="skill-tree-scroll" tabindex="0" aria-label="技能樹，可橫向捲動查看所有分支">
+      <div class="skill-tree-scroll ui-scroll" tabindex="0" aria-label="技能樹，可橫向捲動查看所有分支">
         <div class="skill-tree-board" role="tree" aria-label="${playerClassId === "fighter" ? "格鬥士" : "戰士"}向下發展技能樹" style="--tree-height:${treeHeight}px;--tree-min-width:${treeMinWidth}rem">
           <svg class="skill-tree-links" viewBox="0 0 1000 ${treeHeight}" preserveAspectRatio="none" aria-hidden="true" focusable="false">${links}</svg>
           ${tierGuides}${nodes}
@@ -2677,16 +2730,16 @@
     document.getElementById("skillDetailDescription").textContent = skill.description;
     document.getElementById("skillDetailStats").innerHTML = `
       <div class="ui-detail-row"><dt>類型／系別</dt><dd>${skillTypeText(skill)} · ${skill.treeGroup || "戰鬥技能"}</dd></div>
-      <div><dt>消耗 AP</dt><dd>${skill.tags.includes("passive") ? "PSV" : `${skill.apCost} AP`}</dd></div>
-      <div><dt>速度</dt><dd>${skill.tags.includes("passive") ? "自動" : skill.speedGrade}</dd></div>
-      <div><dt>中斷／耐久</dt><dd>${skill.interrupt ?? "—"} ／ ${skill.durability ?? "—"}</dd></div>
-      <div><dt>總傷害</dt><dd>${skillDamageText(skill)}</dd></div>
-      <div><dt>Hit 數／判定</dt><dd>${skill.hitResolution?.hit_count || 0} · ${skill.hitResolution?.hit_judgement_mode || "—"}</dd></div>
-      <div><dt>可選範圍</dt><dd>${skillRangeText(skill)}</dd></div>
-      <div><dt>高低差</dt><dd>${skillHeightText(skill)}</dd></div>
-      <div><dt>效果</dt><dd>${skillEffectSummary(skill)}</dd></div>
-      <div><dt>前置</dt><dd>${skill.prerequisites.length ? skill.prerequisites.map((id) => Skills.getSkill(id)?.name || id).join(" ＋ ") : "無"}</dd></div>
-      <div><dt>狀態</dt><dd>${stateLabel}</dd></div>`;
+      <div class="ui-detail-row"><dt>消耗 AP</dt><dd>${skill.tags.includes("passive") ? "PSV" : `${skill.apCost} AP`}</dd></div>
+      <div class="ui-detail-row"><dt>速度</dt><dd>${skill.tags.includes("passive") ? "自動" : skill.speedGrade}</dd></div>
+      <div class="ui-detail-row"><dt>中斷／耐久</dt><dd>${skill.interrupt ?? "—"} ／ ${skill.durability ?? "—"}</dd></div>
+      <div class="ui-detail-row"><dt>總傷害</dt><dd>${skillDamageText(skill)}</dd></div>
+      <div class="ui-detail-row"><dt>Hit 數／判定</dt><dd>${skill.hitResolution?.hit_count || 0} · ${skill.hitResolution?.hit_judgement_mode || "—"}</dd></div>
+      <div class="ui-detail-row"><dt>可選範圍</dt><dd>${skillRangeText(skill)}</dd></div>
+      <div class="ui-detail-row"><dt>高低差</dt><dd>${skillHeightText(skill)}</dd></div>
+      <div class="ui-detail-row"><dt>效果</dt><dd>${skillEffectSummary(skill)}</dd></div>
+      <div class="ui-detail-row"><dt>前置</dt><dd>${skill.prerequisites.length ? skill.prerequisites.map((id) => Skills.getSkill(id)?.name || id).join(" ＋ ") : "無"}</dd></div>
+      <div class="ui-detail-row"><dt>狀態</dt><dd>${stateLabel}</dd></div>`;
     const detailPattern = document.getElementById("skillDetailRangePattern");
     if (detailPattern) detailPattern.innerHTML = skillRangePatternMarkup(skill);
     const learnButton = document.getElementById("skillDetailLearnButton");
@@ -2739,7 +2792,7 @@
     sound.crystal();
     showToast(`抽到 ${"★".repeat(result.skill.star)}「${result.skill.name}」技能書，已放入物品欄。`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function openSkillManualConfirm(skillId) {
@@ -2786,7 +2839,7 @@
     showToast(result.duplicate ? `重複技能書化成 ${result.shardsAwarded} 精通碎片。` : `已學識「${result.skill.name}」；去城門 DECK 面板裝設先可出戰。`, "good");
     closeSkillManualConfirm();
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function useBagPotion() {
@@ -2796,12 +2849,13 @@
     player.potions -= 1;
     const healed = Math.min(maxHp - player.hp, Math.round(maxHp * .46));
     player.hp += healed;
+    markPersistenceDirty();
     sound.heal();
     showToast(`使用回燈藥 · 回復 ${healed} 生命`, "good");
     announce(`回復 ${healed} 生命`);
     updateHud();
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function changeSkillLoadout(skillId, equip, options = {}) {
@@ -2813,7 +2867,7 @@
     skillState = result.state;
     showToast(`${equip ? "已裝備" : "已卸下"}：${Skills.getSkill(skillId).name}`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function masterSkill(skillId) {
@@ -2822,7 +2876,7 @@
     skillState = result.state;
     showToast(`用 ${result.cost} 碎片領悟「${result.skill.name}」！`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function renderCodexFacility() {
@@ -2911,7 +2965,6 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     updateHud(true);
-    saveGame(false);
     pendingLevelUps = 0;
     canvas.focus({ preventScroll: true });
   }
@@ -2930,7 +2983,7 @@
     sound.crystal();
     showToast(`已接委託：${result.commission.title}`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function claimGuildContract(contractId) {
@@ -2946,7 +2999,7 @@
     sound.level();
     showToast(`委託回報完成 · ${"★".repeat(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function openAbandonCommission(contractId) {
@@ -2988,7 +3041,7 @@
     closeAbandonCommission(false);
     showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
     renderFacility();
-    saveGame(false);
+    saveImportant(false);
   }
 
   function openGuildEnvelope(star) {
@@ -3010,7 +3063,7 @@
     announce(`獲得格鬥士技能書：${skill.name}`);
     if (mode === "facility") renderFacility();
     updateHud(true);
-    saveGame(false);
+    saveImportant(false);
   }
 
   function changeEquipment(itemId, buyFirst = false) {
@@ -3043,37 +3096,7 @@
     showToast(`${buyFirst ? "買到兼裝備" : "已裝備"}：${result.item.name}`, "good");
     renderFacility();
     updateHud(true);
-    saveGame(false);
-  }
-
-  function togglePause(force) {
-    if (["title", "dead", "victory", "levelup", "dialogue", "facility"].includes(mode)) return;
-    const shouldPause = typeof force === "boolean" ? force : mode !== "paused";
-    if (shouldPause && mode !== "paused") {
-      modeBeforePause = mode;
-      mode = "paused";
-      stage.dataset.gameState = mode;
-      keys.clear();
-      updatePauseStats();
-      pausePanel.hidden = false;
-      document.getElementById("resumeButton").focus({ preventScroll: true });
-    } else if (!shouldPause && mode === "paused") {
-      pausePanel.hidden = true;
-      mode = modeBeforePause;
-      stage.dataset.gameState = mode;
-      previousTime = performance.now();
-      canvas.focus({ preventScroll: true });
-    }
-  }
-
-  function updatePauseStats() {
-    const stats = playerStats();
-    document.getElementById("pauseLevel").textContent = player.level;
-    document.getElementById("pauseAttack").textContent = stats.attack;
-    document.getElementById("pauseHp").textContent = stats.maxHp;
-    document.getElementById("pauseDefense").textContent = stats.defence;
-    document.getElementById("pauseCrystals").textContent = `${crystals.size} / 3`;
-    document.getElementById("pauseTime").textContent = formatTime(playTime);
+    saveImportant(false);
   }
 
   function showVictory() {
@@ -3086,7 +3109,7 @@
     const openedOutdoorChests = outdoorChests.filter((chest) => openedChests.has(chest.id)).length;
     document.getElementById("victoryChests").textContent = `${openedOutdoorChests} / ${outdoorChests.length}`;
     victoryPanel.hidden = false;
-    saveGame();
+    saveImportant(false);
     document.getElementById("keepPlayingButton").focus({ preventScroll: true });
     announce("霧梅爾山地重光。你完成了永恆國度的主線故事。");
   }
@@ -3123,10 +3146,6 @@
     const token = battle.token;
     const run = () => {
       if (!battle || battle.token !== token) return;
-      if (mode === "paused" && modeBeforePause === "battle") {
-        window.setTimeout(run, 90);
-        return;
-      }
       if (mode !== "battle") return;
       callback();
     };
@@ -3278,7 +3297,6 @@
     battleEncounterIntro.hidden = true;
     sound.boss();
     announce(`遇上${source.name}。進入格仔回合戰。`);
-    saveGame(false);
     beginPlayerRound();
     return true;
   }
@@ -4214,7 +4232,7 @@
       const earnedXp = finished.source.xp + bonusXp;
       showToast(`戰鬥勝利 · +${earnedXp} XP${bonusCoins ? `、+${bonusCoins} 燈幣` : ""}`, "good");
       updateHud(true);
-      saveGame(false);
+      saveImportant(false);
       canvas.focus({ preventScroll: true });
     }, 760);
   }
@@ -4450,12 +4468,7 @@
     if (mode !== "playing") return;
     playTime += dt;
     encounterGrace = Math.max(0, encounterGrace - dt);
-    autosaveTimer += dt;
-    if (autosaveTimer >= 5) {
-      autosaveTimer = 0;
-      const nextFingerprint = getPersistenceFingerprint();
-      if (nextFingerprint !== persistenceFingerprint) saveGame(false);
-    }
+    persistence?.tick(dt);
     updatePlayer(dt);
     updateEnemies(dt);
     updateProjectiles(dt);
@@ -4695,7 +4708,7 @@
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#0a1020";
     ctx.fillRect(0, 0, width, height);
-    if (battle && (mode === "battle" || (mode === "paused" && modeBeforePause === "battle"))) {
+    if (battle && mode === "battle") {
       drawBattle();
       if (screenFlash > .01) {
         ctx.fillStyle = `rgba(255,107,107,${screenFlash * .16})`;
@@ -6819,7 +6832,6 @@
       return;
     }
     if (mode === "battle") {
-      if (code === "KeyP") return togglePause();
       if (!battle) return;
       if (battle.phase === "intro") {
         if (code === "Enter" || code === "Space") beginPlayerRound();
@@ -6882,15 +6894,11 @@
       if (code === "Enter" || code === "Space") keepPlaying();
       return;
     }
-    if (mode === "paused") {
-      if (["Escape", "KeyP", "Enter"].includes(code)) togglePause(false);
-      return;
-    }
     if (mode !== "playing") return;
     if (code === "KeyI") openFacility("bag");
     else if (code === "KeyL") openFacility("skills");
     else if (code === "KeyE" || code === "Enter") interact();
-    else if (code === "Escape" || code === "KeyP") togglePause();
+    else if (code === "Escape") canvas.focus({ preventScroll: true });
   }
 
   function debugBattleSnapshot() {
@@ -6995,6 +7003,7 @@
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(),
+        persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
         facility: mode === "facility" ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
         checkpoint: { ...checkpoint },
         enemyLevels: enemies.map((enemy) => ({ id: enemy.id, level: enemy.level, boss: enemy.boss })),
@@ -7255,8 +7264,6 @@
     advanceDialogue();
   });
   continueButton.addEventListener("click", loadGame);
-  document.getElementById("resumeButton").addEventListener("click", () => togglePause(false));
-  document.getElementById("pauseButton").addEventListener("click", () => togglePause());
   const openStatusFromHud = () => openFacility("status");
   statusButton.addEventListener("click", openStatusFromHud);
   playerHud.addEventListener("click", openStatusFromHud);
@@ -7286,7 +7293,6 @@
   abandonCommissionPanel.addEventListener("click", (event) => {
     if (event.target === abandonCommissionPanel) closeAbandonCommission();
   });
-  document.getElementById("saveButton").addEventListener("click", () => saveGame());
   document.getElementById("respawnButton").addEventListener("click", respawn);
   document.getElementById("keepPlayingButton").addEventListener("click", keepPlaying);
   document.getElementById("facilityCloseButton").addEventListener("click", closeFacility);
@@ -7303,7 +7309,15 @@
     const button = event.target.closest("[data-facility-action]");
     if (!button || button.disabled) return;
     const action = button.dataset.facilityAction;
-    if (action === "accept") acceptGuildOffer(button.dataset.offerId);
+    if (action === "select-item") {
+      selectedInventoryItemId = button.dataset.itemId || null;
+      renderBagFacility();
+    } else if (action === "inventory-filter") {
+      inventoryCategory = ["all", "equipment", "consumable", "skillbook", "material"].includes(button.dataset.inventoryCategory)
+        ? button.dataset.inventoryCategory
+        : "all";
+      renderBagFacility();
+    } else if (action === "accept") acceptGuildOffer(button.dataset.offerId);
     else if (action === "claim") claimGuildContract(button.dataset.contractId);
     else if (action === "abandon") openAbandonCommission(button.dataset.contractId);
     else if (action === "buy") changeEquipment(button.dataset.itemId, true);
@@ -7363,7 +7377,7 @@
     cancelExplorePointerTracking();
     previousTime = performance.now();
   });
-  window.addEventListener("beforeunload", () => { if (mode !== "title") saveGame(false); });
+  window.addEventListener("beforeunload", () => { if (mode !== "title") persistence?.flush(); });
   window.addEventListener("resize", resize, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
