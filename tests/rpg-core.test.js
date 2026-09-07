@@ -252,29 +252,15 @@ test("normal town services use physical door entries and the east passage uses a
   assert.match(world.houses.find((house) => house.id === "tea-house").label, /霧燈旅店/);
 });
 
-test("Ah Ching is authored as an adult female keeper", () => {
-  const ahChing = World.createWorld().npcs.find((npc) => npc.id === "ah-ching");
-  assert.ok(ahChing, "ah-ching should remain in the village NPC roster");
-  assert.equal(ahChing.name, "阿澄");
-  assert.equal(ahChing.actor, "keeper");
-  assert.equal(ahChing.gender, "female");
-  assert.ok(ahChing.age >= 18, "Ah Ching should be unambiguously adult");
-  assert.equal(ahChing.role, "守燈星術師");
-  assert.equal(ahChing.referenceAsset, "assets/ah-ching-v1.png");
-  assert.match(ahChing.appearance, /銀藍長髮/);
-  assert.match(ahChing.appearance, /月輪法杖/);
-  assert.match(ahChing.appearance, /藍色精靈/);
-});
-
-test("village NPCs each have a distinct visual actor", () => {
-  const npcs = World.createWorld().npcs;
-  assert.deepEqual(npcs.map((npc) => npc.actor).sort(), ["healer", "keeper", "smith"]);
-  assert.equal(new Set(npcs.map((npc) => npc.actor)).size, npcs.length);
+test("Main Town has no street NPC roster after the flattened-scene migration", () => {
+  const world = World.createWorld();
+  assert.deepEqual(world.npcs, []);
+  assert.equal(Object.hasOwn(world.objectives, "elder"), false);
 });
 
 test("town quest points stand on walkable tiles", () => {
   const world = World.createWorld();
-  const points = [world.start, world.objectives.elder, world.objectives.townGate];
+  const points = [world.start, world.objectives.townGate];
   for (const point of points) {
     const tx = Math.floor(point.x / world.tileSize);
     const ty = Math.floor(point.y / world.tileSize);

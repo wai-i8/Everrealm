@@ -1,9 +1,9 @@
 # 霧燈旅店 · Inn
 
 - `map_id: inn`
-- 類型：主城 interior；主題：旅店／休息空間。
+- 類型：主城 flattened interior；主題：旅店／休息空間。
 - 目的：休息、恢復與提供旅店服務。
 
-入口由主城 authored navigation package 的 `Inn` physical-door trigger 連入，`inn-to-world` 以精準 threshold 返回門外安全 spawn；入口及室內出口只使用共用 bitmap 門標記，沒有 legacy 紫色 magic-circle。朵姨站在前台櫃台後；房匙／名冊與行李櫃靠牆組成 guest-service，中央兩側長凳與茶桌形成 lounge，南側兩張床保留作 guest／rest 區，壁爐作休憩焦點而不堵住入口動線。
+入口由主城 authored navigation package 的 `Inn` physical-door trigger 連入，`inn-to-world` 以 cyan exit region 驗證精準 threshold 返回門外安全 spawn；不使用魔法圓陣或室內 marker。可見場景由 `assets/inn/inn.png` 提供，`assets/inn/inn_walkable.png` 只作 authoring source，兩者固定 `1672 × 941`。朵姨係 master art 內唯一可見服務 NPC，runtime 只保留 `inn-keeper` semantic entity；前台、房匙／名冊、行李櫃、lounge、床位及壁爐全由背景提供，唔重畫 procedural props 或 marker。
 
-精確家具、NPC 與 collision 由 `maps/interiors/inn.js` 定義。
+精確 NPC/service、transition metadata 與 scene wiring 由 `maps/interiors/inn.js` 定義；像素 walkability 由 `map/inn-navigation.generated.js`／共用 resolver 提供。

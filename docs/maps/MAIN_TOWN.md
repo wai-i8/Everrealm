@@ -84,7 +84,7 @@ direction: east
 
 以下物件仍然由 `maps/main-town.js` 暴露，供既有 UI、quest、interaction 同 transition code 使用：
 
-- `npcs`：阿澄、鐵叔、草姨；
+- `npcs`：空陣列；主城唔再生成街道 NPC，服務／主線接待角色放返各自 interior；
 - `shrine`：中央燈龕；
 - `boards`：`harbour-gate-deck-console`，連接 `deck-loadout`；
 - `houses`：五個 service doorway semantic records；
@@ -98,5 +98,5 @@ direction: east
 - package 內嘅 source dimensions、walkable／collision／trigger masks、building rectangles、east exit 同 connectivity metadata 係本地 authored source of truth。
 - `docs/MAP_SYSTEM.md` 只保留 map-system 層級規則；本文件負責主城 package contract。
 - `maps/main-town.js` 負責 runtime object shape、map registry compatibility、portal linkage，同 package 座標接駁。
-- `game.js` 負責將 pathfinding、line-clear、movement substeps 及正常 arrival validation 接到 `LanternMainTownNavigation.isWorldPositionWalkable()`；`character-art.js` 只負責 flattened rendering，唔再掃描主城 navigation PNG。
+- `game.js` 負責將 pathfinding、line-clear、movement substeps 及正常 arrival validation 接到 `LanternMainTownNavigation.isWorldPositionWalkable()`；`character-art.js` 只負責 flattened rendering，唔再掃描主城 navigation PNG。主城門口同東側出口保留 semantic hit regions，但唔畫 transition marker、入口 label 或 talk prompt。
 - 如果要改主城永久 geometry，必須更新 package assets／JSON、重新執行 generator、檢查 generated runtime、相關測試及本文件，並重新做 automated／runtime／visual QA。exact mask geometry 唔應複製到 Markdown。

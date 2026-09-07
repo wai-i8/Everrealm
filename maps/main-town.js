@@ -122,11 +122,10 @@
       eastGateInside: eastAnchor,
     };
     const spawnFacings = { guildFront: "down", shopFront: "down", clinicFront: "down", generalStoreFront: "down", innFront: "down", eastGateInside: "right" };
-    const npcs = [
-      { id: "ah-ching", name: "阿澄", role: "守燈星術師", kind: "npc", x: 687, y: 650, radius: 12, color: "#ffc857", facing: "down", actor: "keeper", gender: "female", age: 25, appearance: "銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、月輪法杖與藍色精靈同伴", referenceAsset: "assets/ah-ching-v1.png" },
-      { id: "town-smith", name: "鐵叔", role: "街坊鍛刀匠", kind: "npc", x: 300, y: 550, radius: 12, color: "#ff8b62", facing: "right", actor: "smith", gender: "male", age: 43 },
-      { id: "town-herbalist", name: "草姨", role: "街坊草藥師", kind: "npc", x: 1050, y: 550, radius: 12, color: "#87db82", facing: "left", actor: "healer", gender: "female", age: 47 },
-    ];
+    // Main Town is an authored navigation-and-building scene. Services and
+    // story reception now live inside their owning interiors, so no street
+    // NPC sprites or duplicate talk targets are spawned here.
+    const npcs = [];
     const shrine = { id: "harbour-shrine", name: "中央燈龕", kind: "shrine", x: 687, y: 698, radius: 18 };
     const boards = [{ id: "harbour-gate-deck-console", kind: "questBoard", name: "城門戰技面板台", x: 1110, y: 598, radius: 22, boardId: "deck-loadout", prompt: "設定戰技面板", passageId: "east-town-passage" }];
     const eastPortal = {
@@ -211,7 +210,7 @@
       start: spawnPoints.start,
       spawnPoints,
       spawnFacings,
-      objectives: { elder: { x: npcs[0].x, y: npcs[0].y }, townGate: eastCentre, gate: eastCentre, boss: eastCentre, crystals: {} },
+      objectives: { townGate: eastCentre, gate: eastCentre, boss: eastCentre, crystals: {} },
       questDestinations: { crystals: { mapId: MAP_IDS.FIELD, objectiveGroup: "crystals" }, seal: { mapId: MAP_IDS.FIELD, objectiveId: "gate" }, boss: { mapId: MAP_IDS.FIELD, objectiveId: "boss" }, dungeon: { mapId: MAP_IDS.FIELD, objectiveId: "dungeon" } },
       townLayout: {
         style: "flattened-final-navigation-package",

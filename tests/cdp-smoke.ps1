@@ -231,9 +231,7 @@ try {
         @{ portal = 'world-to-general-store'; map = 'general-store' },
         @{ portal = 'world-to-inn'; map = 'inn' }
       )) {
-        $approachOffset = if ($entry.map -eq 'general-store') { 300 } else { -300 }
-        $approachExpression = if (@('guild', 'clinic', 'inn') -contains $entry.map) { 'door.x,door.y+70' } else { 'door.x,door.y-70' }
-        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const door=api.entityPosition('$($entry.portal)');api.teleport($approachExpression);const blocked=api.collisionAt(door.x,door.y,12);api.clickPortal('$($entry.portal)');return JSON.stringify({door,blocked,start:api.snapshot()});})()" | ConvertFrom-Json
+        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,door=api.entityPosition('$($entry.portal)'),info=api.transitionInfo('$($entry.portal)');api.newGame();api.clickPortal('$($entry.portal)');return JSON.stringify({door,info,approach:info.entrance.approachPoint,blocked:api.collisionAt(door.x,door.y,12),start:api.snapshot()});})()" | ConvertFrom-Json
         $arrived = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $arrived; $attempt += 1) {
           Start-Sleep -Milliseconds 250
@@ -242,8 +240,7 @@ try {
         }
         if (-not $arrived) { throw "Physical town door did not enter $($entry.map) (map=$($doorSnapshot.currentMapId), mode=$($doorSnapshot.mode), door=$($doorData.door.x),$($doorData.door.y), blocked=$($doorData.blocked), player=$($doorSnapshot.x),$($doorSnapshot.y), remaining=$($doorSnapshot.explorePath.remaining))." }
         Start-Sleep -Milliseconds 500
-        $exitApproachExpression = if (@('guild', 'shop') -contains $entry.map) { 'exit.x,exit.y-70' } else { 'exit.x-100,exit.y' }
-        $exitData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;const exit=api.entityPosition('$($entry.map)-to-world');api.teleport($exitApproachExpression);api.clickMoveTo(exit.x,exit.y);return JSON.stringify({exit,blocked:api.collisionAt(exit.x,exit.y,12),start:api.snapshot()});})()" | ConvertFrom-Json
+        $exitData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,exit=api.entityPosition('$($entry.map)-to-world'),info=api.transitionInfo('$($entry.map)-to-world'),approach=info.entrance.approachPoint;api.teleport(approach.x,approach.y-30);api.portalTick();api.clickMoveTo(exit.x,exit.y);return JSON.stringify({exit,info,approach:{x:approach.x,y:approach.y-30},blocked:api.collisionAt(approach.x,approach.y-30,12),start:api.snapshot()});})()" | ConvertFrom-Json
         $returned = $false
         for ($attempt = 0; $attempt -lt 18 -and -not $returned; $attempt += 1) {
           Start-Sleep -Milliseconds 250
@@ -597,7 +594,7 @@ try {
       if ($forest.mode -ne 'playing' -or $forest.currentMapId -ne 'field') { throw 'Forest layout preview did not remain on the separate field map.' }
     }
     'dialogue' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.teleportTo('ah-ching'); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
       Start-Sleep -Milliseconds 220
       Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',key:'e',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',key:'e',bubbles:true})); true" | Out-Null
       Start-Sleep -Milliseconds 120
@@ -606,9 +603,9 @@ try {
       $dialoguePortraitUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const canvas=document.getElementById("dialoguePortraitCanvas"),rect=canvas.getBoundingClientRect();return {speaker:document.getElementById("speakerName").textContent,actor:canvas.dataset.actor,displayWidth:rect.width,displayHeight:rect.height,canvasWidth:canvas.width,canvasHeight:canvas.height,art:window.LanternArt.spriteStatus()};})())') | ConvertFrom-Json
       # Keep this comparison ASCII-only so Windows PowerShell 5.1 does not
       # reinterpret the UTF-8 source literal through the active ANSI codepage.
-      $expectedAhChing = ([string][char]0x963F) + ([string][char]0x6F84)
-      if ($dialoguePortraitUi.speaker -ne $expectedAhChing) { throw "Expected Ah Ching dialogue, got $($dialoguePortraitUi.speaker)." }
-      if ($dialoguePortraitUi.actor -ne 'keeper') { throw "Expected Ah Ching portrait actor keeper, got $($dialoguePortraitUi.actor)." }
+      $expectedGuildMaster = ([string][char]0x598D) + ([string][char]0x59D0)
+      if ($dialoguePortraitUi.speaker -ne $expectedGuildMaster) { throw "Expected Guild Master dialogue, got $($dialoguePortraitUi.speaker)." }
+      if ($dialoguePortraitUi.actor -ne 'guildmaster') { throw "Expected Guild Master portrait actor guildmaster, got $($dialoguePortraitUi.actor)." }
       foreach ($asset in @(
         @('npcMap', 'assets/npc-map-chibi-v4.png'),
         @('npcPortraits', 'assets/npc-dialogue-portraits-v4.png'),
@@ -676,7 +673,7 @@ try {
       Start-Sleep -Milliseconds 100
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.teleportTo('boss-mistfang'); window.__RPG_DEBUG__.damageEnemy('boss-mistfang',99999); true" | Out-Null
       Start-Sleep -Milliseconds 600
-      Invoke-GameExpression -Expression "for(let i=0;i<10&&window.__RPG_DEBUG__.snapshot().mode==='levelup';i++) window.__RPG_DEBUG__.chooseUpgrade('edge'); window.__RPG_DEBUG__.enterMap('world'); window.__RPG_DEBUG__.teleportTo('ah-ching'); true" | Out-Null
+      Invoke-GameExpression -Expression "for(let i=0;i<10&&window.__RPG_DEBUG__.snapshot().mode==='levelup';i++) window.__RPG_DEBUG__.chooseUpgrade('edge'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
       Start-Sleep -Milliseconds 220
       Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',key:'e',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',key:'e',bubbles:true})); true" | Out-Null
       Start-Sleep -Milliseconds 80

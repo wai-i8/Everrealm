@@ -10,9 +10,9 @@
 - 霧獸舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy runtime/fallback**；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
 - 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
-- 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及傳送門。
+- 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及 legacy 傳送門；flattened interior runtime 不把 marker 畫喺場景上。
 - 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築；主城主要服務建築統一遵守下文「主城服務建築統一外觀規格」。
-- 主城實體轉場：普通建築門同東側 passage 共用 `assets/marker-atlas-v1.png` 左下角 `interact` frame（index 2），由 shared marker renderer 按 anchor 繪製；`assets/town-door-marker-v1.png` 同 `assets/town-gate-east-v1.png` 只保留作歷史／製作來源，不屬普通 transition runtime art。
+- 主城實體轉場：普通建築門同東側 passage 使用 semantic physical-door／physical-passage hit region；`assets/town-door-marker-v1.png` 同 `assets/town-gate-east-v1.png` 只保留作歷史／製作來源，不屬普通 transition runtime art。runtime 不顯示門口菱形、入口 label 或 talk prompt。
 - UI：`assets/ui/ui-visual-atlas-v1.png` 係共用 fantasy window、button、tab、slot、skill-node 嘅 bitmap source atlas；HTML/CSS 負責 9-slice 式可伸縮組合，`docs/UI_SYSTEM.md` 負責玩家可見嘅組合與狀態規則。
 - 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。
@@ -26,6 +26,18 @@
 PNG mask 係 development-time authoring input，由 `tools/generate-main-town-navigation.js` deterministic 轉成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔應載入主城 mask PNG、使用 Canvas／OffscreenCanvas pixel readback，亦唔應由 bitmap alpha 或視覺物件自動推導 collision。walkable mask 係完整 allowlist，collision mask 唔係其 inverse，trigger mask 亦唔會令普通移動位置自動變成 walkable。
 
 主城玩家定位採用 shared exploration feet pivot；`feet_radius_px` 由 authored package 提供，目前係 3 px。視覺 sprite 可以伸入建築上方，但 feet disk 必須由 shared navigation resolver 驗證。pathfinding、line-clear、實際 movement substeps 同正常 arrival validation 都使用同一 resolver；navigation 缺失／驗證失敗時 default blocked。
+
+## Flattened interior scene contract
+
+Guild、Weapon Shop、Inn、General Store 同 Hospital 五個室內場景使用同一套可重用 flattened-scene contract。每個場景有一對同尺寸、同像素對位嘅 PNG：
+
+- visible master art：`assets/{guild|weapon|inn|item|hospital}/{scene}.png`，所有地板、牆、家具、裝飾及可見 NPC 都已烘焙入畫面；runtime 只顯示呢張圖。
+- authoring navigation art：同一資料夾嘅 `{scene}_walkable.png`，只供開發期生成器讀取，唔會由 browser runtime 載入；白色係 walkable allowlist、洋紅色係 NPC occupancy、青色係 exit／door region。
+- 每張圖固定為 `1672 × 941`，只接受精確不透明 `#ffffff`、`#ff00ff`、`#00ffff` authored colors；其他像素唔會被推導成 collision。
+
+`tools/generate-flattened-navigation.js` 以 deterministic generator 將 authoring PNG 編譯成 `map/*-navigation.generated.js`；`map/flattened-navigation.js` 提供所有場景共用嘅 fail-closed feet-disk resolver（半徑 `3 px`）。NPC／exit region、anchor、bbox、centroid 同 source hash 都保留喺 generated package，map factory 只接入 semantic interaction、service data 同 transition contract。瀏覽器唔應掃描 PNG、由 visible art alpha 推導 collision，亦唔應把 authoring overlay 顯示畀玩家。
+
+室內正式 runtime 只保留一個 authored service NPC；NPC bitmap 係背景內已烘焙嘅視覺，map NPC entity 只負責互動及服務，不再重畫第二個角色。家具、裝飾、委託板等可保留 metadata 供系統查詢，但 flattened 場景一律 `render: false`、唔以舊 procedural prop 或 marker 覆蓋 master art。出口仍然係正常 semantic physical door，玩家可以按住門區／點擊門區自然行入，離開時由 cyan exit region 驗證，整個流程唔顯示 talk／transition marker。
 
 ## 主城服務建築統一外觀規格
 
@@ -44,7 +56,7 @@ PNG mask 係 development-time authoring input，由 `tools/generate-main-town-na
 - 所有主要服務建築 exterior 必須以**正面朝向 Main Street** 嘅正交構圖呈現；北排建築面向南，南排建築面向北。
 - **正式可用正門固定喺面向 Main Street 嘅建築邊中央。** 門中心 X 必須與建築 semantic centerline 對齊。
 - 禁止將主要入口設計成偏左、偏右、側門、斜門或藏喺附屬攤位後面；呢啲構圖即使美術上有特色，都唔適合標準主城服務建築。
-- `doorAnchor`、門口 marker、threshold、approachPoint 同 exteriorSpawn 必須沿同一條 building centerline 配置，並按所屬街道側推導。
+- `doorAnchor`、threshold、approachPoint 同 exteriorSpawn 必須沿同一條 building centerline 配置，並按所屬街道側推導；門口 marker 只屬 legacy／debug art，正式 flattened runtime 不顯示。
 - 門前台階／平台／地墊可以有風格差異，但必須保持中央入口清晰，並預留足夠透明／地面空間畀角色接近。
 - 如果畫面包含其他裝飾門、側門或開口，必須明顯次要且不可誤導為主要可互動入口；若會造成混淆，應從 final runtime asset 移除。
 
@@ -58,7 +70,7 @@ PNG mask 係 development-time authoring input，由 `tools/generate-main-town-na
 4. standardized building envelope／visual scale；
 5. complete foundation、steps、door shadow 同接地像素；
 6. 左右輪廓可以唔完全對稱，但門中心不可漂移；
-7. runtime 截圖中門口 marker／threshold 必須對正可見門洞。
+7. runtime 截圖中 semantic threshold 必須對正可見門洞；正式畫面唔應出現門口 marker。
 
 如果現有建築 asset 違反中央正門或統一尺寸規格，應重新生成／重畫正式 bitmap，而唔係長期保留 per-building entrance offset 作補救。主城主要服務建築不得以任意 per-building entrance offset 取代共用 contract。
 

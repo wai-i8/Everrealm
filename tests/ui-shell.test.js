@@ -32,14 +32,16 @@ test("three persisted exploration zoom levels are wired to the camera", () => {
   assert.match(game, /setExploreZoomLevel\(button\.dataset\.zoomLevel\)/);
 });
 
-test("named building entrances stay visible while remote portals remain proximity gated", () => {
+test("flattened building entrances keep semantic doors without painted markers", () => {
   assert.doesNotMatch(game, /function drawObjective\(/);
   assert.doesNotMatch(game, /drawObjective\(shakeX, shakeY\)/);
-  assert.match(game, /!portal\.alwaysVisible && Core\.distance\(player, portal\) > revealDistance/);
-  assert.match(transitionsSource, /mapLabel: link\.mapLabel,[\s\S]*?alwaysVisible: true/);
+  assert.match(game, /function drawDoorway\(portal, shakeX, shakeY\)[\s\S]*?return undefined;/);
+  assert.match(game, /function drawPortal\(portal, shakeX, shakeY\)[\s\S]*?return undefined;/);
+  assert.match(game, /function drawPhysicalPassage\(portal, shakeX, shakeY\)[\s\S]*?return undefined;/);
+  assert.match(transitionsSource, /transitionType: TRANSITION_TYPES\.PHYSICAL_DOOR/);
   assert.match(mainTownSource, /mapLabel: "公會"/);
   assert.match(mainTownSource, /mapLabel: "裝備店"/);
-  assert.match(game, /mapPortal:\s*true/);
+  assert.match(game, /interactionPrompt\.hidden = true/);
 });
 
 test("click-only exploration plans a collision-aware path and carries no mobile d-pad binder", () => {

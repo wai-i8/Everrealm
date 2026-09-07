@@ -34,9 +34,9 @@
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。
 - 所有一般彈出視窗共用網站式關閉契約：右上角永遠提供清楚可見的 `×`，點擊視窗外的半透明背景亦會關閉；即使底部已有「取消」按鈕，亦不可取代以上兩種離開方式。
 - 點擊左上角色狀態可開啟狀態欄，只顯示職業、等級、HP、攻擊、防禦、戰棋移動及 DECK；不顯示行動速度、探索移速或暴擊率。
-- 所有 NPC 頭頂置中顯示名稱；任務問號／感嘆號以 NPC 身體中心線定位。不得把名稱燒進角色圖，避免縮放、換圖或四方向動畫後失去清晰度。角色圖點樣裁切、對齊及以 semantic anchor 維持中心線，統一依 `ART_PIPELINE.md`。
-- NPC 的法杖、槌、寵物、托盤等外伸裝飾不得令人物世界座標、名稱或任務標記漂移；具體 atlas／anchor 實作規格見 `ART_PIPELINE.md`。
-- 公會及裝備店的入口圖示與名稱只要在鏡頭內就常駐顯示，文字使用可讀尺寸，不需先走近才出現。建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體門框 anchor 與 atlas 實作見 `ART_PIPELINE.md`。
+- 所有可互動 NPC 頭頂置中顯示名稱；任務問號／感嘆號若存在，必須以 NPC 身體中心線定位。不得把名稱燒進角色圖，避免縮放、換圖或四方向動畫後失去清晰度。角色圖點樣裁切、對齊及以 semantic anchor 維持中心線，統一依 `ART_PIPELINE.md`。flattened interior 嘅 NPC 視覺已烘焙入 master art，runtime 只顯示一個 semantic NPC entity，唔重畫角色。
+- NPC 的法杖、槌、寵物、托盤等外伸裝飾不得令人物世界座標、名稱或任務標記漂移；具體 atlas／anchor 實作規格見 `ART_PIPELINE.md`。正式 flattened interior 不顯示 talk／互動菱形或 transition marker。
+- 公會、裝備店、療癒所、雜貨舖及旅店嘅入口使用可見 master art 對應嘅 semantic physical door；門區只要在鏡頭內就可以直接點擊／按住行入，但唔常駐繪製 marker 或入口 label。建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體 flattened-scene contract 見 `ART_PIPELINE.md`，transition geometry 見 `docs/MAP_SYSTEM.md`。
 - 玩家、普通怪物及 Familiar 正式移動時都要有四方向行走動畫；探索地圖唔接受靜止 sprite 純平移。普通怪物接近斜角時保留原軸向，改向需要短暫確認及冷卻，避免碰牆或微小路徑修正造成左右高速閃爍。具體 28-frame locomotion atlas、anchor、repack 及 animation QA 規格見 `ART_PIPELINE.md`。
 - 探索地圖不顯示怪物血條；只有戰鬥場景在角色腳下顯示血條。
 - 公會任務只可在公會開啟；商店只可在裝備店開啟。一般物品、狀態、裝備及技能可由左側選單隨時查看。

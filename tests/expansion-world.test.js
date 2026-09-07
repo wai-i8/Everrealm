@@ -5,6 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const ExpansionWorld = require("../expansion-world.js");
+const Core = require("../rpg-core.js");
 
 const REQUIRED_API = [
   "TILE",
@@ -38,6 +39,10 @@ function circleRectOverlap(circle, rect) {
 
 // This mirrors the exploration collision rules in game.js for expansion maps.
 function isBlockedAt(map, x, y, radius = 12) {
+  if (map.navigation?.authoritative && typeof map.navigation.isPositionWalkable === "function") {
+    const navigationRadius = Number(map.navigation.feetRadiusPx) || 3;
+    return !map.navigation.isPositionWalkable({ x, y }, { radius: navigationRadius });
+  }
   const circle = { x, y, radius };
   if (
     x - radius < 0 ||
@@ -112,7 +117,26 @@ function assertReachable(map, reached, entity, group) {
   assert.ok(Number.isFinite(entity.x) && Number.isFinite(entity.y), `${map.id} ${group} ${entity.id} needs a position`);
   assert.ok(entity.x >= 0 && entity.x <= map.pixelWidth, `${map.id} ${group} ${entity.id} x is in bounds`);
   assert.ok(entity.y >= 0 && entity.y <= map.pixelHeight, `${map.id} ${group} ${entity.id} y is in bounds`);
-  assert.equal(isBlockedAt(map, entity.x, entity.y), false, `${map.id} ${group} ${entity.id} must not spawn in collision`);
+  const authoritative = map.navigation?.authoritative && typeof map.navigation.isPositionWalkable === "function";
+  const authoredNpc = authoritative && typeof map.navigation.isRegionAt === "function" && map.navigation.isRegionAt("npc", entity);
+  if (!authoredNpc) assert.equal(isBlockedAt(map, entity.x, entity.y), false, `${map.id} ${group} ${entity.id} must not spawn in collision`);
+  if (authoritative) {
+    // Authored NPC pixels intentionally represent occupancy rather than a
+    // standable player position. The shared resolver returns the nearest
+    // valid approach point for those targets, just like runtime pathfinding.
+    const radius = Number(map.navigation.feetRadiusPx) || 3;
+    const route = Core.findOverworldPath(map.start, entity, {
+      bounds: { x: 0, y: 0, w: map.pixelWidth, h: map.pixelHeight },
+      cellSize: 12,
+      radius,
+      directions: 8,
+      maxVisited: 14000,
+      nearestReachable: true,
+      isWalkable: (point) => map.navigation.isPositionWalkable(point, { radius }),
+    });
+    assert.ok(route.length > 0 || Core.distance(map.start, entity) < 1, `${map.id} ${group} ${entity.id} must be reachable by its authored approach route`);
+    return;
+  }
   const { tx, ty } = tileForPoint(map, entity);
   assert.ok(reached.has(tileKey(tx, ty)), `${map.id} ${group} ${entity.id} must be reachable from start`);
 }
@@ -155,8 +179,17 @@ test("exports the same UMD API to Node and a browser-like global", () => {
     "map/interior-helpers.js",
     "map/main-town-navigation.generated.js",
     "map/main-town-navigation.js",
+    "map/flattened-navigation.js",
     "map/hospital-navigation.generated.js",
     "map/hospital-navigation.js",
+    "map/weapon-navigation.generated.js",
+    "map/weapon-navigation.js",
+    "map/inn-navigation.generated.js",
+    "map/inn-navigation.js",
+    "map/item-navigation.generated.js",
+    "map/item-navigation.js",
+    "map/guild-navigation.generated.js",
+    "map/guild-navigation.js",
     "maps/main-town.js",
     "maps/mountain-field.js",
     "maps/mine.js",
@@ -191,7 +224,7 @@ test("all expansion maps have a renderer-compatible, rectangular shape", () => {
     assert.equal(map.id, id);
     assert.ok(map.name && map.shortName);
     assert.equal(map.tileSize, ExpansionWorld.TILE);
-    if (id === "clinic") {
+    if (map.art?.flattened) {
       assert.deepEqual([map.pixelWidth, map.pixelHeight], [1672, 941]);
     } else {
       assert.equal(map.pixelWidth, map.width * map.tileSize);
@@ -324,16 +357,12 @@ test("the expanded adult female NPC cast is substantial and reachable", () => {
 test("every expansion NPC has an explicit visual actor, with service interiors reusing the actor roster", () => {
   const npcs = Object.values(ExpansionWorld.createExpansionMaps()).flatMap((map) => map.npcs);
   const expectedActors = [
-    "adventurer",
-    "armorer",
     "clerk",
-    "duelist",
     "explorer",
     "guildmaster",
     "healer",
     "mountainCourier",
     "merchant",
-    "tailor",
   ];
 
   assert.ok(npcs.every((npc) => typeof npc.actor === "string" && npc.actor.length > 0));

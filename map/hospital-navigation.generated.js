@@ -11,6 +11,8 @@
   "use strict";
 
   const PACKAGE = {
+  "scene": "hospital",
+  "package_id": "hospital-navigation-prototype",
   "source": {
     "filename": "hospital_walkable.png",
     "width": 1672,
@@ -39,7 +41,7 @@
     },
     "matching": "exact opaque RGB colors only; all other pixels are non-authored"
   },
-  "rendering": "hospital.png is the only player-visible Hospital environment; authoring image is never rendered",
+  "rendering": "hospital.png is the only player-visible hospital environment; the authoring image is never rendered",
   "movement_rule": "A feet disk must be completely inside exact white walkable pixels or the exact cyan exit region. The exact magenta NPC region is occupied and never walkable. All other pixels are blocked.",
   "feet_radius_px": 3,
   "regions": {
@@ -155,19 +157,13 @@
     }
     if (typeof Buffer !== "undefined") return Uint8Array.from(Buffer.from(value, "base64"));
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    const bytes = [];
-    let buffer = 0;
-    let bits = 0;
+    const bytes = []; let buffer = 0; let bits = 0;
     for (const character of value) {
       if (character === "=") break;
       const digit = alphabet.indexOf(character);
       if (digit < 0) continue;
-      buffer = (buffer << 6) | digit;
-      bits += 6;
-      if (bits >= 8) {
-        bits -= 8;
-        bytes.push((buffer >> bits) & 255);
-      }
+      buffer = (buffer << 6) | digit; bits += 6;
+      if (bits >= 8) { bits -= 8; bytes.push((buffer >> bits) & 255); }
     }
     return Uint8Array.from(bytes);
   }
@@ -175,30 +171,23 @@
   function decodeRle(value) {
     const encoded = decodeBase64(value);
     const result = new Uint8Array(WIDTH * HEIGHT);
-    let source = 0;
-    let target = 0;
+    let source = 0; let target = 0;
     while (source < encoded.length) {
-      let count = 0;
-      let shift = 0;
+      let count = 0; let shift = 0;
       do {
-        if (source >= encoded.length || shift > 28) throw new Error("Malformed Hospital navigation RLE");
-        const byte = encoded[source++];
-        count |= (byte & 127) << shift;
-        shift += 7;
+        if (source >= encoded.length || shift > 28) throw new Error("Malformed hospital navigation RLE");
+        const byte = encoded[source++]; count |= (byte & 127) << shift; shift += 7;
         if (!(byte & 128)) break;
       } while (true);
-      if (!count || source >= encoded.length || target + count > result.length) throw new Error("Invalid Hospital navigation RLE span");
-      result.fill(encoded[source++], target, target + count);
-      target += count;
+      if (!count || source >= encoded.length || target + count > result.length) throw new Error("Invalid hospital navigation RLE span");
+      result.fill(encoded[source++], target, target + count); target += count;
     }
-    if (target !== result.length) throw new Error("Incomplete Hospital navigation RLE");
+    if (target !== result.length) throw new Error("Incomplete hospital navigation RLE");
     return result;
   }
 
   return Object.freeze({
-    package: PACKAGE,
-    width: WIDTH,
-    height: HEIGHT,
+    package: PACKAGE, width: WIDTH, height: HEIGHT,
     masks: Object.freeze({ white: decodeRle(MASK_RLE.white), magenta: decodeRle(MASK_RLE.magenta), cyan: decodeRle(MASK_RLE.cyan) }),
   });
 });

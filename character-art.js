@@ -278,6 +278,10 @@
     terrain: { src: "assets/terrain-atlas-v1.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
     mainTownBackground: { src: "assets/main-town/main-town-final.png", background: true, image: null, ready: false, failed: false },
     hospitalBackground: { src: "assets/hospital/hospital.png", background: true, image: null, ready: false, failed: false },
+    weaponBackground: { src: "assets/weapon/weapon.png", background: true, image: null, ready: false, failed: false },
+    innBackground: { src: "assets/inn/inn.png", background: true, image: null, ready: false, failed: false },
+    itemBackground: { src: "assets/item/item.png", background: true, image: null, ready: false, failed: false },
+    guildBackground: { src: "assets/guild/guild.png", background: true, image: null, ready: false, failed: false },
     battleMountainBackground: { src: "assets/battle/mountain/mountain-battle-background-v1.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v2.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
@@ -1002,13 +1006,13 @@
     return true;
   }
 
-  function drawHospitalBackground(ctx, options) {
-    const settings = options || {};
-    const atlas = spriteAtlases.hospitalBackground;
+  function drawFlattenedBackground(ctx, scene, options) {
+    const atlas = spriteAtlases[`${String(scene || "").trim()}Background`];
     if (!atlas?.ready || !atlas.image) return false;
     const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
     const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
     if (sourceWidth !== 1672 || sourceHeight !== 941) return false;
+    const settings = options || {};
     const width = Math.max(1, Number(settings.width) || sourceWidth);
     const height = Math.max(1, Number(settings.height) || sourceHeight);
     const x = Number(settings.x) || 0;
@@ -1023,6 +1027,10 @@
       ctx.restore();
     }
     return true;
+  }
+
+  function drawHospitalBackground(ctx, options) {
+    return drawFlattenedBackground(ctx, "hospital", options);
   }
 
   function drawBattleBitmap(ctx, atlas, settings, cover) {
@@ -1777,6 +1785,7 @@
     drawBattleBackground,
     drawBattleGround,
     drawMainTownBackground,
+    drawFlattenedBackground,
     drawHospitalBackground,
     drawInteriorSprite,
     drawMarker,

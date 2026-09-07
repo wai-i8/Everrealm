@@ -621,7 +621,7 @@
     stage.dataset.gameState = mode;
     sound.start();
     showLocation("霧都主城", true);
-    if (!skipIntro) showToast("撳地面行去公會前，再撳阿澄傾偈。", "good");
+    if (!skipIntro) showToast("撳地面行入公會，再同妍姐傾偈。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
     if (!testingMode) saveGame(false);
@@ -1161,8 +1161,8 @@
       const deckUpgrade = grantDeckCapacityMilestone("main:light-eater-defeated", { silent: true });
       player.coins += enemy.coins;
       sound.crystal();
-      showToast(`吞燈獸倒下咗！返去搵阿澄。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
-      announce(`擊敗吞燈獸。任務更新：返回霧都主城搵阿澄${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
+      showToast(`吞燈獸倒下咗！返去公會搵妍姐。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
+      announce(`擊敗吞燈獸。任務更新：返回公會搵妍姐${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
       saveGame();
       return;
     }
@@ -1519,12 +1519,11 @@
           : Number(item.entity.interactionRadius) || 58);
       })
       .sort((a, b) => a.distance - b.distance)[0]?.entity || null;
-    if (nearestInteraction && mode === "playing") {
-      interactionText.textContent = interactionLabel(nearestInteraction);
-      interactionPrompt.hidden = false;
-    } else {
-      interactionPrompt.hidden = true;
-    }
+    // Interaction remains available through normal clicks/controls, but the
+    // exploration canvas and HUD intentionally stay free of talk/transition
+    // prompts. The authored scene art supplies the visual context.
+    if (nearestInteraction) interactionText.textContent = interactionLabel(nearestInteraction);
+    interactionPrompt.hidden = true;
   }
 
   function interactionLabel(entity) {
@@ -1553,9 +1552,8 @@
   }
 
   function interactNpc(npc) {
-    if (npc.id === "ah-ching") interactElder(npc);
-    else if (npc.id === "uncle-tit") interactSmith(npc);
-    else if (["siu-moon", "clinic-healer-siu-moon"].includes(npc.id)) interactHealer(npc);
+    if (npc.id === "guildmaster-yin" && [0, 4].includes(questStage)) interactGuildMaster(npc);
+    else if (npc.id === "clinic-healer-siu-moon") interactHealer(npc);
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
     else if (npc.id === "mountain_delivery_recipient") interactDeliveryRecipient(npc);
@@ -1680,11 +1678,12 @@
     return true;
   }
 
-  function interactElder(npc) {
+  function interactGuildMaster(npc) {
     if (questStage === 0) {
       startDialogue({
         speaker: npc.name,
         color: npc.color,
+        actor: "guildmaster",
         lines: [
           "阿巡，你終於嚟喇。北岸盞長明燈，畀黑霧一口咬熄咗。",
           "三粒霧晶散咗落舊林。冇佢哋，燈塔道封印開唔返。",
@@ -1697,11 +1696,11 @@
         },
       });
     } else if (questStage === 1) {
-      startDialogue({ speaker: npc.name, actor: "keeper", color: npc.color, lines: [`仲差 ${3 - crystals.size} 粒。跟住林入面嗰陣紫光，就會搵到。`] });
+      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: [`仲差 ${3 - crystals.size} 粒。跟住林入面嗰陣紫光，就會搵到。`] });
     } else if (questStage === 2) {
-      startDialogue({ speaker: npc.name, actor: "keeper", color: npc.color, lines: ["三粒都齊？好。沿城外山路向北行，坑道口嘅封印會認得你手上嘅光。"] });
+      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["三粒都齊？好。沿城外山路向北行，坑道口嘅封印會認得你手上嘅光。"] });
     } else if (questStage === 3) {
-      startDialogue({ speaker: npc.name, actor: "keeper", color: npc.color, lines: ["燈塔頂嗰隻吞燈獸仲喺度。見到紅色攻擊格就走開，儲 AP 再反擊。"] });
+      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["燈塔頂嗰隻吞燈獸仲喺度。見到紅色攻擊格就走開，儲 AP 再反擊。"] });
     } else if (questStage === 4) {
       startDialogue({
         speaker: npc.name,
@@ -1714,7 +1713,7 @@
         onClose: showVictory,
       });
     } else {
-      startDialogue({ speaker: npc.name, actor: "keeper", color: npc.color, lines: ["今晚條路仲長。想練刀就再去霧林；港口永遠有盞燈等你返嚟。"] });
+      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["今晚條路仲長。想練刀就再去霧林；港口永遠有盞燈等你返嚟。"] });
     }
   }
 
@@ -1866,7 +1865,7 @@
     stage.dataset.gameState = mode;
     keys.clear();
     const portraitActors = {
-      "阿澄": "keeper", "鐵叔": "smith", "小滿": "healer",
+      "小滿": "healer",
       "妍姐": "guildmaster", "阿寶": "clerk", "諾拉": "adventurer", "麗雅": "duelist",
       "銀姐": "merchant", "阿月": "armorer", "莎菲": "tailor", "露娜": "explorer", "洛安": "mountainCourier",
     };
@@ -4491,7 +4490,7 @@
 
   function mainQuestInfo() {
     const copy = questStage === 0
-      ? { title: "去公會前搵阿澄", detail: "問下長明燈發生咩事" }
+      ? { title: "入公會搵妍姐", detail: "問下長明燈發生咩事" }
       : questStage === 1
         ? { title: "城外失落嘅霧晶", detail: `搵齊霧晶　${crystals.size} / 3` }
         : questStage === 2
@@ -4499,18 +4498,22 @@
           : questStage === 3
             ? { title: "坑道口嘅黑影", detail: "擊敗吞燈獸" }
             : questStage === 4
-              ? { title: "帶光返城", detail: "返霧都主城搵阿澄" }
+              ? { title: "帶光返城", detail: "返公會搵妍姐" }
               : { title: "霧都重光", detail: "探索寶箱、升級同繼續夜巡" };
-    const targetMapId = questStage >= 1 && questStage <= 3 ? "field" : "world";
+    const targetMapId = questStage >= 1 && questStage <= 3 ? "field" : currentMapId === "guild" ? "guild" : "world";
     if (currentMapId !== targetMapId) {
       const direction = targetMapId === "field" ? "前往城外山地" : "先返回霧都";
       return { ...copy, detail: `${direction} · ${copy.detail}`, target: routeToMap(targetMapId) };
     }
-    if (questStage === 0) return { ...copy, target: world.objectives.elder };
+    if (questStage === 0 || questStage === 4) {
+      const guildTarget = currentMapId === "guild"
+        ? world.npcs.find((npc) => npc.id === "guildmaster-yin")
+        : world.portals.find((portal) => portal.id === "world-to-guild");
+      return { ...copy, target: guildTarget || world.start };
+    }
     if (questStage === 1) return { ...copy, target: nearestMissingCrystal(world) };
     if (questStage === 2) return { ...copy, target: world.objectives.gate };
     if (questStage === 3) return { ...copy, target: world.objectives.boss };
-    if (questStage === 4) return { ...copy, target: world.objectives.elder };
     return { ...copy, target: world.shrine || world.start };
   }
 
@@ -5589,8 +5592,8 @@
     const centreY = mapHeight / 2;
     const radius = Math.min(mapWidth, mapHeight) * .485;
     const flattenedTownArt = currentMapId === "world" && world.art?.flattened;
-    const flattenedHospitalArt = currentMapId === "clinic" && world.art?.flattened && world.art?.background === "hospital";
-    const flattenedMapArt = flattenedTownArt || flattenedHospitalArt;
+    const flattenedInteriorArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
+    const flattenedMapArt = flattenedTownArt || flattenedInteriorArt;
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 22 : 18;
     const scale = flattenedMapArt
       ? Math.min((mapWidth - 12) / world.pixelWidth, (mapHeight - 12) / world.pixelHeight)
@@ -5609,13 +5612,11 @@
     miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
     if (flattenedMapArt) {
-      const drawBackground = flattenedHospitalArt ? Art.drawHospitalBackground : Art.drawMainTownBackground;
-      drawBackground(miniCtx, {
-        x: originX,
-        y: originY,
-        width: world.pixelWidth * scale,
-        height: world.pixelHeight * scale,
-        alpha: .9,
+      if (flattenedInteriorArt) Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
+        x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
+      });
+      else Art.drawMainTownBackground(miniCtx, {
+        x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
       });
     }
     const tilePixels = world.tileSize * scale + .7;
@@ -5811,9 +5812,9 @@
       });
       return;
     }
-    if (currentMapId === "clinic" && world.art?.flattened && world.art?.background === "hospital") {
+    if (world.art?.flattened && world.art?.backgroundScene) {
       const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
-      Art.drawHospitalBackground(ctx, {
+      Art.drawFlattenedBackground(ctx, world.art.backgroundScene, {
         x: topLeft.x,
         y: topLeft.y,
         width: world.pixelWidth * camera.zoom,
@@ -6092,124 +6093,19 @@
   }
 
   function drawDoorway(portal, shakeX, shakeY) {
-    const point = worldToScreen(portal, shakeX, shakeY);
-    const scale = camera.zoom;
-    const label = portal.mapLabel || portal.name;
-    const showLabel = portal.interactionMode === "gate" || nearestInteraction?.id === portal.id;
-    const marker = portal.marker || MapTransitions.entranceFor(portal)?.marker || {};
-    ctx.save();
-    const markerSize = (Number(marker.size) || Math.max(Number(marker.width) || 34, Number(marker.height) || 34)) * scale;
-    if (!Art.drawMarker(ctx, {
-      sprite: marker.sprite || "interact",
-      x: point.x,
-      y: point.y + 2 * scale,
-      size: markerSize,
-      anchorX: Number.isFinite(marker.anchorX) ? marker.anchorX : .5,
-      anchorY: Number.isFinite(marker.anchorY) ? marker.anchorY : .5,
-      alpha: nearestInteraction?.id === portal.id ? 1 : .84,
-    })) {
-      ctx.fillStyle = "rgba(82,220,203,.22)";
-      ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(8, markerSize * .28), 0, Core.TAU); ctx.fill();
-    }
-    if (showLabel) {
-      const fontSize = Core.clamp(13 * scale, 12, 17);
-      ctx.font = `900 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(7,11,22,.96)";
-      ctx.lineWidth = Math.max(3, fontSize * .34);
-      ctx.strokeText(label, point.x, point.y - 40 * scale);
-      ctx.fillStyle = "#fff1bf";
-      ctx.fillText(label, point.x, point.y - 40 * scale);
-    }
-    if (nearestInteraction?.id === portal.id) drawInteractDiamond(point.x, point.y - 58 * scale);
-    ctx.restore();
+    // Doorway geometry remains interactive, but the doorway marker/label is
+    // intentionally hidden because the flattened master art already shows it.
+    return undefined;
   }
 
   function drawPortal(portal, shakeX, shakeY) {
-    if (MapTransitions.isPhysicalTransition(portal)) {
-      if ([TRANSITION_TYPES.PHYSICAL_DOOR, TRANSITION_TYPES.PHYSICAL_GATE].includes(MapTransitions.transitionTypeFor(portal))) {
-        drawDoorway(portal, shakeX, shakeY);
-      } else {
-        drawPhysicalPassage(portal, shakeX, shakeY);
-      }
-      return;
-    }
-    const revealDistance = player.radius + (portal.radius || 20) + 72;
-    if (!portal.alwaysVisible && Core.distance(player, portal) > revealDistance) return;
-    const point = worldToScreen(portal, shakeX, shakeY);
-    const scale = camera.zoom;
-    const pulse = .62 + Math.sin(elapsed * 3.2 + portal.x * .01) * .18;
-    const markerSize = (portal.markerSize || 34) * scale;
-    const label = portal.mapLabel || (portal.targetMap === "world" ? "出口" : portal.targetMap === "dungeon" ? "坑道" : portal.targetMap === "guild" ? "公會" : "裝備店");
-    const labelY = point.y - Math.max(27, (portal.markerSize || 34) * .78) * scale;
-    ctx.save();
-    const drewMarker = Art.drawMarker(ctx, {
-      sprite: "portal",
-      x: point.x,
-      y: point.y + 4 * scale,
-      size: markerSize,
-      anchorY: .72,
-      mapPortal: true,
-      alpha: .72 + Math.sin(elapsed * 3.2 + portal.x * .01) * .1,
-    });
-    if (!drewMarker) {
-      ctx.fillStyle = `rgba(82,220,203,${pulse * .2})`;
-      ctx.beginPath(); ctx.ellipse(point.x, point.y + 7 * scale, 19 * scale, 8 * scale, 0, 0, Core.TAU); ctx.fill();
-      ctx.strokeStyle = portal.targetMap === "dungeon" ? `rgba(174,145,255,${pulse})` : `rgba(255,200,87,${pulse})`;
-      ctx.lineWidth = Math.max(1.5, 2 * scale);
-      ctx.beginPath(); ctx.arc(point.x, point.y - 2 * scale, 12 * scale, Math.PI * .12, Math.PI * .88, true); ctx.stroke();
-    }
-    const fontSize = Core.clamp(14 * scale, 13, 18);
-    ctx.font = `900 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "rgba(7,11,22,.96)";
-    ctx.lineWidth = Math.max(3, fontSize * .34);
-    ctx.strokeText(label, point.x, labelY);
-    ctx.fillStyle = "#fff1bf";
-    ctx.fillText(label, point.x, labelY);
-    if (nearestInteraction?.id === portal.id) drawInteractDiamond(point.x, labelY - 16 * scale);
-    ctx.restore();
+    // Transition hit regions remain semantic; no transition marker or label
+    // is painted over the authored scene.
+    return undefined;
   }
 
   function drawPhysicalPassage(portal, shakeX, shakeY) {
-    const point = worldToScreen(portal, shakeX, shakeY);
-    const scale = camera.zoom;
-    const showLabel = portal.alwaysVisible || nearestInteraction?.id === portal.id;
-    const pulse = .68 + Math.sin(elapsed * 2.2 + portal.x * .01) * .12;
-    ctx.save();
-    const markerSize = Math.max(32, (portal.markerSize || 38) * scale);
-    const drewMarker = Art.drawMarker(ctx, {
-      sprite: "interact",
-      x: point.x,
-      y: point.y + 2 * scale,
-      size: markerSize,
-      anchorY: .5,
-      alpha: pulse,
-    });
-    if (!drewMarker) {
-      ctx.strokeStyle = `rgba(255,200,87,${pulse})`;
-      ctx.fillStyle = "rgba(255,200,87,.18)";
-      ctx.lineWidth = Math.max(2, 3 * scale);
-      ctx.beginPath(); ctx.ellipse(point.x, point.y + 6 * scale, 22 * scale, 9 * scale, 0, 0, Core.TAU); ctx.fill(); ctx.stroke();
-    }
-    if (showLabel) {
-      const fontSize = Core.clamp(14 * scale, 13, 18);
-      ctx.font = `900 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(7,11,22,.96)";
-      ctx.lineWidth = Math.max(3, fontSize * .34);
-      ctx.strokeText(portal.mapLabel || portal.name, point.x, point.y - 28 * scale);
-      ctx.fillStyle = "#fff1bf";
-      ctx.fillText(portal.mapLabel || portal.name, point.x, point.y - 28 * scale);
-    }
-    if (nearestInteraction?.id === portal.id) drawInteractDiamond(point.x, point.y - 46 * scale);
-    ctx.restore();
+    return undefined;
   }
 
   function drawMapProp(prop, shakeX, shakeY) {
@@ -6226,14 +6122,12 @@
         width: (indoor ? 88 : 76) * scale,
         height: (indoor ? 72 : 76) * scale,
       })) {
-        if (nearestInteraction?.id === prop.id) drawInteractDiamond(point.x, point.y - (indoor ? 31 : 35) * scale);
         ctx.restore();
         return;
       }
       ctx.fillStyle = "#6d4e34"; ctx.fillRect(point.x - 17 * scale, point.y - 20 * scale, 34 * scale, 28 * scale);
       ctx.fillStyle = "#ead9a7"; ctx.fillRect(point.x - 12 * scale, point.y - 16 * scale, 10 * scale, 13 * scale); ctx.fillRect(point.x + 2 * scale, point.y - 13 * scale, 9 * scale, 10 * scale);
       ctx.strokeStyle = "#ffc857"; ctx.strokeRect(point.x - 18 * scale, point.y - 21 * scale, 36 * scale, 30 * scale);
-      if (nearestInteraction?.id === prop.id) drawInteractDiamond(point.x, point.y - 32 * scale);
     } else if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
       const w = Math.max(16, (prop.w || 28) * scale);
       const h = Math.max(12, (prop.h || 22) * scale);
@@ -6587,11 +6481,9 @@
       // Keep the semantic NPC for collision, authored-hotspot clicks and the
       // existing service flow without drawing a duplicate sprite over it.
       drawNpcName(point.x, point.y - 69 * scale, npc.name);
-      if (nearestInteraction?.id === npc.id) drawInteractDiamond(point.x + 23 * scale, point.y - 67 * scale);
       return;
     }
     const actors = {
-      "ah-ching": "keeper", "uncle-tit": "smith", "siu-moon": "healer", "town-smith": "smith", "town-herbalist": "healer",
       "clinic-healer-siu-moon": "healer", "store-merchant-gin": "merchant", "inn-keeper": "clerk",
       "guildmaster-yin": "guildmaster", "guild-clerk-po": "clerk", "guild-adventurer-nok": "adventurer", "guild-duelist-rhea": "duelist",
       "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer", "mountain_delivery_recipient": "mountainCourier",
@@ -6604,17 +6496,13 @@
       facing: npc.facing,
       state: "idle",
       phase: elapsed + npc.x * .007,
-      expression: npc.id === "uncle-tit" ? "determined" : "happy",
+      expression: "happy",
     });
     const anchorX = artBox?.nameAnchorX ?? point.x;
     const nameY = artBox?.nameAnchorY ?? point.y - 56 * scale;
     const markerX = (artBox?.markerAnchorX ?? anchorX) + (Number(npc.markerOffsetX) || 0) * scale;
     const markerY = artBox?.markerAnchorY ?? point.y - 88 * scale;
     drawNpcName(anchorX, nameY, npc.name);
-    if (npc.id === "ah-ching" && [0,4].includes(questStage)) drawQuestMark(markerX, markerY, questStage === 4 ? "!" : "?");
-    if (npc.id === "guild-clerk-po" && (guildCommissionState.status === "ready_to_report" || !activeGuildCommission())) drawQuestMark(markerX, markerY, activeGuildCommission() ? "!" : "?");
-    if (npc.id === "mountain_delivery_recipient" && activeGuildCommission()?.type === "delivery" && guildCommissionState.status === "active") drawQuestMark(markerX, markerY, "!");
-    if (nearestInteraction?.id === npc.id) drawInteractDiamond(artBox?.interactAnchorX ?? anchorX + 23 * scale, nameY + 2 * scale);
   }
 
   function drawNpcName(x, y, name) {
@@ -6726,7 +6614,6 @@
         palette: { body: enemy.color },
       });
       ctx.restore();
-      if (nearestInteraction?.id === enemy.id) drawInteractDiamond(point.x, point.y - 48 * scale);
       return;
     }
     ctx.save();
@@ -6761,7 +6648,6 @@
     }
     ctx.filter = "none";
     ctx.restore();
-    if (nearestInteraction?.id === enemy.id) drawInteractDiamond(point.x, point.y - 40 * scale);
   }
 
   function drawDrop(drop, shakeX, shakeY) {
@@ -7136,6 +7022,19 @@
       entityPosition: (id) => {
         const target = enemies.find((item) => item.id === id) || world.npcs.find((item) => item.id === id) || world.portals.find((item) => item.id === id) || world.boards.find((item) => item.id === id) || world.chests.find((item) => item.id === id) || world.objectives?.[id];
         return target ? { id: target.id, x: target.x, y: target.y } : null;
+      },
+      transitionInfo: (id) => {
+        const target = world.portals.find((item) => item.id === id);
+        if (!target) return null;
+        return JSON.parse(JSON.stringify({
+          id: target.id,
+          sourceMapId: target.sourceMapId,
+          targetMap: target.targetMap,
+          targetSpawn: target.targetSpawn,
+          entrance: target.entrance,
+          returnPosition: target.returnPosition,
+          returnFacing: target.returnFacing,
+        }));
       },
       attack: performAttack,
       startBattle: (id, instant = false) => {

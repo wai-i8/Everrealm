@@ -104,6 +104,7 @@
         art: {
           flattened: true,
           background: "hospital",
+          backgroundScene: "hospital",
           master: HOSPITAL_ART,
           authoring: HOSPITAL_AUTHORING,
           sourceDimensions: { width: navigationPackage.source.width, height: navigationPackage.source.height },

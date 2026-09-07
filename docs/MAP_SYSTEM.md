@@ -67,6 +67,24 @@
 
 五個主城服務 interior（公會、療癒所、旅店、裝備店、雜貨舖）先按房間用途，再按玩家動線 author：入口 → 主要服務點 → 對應功能區。櫃台／服務 NPC 必須形成可理解的工作組；牆邊優先放置書架、貨架、櫃與儲物，中央地面只保留有用途的候位、展示、治療或休憩家具。主要行走路線要保持清楚，不以無關 props 填滿空位；每張 interior 的功能區語意與 NPC 角色由對應 `docs/maps/*.md` 及 owning runtime map 保存。
 
+### 2.2 Flattened interior navigation package
+
+Hospital、Guild、Equipment Shop、Inn 同 Item／General Store 使用同一套 flattened-scene contract。每張圖有一對同尺寸 `master`／`walkable` PNG：master 係唯一玩家可見環境，walkable 只係 development authoring source，永遠唔喺 browser render。現行 pair 如下：
+
+| map | visible master | authoring navigation | generated runtime |
+| --- | --- | --- | --- |
+| `clinic` | `assets/hospital/hospital.png` | `assets/hospital/hospital_walkable.png` | `map/hospital-navigation.generated.js` |
+| `shop` | `assets/weapon/weapon.png` | `assets/weapon/weapon_walkable.png` | `map/weapon-navigation.generated.js` |
+| `inn` | `assets/inn/inn.png` | `assets/inn/inn_walkable.png` | `map/inn-navigation.generated.js` |
+| `general-store` | `assets/item/item.png` | `assets/item/item_walkable.png` | `map/item-navigation.generated.js` |
+| `guild` | `assets/guild/guild.png` | `assets/guild/guild_walkable.png` | `map/guild-navigation.generated.js` |
+
+所有 pair 必須保持 `1672 × 941` 原圖 pixel coordinate space。`tools/generate-flattened-navigation.js` 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。generator 會輸出 hash、connected-component bbox／centroid／feet anchor，同 white／magenta／cyan RLE mask；generated file 明確標示不可手改。
+
+所有 flattened interior 共享 `feet_radius_px: 3`。feet disk 必須完全落喺 white 或 cyan，唔可以撞入 magenta；越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、NPC authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。每張 interior 只保留一個最重要嘅核心服務／接待 NPC；家具同裝飾只保留語意 zone metadata，若已烘焙入 master art 就 `render: false`、`solid: false`。
+
+門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。
+
 ---
 
 ## 3. 現有主要世界區域
@@ -97,9 +115,9 @@
 - 一般情況唔產生普通野外 random encounter。
 - 劇情／特殊戰鬥可以明確指定 `town` battle theme。
 
-主城普通建築使用 `interactionMode: "door"` 嘅入口資料：玩家行到門檻／門口觸發實體入門互動，唔使用魔法圓陣。東側出口使用 `interactionMode: "passage"`，以城牆開口及出口 trigger 表達離城；魔法圓陣只保留畀真正超自然傳送或特殊入口。
+主城普通建築使用 `interactionMode: "door"` 嘅入口資料：玩家行到門檻／門口觸發實體入門互動，唔使用魔法圓陣。東側出口使用 `interactionMode: "passage"`，以城牆開口及出口 trigger 表達離城；魔法圓陣只保留畀真正超自然傳送或特殊入口。入口視覺已經屬於 flattened master art，runtime 不再額外繪製門口 marker、入口 label 或互動菱形。
 
-主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口使用 `marker-atlas-v1` 左下角（`interact`）實體互動 marker，唔使用魔法傳送圓陣。
+主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬核心 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口只保留 semantic physical-door contract，唔再畫 marker。
 
 主城入口與東側 passage 由 `assets/main-town/main-town-navigation.json` 及配套 mask authored；`maps/main-town.js` 將 exact trigger／threshold／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable mask 係完整 allowlist，collision mask 只作 supplemental solid objects；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 collision inversion 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
 
