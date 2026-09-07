@@ -155,6 +155,8 @@ test("exports the same UMD API to Node and a browser-like global", () => {
     "map/interior-helpers.js",
     "map/main-town-navigation.generated.js",
     "map/main-town-navigation.js",
+    "map/hospital-navigation.generated.js",
+    "map/hospital-navigation.js",
     "maps/main-town.js",
     "maps/mountain-field.js",
     "maps/mine.js",
@@ -189,8 +191,12 @@ test("all expansion maps have a renderer-compatible, rectangular shape", () => {
     assert.equal(map.id, id);
     assert.ok(map.name && map.shortName);
     assert.equal(map.tileSize, ExpansionWorld.TILE);
-    assert.equal(map.pixelWidth, map.width * map.tileSize);
-    assert.equal(map.pixelHeight, map.height * map.tileSize);
+    if (id === "clinic") {
+      assert.deepEqual([map.pixelWidth, map.pixelHeight], [1672, 941]);
+    } else {
+      assert.equal(map.pixelWidth, map.width * map.tileSize);
+      assert.equal(map.pixelHeight, map.height * map.tileSize);
+    }
     assert.equal(map.tiles.length, map.height);
     assert.ok(map.tiles.every((row) => Array.isArray(row) && row.length === map.width));
     assert.ok(map.tiles.flat().every((tile) => Object.values(ExpansionWorld.TILES).includes(tile)));

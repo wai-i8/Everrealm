@@ -833,14 +833,16 @@
 
   function isBlocked(circle, activeWorld = world, activeMapId = currentMapId) {
     if (!Number.isFinite(circle.x) || !Number.isFinite(circle.y)) return true;
-    const isMainTown = activeMapId === "world" && activeWorld.navigation?.authoritative;
-    const radius = isMainTown ? Number(activeWorld.navigation.feetRadiusPx) || 3 : Number(circle.radius) || 0;
+    const isAuthoritativeNavigation = activeWorld.navigation?.authoritative === true;
+    const radius = isAuthoritativeNavigation ? Number(activeWorld.navigation.feetRadiusPx) || 3 : Number(circle.radius) || 0;
     if (circle.x - radius < 0 || circle.y - radius < 0 || circle.x + radius > activeWorld.pixelWidth || circle.y + radius > activeWorld.pixelHeight) return true;
-    if (isMainTown) {
-      // Main Town owns one fail-closed resolver. Missing or invalid generated
-      // data blocks movement; it must never reopen the legacy tile fallback.
-      if (typeof MainTownNavigation?.isWorldPositionWalkable !== "function") return true;
-      return !MainTownNavigation.isWorldPositionWalkable(activeMapId, circle, { radius });
+    if (isAuthoritativeNavigation) {
+      // Authoritative maps own one fail-closed resolver. Missing or invalid
+      // generated data blocks movement; it must never reopen tile fallback.
+      const canWalk = activeMapId === "world"
+        ? typeof MainTownNavigation?.isWorldPositionWalkable === "function" && MainTownNavigation.isWorldPositionWalkable(activeMapId, circle, { radius })
+        : typeof activeWorld.navigation.resolver?.isPositionWalkable === "function" && activeWorld.navigation.resolver.isPositionWalkable(circle, { radius });
+      return !canWalk;
     }
     const left = Math.floor((circle.x - circle.radius) / activeWorld.tileSize);
     const right = Math.floor((circle.x + circle.radius) / activeWorld.tileSize);
@@ -896,15 +898,16 @@
       y: Core.clamp(Number(destination?.y) || player.y, player.radius, world.pixelHeight - player.radius),
     };
     if (Core.distance(player, goal) <= Math.max(5, player.radius * .45)) return true;
-    const navigationRadius = currentMapId === "world"
-      ? Number(world.navigation?.feetRadiusPx) || MainTownNavigation?.feetRadiusPx || 3
+    const authoritativeNavigation = world.navigation?.authoritative === true;
+    const navigationRadius = authoritativeNavigation
+      ? Number(world.navigation?.feetRadiusPx) || (currentMapId === "world" ? MainTownNavigation?.feetRadiusPx : 3) || 3
       : player.radius;
     const path = Core.findOverworldPath(player, goal, {
       bounds: { x: 0, y: 0, w: world.pixelWidth, h: world.pixelHeight },
       // The authored Main Town allowlist has narrow but valid approaches
       // (notably the Inn). Sample the shared pathfinder from the same feet
       // contract instead of skipping over those corridors at tile scale.
-      cellSize: currentMapId === "world"
+      cellSize: authoritativeNavigation
         ? Math.max(12, navigationRadius * 4)
         : Math.max(20, world.tileSize * .6),
       radius: navigationRadius,
@@ -1089,7 +1092,7 @@
     const steps = Math.max(2, Math.ceil(Core.distance(from, to) / 10));
     for (let index = 1; index < steps; index += 1) {
       const t = index / steps;
-      const radius = currentMapId === "world" ? Number(world.navigation?.feetRadiusPx) || 3 : 2;
+      const radius = world.navigation?.authoritative ? Number(world.navigation?.feetRadiusPx) || 3 : 2;
       if (isBlocked({ x: Core.lerp(from.x, to.x, t), y: Core.lerp(from.y, to.y, t), radius })) return false;
     }
     return true;
@@ -1511,7 +1514,9 @@
         if (item.entity.kind === "portal" && MapTransitions.transitionTypeFor(item.entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
           return MapTransitions.pointInThreshold(item.entity, player);
         }
-        return item.distance <= (["gate", "portal", "questBoard"].includes(item.entity.kind) ? 82 : 58);
+        return item.distance <= (["gate", "portal", "questBoard"].includes(item.entity.kind)
+          ? 82
+          : Number(item.entity.interactionRadius) || 58);
       })
       .sort((a, b) => a.distance - b.distance)[0]?.entity || null;
     if (nearestInteraction && mode === "playing") {
@@ -1611,6 +1616,9 @@
   function updateAutomaticPortal() {
     if (mode !== "playing") return false;
     const portal = world.portals.find((candidate) => {
+      if (candidate.navigationRegion && typeof world.navigation?.isInRegion === "function") {
+        return world.navigation.isInRegion(candidate.navigationRegion, player);
+      }
       if (MapTransitions.transitionTypeFor(candidate) === TRANSITION_TYPES.PHYSICAL_DOOR) {
         // Ordinary doors use the authored feet/threshold rectangle. A nearby
         // sprite or label is never sufficient to enter a building.
@@ -1634,17 +1642,17 @@
   function transitionMap(targetMapId, targetPosition, targetFacing = null) {
     const target = maps[targetMapId];
     if (!target) return false;
+    const destination = targetPosition && Number.isFinite(targetPosition.x) ? targetPosition : target.start;
+    if (target.navigation?.authoritative && isBlocked({ x: destination.x, y: destination.y, radius: target.navigation.feetRadiusPx || player.radius }, target, targetMapId)) {
+      console.error("Authoritative map transition arrival is not a valid navigation position", { targetMapId, destination });
+      return false;
+    }
     clearExplorePointerGesture();
     closeBattleHud();
     currentMapId = targetMapId;
     world = target;
     clearExploreMovePath();
     pendingClickInteractionId = null;
-    const destination = targetPosition && Number.isFinite(targetPosition.x) ? targetPosition : target.start;
-    if (targetMapId === "world" && isBlocked({ x: destination.x, y: destination.y, radius: target.navigation?.feetRadiusPx || 3 }, target, targetMapId)) {
-      console.error("Main Town transition arrival is not a valid navigation position", { targetMapId, destination });
-      return false;
-    }
     player.x = destination.x;
     player.y = destination.y;
     if (["up", "down", "left", "right"].includes(targetFacing)) player.facing = targetFacing;
@@ -5340,6 +5348,17 @@
   }
 
   function clickedExploreEntity(screenX, screenY) {
+    if (world.navigation?.authoritative && typeof world.navigation.interactionAtWorldPoint === "function") {
+      const authoredPoint = {
+        x: (screenX - width * .5) / camera.zoom + camera.x,
+        y: (screenY - height * .5) / camera.zoom + camera.y,
+      };
+      const authoredNpcId = world.navigation.interactionAtWorldPoint(authoredPoint);
+      if (authoredNpcId) {
+        const authoredNpc = world.npcs.find((npc) => npc.id === authoredNpcId);
+        if (authoredNpc) return authoredNpc;
+      }
+    }
     const fieldGate = currentFieldGateInteraction();
     if (fieldGate) {
       const gateOrigin = worldToScreen(world.gate);
@@ -5391,12 +5410,18 @@
     }
     let destination = { x: target.x, y: target.y };
     if (entity?.kind === "portal" && MapTransitions.transitionTypeFor(entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
-      // Selecting the marker creates a door intent and first walks to the
-      // authored approach point. The second leg ends inside the threshold so
-      // entry still occurs through normal movement, never by teleport.
-      const entrance = MapTransitions.entranceFor(entity);
-      destination = entrance?.approachPoint || entity.approachPoint || { x: entity.x, y: entity.y };
-      explorePortalIntentId = entity.id;
+      // World-building doors use their authored exterior approach point. An
+      // authoritative interior map can instead own an exact pixel exit
+      // region; clicking that portal must walk to the resolved portal point
+      // so the shared navigation mask can perform the normal transition.
+      if (world.navigation?.authoritative && entity.navigationRegion) {
+        destination = { x: entity.x, y: entity.y };
+        explorePortalIntentId = null;
+      } else {
+        const entrance = MapTransitions.entranceFor(entity);
+        destination = entrance?.approachPoint || entity.approachPoint || { x: entity.x, y: entity.y };
+        explorePortalIntentId = entity.id;
+      }
       pendingClickInteractionId = null;
     } else if (entity && !entity.type && entity.kind !== "portal") {
       const away = Core.normalize({ x: player.x - entity.x, y: player.y - entity.y });
@@ -5564,16 +5589,18 @@
     const centreY = mapHeight / 2;
     const radius = Math.min(mapWidth, mapHeight) * .485;
     const flattenedTownArt = currentMapId === "world" && world.art?.flattened;
+    const flattenedHospitalArt = currentMapId === "clinic" && world.art?.flattened && world.art?.background === "hospital";
+    const flattenedMapArt = flattenedTownArt || flattenedHospitalArt;
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 22 : 18;
-    const scale = flattenedTownArt
+    const scale = flattenedMapArt
       ? Math.min((mapWidth - 12) / world.pixelWidth, (mapHeight - 12) / world.pixelHeight)
       : Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
-    const originX = flattenedTownArt ? (mapWidth - world.pixelWidth * scale) / 2 : centreX - player.x * scale;
-    const originY = flattenedTownArt ? (mapHeight - world.pixelHeight * scale) / 2 : centreY - player.y * scale;
-    const minTileX = flattenedTownArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
-    const maxTileX = flattenedTownArt ? -1 : Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
-    const minTileY = flattenedTownArt ? 0 : Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
-    const maxTileY = flattenedTownArt ? -1 : Core.clamp(Math.ceil((player.y + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
+    const originX = flattenedMapArt ? (mapWidth - world.pixelWidth * scale) / 2 : centreX - player.x * scale;
+    const originY = flattenedMapArt ? (mapHeight - world.pixelHeight * scale) / 2 : centreY - player.y * scale;
+    const minTileX = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
+    const maxTileX = flattenedMapArt ? -1 : Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
+    const minTileY = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
+    const maxTileY = flattenedMapArt ? -1 : Core.clamp(Math.ceil((player.y + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
     miniCtx.clearRect(0, 0, mapWidth, mapHeight);
     miniCtx.save();
     miniCtx.beginPath();
@@ -5581,8 +5608,9 @@
     miniCtx.clip();
     miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
-    if (flattenedTownArt) {
-      Art.drawMainTownBackground(miniCtx, {
+    if (flattenedMapArt) {
+      const drawBackground = flattenedHospitalArt ? Art.drawHospitalBackground : Art.drawMainTownBackground;
+      drawBackground(miniCtx, {
         x: originX,
         y: originY,
         width: world.pixelWidth * scale,
@@ -5591,7 +5619,7 @@
       });
     }
     const tilePixels = world.tileSize * scale + .7;
-    if (!flattenedTownArt) {
+    if (!flattenedMapArt) {
       for (let ty = minTileY; ty <= maxTileY; ty += 1) {
         for (let tx = minTileX; tx <= maxTileX; tx += 1) {
           const tile = visualTerrainTile(world.tiles[ty][tx]);
@@ -5709,7 +5737,7 @@
       else queueInterior("indoorQuestBoard", point.x, point.y, Math.max(9, 68 * scale), Math.max(8, 58 * scale), point.y);
     }
     for (const prop of world.staticObjects || []) {
-      if (!prop?.kind || ["questBoard", "rug", "crackedTile"].includes(prop.kind)) continue;
+      if (!prop?.kind || prop.render === false || ["questBoard", "rug", "crackedTile"].includes(prop.kind)) continue;
       const w = Math.max(4, (prop.w || prop.radius * 2 || 36) * scale);
       const h = Math.max(4, (prop.h || prop.radius * 2 || 36) * scale);
       const rectPoint = mapPoint(prop.x + (prop.w || 0) / 2, prop.y + (prop.h || 0));
@@ -5776,6 +5804,16 @@
     if (currentMapId === "world" && world.art?.flattened) {
       const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
       Art.drawMainTownBackground(ctx, {
+        x: topLeft.x,
+        y: topLeft.y,
+        width: world.pixelWidth * camera.zoom,
+        height: world.pixelHeight * camera.zoom,
+      });
+      return;
+    }
+    if (currentMapId === "clinic" && world.art?.flattened && world.art?.background === "hospital") {
+      const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
+      Art.drawHospitalBackground(ctx, {
         x: topLeft.x,
         y: topLeft.y,
         width: world.pixelWidth * camera.zoom,
@@ -6021,6 +6059,7 @@
     const renderables = [];
     const groundKinds = new Set(["rug", "crackedTile"]);
     for (const object of world.staticObjects) {
+      if (object.render === false) continue;
       if (!inView({ x: object.x + (object.w || 0) / 2, y: object.y + (object.h || 0) / 2 }, 180)) continue;
       if (groundKinds.has(object.kind)) drawMapProp(object, shakeX, shakeY);
       else renderables.push(object);
@@ -6543,6 +6582,14 @@
   function drawNpc(npc, shakeX, shakeY) {
     const point = worldToScreen(npc, shakeX, shakeY);
     const scale = camera.zoom;
+    if (npc.render === false) {
+      // The Hospital nurse is already part of the supplied flattened bitmap.
+      // Keep the semantic NPC for collision, authored-hotspot clicks and the
+      // existing service flow without drawing a duplicate sprite over it.
+      drawNpcName(point.x, point.y - 69 * scale, npc.name);
+      if (nearestInteraction?.id === npc.id) drawInteractDiamond(point.x + 23 * scale, point.y - 67 * scale);
+      return;
+    }
     const actors = {
       "ah-ching": "keeper", "uncle-tit": "smith", "siu-moon": "healer", "town-smith": "smith", "town-herbalist": "healer",
       "clinic-healer-siu-moon": "healer", "store-merchant-gin": "merchant", "inn-keeper": "clerk",

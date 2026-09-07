@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -78,6 +78,26 @@ function Invoke-GameExpression {
 function Get-GameSnapshot {
   $json = Invoke-GameExpression -Expression 'JSON.stringify(window.__RPG_DEBUG__.snapshot())'
   return $json | ConvertFrom-Json
+}
+
+function Invoke-WorldPointerClick {
+  param(
+    [Parameter(Mandatory = $true)][int]$WorldX,
+    [Parameter(Mandatory = $true)][int]$WorldY
+  )
+  $expression = @'
+(()=>{
+  const api=window.__RPG_DEBUG__,canvas=document.getElementById("gameCanvas"),rect=canvas.getBoundingClientRect(),snap=api.snapshot();
+  const clientX=rect.left+rect.width/2+(__WORLD_X__-snap.x)*snap.cameraZoom;
+  const clientY=rect.top+rect.height/2+(__WORLD_Y__-snap.y)*snap.cameraZoom;
+  const init={pointerId:77,button:0,clientX,clientY,bubbles:true,cancelable:true,pointerType:"mouse"};
+  canvas.dispatchEvent(new PointerEvent("pointerdown",init));
+  canvas.dispatchEvent(new PointerEvent("pointerup",{...init,button:0}));
+  return JSON.stringify({worldX:__WORLD_X__,worldY:__WORLD_Y__,clientX,clientY});
+})()
+'@
+  $expression = $expression.Replace('__WORLD_X__', [string]$WorldX).Replace('__WORLD_Y__', [string]$WorldY)
+  return Invoke-GameExpression -Expression $expression
 }
 
 try {
@@ -271,6 +291,71 @@ try {
       if ($clinicReturn.currentMapId -ne 'world' -or $clinicReturn.mode -ne 'playing') { throw "Clinic exit did not return to town (map=$($clinicReturn.currentMapId), mode=$($clinicReturn.mode))." }
       if ([double]$clinicReturn.y -lt 370) { throw "Clinic return spawn is not outside the visible facade (y=$($clinicReturn.y))." }
       $after = $clinicReturn
+    }
+    'clinic-authoring' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setZoom('far'); true" | Out-Null
+      Invoke-WorldPointerClick -WorldX 1016 -WorldY 434 | Out-Null
+      $enteredClinic = $null
+      for ($attempt = 0; $attempt -lt 36 -and (-not $enteredClinic -or $enteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
+        Start-Sleep -Milliseconds 250
+        $enteredClinic = Get-GameSnapshot
+      }
+      if (-not $enteredClinic -or $enteredClinic.currentMapId -ne 'clinic') { throw "Normal pointer movement did not enter Hospital (map=$($enteredClinic.currentMapId), x=$($enteredClinic.x), y=$($enteredClinic.y))." }
+      if ([Math]::Abs([double]$enteredClinic.x - 837) -gt 8 -or [Math]::Abs([double]$enteredClinic.y - 780) -gt 8) { throw "Hospital arrival spawn drifted from authored interior position (x=$($enteredClinic.x), y=$($enteredClinic.y))." }
+      $entryNavigation = Invoke-GameExpression -Expression 'JSON.stringify({ready:window.LanternHospitalNavigation.status(),walkable:window.LanternHospitalNavigation.isPositionWalkable({x:window.__RPG_DEBUG__.snapshot().x,y:window.__RPG_DEBUG__.snapshot().y},{radius:3}),exit:window.LanternHospitalNavigation.isInRegion("exit",{x:window.__RPG_DEBUG__.snapshot().x,y:window.__RPG_DEBUG__.snapshot().y,radius:3})})' | ConvertFrom-Json
+      if (-not $entryNavigation.walkable -or $entryNavigation.exit) { throw "Hospital arrival was not safely inside white ground and outside cyan (walkable=$($entryNavigation.walkable), exit=$($entryNavigation.exit))." }
+
+      foreach ($blockedTarget in @(@{ x = 837; y = 310 }, @{ x = 250; y = 350 }, @{ x = 1400; y = 350 }, @{ x = 100; y = 300 })) {
+        Invoke-WorldPointerClick -WorldX $blockedTarget.x -WorldY $blockedTarget.y | Out-Null
+        Start-Sleep -Milliseconds 850
+        $blockedSnapshot = Get-GameSnapshot
+        if ($blockedSnapshot.currentMapId -ne 'clinic') { throw "Blocked Hospital click left the Clinic (target=$($blockedTarget.x),$($blockedTarget.y), map=$($blockedSnapshot.currentMapId))." }
+        $blocked = Invoke-GameExpression -Expression "JSON.stringify(window.__RPG_DEBUG__.collisionAt($($blockedTarget.x),$($blockedTarget.y),12))" | ConvertFrom-Json
+        if (-not $blocked) { throw "Hospital blocked target was reported walkable (target=$($blockedTarget.x),$($blockedTarget.y))." }
+      }
+
+      $nurseClick = Invoke-WorldPointerClick -WorldX 829 -WorldY 200 | ConvertFrom-Json
+      $nurseDialogue = $null
+      for ($attempt = 0; $attempt -lt 36 -and (-not $nurseDialogue -or $nurseDialogue.mode -ne 'dialogue'); $attempt += 1) {
+        Start-Sleep -Milliseconds 250
+        $nurseDialogue = Get-GameSnapshot
+      }
+      if (-not $nurseDialogue -or $nurseDialogue.mode -ne 'dialogue') {
+        $nurseDebug = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,snap=api.snapshot(),npc=api.entityPosition("clinic-healer-siu-moon"),canvas=document.getElementById("gameCanvas"),rect=canvas.getBoundingClientRect();return {snap,npc,rect:{left:rect.left,top:rect.top,width:rect.width,height:rect.height},nursePoint:{x:(($nurseClientX)-rect.left)*(canvas.width/rect.width),y:(($nurseClientY)-rect.top)*(canvas.height/rect.height)},npcRegion:window.LanternHospitalNavigation.isRegionAt("npc",{x:829,y:200})}})())'.Replace('$nurseClientX', [string]$nurseClick.clientX).Replace('$nurseClientY', [string]$nurseClick.clientY) | ConvertFrom-Json
+        throw "Authored magenta nurse click did not open the existing dialogue (mode=$($nurseDialogue.mode), x=$($nurseDialogue.x), y=$($nurseDialogue.y), click=$($nurseClick.clientX),$($nurseClick.clientY), debug=$($nurseDebug | ConvertTo-Json -Compress -Depth 8))."
+      }
+      $clinicService = Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,choices:document.querySelectorAll(".dialogue-choice").length,actor:document.getElementById("dialoguePortraitCanvas").dataset.actor})' | ConvertFrom-Json
+      if ($clinicService.speaker -ne '小滿' -or $clinicService.choices -lt 2 -or $clinicService.actor -ne 'healer') { throw "Existing Hospital nurse service/dialogue changed (speaker=$($clinicService.speaker), choices=$($clinicService.choices), actor=$($clinicService.actor))." }
+      Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:last-child').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 250
+
+      Invoke-WorldPointerClick -WorldX 837 -WorldY 700 | Out-Null
+      Start-Sleep -Milliseconds 1700
+      $exitClick = Invoke-WorldPointerClick -WorldX 837 -WorldY 833 | ConvertFrom-Json
+      $returnedTown = $null
+      for ($attempt = 0; $attempt -lt 44 -and (-not $returnedTown -or $returnedTown.currentMapId -ne 'world'); $attempt += 1) {
+        Start-Sleep -Milliseconds 250
+        $returnedTown = Get-GameSnapshot
+      }
+      if (-not $returnedTown -or $returnedTown.currentMapId -ne 'world') {
+        $exitDebug = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,snap=api.snapshot(),portal=api.entityPosition("clinic-to-world");return {snap,portal,exitRegion:window.LanternHospitalNavigation.isInRegion("exit",{x:snap.x,y:snap.y,radius:3}),portalAtPointer:portal&&{dx:portal.x-837,dy:portal.y-833}}})())' | ConvertFrom-Json
+        throw "Normal movement into the cyan Hospital exit did not return to Main Town (map=$($returnedTown.currentMapId), x=$($returnedTown.x), y=$($returnedTown.y), moving=$($returnedTown.moving), target=$($returnedTown.explorePath.target.x),$($returnedTown.explorePath.target.y), remaining=$($returnedTown.explorePath.remaining), ready=$($returnedTown.automaticPortalReady), zoom=$($returnedTown.cameraZoom), click=$($exitClick.clientX),$($exitClick.clientY), debugPortal=$($exitDebug.portal.x),$($exitDebug.portal.y), exitRegion=$($exitDebug.exitRegion))."
+      }
+
+      Invoke-WorldPointerClick -WorldX 850 -WorldY 520 | Out-Null
+      Start-Sleep -Milliseconds 1800
+      $awayFromDoor = Get-GameSnapshot
+      if ($awayFromDoor.currentMapId -ne 'world' -or -not $awayFromDoor.automaticPortalReady) { throw "Main Town did not settle away from Hospital door before re-entry (map=$($awayFromDoor.currentMapId), ready=$($awayFromDoor.automaticPortalReady))." }
+      Invoke-WorldPointerClick -WorldX 1016 -WorldY 434 | Out-Null
+      $reenteredClinic = $null
+      for ($attempt = 0; $attempt -lt 36 -and (-not $reenteredClinic -or $reenteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
+        Start-Sleep -Milliseconds 250
+        $reenteredClinic = Get-GameSnapshot
+      }
+      if (-not $reenteredClinic -or $reenteredClinic.currentMapId -ne 'clinic') { throw "Hospital re-entry failed (map=$($reenteredClinic.currentMapId), x=$($reenteredClinic.x), y=$($reenteredClinic.y))." }
+      Start-Sleep -Milliseconds 900
+      $after = Get-GameSnapshot
+      if ($after.currentMapId -ne 'clinic') { throw "Hospital re-entry immediately bounced back outside (map=$($after.currentMapId))." }
     }
     'general-store' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('general-store'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(400,280); true" | Out-Null

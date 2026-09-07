@@ -277,6 +277,7 @@
     environment: { src: "assets/environment-atlas-v5.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     terrain: { src: "assets/terrain-atlas-v1.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
     mainTownBackground: { src: "assets/main-town/main-town-final.png", background: true, image: null, ready: false, failed: false },
+    hospitalBackground: { src: "assets/hospital/hospital.png", background: true, image: null, ready: false, failed: false },
     battleMountainBackground: { src: "assets/battle/mountain/mountain-battle-background-v1.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v2.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
@@ -985,6 +986,29 @@
     if (!atlas?.ready || !atlas.image) return false;
     const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
     const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    const width = Math.max(1, Number(settings.width) || sourceWidth);
+    const height = Math.max(1, Number(settings.height) || sourceHeight);
+    const x = Number(settings.x) || 0;
+    const y = Number(settings.y) || 0;
+    ctx.save();
+    try {
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
+    } finally {
+      ctx.restore();
+    }
+    return true;
+  }
+
+  function drawHospitalBackground(ctx, options) {
+    const settings = options || {};
+    const atlas = spriteAtlases.hospitalBackground;
+    if (!atlas?.ready || !atlas.image) return false;
+    const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
+    const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    if (sourceWidth !== 1672 || sourceHeight !== 941) return false;
     const width = Math.max(1, Number(settings.width) || sourceWidth);
     const height = Math.max(1, Number(settings.height) || sourceHeight);
     const x = Number(settings.x) || 0;
@@ -1753,6 +1777,7 @@
     drawBattleBackground,
     drawBattleGround,
     drawMainTownBackground,
+    drawHospitalBackground,
     drawInteriorSprite,
     drawMarker,
   });
