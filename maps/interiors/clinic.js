@@ -10,12 +10,14 @@
   const { createInteriorMap, rect, point } = interior;
   function createClinicMap() {
     const furniture = [
-      rect(6, 2, 8, 1.1, { id: "clinic-counter", kind: "counter", name: "配藥櫃台", solid: true }),
-      rect(2, 3, 1, 5, { id: "clinic-herb-shelf", kind: "bookshelf", name: "藥草架", solid: true }),
-      rect(15, 3, 1, 5, { id: "clinic-bottle-shelf", kind: "bookshelf", name: "藥瓶架", solid: true }),
-      rect(4, 6, 3, 1.35, { id: "clinic-bed-a", kind: "bed", name: "療癒床", solid: true, blanket: "#87c5c1" }),
-      rect(4, 9, 3, 1.35, { id: "clinic-bed-b", kind: "bed", name: "療癒床", solid: true, blanket: "#c8a6d8" }),
-      rect(12, 8, 3, 1.2, { id: "clinic-herb-table", kind: "table", name: "曬草桌", solid: true }),
+      rect(6, 3.1, 8, 1.1, { id: "clinic-counter", kind: "counter", name: "配藥櫃台", zone: "reception", solid: true }),
+      rect(2, 2, 1, 5, { id: "clinic-herb-shelf", kind: "bookshelf", name: "藥草架", zone: "medical-storage", solid: true }),
+      rect(17, 2, 1, 5, { id: "clinic-bottle-shelf", kind: "bookshelf", name: "藥瓶架", zone: "medical-storage", solid: true }),
+      rect(4, 5.5, 3, 1, { id: "clinic-waiting-bench-west", kind: "table", name: "候診長凳", zone: "waiting", solid: true }),
+      rect(11.5, 5.5, 3, 1, { id: "clinic-waiting-bench-east", kind: "table", name: "候診長凳", zone: "waiting", solid: true }),
+      rect(4, 8, 3, 1.35, { id: "clinic-bed-a", kind: "bed", name: "療癒床", zone: "treatment", solid: true, blanket: "#87c5c1" }),
+      rect(12, 8, 3, 1.35, { id: "clinic-bed-b", kind: "bed", name: "療癒床", zone: "treatment", solid: true, blanket: "#c8a6d8" }),
+      rect(8, 9.7, 3, 1, { id: "clinic-treatment-table", kind: "table", name: "處置桌", zone: "treatment", solid: true }),
     ];
     const decorations = [
       { id: "clinic-lamp-west", kind: "wallSconce", ...point(5, 2.1), radius: 8, solid: false },
@@ -25,9 +27,9 @@
     const npcs = [{
       id: "clinic-healer-siu-moon",
       name: "小滿",
-      role: "療癒師",
+      role: "療癒師／前台",
       kind: "npc",
-      ...point(10, 3.8),
+      ...point(10, 2.3),
       radius: 12,
       color: "#87db82",
       facing: "down",
@@ -35,6 +37,7 @@
       gender: "female",
       age: 27,
       appearance: "金髮藍白女法師造型、白金短斗篷、藍寶石法袍與長靴",
+      zone: "reception",
       services: ["clinic-healing"],
     }];
     return createInteriorMap({
@@ -59,7 +62,7 @@
         theme: "clinic",
         ambient: "herbal-warm",
         start: point(9.5, 11.3),
-        spawnPoints: { entrance: point(9.5, 11.3), healer: point(10, 3.8) },
+        spawnPoints: { entrance: point(9.5, 11.3), healer: point(10, 2.3) },
         worldBuildingId: "clinic",
       },
     });

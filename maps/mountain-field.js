@@ -38,6 +38,7 @@
     }
     const treeVariants = ["broadleafTree", "pineTree", "autumnTree", "blossomTree"];
     const treeSeeds = { broadleafTree: .125, pineTree: .375, autumnTree: .625, blossomTree: .875 };
+    const deliveryClearing = { x: 35, y: 12, radius: 4 };
     const trees = [];
     for (let ty = 1; ty < height - 1; ty += 2) {
       for (let tx = 1; tx < width - 1; tx += 2) {
@@ -53,6 +54,7 @@
         // readable unit even though the tree's collision trunk is clear.
         const lowerRoadBuffer = ty >= 26 ? 4.2 : 2.6;
         if (routeDistance(tx, ty) < lowerRoadBuffer) continue;
+        if (Math.hypot(tx - deliveryClearing.x, ty - deliveryClearing.y) < deliveryClearing.radius) continue;
         const variant = treeVariants[(Math.floor(tx / 10) + Math.floor(ty / 9)) % treeVariants.length];
         const renderScale = ty >= 26 ? 1.3 : 2.1;
         trees.push({ id: `field-tree-${trees.length}`, kind: "tree", ...point(tx, ty), tileX: tx, tileY: ty, radius: ty >= 26 ? 23 : 28, seed: treeSeeds[variant] + (random() - .5) * .035, variant, groveId: `field-mass-${Math.floor(tx / 10)}-${Math.floor(ty / 9)}`, renderScale });
@@ -77,7 +79,7 @@
       { id: "ruin-cache", kind: "chest", ...point(39, 4), radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
     ];
     const npcs = [
-      { id: "mountain_delivery_recipient", name: "洛安", role: "山地信使", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "explorer", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
+      { id: "mountain_delivery_recipient", name: "洛安", role: "山地信使", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "mountainCourier", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", zone: "far-field-clearing", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
     ];
     const enemySpawns = [
       { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },
@@ -100,7 +102,7 @@
       worldPortalId: "world-to-field", dungeonPortalId: dungeonExit.id,
       objectives: { crystals: { west: point(16, 25), hollow: point(28, 27), north: point(37, 14) }, gate: point(37, 8), boss: point(37, 4), dungeon: point(37, 1), town: point(1, 26) },
       routeLayout: { style: "east-then-north", entrySide: "west", dungeonSide: "north", waypoints: [point(1, 26), point(29, 26), point(35, 22), point(37, 16), point(37, 1)], solidOutsideRoute: true },
-      forestLayout: { style: "solid-tree-mass", treePattern: "two-tile-canopy-grid", collisionTile: TILES.WALL, visualGroundTile: TILES.GRASS, collisionRadius: 28, roadClearanceTiles: 2.15 },
+      forestLayout: { style: "solid-tree-mass", treePattern: "two-tile-canopy-grid", collisionTile: TILES.WALL, visualGroundTile: TILES.GRASS, collisionRadius: 28, roadClearanceTiles: 2.15, clearings: [{ id: "far-field-clearing", ...point(deliveryClearing.x, deliveryClearing.y), radiusTiles: deliveryClearing.radius }] },
       staticObjects: [...trees, ...signs],
     });
   }

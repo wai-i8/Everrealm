@@ -57,6 +57,8 @@
 .skill-detail-panel > .ui-modal-window > .modal-kicker,
 .skill-detail-panel > .ui-modal-window > h2 { text-align: center; }
 .skill-detail-panel > .ui-modal-window > .modal-actions { margin-inline: auto; }
+.abandon-commission-panel { z-index: 21; }
+.abandon-commission-icon { color: var(--red); border-color: rgba(255,107,107,.5); }
 
 /* The facility header remains a warm information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */

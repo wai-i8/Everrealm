@@ -8,7 +8,7 @@ const Art = require("../character-art.js");
 test("named NPCs own unique glasses-free frames and the generic fallback never uses the eyewear frame", () => {
   const namedRoles = [
     "keeper", "smith", "healer", "guildmaster", "clerk", "adventurer",
-    "duelist", "merchant", "armorer", "tailor", "explorer",
+    "duelist", "merchant", "armorer", "tailor", "explorer", "mountainCourier",
   ];
   const indices = Art.npcArtIndices;
   const namedValues = namedRoles.map((role) => indices[role]);

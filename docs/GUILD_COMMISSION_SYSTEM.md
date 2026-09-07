@@ -20,13 +20,17 @@
 
 討伐委託以 canonical Monster ID 及每次生成的穩定 `instanceId` 記錄擊殺。只有接受後、符合目標 ID 的活躍委託會增加進度；錯誤魔物、接受前擊殺，以及同一個生成實例的重複事件都不計算。多個符合目標的戰鬥單位各自以實例計算一次。
 
-送信委託以 token 形式存在委託 state，不需要佔用一般物品欄。玩家必須到 `field` 與 `mountain_delivery_recipient` 互動；只有該穩定 NPC ID 可以完成目標。收件人位於遠離主城東門、靠近山路北段的可達區域，精確位置由 `maps/mountain-field.js` 擁有。
+送信委託以 token 形式存在委託 state，不需要佔用一般物品欄。玩家必須到 `field` 與穩定 ID `mountain_delivery_recipient` 互動；只有該 NPC 可以完成目標。收件人顯示名為「洛安」，使用獨立成年男性山地信使 bitmap／對話肖像，位於遠離主城東門、靠近山路北段的可達區域，精確位置由 `maps/mountain-field.js` 擁有。沒有活躍送信時只顯示 ambient 對話；送信進行中會收信並完成 objective；已送達後只提示玩家回公會回報；錯誤 NPC 或重複點擊不會改變 state。
 
 狀態流程是：
 
 `available → active → ready_to_report → available`
 
 `objectiveCompleted` 與 `deliveryCompleted` 是 state 內的明確旗標；討伐進度達標或送信成功後只會變成 `ready_to_report`，玩家仍要回到 `guild` 向公會回報。回報是一次性、原子操作，會清除活躍委託、增加 cycle，並把一個與委託星級相同的技能書信封加入 state。重複回報不能重複領獎；同一份委託完成回報後會再次出現在固定目錄中。
+
+接受後的委託可在尚未領取報酬前放棄：`active` 或 `ready_to_report` 都可從公會委託卡按下「放棄委託」，並必須先通過遊戲內確認視窗。放棄會清除進度、objective／delivery 完成旗標及擊殺實例，增加 cycle 使舊卡片失效，回到 `available`；不扣金幣、聲望、階級，也不設 cooldown。重新接受必須從 0 開始。已經回報並領取信封的 cycle 沒有可放棄內容。
+
+放棄送信同時移除送信 token；收件人不會接受已放棄的信，`ready_to_report` 也會被清除。放棄不會減少既有信封，且保存／載入後仍維持可用狀態，不會復原舊進度或舊完成旗標。
 
 ## 技能書信封
 
@@ -44,11 +48,11 @@
 - `cycle`、`rewardClaimed`
 - 各星級 `envelopes` 數量與 `envelopeDrawSerial`
 
-載入時會以 state normalizer 修正數字、未知委託與不完整舊資料；舊版只有 `activeContracts` 的存檔會安全地回到可用的 V1 委託板，不會沿用舊的固定金幣／XP／物品獎勵路徑。現有 `activeContracts` 欄位只保留為舊 UI／測試的相容投影，並非新的資料來源。
+載入時會以 state normalizer 修正數字、未知委託與不完整舊資料；active Hunt／Delivery 的進度及 `ready_to_report` 必須原樣保留。放棄後保存的 `available` state 不會復原舊進度；回報後保存的 envelope 數量仍只可消費一次。舊版只有 `activeContracts` 的存檔會安全地回到可用的 V1 委託板，不會沿用舊的固定金幣／XP／物品獎勵路徑。現有 `activeContracts` 欄位只保留為舊 UI／測試的相容投影，並非新的資料來源。
 
 ## Guild UI 與互動
 
-Guild 委託板一次顯示固定五份可接委託；接任後只顯示當前一份，並呈現星級、標題、類型、推薦等級、目標、進度、技能書信封報酬與狀態。接受及回報只能在 `guild` 進行；送信只能在山地收件人處完成。完成後公會職員顯示回報提示，山地收件人則在送信前後使用簡短的狀態對話。
+Guild 委託板一次顯示固定五份可接委託；接任後只顯示當前一份，並呈現星級、標題、類型、推薦等級、目標、進度、技能書信封報酬、狀態及放棄操作。接受、放棄及回報只能在 `guild` 進行；送信只能在山地收件人處完成。完成後公會職員顯示回報提示，山地收件人則在送信前後使用簡短的狀態對話。放棄確認使用現有 shared modal/window skin，不使用 browser alert。
 
 ## 系統 ownership
 

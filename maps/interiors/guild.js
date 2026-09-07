@@ -10,12 +10,12 @@
   const { createInteriorMap, rect, point } = interior;
   function createGuildMap() {
     const furniture = [
-      rect(7.25, 2, 7.5, 1.2, { id: "guild-counter", kind: "counter", name: "接待櫃台", solid: true }),
-      rect(2, 2, 1, 4, { id: "guild-bookshelf-west", kind: "bookshelf", name: "委託紀錄架", solid: true }),
-      rect(19, 2, 1, 4, { id: "guild-bookshelf-east", kind: "bookshelf", name: "冒險者名冊", solid: true }),
-      rect(3, 8, 4, 1.25, { id: "guild-table-west", kind: "table", name: "聚會長桌", solid: true }),
-      rect(15, 8, 4, 1.25, { id: "guild-table-east", kind: "table", name: "聚會長桌", solid: true }),
-      rect(3, 12, 2, .6, { id: "guild-training-rack", kind: "weaponRack", name: "練習武器架", solid: true }),
+      rect(7.25, 3.1, 7.5, 1.1, { id: "guild-counter", kind: "counter", name: "接待櫃台", zone: "reception-admin", solid: true }),
+      rect(2, 2, 1, 4, { id: "guild-bookshelf-west", kind: "bookshelf", name: "委託紀錄架", zone: "archive-storage", solid: true }),
+      rect(19, 2, 1, 4, { id: "guild-bookshelf-east", kind: "bookshelf", name: "冒險者名冊", zone: "archive-storage", solid: true }),
+      rect(3, 8, 4, 1.25, { id: "guild-table-west", kind: "table", name: "候位長桌", zone: "waiting-lounge", solid: true }),
+      rect(15, 8, 4, 1.25, { id: "guild-table-east", kind: "table", name: "候位長桌", zone: "waiting-lounge", solid: true }),
+      rect(8.5, 9.7, 5, 1, { id: "guild-lounge-table", kind: "table", name: "公會休憩桌", zone: "waiting-lounge", solid: true }),
     ];
     const decorations = [
       { id: "guild-banner-left", kind: "banner", ...point(6, 1), color: "#e7ad48", emblem: "lantern", solid: false },
@@ -25,13 +25,13 @@
       { id: "guild-lamp-east", kind: "wallSconce", ...point(16, 6), radius: 8, solid: false },
     ];
     const boards = [
-      { id: "guild-request-board", kind: "questBoard", name: "霧都委託板", ...point(4, 5), radius: 22, prompt: "E　查看重複委託", boardId: "repeatable-bounties" },
+      { id: "guild-request-board", kind: "questBoard", name: "霧都委託板", ...point(4, 5), radius: 22, prompt: "E　查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission" },
     ];
     const npcs = [
-      { id: "guildmaster-yin", name: "妍姐", role: "公會會長", kind: "npc", ...point(10, 3.7), radius: 12, color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32, appearance: "紅黑女劍士造型、赤紅披肩、黑色輕甲與高筒戰靴", services: ["guild-rank", "bounty-report"] },
-      { id: "guild-clerk-po", name: "阿寶", role: "委託接待員", kind: "npc", ...point(13, 3.7), radius: 12, color: "#71c7b5", facing: "down", actor: "clerk", gender: "female", age: 24, appearance: "藍髮兔耳侍從造型、藍白公會制服、束腰短裙與長襪短靴", services: ["repeatable-bounties"] },
-      { id: "guild-adventurer-nok", name: "諾拉", role: "見習女遊俠", kind: "npc", ...point(17, 10), radius: 12, color: "#9da8ef", facing: "left", actor: "adventurer", gender: "female", age: 25, appearance: "綠衣精靈女弓手造型、尖耳、翠綠短斗篷、輕皮甲與長靴", chatter: "地下坑道啲苔糰子，睇落得意但撞人幾痛㗎。" },
-      { id: "guild-duelist-rhea", name: "麗雅", role: "賞金女劍士", kind: "npc", ...point(5, 10.5), radius: 12, color: "#e8889c", facing: "right", actor: "duelist", gender: "female", age: 29, appearance: "紅黑女劍士造型、露肩赤紅戰衣、黑金腰封與高筒戰靴", chatter: "高星委託唔止獎金高，抽到稀有技能書先係真正驚喜。" },
+      { id: "guildmaster-yin", name: "妍姐", role: "公會會長／前台接待", kind: "npc", ...point(10, 2.3), radius: 12, color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32, appearance: "紅黑女劍士造型、赤紅披肩、黑色輕甲與高筒戰靴", zone: "reception-admin", services: ["guild-rank", "bounty-report"] },
+      { id: "guild-clerk-po", name: "阿寶", role: "委託接待員", kind: "npc", ...point(13, 2.3), radius: 12, color: "#71c7b5", facing: "down", actor: "clerk", gender: "female", age: 24, appearance: "藍髮兔耳侍從造型、藍白公會制服、束腰短裙與長襪短靴", zone: "reception-admin", services: ["repeatable-bounties"] },
+      { id: "guild-adventurer-nok", name: "諾拉", role: "見習女遊俠", kind: "npc", ...point(17, 10), radius: 12, color: "#9da8ef", facing: "left", actor: "adventurer", gender: "female", age: 25, appearance: "綠衣精靈女弓手造型、尖耳、翠綠短斗篷、輕皮甲與長靴", zone: "waiting-lounge", chatter: "地下坑道啲苔糰子，睇落得意但撞人幾痛㗎。" },
+      { id: "guild-duelist-rhea", name: "麗雅", role: "賞金女劍士", kind: "npc", ...point(5, 10.5), radius: 12, color: "#e8889c", facing: "right", actor: "duelist", gender: "female", age: 29, appearance: "紅黑女劍士造型、露肩赤紅戰衣、黑金腰封與高筒戰靴", zone: "waiting-lounge", chatter: "高星委託唔止獎金高，抽到稀有技能書先係真正驚喜。" },
     ];
     return createInteriorMap({
       width: 22,

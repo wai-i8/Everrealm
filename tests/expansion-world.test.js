@@ -323,6 +323,7 @@ test("every expansion NPC has an explicit visual actor, with service interiors r
     "explorer",
     "guildmaster",
     "healer",
+    "mountainCourier",
     "merchant",
     "tailor",
   ];

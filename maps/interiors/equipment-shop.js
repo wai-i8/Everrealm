@@ -10,12 +10,12 @@
   const { createInteriorMap, rect, point } = interior;
   function createEquipmentShopMap() {
     const furniture = [
-      rect(2, 2, 5, 1.1, { id: "shop-weapon-counter", kind: "counter", name: "武器櫃台", solid: true, shopCategory: "weapon" }),
-      rect(11, 2, 5, 1.1, { id: "shop-armour-counter", kind: "counter", name: "防具櫃台", solid: true, shopCategory: "armor" }),
-      rect(2, 5, 1, 4, { id: "shop-sword-rack", kind: "weaponRack", name: "刀劍陳列架", solid: true, shopCategory: "weapon" }),
-      rect(15, 5, 1, 4, { id: "shop-armour-rack", kind: "armourRack", name: "護甲陳列架", solid: true, shopCategory: "armor" }),
-      rect(4.2, 8.1, 2.4, 1.4, { id: "shop-anvil", kind: "anvil", name: "改裝鐵砧", solid: true }),
-      rect(11.4, 7.5, 2.1, 2.2, { id: "shop-fitting-screen", kind: "screen", name: "試身屏風", solid: true }),
+      rect(2, 3.1, 5, 1.1, { id: "shop-weapon-counter", kind: "counter", name: "武器櫃台", zone: "sales-counter", solid: true, shopCategory: "weapon" }),
+      rect(11, 3.1, 5, 1.1, { id: "shop-armour-counter", kind: "counter", name: "防具櫃台", zone: "sales-counter", solid: true, shopCategory: "armor" }),
+      rect(2, 5, 1, 4, { id: "shop-sword-rack", kind: "weaponRack", name: "刀劍陳列架", zone: "weapon-display", solid: true, shopCategory: "weapon" }),
+      rect(15, 5, 1, 4, { id: "shop-armour-rack", kind: "armourRack", name: "護甲陳列架", zone: "armour-display", solid: true, shopCategory: "armor" }),
+      rect(4.2, 8.8, 2.4, 1.4, { id: "shop-anvil", kind: "anvil", name: "改裝鐵砧", zone: "work-storage", solid: true }),
+      rect(11.4, 8, 2.1, 2.2, { id: "shop-fitting-screen", kind: "screen", name: "試身屏風", zone: "armour-display", solid: true }),
     ];
     const decorations = [
       { id: "shop-forge", kind: "forgeFire", ...point(3.5, 10), radius: 24, glow: "#ff744c", solid: false },
@@ -24,9 +24,9 @@
       { id: "shop-lamp-right", kind: "wallSconce", ...point(12, 4), radius: 8, solid: false },
     ];
     const npcs = [
-      { id: "merchant-gin", name: "銀姐", role: "銀火店主", kind: "npc", ...point(5, 3.8), radius: 12, color: "#f2a96b", facing: "down", actor: "merchant", gender: "female", age: 36, appearance: "紅髮海盜女商人造型、酒紅船長外套、金飾腰封與高筒靴", services: ["equipment-shop", "sell"] },
-      { id: "armorer-yuet", name: "阿月", role: "防具師", kind: "npc", ...point(13, 3.8), radius: 12, color: "#8ac7d3", facing: "down", actor: "armorer", gender: "female", age: 28, appearance: "紫髮女忍者造型、紫黑輕甲、護臂、忍具腰帶與長靴", services: ["equipment-shop", "compare-equipment"] },
-      { id: "shop-tailor-safi", name: "莎菲", role: "魔裝裁縫師", kind: "npc", ...point(14, 10.5), radius: 12, color: "#d89adf", facing: "left", actor: "tailor", gender: "female", age: 26, appearance: "成年粉髮小惡魔裁縫造型、短角、紫紅裁縫裙、翼紋披肩與繫帶靴", chatter: "防具唔只要頂得住，剪裁夠俐落先襯得起冒險者嘛。" },
+      { id: "merchant-gin", name: "銀姐", role: "銀火店主／武器櫃台", kind: "npc", ...point(5, 2.3), radius: 12, color: "#f2a96b", facing: "down", actor: "merchant", gender: "female", age: 36, appearance: "紅髮海盜女商人造型、酒紅船長外套、金飾腰封與高筒靴", zone: "sales-counter", services: ["equipment-shop", "sell"] },
+      { id: "armorer-yuet", name: "阿月", role: "防具師／防具櫃台", kind: "npc", ...point(13, 2.3), radius: 12, color: "#8ac7d3", facing: "down", actor: "armorer", gender: "female", age: 28, appearance: "紫髮女忍者造型、紫黑輕甲、護臂、忍具腰帶與長靴", zone: "sales-counter", services: ["equipment-shop", "compare-equipment"] },
+      { id: "shop-tailor-safi", name: "莎菲", role: "魔裝裁縫師", kind: "npc", ...point(14, 10.5), radius: 12, color: "#d89adf", facing: "left", actor: "tailor", gender: "female", age: 26, appearance: "成年粉髮小惡魔裁縫造型、短角、紫紅裁縫裙、翼紋披肩與繫帶靴", zone: "work-storage", chatter: "防具唔只要頂得住，剪裁夠俐落先襯得起冒險者嘛。" },
     ];
     return createInteriorMap({
       width: 18,

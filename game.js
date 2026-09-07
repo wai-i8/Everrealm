@@ -82,6 +82,7 @@
   const classSelectPanel = document.getElementById("classSelectPanel");
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
+  const abandonCommissionPanel = document.getElementById("abandonCommissionPanel");
   const battlePortraitCanvas = document.getElementById("selectedUnitPortraitCanvas");
   const battlePortraitCtx = battlePortraitCanvas.getContext("2d");
   const dialoguePortraitCanvas = document.getElementById("dialoguePortraitCanvas");
@@ -174,6 +175,7 @@
   let activeContracts = [];
   let contractRotation = 0;
   let guildCommissionState = Guild.normalizeState();
+  let pendingAbandonContractId = null;
   let guildMarks = 0;
   let guildRenown = 0;
   let inventory = {};
@@ -746,6 +748,8 @@
     classSelectPanel.hidden = true;
     skillBookConfirmPanel.hidden = true;
     skillDetailPanel.hidden = true;
+    abandonCommissionPanel.hidden = true;
+    pendingAbandonContractId = null;
     battleHud.hidden = true;
     battleEncounterIntro.hidden = true;
   }
@@ -1828,7 +1832,7 @@
     const portraitActors = {
       "阿澄": "keeper", "鐵叔": "smith", "小滿": "healer",
       "妍姐": "guildmaster", "阿寶": "clerk", "諾拉": "adventurer", "麗雅": "duelist",
-      "銀姐": "merchant", "阿月": "armorer", "莎菲": "tailor", "露娜": "explorer",
+      "銀姐": "merchant", "阿月": "armorer", "莎菲": "tailor", "露娜": "explorer", "洛安": "mountainCourier",
     };
     dialogue = {
       ...config,
@@ -2038,8 +2042,11 @@
     const offers = currentContractOffers();
     const activeStatus = guildCommissionState.status === "ready_to_report" ? "待回報" : "進行中";
     const activeAction = active && guildCommissionState.status === "ready_to_report"
-      ? `<button class="facility-action-button" type="button" data-facility-action="claim" data-contract-id="${active.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "回報並領取信封" : "要親身返公會回報"}</button>`
+      ? `<button class="facility-action-button" type="button" data-facility-action="claim" data-contract-id="${guildCommissionState.cycle}:${active.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "回報並領取信封" : "要親身返公會回報"}</button>`
       : `<button class="facility-action-button" type="button" disabled>完成目標後返公會回報</button>`;
+    const abandonAction = active
+      ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="abandon" data-contract-id="${guildCommissionState.cycle}:${active.id}">放棄委託</button>`
+      : "";
     const objectiveText = (commission) => commission.type === "hunt"
       ? `討伐${contractTargetName(commission.objective.monster_id)}`
       : `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
@@ -2054,7 +2061,7 @@
         <div class="facility-card-meta"><span>${objectiveText(active)}</span><b>${objectiveProgress(active, guildCommissionState)}</b></div>
         <div class="contract-progress"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
         <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(active)}</b></div>
-        ${activeAction}
+        <div class="facility-action-row">${activeAction}${abandonAction}</div>
       </article>` : "";
     const offersHtml = active ? "" : offers.map((offer) => `
       <article class="facility-list-card">
@@ -2893,6 +2900,48 @@
     questTrackerMode = "main";
     sound.level();
     showToast(`委託回報完成 · ${"★".repeat(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
+    renderFacility();
+    saveGame(false);
+  }
+
+  function openAbandonCommission(contractId) {
+    const active = activeGuildCommission();
+    const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
+    if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+    pendingAbandonContractId = expectedId;
+    document.getElementById("abandonCommissionTitle").textContent = `確定放棄「${active.title}」？`;
+    document.getElementById("abandonCommissionDescription").textContent = active.type === "hunt"
+      ? `目前討伐進度 ${guildCommissionState.progress} / ${active.objective.count} 將會失去；委託會重新開放接受。`
+      : guildCommissionState.status === "ready_to_report"
+        ? "信件已送達但尚未回報；放棄後送件完成狀態與回報資格都會失去。"
+        : "目前送信進度將會失去；委託會重新開放接受。";
+    abandonCommissionPanel.hidden = false;
+    document.getElementById("abandonCommissionConfirmButton").focus({ preventScroll: true });
+  }
+
+  function closeAbandonCommission(restoreFocus = true) {
+    pendingAbandonContractId = null;
+    abandonCommissionPanel.hidden = true;
+    if (restoreFocus && mode === "facility") facilityContent.focus({ preventScroll: true });
+  }
+
+  function confirmAbandonCommission() {
+    const active = activeGuildCommission();
+    const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
+    if (!pendingAbandonContractId || pendingAbandonContractId !== expectedId) {
+      closeAbandonCommission(false);
+      return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+    }
+    const result = Guild.abandon(guildCommissionState);
+    if (!result.ok) {
+      closeAbandonCommission(false);
+      return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
+    }
+    guildCommissionState = result.state;
+    syncGuildCommissionProjection();
+    questTrackerMode = "main";
+    closeAbandonCommission(false);
+    showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
     renderFacility();
     saveGame(false);
   }
@@ -5634,7 +5683,7 @@
       const h = Math.max(4, (prop.h || prop.radius * 2 || 36) * scale);
       const rectPoint = mapPoint(prop.x + (prop.w || 0) / 2, prop.y + (prop.h || 0));
       const point = mapPoint(prop.x, prop.y + 12);
-      const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge", forgeFire: "indoorForge" };
+      const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge", forgeFire: "indoorForge", goodsCrate: "barrelCrate" };
       const interiorSprites = { table: "guildTable", screen: "fittingScreen", pillar: "pillar", fireplace: "fireplace", wallSconce: "wallSconce", ancientLamp: "ancientLamp", banner: "guildBanner", glowMushroom: "glowMushroom", rubble: "rubble", mannequin: "mannequin" };
       if (environmentSprites[prop.kind]) {
         const propScale = prop.kind === "counter" ? 1 : prop.kind === "bookshelf" ? 1.1 : 1.35;
@@ -6105,7 +6154,7 @@
       ctx.fillStyle = "#ead9a7"; ctx.fillRect(point.x - 12 * scale, point.y - 16 * scale, 10 * scale, 13 * scale); ctx.fillRect(point.x + 2 * scale, point.y - 13 * scale, 9 * scale, 10 * scale);
       ctx.strokeStyle = "#ffc857"; ctx.strokeRect(point.x - 18 * scale, point.y - 21 * scale, 36 * scale, 30 * scale);
       if (nearestInteraction?.id === prop.id) drawInteractDiamond(point.x, point.y - 32 * scale);
-    } else if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar"].includes(prop.kind)) {
+    } else if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
       const w = Math.max(16, (prop.w || 28) * scale);
       const h = Math.max(12, (prop.h || 22) * scale);
       if (prop.kind === "bed") {
@@ -6131,12 +6180,12 @@
         ctx.restore();
         return;
       }
-      const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge" };
+      const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge", goodsCrate: "barrelCrate" };
       const interiorSprites = { table: "guildTable", screen: "fittingScreen", pillar: "pillar" };
       const sprite = environmentSprites[prop.kind] || interiorSprites[prop.kind];
       const drawer = environmentSprites[prop.kind] ? Art.drawEnvironmentSprite : Art.drawInteriorSprite;
-      const artWidth = prop.kind === "counter" ? w * 1.03 : prop.kind === "bookshelf" ? Math.max(w * 2.4, 76 * scale) : prop.kind.includes("Rack") ? Math.max(w * 1.45, 86 * scale) : prop.kind === "table" ? w * 1.08 : Math.max(w * 1.25, 68 * scale);
-      const artHeight = prop.kind === "counter" ? Math.max(h * 2.15, 68 * scale) : prop.kind === "bookshelf" ? h * 1.03 : prop.kind.includes("Rack") ? Math.max(h * 1.2, 78 * scale) : prop.kind === "table" ? Math.max(h * 2.4, 74 * scale) : Math.max(h * 1.15, 72 * scale);
+      const artWidth = prop.kind === "counter" ? w * 1.03 : prop.kind === "bookshelf" ? Math.max(w * 2.4, 76 * scale) : prop.kind.includes("Rack") ? Math.max(w * 1.45, 86 * scale) : prop.kind === "table" ? w * 1.08 : prop.kind === "goodsCrate" ? Math.max(w * 1.35, 58 * scale) : Math.max(w * 1.25, 68 * scale);
+      const artHeight = prop.kind === "counter" ? Math.max(h * 2.15, 68 * scale) : prop.kind === "bookshelf" ? h * 1.03 : prop.kind.includes("Rack") ? Math.max(h * 1.2, 78 * scale) : prop.kind === "table" ? Math.max(h * 2.4, 74 * scale) : prop.kind === "goodsCrate" ? Math.max(h * 1.2, 58 * scale) : Math.max(h * 1.15, 72 * scale);
       if (sprite && drawer(ctx, {
         sprite,
         x: point.x + w / 2,
@@ -6147,7 +6196,7 @@
         ctx.restore();
         return;
       }
-      const colors = { counter: "#79553c", bookshelf: "#4f3c36", table: "#72533d", weaponRack: "#604b42", armourRack: "#536273", anvil: "#59616d", screen: "#796175", pillar: "#556273" };
+      const colors = { counter: "#79553c", bookshelf: "#4f3c36", table: "#72533d", weaponRack: "#604b42", armourRack: "#536273", anvil: "#59616d", screen: "#796175", pillar: "#556273", goodsCrate: "#8f6843" };
       ctx.fillStyle = "rgba(2,5,12,.32)"; ctx.fillRect(point.x + 4, point.y + 6, w, h);
       ctx.fillStyle = colors[prop.kind] || "#586273"; ctx.fillRect(point.x, point.y, w, h);
       ctx.strokeStyle = "rgba(245,233,202,.2)"; ctx.strokeRect(point.x, point.y, w, h);
@@ -6457,7 +6506,7 @@
       "ah-ching": "keeper", "uncle-tit": "smith", "siu-moon": "healer", "town-smith": "smith", "town-herbalist": "healer",
       "clinic-healer-siu-moon": "healer", "store-merchant-gin": "merchant", "inn-keeper": "clerk",
       "guildmaster-yin": "guildmaster", "guild-clerk-po": "clerk", "guild-adventurer-nok": "adventurer", "guild-duelist-rhea": "duelist",
-      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer", "mountain_delivery_recipient": "explorer",
+      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer", "mountain_delivery_recipient": "mountainCourier",
     };
     const artBox = Art.drawCharacter(ctx, {
       x: point.x,
@@ -6775,6 +6824,10 @@
       }
       if (!skillBookConfirmPanel.hidden) {
         if (code === "Escape" || code === "KeyE") closeSkillManualConfirm();
+        return;
+      }
+      if (!abandonCommissionPanel.hidden) {
+        if (code === "Escape" || code === "KeyE") closeAbandonCommission();
         return;
       }
       if (code === "Escape" || code === "KeyE" || (code === "KeyI" && facilityTab === "bag") || (code === "KeyL" && facilityTab === "skills")) closeFacility();
@@ -7229,6 +7282,12 @@
   skillDetailPanel.addEventListener("click", (event) => {
     if (event.target === skillDetailPanel) closeSkillDetail();
   });
+  document.getElementById("abandonCommissionConfirmButton").addEventListener("click", confirmAbandonCommission);
+  document.getElementById("abandonCommissionCancelButton").addEventListener("click", () => closeAbandonCommission());
+  document.getElementById("abandonCommissionCloseButton").addEventListener("click", () => closeAbandonCommission());
+  abandonCommissionPanel.addEventListener("click", (event) => {
+    if (event.target === abandonCommissionPanel) closeAbandonCommission();
+  });
   document.getElementById("saveButton").addEventListener("click", () => saveGame());
   document.getElementById("respawnButton").addEventListener("click", respawn);
   document.getElementById("keepPlayingButton").addEventListener("click", keepPlaying);
@@ -7248,6 +7307,7 @@
     const action = button.dataset.facilityAction;
     if (action === "accept") acceptGuildOffer(button.dataset.offerId);
     else if (action === "claim") claimGuildContract(button.dataset.contractId);
+    else if (action === "abandon") openAbandonCommission(button.dataset.contractId);
     else if (action === "buy") changeEquipment(button.dataset.itemId, true);
     else if (action === "equip") changeEquipment(button.dataset.itemId, false);
     else if (action === "use-potion") useBagPotion();

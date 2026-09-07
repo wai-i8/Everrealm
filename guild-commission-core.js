@@ -257,6 +257,27 @@
     };
   }
 
+  function abandon(state, catalog = CATALOG) {
+    const current = normalizeState(state, catalog);
+    const commission = activeCommission(current, catalog);
+    if (!commission) return { ok: false, reason: "not-active", state: current, commission: null };
+    if (!["active", "ready_to_report"].includes(current.status)) {
+      return { ok: false, reason: "not-abandonable", state: current, commission };
+    }
+    const next = normalizeState({
+      ...current,
+      activeCommissionId: null,
+      status: "available",
+      progress: 0,
+      objectiveCompleted: false,
+      deliveryCompleted: false,
+      countedDefeatIds: [],
+      cycle: current.cycle + 1,
+      rewardClaimed: false,
+    }, catalog);
+    return { ok: true, reason: null, state: next, commission };
+  }
+
   function report(state, catalog = CATALOG) {
     const current = normalizeState(state, catalog);
     const commission = activeCommission(current, catalog);
@@ -310,6 +331,7 @@
     accept,
     recordHuntKill,
     deliver,
+    abandon,
     report,
     consumeEnvelope,
   };

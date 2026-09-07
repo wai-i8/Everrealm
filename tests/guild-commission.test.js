@@ -64,6 +64,33 @@ test("Mountain Field recipient is permanent, far from town, and reachable on aut
     },
   });
   assert.ok(route.length > 0, "recipient should be reachable from the authored field entrance");
+  assert.equal(recipient.actor, "mountainCourier");
+  assert.equal(recipient.zone, "far-field-clearing");
+  assert.ok(field.forestLayout.clearings?.some((clearing) => clearing.id === "far-field-clearing"), "recipient should own a visible far-field clearing");
+});
+
+test("service interiors expose functional furniture zones and role-aligned service NPCs", () => {
+  const maps = Maps;
+  const contracts = {
+    guild: { zones: ["reception-admin", "waiting-lounge", "archive-storage", "notice-commission"], npc: "guildmaster-yin" },
+    clinic: { zones: ["reception", "waiting", "treatment", "medical-storage"], npc: "clinic-healer-siu-moon" },
+    inn: { zones: ["front-desk", "lounge", "guest-service"], npc: "inn-keeper" },
+    shop: { zones: ["sales-counter", "weapon-display", "armour-display", "work-storage"], npc: "merchant-gin" },
+    "general-store": { zones: ["sales-counter", "food-goods", "bottles-potions", "general-supplies", "storage"], npc: "store-merchant-gin" },
+  };
+  for (const [mapId, contract] of Object.entries(contracts)) {
+    const map = maps[mapId];
+    const authoredZones = new Set([
+      ...map.furniture.map((item) => item.zone),
+      ...map.decorations.map((item) => item.zone),
+      ...map.boards.map((item) => item.zone),
+      ...map.npcs.map((item) => item.zone),
+    ].filter(Boolean));
+    for (const zone of contract.zones) assert.ok(authoredZones.has(zone), `${mapId} should author ${zone}`);
+    const serviceNpc = map.npcs.find((npc) => npc.id === contract.npc);
+    assert.ok(serviceNpc, `${mapId} should contain its service NPC`);
+    assert.ok(["reception-admin", "reception", "front-desk", "sales-counter"].includes(serviceNpc.zone), `${mapId} service NPC should be at the service point`);
+  }
 });
 
 test("hunt progress only counts an active matching target and each instance once", () => {
@@ -106,6 +133,48 @@ test("delivery only completes at the permanent recipient and remains ready until
   assert.equal(state.deliveryCompleted, true);
   assert.equal(state.progress, 1);
   assert.equal(Guild.deliver(state, "mountain_delivery_recipient").changed, false);
+});
+
+test("abandoning an active Hunt clears progress and re-accept starts at zero", () => {
+  let state = Guild.accept(Guild.emptyState(), "guild_hunt_coyote_3star").state;
+  for (let index = 1; index <= 3; index += 1) state = Guild.recordHuntKill(state, { monsterId: "coyote", instanceId: `abandon:${index}` }).state;
+  const abandoned = Guild.abandon(state);
+  assert.equal(abandoned.ok, true);
+  assert.equal(abandoned.state.status, "available");
+  assert.equal(abandoned.state.activeCommissionId, null);
+  assert.equal(abandoned.state.progress, 0);
+  assert.equal(abandoned.state.objectiveCompleted, false);
+  assert.deepEqual(abandoned.state.countedDefeatIds, []);
+  assert.equal(abandoned.state.envelopes[3], 0);
+  assert.equal(Guild.recordHuntKill(abandoned.state, { monsterId: "coyote", instanceId: "abandon:late" }).changed, false);
+  const acceptedAgain = Guild.accept(abandoned.state, "guild_hunt_coyote_3star");
+  assert.equal(acceptedAgain.ok, true);
+  assert.equal(acceptedAgain.state.progress, 0);
+  assert.equal(Guild.abandon(acceptedAgain.state).ok, true);
+  assert.equal(Guild.abandon(acceptedAgain.state).state.progress, 0);
+});
+
+test("abandoning Delivery or ready_to_report removes completion without a reward", () => {
+  let state = Guild.accept(Guild.emptyState(), "guild_delivery_mountain_2star").state;
+  const beforeDelivery = Guild.abandon(state);
+  assert.equal(beforeDelivery.ok, true);
+  assert.equal(Guild.deliver(beforeDelivery.state, "mountain_delivery_recipient").changed, false);
+  assert.equal(beforeDelivery.state.status, "available");
+
+  state = Guild.accept(beforeDelivery.state, "guild_delivery_mountain_2star").state;
+  state = Guild.deliver(state, "mountain_delivery_recipient").state;
+  assert.equal(state.status, "ready_to_report");
+  const abandonedReady = Guild.abandon(state);
+  assert.equal(abandonedReady.ok, true);
+  assert.equal(abandonedReady.state.status, "available");
+  assert.equal(abandonedReady.state.deliveryCompleted, false);
+  assert.equal(abandonedReady.state.envelopes[2], 0);
+  assert.equal(Guild.report(abandonedReady.state).ok, false);
+  const reloaded = Guild.normalizeState(JSON.parse(JSON.stringify(abandonedReady.state)));
+  assert.equal(reloaded.status, "available");
+  assert.equal(reloaded.activeCommissionId, null);
+  assert.equal(reloaded.progress, 0);
+  assert.equal(reloaded.deliveryCompleted, false);
 });
 
 test("report rejects early, grants one matching envelope, and makes the commission repeatable", () => {

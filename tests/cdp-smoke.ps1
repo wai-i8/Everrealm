@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -138,6 +138,7 @@ try {
   $equipmentScreenshotPath = $null
   $fighterTreeDetailScreenshotPath = $null
   $fighterTreeBottomScreenshotPath = $null
+  $abandonScreenshotPath = $null
   $monsterFacingRuntime = $null
   switch ($Scenario) {
     'title' {
@@ -698,6 +699,13 @@ try {
       $mountainAttackCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($mountainAttackScreenshotPath, [Convert]::FromBase64String($mountainAttackCapture.result.data))
     }
+    'mountain-recipient' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); window.__RPG_DEBUG__.acceptOffer('guild_delivery_mountain_2star'); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setEncounterGrace(30); const target=window.__RPG_DEBUG__.entityPosition('mountain_delivery_recipient'); window.__RPG_DEBUG__.teleport(target.x-42,target.y); window.__RPG_DEBUG__.interactWith('mountain_delivery_recipient'); true" | Out-Null
+      Start-Sleep -Milliseconds 260
+      $mountainRecipient = Get-GameSnapshot
+      $recipientUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,map:window.__RPG_DEBUG__.snapshot().currentMapId,dialogueHidden:document.getElementById("dialoguePanel").hidden,portraitActor:document.getElementById("dialoguePortraitCanvas").dataset.actor,speaker:document.getElementById("speakerName").textContent,target:window.__RPG_DEBUG__.entityPosition("mountain_delivery_recipient")})') | ConvertFrom-Json
+      if ($mountainRecipient.currentMapId -ne 'field' -or $recipientUi.mode -ne 'dialogue' -or $recipientUi.dialogueHidden -or $recipientUi.portraitActor -ne 'mountainCourier' -or $recipientUi.speaker -ne '洛安' -or $null -eq $recipientUi.target) { throw "Mountain recipient dialogue preview failed (mode=$($recipientUi.mode), map=$($recipientUi.map), portrait=$($recipientUi.portraitActor), speaker=$($recipientUi.speaker))." }
+    }
     'bossbattle' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.startBattle('boss-mistfang'); true" | Out-Null
       Start-Sleep -Milliseconds 150
@@ -823,6 +831,33 @@ try {
       Start-Sleep -Milliseconds 520
       $dungeonWarning = Get-GameSnapshot
       if ($dungeonWarning.mode -ne 'dialogue' -or $dungeonWarning.currentMapId -ne 'field') { throw 'Automatic dungeon portal did not preserve its under-level warning choice.' }
+    }
+    'guild-abandon' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); window.__RPG_DEBUG__.acceptOffer('guild_hunt_coyote_3star'); window.__RPG_DEBUG__.closeFacility(); for(let i=1;i<=2;i++)window.__RPG_DEBUG__.recordGuildKill('coyote','abandon-coyote:'+i); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.openFacility('guild'); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $activeUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),buttons:document.querySelectorAll("[data-facility-action=abandon]").length,contractId:document.querySelector("[data-facility-action=abandon]")?.dataset.contractId})') | ConvertFrom-Json
+      if ($activeUi.snapshot.guildCommission.status -ne 'active' -or $activeUi.snapshot.guildCommission.progress -ne 2 -or $activeUi.buttons -ne 1 -or $activeUi.contractId -ne "0:guild_hunt_coyote_3star") { throw 'Active commission card did not expose the cycle-safe abandon action.' }
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=abandon]').click(); true" | Out-Null
+      $confirmUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("abandonCommissionPanel").hidden,title:document.getElementById("abandonCommissionTitle").textContent,description:document.getElementById("abandonCommissionDescription").textContent})') | ConvertFrom-Json
+      if ($confirmUi.hidden -or -not $confirmUi.title.Contains('郊狼討伐') -or -not $confirmUi.description.Contains('2 / 5')) { throw 'Abandon confirmation modal did not describe the active commission progress.' }
+      $abandonScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-abandon-modal-$ViewportWidth.png"
+      $abandonCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($abandonScreenshotPath, [Convert]::FromBase64String($abandonCapture.result.data))
+      Invoke-GameExpression -Expression "document.getElementById('abandonCommissionCancelButton').click(); true" | Out-Null
+      $cancelled = Get-GameSnapshot
+      if (-not (Invoke-GameExpression -Expression 'document.getElementById("abandonCommissionPanel").hidden') -or $cancelled.guildCommission.status -ne 'active' -or $cancelled.guildCommission.progress -ne 2) { throw 'Cancelling abandon confirmation changed the commission state.' }
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=abandon]').click(); document.getElementById('abandonCommissionConfirmButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $abandoned = Get-GameSnapshot
+      if ($abandoned.guildCommission.status -ne 'available' -or $abandoned.guildCommission.activeCommissionId -ne $null -or $abandoned.guildCommission.progress -ne 0 -or $abandoned.guildCommission.cycle -ne 1 -or $abandoned.guildCommission.envelopes.'3' -ne 0) { throw 'Confirming abandon did not clear progress without granting a reward.' }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.acceptOffer('guild_hunt_coyote_3star'); window.__RPG_DEBUG__.closeFacility(); for(let i=1;i<=5;i++)window.__RPG_DEBUG__.recordGuildKill('coyote','claim-coyote:'+i); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.openFacility('guild'); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $readyUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),contractId:document.querySelector("[data-facility-action=claim]")?.dataset.contractId})') | ConvertFrom-Json
+      if ($readyUi.snapshot.guildCommission.status -ne 'ready_to_report' -or $readyUi.snapshot.guildCommission.progress -ne 5 -or $readyUi.contractId -ne "1:guild_hunt_coyote_3star") { throw 'Ready commission card did not expose its cycle-safe report action.' }
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=claim]').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $claimedUi = Get-GameSnapshot
+      if ($claimedUi.guildCommission.status -ne 'available' -or $claimedUi.guildCommission.envelopes.'3' -ne 1) { throw 'Cycle-safe commission report button did not claim the envelope.' }
     }
     'guild-commission' {
       $commissionIds = @('guild_hunt_chick_1star', 'guild_delivery_mountain_2star', 'guild_hunt_coyote_3star', 'guild_hunt_bear_4star', 'guild_hunt_snake_5star')
@@ -1018,6 +1053,7 @@ try {
     equipmentScreenshot = $equipmentScreenshotPath
     fighterTreeDetailScreenshot = $fighterTreeDetailScreenshotPath
     fighterTreeBottomScreenshot = $fighterTreeBottomScreenshotPath
+    abandonScreenshot = $abandonScreenshotPath
     monsterFacingRuntime = $monsterFacingRuntime
     guildBoardScreenshot = $guildBoardScreenshotPath
     guildCommissionScreenshot = $guildCommissionScreenshotPath

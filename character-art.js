@@ -29,6 +29,11 @@
       outfit: "#68ad75", outfitDark: "#356649", accent: "#d9f29c", scarf: "#f4d08b",
       shoe: "#2c3b3a", eye: "#26342f", outline: "#111d20", accessory: "leaf",
     }),
+    mountainCourier: Object.freeze({
+      skin: "#d9a27f", skinShade: "#ac705c", hair: "#302b32", hairLight: "#625861",
+      outfit: "#59685c", outfitDark: "#303b3b", accent: "#d6ae58", scarf: "#2f7180",
+      shoe: "#2c292d", eye: "#27302f", outline: "#171b20", accessory: "staff",
+    }),
     villager: Object.freeze({
       skin: "#efc19f", skinShade: "#d49374", hair: "#3d3541", hairLight: "#66536a",
       outfit: "#596b91", outfitDark: "#354260", accent: "#f0ce78", scarf: "#8bcfc3",
@@ -93,6 +98,7 @@
     armorer: 8,
     tailor: 9,
     explorer: 10,
+    mountainCourier: 5,
     villager: 5,
   });
 
@@ -282,6 +288,8 @@
     generalStoreBuilding: { src: "assets/general-store-building-v1.png", standalone: true, image: null, ready: false, failed: false },
     innBuilding: { src: "assets/inn-building-v1.png", standalone: true, image: null, ready: false, failed: false },
     innBed: { src: "assets/inn-bed-v1.png", standalone: true, image: null, ready: false, failed: false },
+    mountainCourier: { src: "assets/mountain-delivery-recipient-v1.png", standalone: true, image: null, ready: false, failed: false },
+    mountainCourierPortrait: { src: "assets/mountain-delivery-recipient-portrait-v1.png", standalone: true, image: null, ready: false, failed: false },
   };
 
   for (const [id, src] of Object.entries(Locomotion.assets)) {
@@ -528,11 +536,62 @@
       atlas: atlas.src, frame: selected.index, facing: selected.facing };
   }
 
+  // The mountain courier is a standalone cutout so the recipient never
+  // inherits a neighboring NPC's atlas pixels or body proportions.
+  function drawStandaloneCharacter(ctx, settings, actor) {
+    const atlas = spriteAtlases[actor];
+    if (!atlas?.standalone || !atlas.ready || !atlas.image) return false;
+    const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
+    const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    if (!sourceWidth || !sourceHeight) return false;
+    const x = Number(settings.x) || 0;
+    const y = Number(settings.y) || 0;
+    const scale = Math.max(.08, Number(settings.scale) || 1);
+    const height = 94 * scale;
+    const width = height * sourceWidth / sourceHeight;
+    const moving = ["walk", "run"].includes(settings.state);
+    const phase = Number(settings.phase) || 0;
+    const bob = moving ? Math.abs(Math.sin(phase * 8)) * -1.15 * scale : 0;
+    const hurt = settings.state === "hurt" || Boolean(settings.hurt);
+    const box = fitFrameToBaseline({ sw: sourceWidth, sh: sourceHeight }, {
+      x, y: y + bob, height, anchorXRatio: .5, anchorYRatio: 1,
+    });
+    ctx.save();
+    try {
+      drawGroundShadow(ctx, x, y, scale, 17, hurt ? .24 : .4);
+      if (settings.selected) {
+        ctx.strokeStyle = settings.selectionColor || "#ffc857";
+        ctx.lineWidth = Math.max(1.2, 1.35 * scale);
+        ctx.setLineDash([3 * scale, 2 * scale]);
+        ctx.beginPath(); ctx.ellipse(x, y + 1.5 * scale, box.width * .3, height * .08, 0, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (hurt) ctx.globalAlpha = .63;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      drawStandaloneSprite(ctx, {
+        sprite: actor, x, y: y + bob, width, height, anchorX: .5, anchorY: 1,
+        flipX: settings.facing === "left",
+      });
+    } finally { ctx.restore(); }
+    return {
+      ...box,
+      nameAnchorX: x,
+      nameAnchorY: box.top - 4 * scale,
+      markerAnchorX: x,
+      markerAnchorY: box.top - 23 * scale,
+      interactAnchorX: x + 23 * scale,
+      atlas: atlas.src,
+    };
+  }
+
   function drawBitmapCharacter(ctx, settings) {
     if ((settings.actor || settings.kind) === "player") {
       const standard = drawLocomotion(ctx, settings, settings.classId || "warrior");
       if (standard) return standard;
     }
+    const actor = settings.actor || settings.kind || "villager";
+    if (spriteAtlases[actor]?.standalone) return drawStandaloneCharacter(ctx, settings, actor);
     const selected = bitmapFrameFor(settings);
     if (!selected.atlas.ready || !selected.atlas.image) return false;
     const frame = atlasFrame(selected.atlas, selected.index);
@@ -540,7 +599,6 @@
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
-    const actor = settings.actor || settings.kind || "villager";
     const isHero = actor === "player";
     const isDetailedNpc = selected.atlas === spriteAtlases.npcMap;
     const mapProfile = isDetailedNpc ? npcMapProfiles[actor] : null;
@@ -641,6 +699,40 @@
 
   function drawBitmapPortrait(ctx, settings) {
     const actor = settings.actor || settings.kind || "player";
+    const standalone = spriteAtlases[`${actor}Portrait`];
+    if (standalone?.standalone && standalone.ready && standalone.image) {
+      const x = Number(settings.x) || 0;
+      const y = Number(settings.y) || 0;
+      const width = Math.max(24, Number(settings.width) || 144);
+      const height = Math.max(24, Number(settings.height) || width);
+      ctx.save();
+      try {
+        roundedRect(ctx, x, y, width, height, Math.min(width, height) * .12);
+        ctx.clip();
+        const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
+        gradient.addColorStop(0, settings.background || "#315d66");
+        gradient.addColorStop(1, settings.backgroundEnd || "#111a31");
+        ctx.fillStyle = gradient; ctx.fillRect(x, y, width, height);
+        drawStandaloneSprite(ctx, {
+          sprite: `${actor}Portrait`,
+          x: x + width / 2,
+          y: y + height * 1.08,
+          width: width * 1.12,
+          height: height * 1.28,
+          anchorX: .5,
+          anchorY: 1,
+        });
+      } finally { ctx.restore(); }
+      if (settings.frame !== false) {
+        ctx.save();
+        roundedRect(ctx, x + .75, y + .75, width - 1.5, height - 1.5, Math.min(width, height) * .12);
+        ctx.strokeStyle = settings.frameColor || "#d6ae58";
+        ctx.lineWidth = Math.max(1.5, Math.min(width, height) * .018);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return true;
+    }
     const selected = portraitFrameFor(actor, settings.classId);
     if (!selected.atlas.ready || !selected.atlas.image) return false;
     const frame = selected.atlas === spriteAtlases.npcPortraits

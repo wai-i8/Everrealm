@@ -10,11 +10,13 @@
   const { createInteriorMap, rect, point } = interior;
   function createGeneralStoreMap() {
     const furniture = [
-      rect(6, 2, 8, 1.1, { id: "store-counter", kind: "counter", name: "雜貨櫃台", solid: true }),
-      rect(2, 3, 1, 6, { id: "store-shelf-west", kind: "bookshelf", name: "乾貨貨架", solid: true }),
-      rect(16, 3, 1, 6, { id: "store-shelf-east", kind: "bookshelf", name: "工具貨架", solid: true }),
-      rect(5, 6, 3, 1.2, { id: "store-display", kind: "table", name: "材料展示桌", solid: true }),
-      rect(12, 8, 3, 1.2, { id: "store-crates", kind: "table", name: "待入庫材料", solid: true }),
+      rect(6, 3.1, 8, 1.1, { id: "store-counter", kind: "counter", name: "雜貨櫃台", zone: "sales-counter", solid: true }),
+      rect(2, 2, 1, 6, { id: "store-shelf-west", kind: "bookshelf", name: "乾貨貨架", zone: "food-goods", solid: true }),
+      rect(17, 2, 1, 6, { id: "store-shelf-east", kind: "bookshelf", name: "工具貨架", zone: "general-supplies", solid: true }),
+      rect(4.5, 6, 3.2, 1.15, { id: "store-food-display", kind: "table", name: "乾糧展示桌", zone: "food-goods", solid: true }),
+      rect(12.3, 6, 3.2, 1.15, { id: "store-bottle-display", kind: "table", name: "瓶裝雜貨桌", zone: "bottles-potions", solid: true }),
+      rect(5, 9.4, 2.2, 1.1, { id: "store-stock-west", kind: "goodsCrate", name: "乾貨箱", zone: "storage", solid: true }),
+      rect(12.8, 9.4, 2.2, 1.1, { id: "store-stock-east", kind: "goodsCrate", name: "工具箱", zone: "storage", solid: true }),
     ];
     const decorations = [
       { id: "store-lamp-west", kind: "wallSconce", ...point(5, 2.1), radius: 8, solid: false },
@@ -24,9 +26,9 @@
     const npcs = [{
       id: "store-merchant-gin",
       name: "穀嬸",
-      role: "雜貨商",
+      role: "雜貨商／前台",
       kind: "npc",
-      ...point(10, 3.8),
+      ...point(10, 2.3),
       radius: 12,
       color: "#f0c36a",
       facing: "down",
@@ -34,6 +36,7 @@
       gender: "female",
       age: 36,
       appearance: "紅髮女商人造型、酒紅短外套、金飾腰封與高筒靴",
+      zone: "sales-counter",
       services: ["general-store"],
     }];
     return createInteriorMap({
@@ -58,7 +61,7 @@
         theme: "general-store",
         ambient: "market-warm",
         start: point(9.5, 11.3),
-        spawnPoints: { entrance: point(9.5, 11.3), merchant: point(10, 3.8) },
+        spawnPoints: { entrance: point(9.5, 11.3), merchant: point(10, 2.3) },
         worldBuildingId: "general-store",
       },
     });
