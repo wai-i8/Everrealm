@@ -325,6 +325,53 @@
     renderPreviousCamera.zoom = camera.zoom;
   }
 
+  // Rendering caches: keep 4K gameplay visually identical while avoiding
+  // repeated creation/resampling work that is static between frames.
+  const atmosphereVignetteCache = document.createElement("canvas");
+  const atmosphereVignetteCtx = atmosphereVignetteCache.getContext("2d");
+  let atmosphereVignetteCacheKey = "";
+  const atmosphereFogSprites = Array.from({ length: 7 }, (_, index) => {
+    const fogCanvas = document.createElement("canvas");
+    fogCanvas.width = 360;
+    fogCanvas.height = 240;
+    const fogCtx = fogCanvas.getContext("2d");
+    const fogRadius = 130 + index * 8;
+    const gradient = fogCtx.createRadialGradient(180, 120, 0, 180, 120, fogRadius);
+    gradient.addColorStop(0, "rgba(190,205,222,.035)");
+    gradient.addColorStop(1, "rgba(190,205,222,0)");
+    fogCtx.fillStyle = gradient;
+    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+    return fogCanvas;
+  });
+
+  const miniMapBackgroundCache = document.createElement("canvas");
+  const miniMapBackgroundCacheCtx = miniMapBackgroundCache.getContext("2d");
+  let miniMapBackgroundCacheKey = "";
+
+  function ensureAtmosphereVignetteCache() {
+    const cacheWidth = Math.max(1, Math.round(width));
+    const cacheHeight = Math.max(1, Math.round(height));
+    const key = `${cacheWidth}x${cacheHeight}`;
+    if (atmosphereVignetteCacheKey === key) return;
+    atmosphereVignetteCache.width = cacheWidth;
+    atmosphereVignetteCache.height = cacheHeight;
+    const vignette = atmosphereVignetteCtx.createRadialGradient(
+      cacheWidth * .5, cacheHeight * .52, Math.min(cacheWidth, cacheHeight) * .16,
+      cacheWidth * .5, cacheHeight * .52, Math.max(cacheWidth, cacheHeight) * .72,
+    );
+    vignette.addColorStop(0, "rgba(4,8,18,0)");
+    vignette.addColorStop(.62, "rgba(4,8,18,.08)");
+    vignette.addColorStop(1, "rgba(3,6,16,.66)");
+    atmosphereVignetteCtx.fillStyle = vignette;
+    atmosphereVignetteCtx.fillRect(0, 0, cacheWidth, cacheHeight);
+    atmosphereVignetteCacheKey = key;
+  }
+
+  function flattenedMiniMapBackgroundKey(mapWidth, mapHeight) {
+    if (!(world.art?.flattened && world.art?.backgroundScene)) return "";
+    return [currentMapId, world.art.backgroundScene, world.pixelWidth, world.pixelHeight, mapWidth, mapHeight].join("|");
+  }
+
   class SoundEngine {
     constructor() { this.context = null; }
     ensure() {
@@ -854,16 +901,33 @@
 
   function resize() {
     const bounds = stage.getBoundingClientRect();
-    width = Math.max(1, bounds.width);
-    height = Math.max(1, bounds.height);
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.imageSmoothingEnabled = false;
-    camera.zoom = targetZoom();
-    syncBattleFacingPicker();
+    const nextWidth = Math.max(1, bounds.width);
+    const nextHeight = Math.max(1, bounds.height);
+    const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const nextBackingWidth = Math.round(nextWidth * nextDpr);
+    const nextBackingHeight = Math.round(nextHeight * nextDpr);
+    const backingChanged = canvas.width !== nextBackingWidth || canvas.height !== nextBackingHeight;
+    const layoutChanged = width !== nextWidth || height !== nextHeight || dpr !== nextDpr;
+
+    width = nextWidth;
+    height = nextHeight;
+    dpr = nextDpr;
+
+    if (backingChanged) {
+      canvas.width = nextBackingWidth;
+      canvas.height = nextBackingHeight;
+      ctx.imageSmoothingEnabled = false;
+    }
+    const cssWidth = `${width}px`;
+    const cssHeight = `${height}px`;
+    if (canvas.style.width !== cssWidth) canvas.style.width = cssWidth;
+    if (canvas.style.height !== cssHeight) canvas.style.height = cssHeight;
+
+    if (layoutChanged) {
+      atmosphereVignetteCacheKey = "";
+      camera.zoom = targetZoom();
+      syncBattleFacingPicker();
+    }
   }
 
   function houseCollisionRects(house) {
@@ -2139,13 +2203,33 @@
       + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0);
   }
 
+  function setTextIfChanged(element, value) {
+    if (!element) return;
+    const next = String(value);
+    if (element.textContent !== next) element.textContent = next;
+  }
+
+  function setStyleWidthIfChanged(element, value) {
+    if (!element) return;
+    const next = String(value);
+    if (element.style.width !== next) element.style.width = next;
+  }
+
+  function setDatasetIfChanged(element, key, value) {
+    if (!element) return;
+    const next = String(value);
+    if (element.dataset[key] !== next) element.dataset[key] = next;
+  }
+
   function updateMenuBadges() {
     const bookCount = totalOwnedSkillBooks();
-    inventoryBookBadge.textContent = bookCount > 99 ? "99+" : String(bookCount);
-    inventoryBookBadge.hidden = bookCount <= 0;
-    inventoryButton.setAttribute("aria-label", bookCount
+    setTextIfChanged(inventoryBookBadge, bookCount > 99 ? "99+" : String(bookCount));
+    const shouldHide = bookCount <= 0;
+    if (inventoryBookBadge.hidden !== shouldHide) inventoryBookBadge.hidden = shouldHide;
+    const label = bookCount
       ? `打開物品欄（I），有 ${bookCount} 本未開技能書`
-      : "打開物品欄（I）");
+      : "打開物品欄（I）";
+    if (inventoryButton.getAttribute("aria-label") !== label) inventoryButton.setAttribute("aria-label", label);
   }
 
   function atlasIconHtml(atlas, index, label, extraClass = "") {
@@ -4738,32 +4822,32 @@
     const xpNeeded = Expansion.xpRequired(player.level);
     const atCap = player.level >= Expansion.LEVEL_CAP;
     const xpRatio = atCap ? 1 : Core.clamp(player.xp / xpNeeded, 0, 1);
-    hud.level.textContent = `LV. ${player.level}`;
-    hud.hpFill.style.width = `${hpRatio * 100}%`;
-    hud.hpText.textContent = `${Math.ceil(player.hp)} / ${stats.maxHp}`;
-    hud.xpFill.style.width = `${xpRatio * 100}%`;
-    hud.xpText.textContent = atCap ? `LV.${Expansion.LEVEL_CAP} MAX` : `${player.xp} / ${xpNeeded} XP`;
-    hud.coins.textContent = player.coins;
-    hud.potions.textContent = player.potions;
-    hud.weapon.textContent = equippedWeaponName();
+    setTextIfChanged(hud.level, `LV. ${player.level}`);
+    setStyleWidthIfChanged(hud.hpFill, `${hpRatio * 100}%`);
+    setTextIfChanged(hud.hpText, `${Math.ceil(player.hp)} / ${stats.maxHp}`);
+    setStyleWidthIfChanged(hud.xpFill, `${xpRatio * 100}%`);
+    setTextIfChanged(hud.xpText, atCap ? `LV.${Expansion.LEVEL_CAP} MAX` : `${player.xp} / ${xpNeeded} XP`);
+    setTextIfChanged(hud.coins, player.coins);
+    setTextIfChanged(hud.potions, player.potions);
+    setTextIfChanged(hud.weapon, equippedWeaponName());
     updateMenuBadges();
     const commission = commissionQuestInfo();
-    hud.commissionTitle.textContent = commission.title;
-    hud.commissionDetail.textContent = commission.detail;
+    setTextIfChanged(hud.commissionTitle, commission.title);
+    setTextIfChanged(hud.commissionDetail, commission.detail);
     const steps = Math.round(Core.distance(player, commission.target) / world.tileSize);
-    hud.commissionDistance.textContent = steps <= 2 ? "目標喺附近" : `距離目標約 ${steps} 步`;
-    hud.zone.textContent = currentZone;
-    stage.dataset.gameState = mode;
-    stage.dataset.level = String(player.level);
-    stage.dataset.hp = String(Math.ceil(player.hp));
-    stage.dataset.aliveEnemies = String(enemies.filter((enemy) => enemy.alive).length);
-    stage.dataset.map = currentMapId;
-    stage.dataset.guildMarks = String(guildMarks);
-    stage.dataset.contractStatus = guildCommissionState.status === "ready_to_report"
+    setTextIfChanged(hud.commissionDistance, steps <= 2 ? "目標喺附近" : `距離目標約 ${steps} 步`);
+    setTextIfChanged(hud.zone, currentZone);
+    setDatasetIfChanged(stage, "gameState", mode);
+    setDatasetIfChanged(stage, "level", player.level);
+    setDatasetIfChanged(stage, "hp", Math.ceil(player.hp));
+    setDatasetIfChanged(stage, "aliveEnemies", enemies.filter((enemy) => enemy.alive).length);
+    setDatasetIfChanged(stage, "map", currentMapId);
+    setDatasetIfChanged(stage, "guildMarks", guildMarks);
+    setDatasetIfChanged(stage, "contractStatus", guildCommissionState.status === "ready_to_report"
       ? "ready"
-      : activeGuildCommission() ? guildCommissionState.status : "none";
-    stage.dataset.skillBooks = String(totalOwnedSkillBooks());
-    stage.dataset.facilityTab = facilityTab;
+      : activeGuildCommission() ? guildCommissionState.status : "none");
+    setDatasetIfChanged(stage, "skillBooks", totalOwnedSkillBooks());
+    setDatasetIfChanged(stage, "facilityTab", facilityTab);
     if (force) drawMiniMap();
   }
 
@@ -4825,9 +4909,9 @@
   function render() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = "#0a1020";
-    ctx.fillRect(0, 0, width, height);
     if (battle && mode === "battle") {
+      ctx.fillStyle = "#0a1020";
+      ctx.fillRect(0, 0, width, height);
       drawBattle();
       if (screenFlash > .01) {
         ctx.fillStyle = `rgba(255,107,107,${screenFlash * .16})`;
@@ -5765,13 +5849,37 @@
     miniCtx.beginPath();
     miniCtx.arc(centreX, centreY, radius, 0, Core.TAU);
     miniCtx.clip();
-    miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
-    miniCtx.fillRect(0, 0, mapWidth, mapHeight);
-    if (flattenedMapArt) {
-      Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
-        x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
-      });
+
+    const backgroundCacheKey = flattenedMiniMapBackgroundKey(mapWidth, mapHeight);
+    const cachedFlattenedBackground = flattenedMapArt
+      && miniMapBackgroundCacheKey === backgroundCacheKey
+      && miniMapBackgroundCache.width === mapWidth
+      && miniMapBackgroundCache.height === mapHeight;
+
+    if (cachedFlattenedBackground) {
+      miniCtx.drawImage(miniMapBackgroundCache, 0, 0);
+    } else {
+      miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
+      miniCtx.fillRect(0, 0, mapWidth, mapHeight);
+      let flattenedBackgroundReady = true;
+      if (flattenedMapArt) {
+        flattenedBackgroundReady = Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
+          x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
+        }) !== false;
+      }
+      if (flattenedMapArt && flattenedBackgroundReady) {
+        if (miniMapBackgroundCache.width !== mapWidth || miniMapBackgroundCache.height !== mapHeight) {
+          miniMapBackgroundCache.width = mapWidth;
+          miniMapBackgroundCache.height = mapHeight;
+        }
+        miniMapBackgroundCacheCtx.clearRect(0, 0, mapWidth, mapHeight);
+        miniMapBackgroundCacheCtx.drawImage(miniMap, 0, 0);
+        miniMapBackgroundCacheKey = backgroundCacheKey;
+      } else if (flattenedMapArt) {
+        miniMapBackgroundCacheKey = "";
+      }
     }
+
     const tilePixels = world.tileSize * scale + .7;
     if (!flattenedMapArt) {
       for (let ty = minTileY; ty <= maxTileY; ty += 1) {
@@ -6883,26 +6991,27 @@
     ctx.beginPath();
     ctx.rect(Math.max(0, left), Math.max(0, top), Math.max(0, Math.min(width, right) - Math.max(0, left)), Math.max(0, Math.min(height, bottom) - Math.max(0, top)));
     ctx.clip();
-    const vignette = ctx.createRadialGradient(width * .5, height * .52, Math.min(width, height) * .16, width * .5, height * .52, Math.max(width, height) * .72);
-    vignette.addColorStop(0, "rgba(4,8,18,0)");
-    vignette.addColorStop(.62, "rgba(4,8,18,.08)");
-    vignette.addColorStop(1, "rgba(3,6,16,.66)");
-    ctx.fillStyle = vignette; ctx.fillRect(0, 0, width, height);
+
+    ensureAtmosphereVignetteCache();
+    ctx.drawImage(atmosphereVignetteCache, 0, 0, width, height);
+
     ctx.save();
-    for (let i = 0; i < 7; i += 1) {
+    for (let i = 0; i < atmosphereFogSprites.length; i += 1) {
       const fogX = ((i * 239 + elapsed * (8 + i)) % (width + 320)) - 160;
       const fogY = height * (.2 + ((i * .173) % .7));
-      const gradient = ctx.createRadialGradient(fogX, fogY, 0, fogX, fogY, 130 + i * 8);
-      gradient.addColorStop(0, "rgba(190,205,222,.035)"); gradient.addColorStop(1, "rgba(190,205,222,0)");
-      ctx.fillStyle = gradient; ctx.fillRect(fogX - 180, fogY - 120, 360, 240);
+      ctx.drawImage(atmosphereFogSprites[i], fogX - 180, fogY - 120, 360, 240);
     }
     if (["world", "field"].includes(currentMapId)) {
-      ctx.strokeStyle = "rgba(190,220,228,.1)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(190,220,228,.1)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
       for (let i = 0; i < Math.ceil(width / 56); i += 1) {
         const x = (i * 67 + (i * 17 % 23)) % width;
         const y = (i * 93 + rainOffset * (1 + i % 3)) % (height + 50) - 25;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 14); ctx.stroke();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 5, y + 14);
       }
+      ctx.stroke();
     }
     ctx.restore();
     ctx.restore();
