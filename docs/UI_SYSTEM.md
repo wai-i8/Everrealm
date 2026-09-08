@@ -25,13 +25,21 @@ Everrealm UI 係暗色 fantasy RPG：
 | 主背景 | deep blue-grey / dark stone，避免純黑 |
 | frame / border | aged metal、carved stone、暖金細節 |
 | primary highlight | warm gold `#ffc857` |
-| secondary text | muted grey-blue `#a6adc4` |
+| secondary text | readable grey-blue `#c7c9d3` |
 | positive / active | lantern teal `#52dccb` |
 | warning / danger | 低飽和紅 `#ff6b6b` |
 | body text | cream `#f5e9ca` |
 
 畫面可以有少量霧、光暈、石材紋理，但內容優先；禁止每個系統自行發明一套
 顏色、圓角、陰影或「霓虹 app」語言。
+
+### 2.1 Text contrast contract
+
+正文、次要說明、disabled copy、gold button text 同 teal button text 使用
+`styles.css` 的 shared semantic tokens。深色背景上的次要／disabled 文字不可
+回退到低對比 `#a6adc4` 或透明白；淺色 gold／teal surface 上的文字必須使用
+深色 `on-accent`／`on-teal` token。所有狀態除顏色外仍要有文字、border、aria
+或 disabled semantics，確保 keyboard、窄屏及低亮度環境都讀得到。
 
 ## 3. Shared bitmap skin
 
@@ -114,6 +122,8 @@ catalogue ownership 術語；世界／互動 label 應以清楚的功能角色�
 Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bitmap slot
 底、中心放 item/icon、右下顯示數量、HTML 顯示名稱及少量 meta。selected / equipped
 用 teal 或 gold ring；locked 用降低飽和度加鎖定 copy；空 slot 保留框但唔放大字元填空。
+selected item detail 不重複列出另一行「持有數量」；數量只保留於 icon badge 及
+accessible label。
 DECK slot number 只作細小 secondary index；read-only viewer 只顯示 index、CMD/PSV
 badge 同技能名，empty slot 的 content 必須完全 blank，唔顯示「空」、「沒有技能」或
 「尚未裝設」。配置頁左右兩欄各自維持單欄 list，`可裝入 DECK` 等 redundant copy
@@ -149,15 +159,15 @@ Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 f
 ### Exploration HUD
 
 探索左側 HUD 固定以 character summary、quick resources、main functions、secondary
-view/audio controls、quest tracker 呢個優先次序組成。expanded state 必須係實際
+view/audio controls、公會委託 tracker 呢個優先次序組成。expanded state 必須係實際
 DOM／layout recomposition：角色摘要係 compact header，資源同武器係 quick-info
 strip，主要功能係視覺主層，視角／聲效係獨立 secondary row，任務係 compact
 independent section；唔可以只喺舊 card stack 上加裝飾。短資料唔應拆成多個同等
 重量嘅 nested card，music control 亦唔可孤立喺一個大空盒內。頂部使用
 `assets/ui/ui-sidebar-toggle-v1.png` bitmap pull-tab；expanded state 顯示完整 HUD，
-collapsed state 只保留呢個 bitmap tab，唔留 portrait、menu rail、quest card 或暗色
+collapsed state 只保留呢個 bitmap tab，唔留 portrait、menu rail、commission card 或暗色
 strip。collapse 係 UI preference，儲存於 localStorage，跨 map/interior/refresh 保留，
-唔改變 movement、keyboard、combat、stats、quest 或 progression。
+唔改變 movement、keyboard、combat、commission 或 progression。
 
 ### Dialogue action language
 

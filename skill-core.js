@@ -23,6 +23,7 @@
   const DEFAULT_TARGET_ARC = Object.freeze(["front", "left", "right"]);
   const TARGET_ARCS = Object.freeze(["front", "left", "right", "rear", "self"]);
   const BOOK_STARS = Object.freeze([1, 2, 3]);
+  const MAX_SKILL_BOOK_RANK = 10;
   const AP_BANDS = deepFreeze({
     1: { min: 3, max: 16 },
     2: { min: 10, max: 45 },
@@ -807,6 +808,15 @@
       sourceHitJudgement: source.sourceHitJudgement || null,
       guildBookStars: Array.isArray(source.guildBookStars) ? source.guildBookStars.map((star) => Math.trunc(Number(star))).filter((star) => star > 0) : [],
     };
+  }
+
+  // Skill-book ranks use the source notation: four minor stars lead into one
+  // major star, then the pattern repeats. Keep this formatter in the shared
+  // skill module so commission cards, inventory, toasts and battle labels
+  // cannot drift into separate glyph conventions.
+  function formatSkillBookRank(value) {
+    const rank = wholeNumber(value, 1, 1, MAX_SKILL_BOOK_RANK);
+    return "★".repeat(Math.floor(rank / 5)) + "☆".repeat(rank % 5);
   }
 
   const SKILL_CATALOG = deepFreeze(RAW_SKILLS.map(cloneSkill));
@@ -1732,6 +1742,7 @@
     DEFAULT_TARGET_ARC,
     TARGET_ARCS,
     BOOK_STARS,
+    MAX_SKILL_BOOK_RANK,
     AP_BANDS,
     DUPLICATE_SHARDS,
     MASTERY_UNLOCK_COST,
@@ -1749,6 +1760,7 @@
     calculateSkillDamageMultiplier,
     splitDamageLaterHits,
     bookStarForQuestLevel,
+    formatSkillBookRank,
     manhattan,
     isCardinallyAligned,
     isTargetInRange,

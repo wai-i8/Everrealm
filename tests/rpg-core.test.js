@@ -214,7 +214,7 @@ test("world generator returns the authored flattened navigation town", () => {
   assert.equal(world.townLayout.style, "flattened-jpg-authoring-package");
   assert.deepEqual(world.townLayout.sourceDimensions, { width: 7680, height: 4320 });
   assert.equal(world.townLayout.roadNetwork, null);
-  assert.equal(world.townGate, null, "the east exit is a passage, not a gate facade");
+  assert.equal(Object.hasOwn(world, "townGate"), false, "the east exit is a passage, not a gate facade");
 });
 
 test("the authored east passage is a physical bitmap trigger", () => {
@@ -260,9 +260,9 @@ test("Main Town has no street NPC roster after the flattened-scene migration", (
   assert.equal(Object.hasOwn(world.objectives, "elder"), false);
 });
 
-test("town quest points stand on walkable tiles", () => {
+test("town anchors stand on walkable tiles", () => {
   const world = World.createWorld();
-  const points = [world.start, world.objectives.townGate];
+  const points = [world.start, world.objectives.town];
   for (const point of points) {
     const tx = Math.floor(point.x / world.tileSize);
     const ty = Math.floor(point.y / world.tileSize);

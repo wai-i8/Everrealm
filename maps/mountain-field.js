@@ -84,11 +84,9 @@
     const enemySpawns = [
       { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },
       { id: "slime-3", type: "raccoon", ...point(20, 25), level: 1 }, { id: "slime-4", type: "raccoon", ...point(25, 27), level: 2 },
-      { id: "warden-west", type: "turtle", ...point(16, 25), level: 2, crystal: "west" }, { id: "warden-hollow", type: "turtle", ...point(28, 27), level: 3, crystal: "hollow" }, { id: "warden-north", type: "turtle", ...point(37, 14), level: 2, crystal: "north" },
+      { id: "warden-west", type: "turtle", ...point(16, 25), level: 2 }, { id: "warden-hollow", type: "turtle", ...point(28, 27), level: 3 }, { id: "warden-north", type: "turtle", ...point(37, 14), level: 2 },
       { id: "wisp-1", type: "chick", ...point(22, 27), level: 2 }, { id: "wisp-2", type: "fox", ...point(34, 21), level: 2 }, { id: "hound-1", type: "wild_boar", ...point(37, 18), level: 3 }, { id: "hound-2", type: "wild_boar", ...point(37, 10), level: 3 }, { id: "hound-3", type: "coyote", ...point(35, 7), level: 4 },
-      { id: "boss-mistfang", type: "bear", ...point(37, 4), level: 5, boss: true, mainBoss: true },
     ];
-    const gate = { id: "ruin-gate", name: "坑道封印", kind: "gate", x: 35 * TILE, y: 7 * TILE + 10, w: 5 * TILE, h: 20 };
     const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回霧都主城", point(32.5, 13), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     westExit.direction = "west"; westExit.mapLabel = "霧都出口"; westExit.alwaysVisible = true;
     const dungeonExit = makeExit("field-to-dungeon", 37, 1, MAP_IDS.DUNGEON, "entrance", "進入沉燈坑道", point(9, 26), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
@@ -98,9 +96,9 @@
       id: MAP_IDS.FIELD, name: "霧梅爾山地東南部", shortName: "霧梅爾山地", kind: "field", type: "world", biome: "mountain", theme: "forest-road", ambient: "misty-woodland",
       tileSize: TILE, tileTypes: TILES, width, height, tiles, start,
       spawnPoints: { entrance: start, westGate: point(2, 26), dungeonFront: point(37, 2.6) }, exits: [westExit, dungeonExit], houses: [], trees, rocks: [], flowers, lamps: [], signs,
-      solidRects: [], furniture: [], decorations: [], boards: [], npcs, enemySpawns, chests, shrine: null, waypoint: null, gate,
+      solidRects: [], furniture: [], decorations: [], boards: [], npcs, enemySpawns, chests, shrine: null, waypoint: null,
       worldPortalId: "world-to-field", dungeonPortalId: dungeonExit.id,
-      objectives: { crystals: { west: point(16, 25), hollow: point(28, 27), north: point(37, 14) }, gate: point(37, 8), boss: point(37, 4), dungeon: point(37, 1), town: point(1, 26) },
+      objectives: { dungeon: point(37, 1), town: point(1, 26) },
       routeLayout: { style: "east-then-north", entrySide: "west", dungeonSide: "north", waypoints: [point(1, 26), point(29, 26), point(35, 22), point(37, 16), point(37, 1)], solidOutsideRoute: true },
       forestLayout: { style: "solid-tree-mass", treePattern: "two-tile-canopy-grid", collisionTile: TILES.WALL, visualGroundTile: TILES.GRASS, collisionRadius: 28, roadClearanceTiles: 2.15, clearings: [{ id: "far-field-clearing", ...point(deliveryClearing.x, deliveryClearing.y), radiusTiles: deliveryClearing.radius }] },
       staticObjects: [...trees, ...signs],

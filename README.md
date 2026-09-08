@@ -72,6 +72,7 @@ npm test
 - `docs/PET_SYSTEM.md`：Familiar 系統；普通 Familiar 嘅探索／戰鬥移動接入共用 locomotion contract。
 - `docs/PRODUCTION_SYSTEM.md`：採集／生產系統。
 - `docs/UI_SYSTEM.md`：共用 fantasy bitmap UI frame、主要視窗組合、dynamic sizing 同 responsive presentation。
+- `docs/BGM_SYSTEM.md`：背景音樂資產、地圖分區 routing、loop／mute／single-instance contract。
 - `ART_PIPELINE.md`：遊戲「應該點樣睇」以及所有 runtime 美術資產「技術上點製作、normalize、repack、切割、對位同驗收」；普通玩家／怪物／Familiar 嘅 28-frame Idle+Walk 標準亦以此文件為準。
 - `AGENTS.md`：指引 Codex 按當前工作只讀必要文件，並規定測試及文件維護方式。
 

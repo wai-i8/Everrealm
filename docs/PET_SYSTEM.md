@@ -172,7 +172,7 @@
 
 `Familiar Contract / ファミリアコントラクト`
 
-本作由一個主線／公會 milestone 解鎖。
+本作由一個公會／探索 milestone 解鎖。
 
 資料：
 
@@ -283,7 +283,7 @@ familiarKnowledge: {
 
 - Familiar 教學。
 - 公會委託。
-- 主線。
+- 公會委託／探索 milestone。
 - Boss。
 - 寶箱。
 - 特殊 NPC。

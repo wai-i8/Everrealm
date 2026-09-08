@@ -480,7 +480,7 @@
   place-items: center;
   border: 1px solid rgba(255,200,87,.5);
   border-radius: .58rem;
-  color: #171421;
+  color: var(--ui-text-on-accent);
   background: var(--gold);
   font-size: .68rem;
   font-weight: 900;
@@ -515,7 +515,7 @@
   padding: .24rem .34rem;
   border: 2px solid #17213a;
   border-radius: 999px;
-  color: #171421;
+  color: var(--ui-text-on-accent);
   background: var(--gold);
   font: 900 .67rem/1 ui-monospace,monospace;
   text-align: center;
@@ -532,7 +532,7 @@
   min-height: 2.15rem;
   border: 1px solid rgba(255,200,87,.5);
   border-radius: .58rem;
-  color: #171421;
+  color: var(--ui-text-on-accent);
   background: var(--gold);
   font-size: .68rem;
   font-weight: 900;
@@ -680,7 +680,7 @@
 .inventory-filter:hover,
 .inventory-filter:focus-visible,
 .inventory-filter[aria-selected="true"] {
-  color: #171421;
+  color: var(--ui-text-on-accent);
   border-color: var(--gold);
   background: var(--gold);
 }
@@ -758,7 +758,7 @@
   left: .28rem;
   padding: .18rem .28rem;
   border-radius: 999px;
-  color: #171421;
+  color: var(--ui-text-on-teal);
   background: var(--teal);
   font: 900 .48rem/1 ui-monospace, monospace;
 }

@@ -213,8 +213,6 @@
       lamps: [],
       npcs,
       shrine,
-      townGate: null,
-      gate: { id: "world-no-quest-gate", kind: "gate", x: -9999, y: -9999, w: 0, h: 0 },
       signs,
       boards: [deckInteraction],
       portals: [eastPortal],
@@ -228,8 +226,7 @@
       start: spawnPoints.start,
       spawnPoints,
       spawnFacings,
-      objectives: { townGate: eastCentre, gate: eastCentre, boss: eastCentre, crystals: {} },
-      questDestinations: { crystals: { mapId: MAP_IDS.FIELD, objectiveGroup: "crystals" }, seal: { mapId: MAP_IDS.FIELD, objectiveId: "gate" }, boss: { mapId: MAP_IDS.FIELD, objectiveId: "boss" }, dungeon: { mapId: MAP_IDS.FIELD, objectiveId: "dungeon" } },
+      objectives: { town: eastCentre },
       townLayout: {
         style: "flattened-jpg-authoring-package",
         sourceDimensions: { width: navigationPackage.source.width, height: navigationPackage.source.height },

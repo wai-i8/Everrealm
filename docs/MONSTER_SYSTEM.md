@@ -36,7 +36,7 @@ Retreat uses:
 
 `clamp(0.40 + 0.15 × (playerLevel - highestLivingEnemyLevel), 0.05, 1.00)`.
 
-The main story gatekeeper may still set `mainBoss: true` to disable retreat. Other boss/elite encounters use the formula and show a failure message without silently teleporting the player.
+Boss and elite encounters use the normal encounter formula; no monster carries a main-story gate flag and no exploration route is blocked by story state. Retreat rules remain owned by the battle system.
 
 ## Migration and stable IDs
 
@@ -44,7 +44,7 @@ The main story gatekeeper may still set `mainBoss: true` to disable retreat. Oth
 
 ## Maps and encounters
 
-The Mountain Field uses chick, fox, raccoon, turtle, wild_boar, coyote and a canonical bear gatekeeper. The Mine uses raccoon, frog, wild_boar, turtle, snake and bear. Spawn level, elite, crystal, chest guard and main-boss flags remain map-owned. Encounter companions are optional `encounterParty` data on the blueprint, not a type chain in the battle UI.
+The Mountain Field uses chick, fox, raccoon, turtle, wild_boar and coyote. The Mine uses raccoon, frog, wild_boar, turtle, snake and bear. Spawn level, elite and chest guard remain map-owned. Encounter companions are optional `encounterParty` data on the blueprint, not a type chain in the battle UI.
 
 ## Art status
 

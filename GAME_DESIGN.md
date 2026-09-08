@@ -75,6 +75,7 @@
 ### 本作採用／改編
 
 - 任務或抽取只會得到「具名技能書」物品，不會直接學會。玩家在物品欄點擊技能書後，先看到名稱、簡介、平面範圍／射程、高低差、AP、速度及前置技能，再按確認學習。
+- 技能書 rank 只使用 shared `skill-core.js` formatter；`1=☆`、`2=☆☆`、`3=☆☆☆`、`4=☆☆☆☆`、`5=★`、`6=★☆`、`7=★☆☆`、`8=★☆☆☆`、`9=★☆☆☆☆`、`10=★★`。委託、物品欄、技能樹、戰鬥、toast 及文件表格不得各自重組星號。
 - 學習成功才消耗技能書；前置不足、職業不符或條件未滿時保留物品。重複技能書按既定碎片規則處理。
 - 公會委託的固定 V1 目錄、星級信封及討伐／送信流程見 `docs/GUILD_COMMISSION_SYSTEM.md`；信封開出具名技能書，但不會直接學會，亦不繞過 Fighter 前置。公會頁正式身份為「公會委託」，次要規則由 shared `[i]` 說明入口提供。
 - 技能樹使用資料驅動的 SVG／DOM 圖，由上向下展開；連線放在節點後方並直接由前置關係產生。不可把整棵樹燒成點陣圖，以便新增技能、響應式排版及互動狀態同步。總覽採用緊湊、名稱為主的節點，點擊名稱才開啟 AP、速度、效果、入手及前置等詳細資料。節點狀態如下：
@@ -87,11 +88,11 @@
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
-- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。配置管理採用 summary-first compact rows，容量只喺目前配置標題旁顯示一次，唔顯示 `可裝入 DECK`／`可裝入 N 格`。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；公會達銀燈階級擴至 `4` 格。配置管理採用 summary-first compact rows，容量只喺目前配置標題旁顯示一次，唔顯示 `可裝入 DECK`／`可裝入 N 格`。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
 - 城門粉紅色 authoring region 嘅「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。粉紅區唔係 NPC、對話點或出口；舊 deck sign／bitmap 不再係 canonical trigger。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
 - 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；普通服務／提示 NPC 嘅個人身份只保留作 internal compatibility metadata，唔進入 player-facing label、quest copy 或 dialogue speaker。具名劇情 NPC 必須有明確未來設計批准先可例外使用個人名；主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
 - 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。普通 NPC 對話使用獨立 anchored、portrait-free gameplay overlay：深海軍藍、金色裝飾、只顯示功能角色名，panel 依短句／選項內容收窄，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
-- 對話最後一句只會關閉對話時顯示「確定」，仍有下一句時顯示「繼續」；E／Enter 等 keyboard shortcut 可以保留但唔需要印喺 action button。探索 HUD 由 compact character header、quick resource／weapon strip、primary functions、獨立 secondary 視角／聲效 controls 及 compact quest tracker 組成，係實際 DOM／layout recomposition 而唔係只加裝飾；並可完全收起至一個 bitmap 三角 pull-tab。收起係 UI preference，唔影響 movement、combat、stats、quest 或 progression，並可跨 map／interior／refresh 保留。
+- 對話最後一句只會關閉對話時顯示「確定」，仍有下一句時顯示「繼續」；E／Enter 等 keyboard shortcut 可以保留但唔需要印喺 action button。探索 HUD 由 compact character header、quick resource／weapon strip、primary functions、獨立 secondary 視角／音樂聲效 controls 及公會委託 tracker 組成，係實際 DOM／layout recomposition 而唔係只加裝飾；並可完全收起至一個 bitmap 三角 pull-tab。收起係 UI preference，唔影響 movement、combat、stats、commission 或 progression，並可跨 map／interior／refresh 保留。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
 
 ### Fighter V1 equipment

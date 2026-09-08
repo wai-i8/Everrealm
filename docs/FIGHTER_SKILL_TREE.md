@@ -15,6 +15,25 @@
 
 Runtime 唔從 pattern 文字猜範圍：`skill-core.js` 旋轉 `range_cells_relative`，`tactics-core.js` 以共同 `facingOrthogonalPriority` 解析 Linear attack path。原始未知值會保留 `status: uncertain` 或 `down: unlimited`，唔會被轉成假定數值。
 
+## Skill Book rank notation
+
+所有 player-facing 技能書 rank 都由 `skill-core.js` 的 `formatSkillBookRank()` 產生，使用以下唯一對照：
+
+| rank | notation |
+| ---: | :--- |
+| 1 | ☆ |
+| 2 | ☆☆ |
+| 3 | ☆☆☆ |
+| 4 | ☆☆☆☆ |
+| 5 | ★ |
+| 6 | ★☆ |
+| 7 | ★☆☆ |
+| 8 | ★☆☆☆ |
+| 9 | ★☆☆☆☆ |
+| 10 | ★★ |
+
+委託卡、技能書信封、物品欄、技能樹、戰鬥按鈕、toast 同 debug-facing labels 必須呼叫同一個 formatter；唔可以以 `★` 重複次數代替 rank notation。
+
 ## Authored visual layout
 
 Grid 係 row-major；第 0 行係最上方，第 0 列係最左方。空格係 `null`，唔代表 prerequisite。正拳 `kentotsu` 位於迅拳 `jinken` 正上方（同為 column 3），唔係背拳上方。

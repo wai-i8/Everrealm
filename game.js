@@ -28,6 +28,7 @@
   const houseSpriteSettings = MapTransitions.houseSpriteSettings;
   const Tactics = window.LanternTactics;
   const Skills = window.LanternSkills;
+  const Bgm = window.LanternBgm;
   const FighterEffects = window.LanternFighterEffects;
   const Art = window.LanternArt;
   const Locomotion = window.LanternLocomotion;
@@ -63,7 +64,6 @@
   const dialoguePanel = document.getElementById("dialoguePanel");
   const levelUpPanel = document.getElementById("levelUpPanel");
   const deathPanel = document.getElementById("deathPanel");
-  const victoryPanel = document.getElementById("victoryPanel");
   const facilityPanel = document.getElementById("facilityPanel");
   const facilityContent = document.getElementById("facilityContent");
   const facilityTabs = document.getElementById("facilityTabs");
@@ -122,10 +122,9 @@
     coins: document.getElementById("coinValue"),
     potions: document.getElementById("potionValue"),
     weapon: document.getElementById("weaponValue"),
-    questTitle: document.getElementById("questTitle"),
-    questDetail: document.getElementById("questDetail"),
-    questDistance: document.getElementById("questDistance"),
-    questTabs: [...document.querySelectorAll("[data-quest-track]")],
+    commissionTitle: document.getElementById("commissionTitle"),
+    commissionDetail: document.getElementById("commissionDetail"),
+    commissionDistance: document.getElementById("commissionDistance"),
     zone: document.getElementById("zoneName"),
   };
 
@@ -173,10 +172,6 @@
   let playTime = 0;
   let persistenceFingerprint = "";
   let persistence = null;
-  let questStage = 0;
-  let questTrackerMode = "main";
-  let crystals = new Set();
-  let bossDefeated = false;
   let openedChests = new Set();
   let ownedEquipment = ["novice_blade", "traveller_coat"];
   let equipped = { head: null, weapon: "novice_blade", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
@@ -300,6 +295,7 @@
   let automaticPortalReady = false;
   let battleToken = 0;
   let soundEnabled = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY) !== "off";
+  const bgm = Bgm.createBgmManager({ enabled: soundEnabled });
   let exploreZoomLevel = Object.hasOwn(EXPLORE_ZOOM_SCALES, readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY))
     ? readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY)
     : "mid";
@@ -474,9 +470,7 @@
       moveRange: Math.max(2, base.moveRange || 4),
       attackRange: base.attackRange || 1,
       dropInfo: base.drop || null,
-      crystal: spawn.crystal || null,
       boss: Boolean(spawn.boss || blueprint?.boss),
-      mainBoss: Boolean(spawn.mainBoss || (type === "boss" && !blueprint)),
       monsterSkills: blueprint?.skills || [],
       elite: Boolean(spawn.elite),
       alive: true,
@@ -510,10 +504,6 @@
     enemies = world.enemySpawns.map((spawn) => makeEnemy(spawn, dungeonLevelBoost
       ? { level: Math.min(Expansion.LEVEL_CAP, (spawn.level || 1) + dungeonLevelBoost) }
       : {}));
-    if (bossDefeated && currentMapId === "field") {
-      const boss = enemies.find((enemy) => enemy.mainBoss);
-      if (boss) boss.alive = false;
-    }
     projectiles = [];
     drops = [];
   }
@@ -551,7 +541,6 @@
     dungeonClears = 0;
     defeatedDungeonBosses = new Set();
     skillState = Skills.createSkillState({ classId: playerClassId });
-    questTrackerMode = "main";
     checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
     facilityTab = "bag";
     facilityContext = "portable";
@@ -620,9 +609,7 @@
 
   function syncDeckCapacityMilestones({ silent = true } = {}) {
     const results = [];
-    if (questStage >= 3) results.push(grantDeckCapacityMilestone("main:fog-gate-open", { silent }));
     if (guildMarks >= 10) results.push(grantDeckCapacityMilestone("guild:rank-2", { silent }));
-    if (questStage >= 4 || bossDefeated) results.push(grantDeckCapacityMilestone("main:light-eater-defeated", { silent }));
     return results;
   }
 
@@ -637,9 +624,6 @@
     pendingClickInteractionId = null;
     resetPlayer();
     resetExpansionProgress(classId);
-    questStage = 0;
-    crystals = new Set();
-    bossDefeated = false;
     openedChests = new Set();
     pendingLevelUps = 0;
     playTime = 0;
@@ -651,9 +635,10 @@
     titleScreen.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
+    bgm.setMap(currentMapId);
     sound.start();
     showLocation("霧都主城", true);
-    if (!skipIntro) showToast("撳地面行入公會，再同公會接待員傾偈。", "good");
+    if (!skipIntro) showToast("沿山路自由探索；想接工作就隨時返公會查看委託。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
     if (!testingMode) saveImportant(false);
@@ -684,14 +669,12 @@
     automaticPortalReady = false;
     currentMapId = hasMap(rawSave?.expansion?.currentMapId) ? rawSave.expansion.currentMapId : "world";
     world = maps[currentMapId];
+    bgm.setMap(currentMapId);
     clearExploreMovePath();
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
     player.upgrades = { ...save.player.upgrades };
-    questStage = save.questStage;
-    crystals = new Set(save.crystals);
-    bossDefeated = save.bossDefeated;
     openedChests = new Set(save.openedChests);
     playTime = save.playTime;
     // Legacy saves may contain unspent three-choice upgrades.  Growth is now
@@ -738,10 +721,7 @@
         weaponLevel: player.weaponLevel,
         upgrades: { ...player.upgrades },
       },
-      questStage,
       pendingLevelUps,
-      crystals: [...crystals],
-      bossDefeated,
       openedChests: [...openedChests],
       playTime,
       expansion: {
@@ -783,7 +763,6 @@
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
     deathPanel.hidden = true;
-    victoryPanel.hidden = true;
     facilityPanel.hidden = true;
     classSelectPanel.hidden = true;
     skillBookConfirmPanel.hidden = true;
@@ -858,10 +837,6 @@
     syncBattleFacingPicker();
   }
 
-  function isGateOpen() {
-    return questStage >= 3 || bossDefeated;
-  }
-
   function houseCollisionRects(house) {
     const inset = 5;
     const top = house.y + 12;
@@ -924,7 +899,6 @@
       if (Number.isFinite(object.w) && Number.isFinite(object.h) && Core.circleRectOverlap(circle, object)) return true;
       if (Number.isFinite(object.radius) && Core.circlesOverlap(circle, object, -2)) return true;
     }
-    if (activeMapId === "field" && !isGateOpen() && Core.circleRectOverlap(circle, activeWorld.gate)) return true;
     return false;
   }
 
@@ -1133,7 +1107,7 @@
   function performAttack() {
     if (mode !== "playing" || player.attackCooldown > 0) return;
     const target = enemies
-      .filter((enemy) => enemy.alive && (!enemy.mainBoss || questStage >= 3) && enemy.encounterCooldown <= 0)
+      .filter((enemy) => enemy.alive && enemy.encounterCooldown <= 0)
       .map((enemy) => ({ enemy, distance: Core.distance(player, enemy) }))
       .filter((item) => item.distance <= 68 && lineClear(player, item.enemy))
       .sort((a, b) => a.distance - b.distance)[0]?.enemy;
@@ -1192,7 +1166,7 @@
   function getPersistenceFingerprint() {
     return JSON.stringify({
       player: { x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
-      questStage, pendingLevelUps, crystals: [...crystals].sort(), bossDefeated, openedChests: [...openedChests].sort(),
+      pendingLevelUps, openedChests: [...openedChests].sort(),
       expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, activeContracts, contractRotation, guildMarks, guildRenown, inventory, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
     });
   }
@@ -1242,17 +1216,6 @@
     recordDefeatedMonster(enemy);
     const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
     gainXp(rewardXp);
-    if (enemy.mainBoss) {
-      bossDefeated = true;
-      questStage = 4;
-      const deckUpgrade = grantDeckCapacityMilestone("main:light-eater-defeated", { silent: true });
-      player.coins += enemy.coins;
-      sound.crystal();
-      showToast(`吞燈獸倒下咗！返去公會搵公會接待員。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
-      announce(`擊敗吞燈獸。任務更新：返回公會搵公會接待員${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
-      saveImportant(false);
-      return;
-    }
     if (enemy.boss) {
       defeatedDungeonBosses.add(enemy.id);
       dungeonClears += 1;
@@ -1270,9 +1233,6 @@
     if (enemy.dropInfo && Math.random() < enemy.dropInfo.chance) {
       inventory[enemy.dropInfo.id] = (inventory[enemy.dropInfo.id] || 0) + 1;
       addDamageNumber(enemy.x, enemy.y - 28, `+ ${enemy.dropInfo.name}`, "#52dccb", true);
-    }
-    if (enemy.crystal && questStage >= 1 && !crystals.has(enemy.crystal)) {
-      drops.push({ id: `crystal-${enemy.crystal}`, kind: "crystal", crystal: enemy.crystal, x: enemy.x, y: enemy.y - 8, radius: 12, life: Infinity, phase: 0 });
     }
   }
 
@@ -1377,11 +1337,10 @@
       if (!enemy.alive) {
         if (!enemy.boss) {
           enemy.respawnTimer -= dt;
-          if (enemy.respawnTimer <= 0) Object.assign(enemy, makeEnemy({ ...enemy, x: enemy.homeX, y: enemy.homeY, type: enemy.type, level: enemy.level, crystal: enemy.crystal }, { id: enemy.id }));
+          if (enemy.respawnTimer <= 0) Object.assign(enemy, makeEnemy({ ...enemy, x: enemy.homeX, y: enemy.homeY, type: enemy.type, level: enemy.level }, { id: enemy.id }));
         }
         continue;
       }
-      if (enemy.mainBoss && (questStage < 3 || bossDefeated)) continue;
       enemy.encounterCooldown = Math.max(0, enemy.encounterCooldown - dt);
       enemy.anim += dt * (enemy.type === "hound" ? 8 : 4);
       enemy.invulnerable = Math.max(0, enemy.invulnerable - dt);
@@ -1535,17 +1494,6 @@
         player.potions = Math.min(9, player.potions + 1);
         showToast("執到一支回燈藥", "good");
         sound.heal();
-      } else if (drop.kind === "crystal") {
-        crystals.add(drop.crystal);
-        sound.crystal();
-        showToast(`獲得霧晶 · ${crystalName(drop.crystal)}（${crystals.size} / 3）`, "good");
-        announce(`獲得${crystalName(drop.crystal)}，目前有 ${crystals.size} 粒霧晶。`);
-        screenFlash = .5;
-        if (crystals.size >= 3 && questStage === 1) {
-          questStage = 2;
-          showToast("三粒霧晶齊晒！去北岸封印。", "good");
-          important = true;
-        }
       }
     }
     if (changed) {
@@ -1555,9 +1503,6 @@
     updateHud();
   }
 
-  function crystalName(id) {
-    return id === "north" ? "北霧晶" : id === "west" ? "林霧晶" : "空心霧晶";
-  }
 
   function spawnParticle(x, y, color, size, speed, life) {
     const angle = Math.random() * Core.TAU;
@@ -1618,8 +1563,6 @@
     candidates.push(...world.signs, ...world.boards);
     for (const chest of world.chests) if (!openedChests.has(chest.id)) candidates.push(chest);
     candidates.push(...world.portals);
-    const fieldGate = currentFieldGateInteraction();
-    if (fieldGate) candidates.push(fieldGate);
     nearestInteraction = candidates
       .map((entity) => ({ entity, distance: interactionDistanceToEntity(entity) }))
       .filter((item) => {
@@ -1644,7 +1587,6 @@
     if (entity.kind === "npc") return `同${npcDisplayName(entity)}傾偈`;
     if (entity.kind === "chest") return "打開寶箱";
     if (entity.kind === "shrine") return "喺燈龕休息";
-    if (entity.kind === "gate") return isGateOpen() ? "查看封印" : "觸摸封印";
     if (entity.kind === "portal") return entity.interactionMode === "door"
       ? (entity.prompt || `進入${entity.name}`)
       : (entity.prompt || `前往${entity.name}`);
@@ -1659,15 +1601,13 @@
     if (entity.kind === "npc") interactNpc(entity);
     else if (entity.kind === "chest") openChest(entity);
     else if (entity.kind === "shrine") restAtShrine();
-    else if (entity.kind === "gate") interactGate();
     else if (entity.kind === "portal") usePortal(entity);
     else if (entity.kind === "questBoard") entity.boardId === "deck-loadout" ? openFacility("deck", "deck") : openFacility("guild");
     else if (entity.kind === "sign") startDialogue({ speaker: entity.name, color: "#9a7653", lines: [entity.text] });
   }
 
   function interactNpc(npc) {
-    if (npc.id === "guildmaster-yin" && [0, 4].includes(questStage)) interactGuildMaster(npc);
-    else if (npc.id === "clinic-healer-siu-moon") interactHealer(npc);
+    if (npc.id === "clinic-healer-siu-moon") interactHealer(npc);
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
     else if (npc.id === "mountain_delivery_recipient") interactDeliveryRecipient(npc);
@@ -1694,7 +1634,6 @@
     }
     guildCommissionState = result.state;
     syncGuildCommissionProjection();
-    questTrackerMode = "contract";
     sound.crystal();
     showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
     saveImportant(false);
@@ -1708,9 +1647,6 @@
   function usePortal(portal) {
     const arrival = MapTransitions.resolveArrival(maps, portal) || { position: null, facing: null };
     const targetPosition = arrival.position;
-    if (portal.targetMap === "dungeon" && questStage < 3) {
-      return startDialogue({ speaker: "沉燈坑道入口", color: "#ae91ff", lines: ["入口畀北岸封印嘅黑霧纏住。先完成三光開門，先落得到去。"] });
-    }
     if (portal.targetMap === "dungeon" && player.level < (portal.minLevel || 5)) {
       return startDialogue({
         speaker: "沉燈坑道入口",
@@ -1763,6 +1699,7 @@
     closeBattleHud();
     currentMapId = targetMapId;
     world = target;
+    bgm.setMap(currentMapId);
     clearExploreMovePath();
     pendingClickInteractionId = null;
     player.x = destination.x;
@@ -1790,45 +1727,6 @@
     saveImportant(false);
     canvas.focus({ preventScroll: true });
     return true;
-  }
-
-  function interactGuildMaster(npc) {
-    if (questStage === 0) {
-      startDialogue({
-        speaker: npc.name,
-        color: npc.color,
-        actor: "guildmaster",
-        lines: [
-          "阿巡，你終於嚟喇。北岸盞長明燈，畀黑霧一口咬熄咗。",
-          "三粒霧晶散咗落舊林。冇佢哋，燈塔道封印開唔返。",
-          "由右邊東門出城，沿山路向東行到底，再轉向北就會去到沉燈坑道。撞到霧獸就會進入戰棋。",
-        ],
-        onClose: () => {
-          questStage = 1;
-          showToast("新任務：搵齊三粒霧晶", "good");
-          saveImportant(false);
-        },
-      });
-    } else if (questStage === 1) {
-      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: [`仲差 ${3 - crystals.size} 粒。跟住林入面嗰陣紫光，就會搵到。`] });
-    } else if (questStage === 2) {
-      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["三粒都齊？好。沿城外山路向北行，坑道口嘅封印會認得你手上嘅光。"] });
-    } else if (questStage === 3) {
-      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["燈塔頂嗰隻吞燈獸仲喺度。見到紅色攻擊格就走開，儲 AP 再反擊。"] });
-    } else if (questStage === 4) {
-      startDialogue({
-        speaker: npc.name,
-        color: npc.color,
-        lines: [
-          "北岸盞燈……着返喇。成個港都睇到。",
-          "燈唔係因為唔會熄先叫長明；係每次熄咗，都有人肯再點着。",
-          "今晚你唔再係學徒。你係霧都嘅守燈人。",
-        ],
-        onClose: showVictory,
-      });
-    } else {
-      startDialogue({ speaker: npc.name, actor: "guildmaster", color: npc.color, lines: ["今晚條路仲長。想練刀就再去霧林；港口永遠有盞燈等你返嚟。"] });
-    }
   }
 
   function interactSmith(npc) {
@@ -1952,26 +1850,6 @@
     showToast(currentMapId === "dungeon" ? "回音燈已點亮 · 死亡會喺呢度醒返" : "燈火暖返晒 · 進度已儲存", "good");
     saveImportant(false);
     updateHud();
-  }
-
-  function interactGate() {
-    if (isGateOpen()) return startDialogue({ speaker: "北岸封印", color: "#52dccb", lines: ["三粒霧晶化成微光，門上只剩一圈暖暖嘅印。"] });
-    if (questStage < 2) {
-      return startDialogue({ speaker: "北岸封印", color: "#ae91ff", lines: [`三個凹位，得 ${crystals.size} 個亮起。黑霧喺門後面呼吸。`] });
-    }
-    startDialogue({
-      speaker: "北岸封印",
-      color: "#52dccb",
-      lines: ["林、北、空心——三粒霧晶一齊發光。", "石門慢慢退開。上面傳嚟一聲，好似有嘢餓咗好多年。"],
-      onClose: () => {
-        questStage = 3;
-        const deckUpgrade = grantDeckCapacityMilestone("main:fog-gate-open", { silent: true });
-        showToast(`北岸封印已解除 · 擊敗吞燈獸${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
-        sound.crystal();
-        screenFlash = .5;
-        saveImportant(false);
-      },
-    });
   }
 
   function startDialogue(config) {
@@ -2134,7 +2012,7 @@
 
   function skillBookRewardText(commission) {
     const star = commission?.reward?.skill_envelope_star || commission?.rewardBookStar || 1;
-    return `${"★".repeat(star)} 技能書信封 × 1`;
+    return `${Skills.formatSkillBookRank(star)} 技能書信封 × 1`;
   }
 
   function guildDiscountRate() {
@@ -2192,7 +2070,7 @@
     const activeHtml = active ? `
       <article class="facility-feature-card guild-commission-card ${guildCommissionState.status === "ready_to_report" ? "is-ready" : ""}">
         <div class="guild-commission-card-summary">
-          <div class="facility-card-heading"><span class="facility-chip">${activeStatus}</span><strong>${"★".repeat(active.star)} ${active.title}</strong></div>
+          <div class="facility-card-heading"><span class="facility-chip">${activeStatus}</span><strong>${Skills.formatSkillBookRank(active.star)} ${active.title}</strong></div>
           <p>${active.description}</p>
         </div>
         <dl class="guild-commission-details">
@@ -2206,7 +2084,7 @@
       </article>` : "";
     const offersHtml = active ? "" : offers.map((offer) => `
       <article class="facility-list-card">
-        <div class="facility-card-heading"><span class="facility-chip">${"★".repeat(offer.star)}</span><strong>${offer.title}</strong></div>
+        <div class="facility-card-heading"><span class="facility-chip">${Skills.formatSkillBookRank(offer.star)}</span><strong>${offer.title}</strong></div>
         <p>${offer.description}</p>
         <div class="facility-card-meta"><span>類型</span><b>${offer.type === "hunt" ? "討伐" : "送信"}</b></div>
         <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${offer.recommendedLevel}</b></div>
@@ -2308,7 +2186,7 @@
       items.push({
         id: `skill_envelope_${star}`,
         iconId: "skill_book_1",
-        name: `${"★".repeat(star)} 技能書信封`,
+        name: `${Skills.formatSkillBookRank(star)} 技能書信封`,
         category: "公會委託獎勵",
         categoryKey: "skillbook",
         quantity: count,
@@ -2325,7 +2203,7 @@
       items.push({
         id: `skill_book_${star}`,
         name: `${star === 1 ? "初階" : star === 2 ? "進階" : "奧義"}技能書`,
-        category: `${"★".repeat(star)} 技能書`,
+        category: `${Skills.formatSkillBookRank(star)} 技能書`,
         categoryKey: "skillbook",
         quantity: count,
         description: `開封後會抽出 ${pool.length} 本對應職業技能書；唔會直接學識。`,
@@ -2400,7 +2278,7 @@
     const detail = selectedItem
       ? `<section class="inventory-selected-detail" aria-label="已選物品詳情" aria-live="polite">
           <div class="inventory-item-art">${iconMarkup(selectedItem)}<b class="inventory-quantity" aria-label="數量 ${selectedItem.quantity}">×${selectedItem.quantity}</b></div>
-          <div class="inventory-selected-copy"><small>${selectedItem.category}</small><strong>${selectedItem.name}</strong><span>持有數量：${selectedItem.quantity}</span><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
+          <div class="inventory-selected-copy"><small>${selectedItem.category}</small><strong>${selectedItem.name}</strong><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
         </section>`
       : `<section class="inventory-selected-detail inventory-empty-selection" aria-label="已選物品詳情"><strong>選取一件物品查看詳情</strong><small>完整描述與可用動作會喺呢度顯示。</small></section>`;
     const totalQuantity = visibleItems.reduce((total, item) => total + item.quantity, 0);
@@ -2531,7 +2409,7 @@
   }
 
   function skillStars(star) {
-    return "★".repeat(star) + "☆".repeat(3 - star);
+    return Skills.formatSkillBookRank(star);
   }
 
   function skillIcon(skill) {
@@ -2895,7 +2773,7 @@
     if (!result.ok) return showToast("你冇呢一星級嘅技能書。", "danger");
     skillState = result.state;
     sound.crystal();
-    showToast(`抽到 ${"★".repeat(result.skill.star)}「${result.skill.name}」技能書，已放入物品欄。`, "good");
+    showToast(`抽到 ${Skills.formatSkillBookRank(result.skill.star)}「${result.skill.name}」技能書，已放入物品欄。`, "good");
     renderFacility();
     saveImportant(false);
   }
@@ -3118,7 +2996,6 @@
     if (!result.ok) return showToast(result.reason === "already-active" ? "同一時間只可以接一份委託。" : "搵唔到呢份委託。", "danger");
     guildCommissionState = result.state;
     syncGuildCommissionProjection();
-    questTrackerMode = "contract";
     sound.crystal();
     showToast(`已接委託：${result.commission.title}`, "good");
     renderFacility();
@@ -3134,9 +3011,8 @@
     if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
     guildCommissionState = result.state;
     syncGuildCommissionProjection();
-    questTrackerMode = "main";
     sound.level();
-    showToast(`委託回報完成 · ${"★".repeat(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
+    showToast(`委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
     renderFacility();
     saveImportant(false);
   }
@@ -3176,7 +3052,6 @@
     }
     guildCommissionState = result.state;
     syncGuildCommissionProjection();
-    questTrackerMode = "main";
     closeAbandonCommission(false);
     showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
     renderFacility();
@@ -3236,29 +3111,6 @@
     renderFacility();
     updateHud(true);
     saveImportant(false);
-  }
-
-  function showVictory() {
-    questStage = 5;
-    mode = "victory";
-    stage.dataset.gameState = mode;
-    document.getElementById("victoryLevel").textContent = `LV. ${player.level}`;
-    document.getElementById("victoryTime").textContent = formatTime(playTime);
-    const outdoorChests = [...(overworld.chests || []), ...(maps.field?.chests || [])];
-    const openedOutdoorChests = outdoorChests.filter((chest) => openedChests.has(chest.id)).length;
-    document.getElementById("victoryChests").textContent = `${openedOutdoorChests} / ${outdoorChests.length}`;
-    victoryPanel.hidden = false;
-    saveImportant(false);
-    document.getElementById("keepPlayingButton").focus({ preventScroll: true });
-    announce("霧梅爾山地重光。你完成了永恆國度的主線故事。");
-  }
-
-  function keepPlaying() {
-    victoryPanel.hidden = true;
-    mode = "playing";
-    stage.dataset.gameState = mode;
-    showToast("主線完成 · 可以繼續探索、開箱同練級", "good");
-    canvas.focus({ preventScroll: true });
   }
 
   const BATTLE_WIDTH = 9;
@@ -3373,7 +3225,6 @@
 
   function startBattle(source, instant = false) {
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
-    if (source.mainBoss && questStage < 3) return false;
     const stats = playerStats();
     battleToken += 1;
     const hero = {
@@ -4393,7 +4244,6 @@
 
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
-    if (battle.source.boss && battle.source.mainBoss) return setBattleMessage("守關霧獸封住咗出口，今場走唔甩。", true);
     const chance = ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (Math.random() >= chance) {
       setBattleMessage(`撤退失敗（成功率 ${Math.round(chance * 100)}%），霧獸逼近咗！`, true);
@@ -4490,7 +4340,7 @@
         <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="reset-move" aria-keyshortcuts="M">
           <i aria-hidden="true">↺</i><span><b>重畫路線</b><small>而家 ${routeSteps} / ${battle.hero.moveRange} 步 · 轉向 +0.5</small></span><kbd>1</kbd>
         </button>
-        <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.mainBoss ? "disabled" : ""}>
+        <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
           <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
         </button>`;
       battleUi.potionCount = null;
@@ -4520,7 +4370,7 @@
       <button id="battleEndTurnButton" class="battle-skill-button end-turn-skill" type="button" data-battle-action="end-turn" aria-keyshortcuts="E">
         <i aria-hidden="true">✓</i><span><b>待機</b><small>保留 AP · 無減傷</small></span><kbd>9</kbd>
       </button>
-      <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape" ${battle.source.mainBoss ? "disabled" : ""}>
+      <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
         <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
       </button>`;
     battleUi.potionCount = document.getElementById("battlePotionCount");
@@ -4651,35 +4501,6 @@
     return null;
   }
 
-  function mainQuestInfo() {
-    const copy = questStage === 0
-      ? { title: "入公會搵接待員", detail: "問下長明燈發生咩事" }
-      : questStage === 1
-        ? { title: "城外失落嘅霧晶", detail: `搵齊霧晶　${crystals.size} / 3` }
-        : questStage === 2
-          ? { title: "三光開門", detail: "帶霧晶去坑道封印" }
-          : questStage === 3
-            ? { title: "坑道口嘅黑影", detail: "擊敗吞燈獸" }
-            : questStage === 4
-              ? { title: "帶光返城", detail: "返公會搵接待員" }
-              : { title: "霧都重光", detail: "探索寶箱、升級同繼續夜巡" };
-    const targetMapId = questStage >= 1 && questStage <= 3 ? "field" : currentMapId === "guild" ? "guild" : "world";
-    if (currentMapId !== targetMapId) {
-      const direction = targetMapId === "field" ? "前往城外山地" : "先返回霧都";
-      return { ...copy, detail: `${direction} · ${copy.detail}`, target: routeToMap(targetMapId) };
-    }
-    if (questStage === 0 || questStage === 4) {
-      const guildTarget = currentMapId === "guild"
-        ? world.npcs.find((npc) => npc.id === "guildmaster-yin")
-        : world.portals.find((portal) => portal.id === "world-to-guild");
-      return { ...copy, target: guildTarget || world.start };
-    }
-    if (questStage === 1) return { ...copy, target: nearestMissingCrystal(world) };
-    if (questStage === 2) return { ...copy, target: world.objectives.gate };
-    if (questStage === 3) return { ...copy, target: world.objectives.boss };
-    return { ...copy, target: world.shrine || world.start };
-  }
-
   function contractEnemyTarget(enemy) {
     return ExpansionWorld.normalizeMonsterId(enemy?.type) || enemy?.type;
   }
@@ -4698,7 +4519,7 @@
     return firstPortalTowardMap(targetMapId) || currentMapExit();
   }
 
-  function contractQuestInfo() {
+  function commissionQuestInfo() {
     const contract = activeGuildCommission();
     const guildBoard = currentMapId === "guild" ? world.boards[0] || world.start : null;
     if (!contract) return {
@@ -4731,18 +4552,6 @@
     };
   }
 
-  function questInfo() {
-    return questTrackerMode === "contract" ? contractQuestInfo() : mainQuestInfo();
-  }
-
-  function nearestMissingCrystal(activeWorld = world) {
-    const options = Object.entries(activeWorld.objectives?.crystals || {})
-      .filter(([id]) => !crystals.has(id))
-      .map(([id, point]) => ({ id, point, distance: Core.distance(player, point) }))
-      .sort((a, b) => a.distance - b.distance);
-    return options[0]?.point || activeWorld.objectives?.gate || activeWorld.start;
-  }
-
   function updateHud(force = false) {
     const stats = playerStats();
     const hpRatio = Core.clamp(player.hp / stats.maxHp, 0, 1);
@@ -4758,30 +4567,21 @@
     hud.potions.textContent = player.potions;
     hud.weapon.textContent = equippedWeaponName();
     updateMenuBadges();
-    const quest = questInfo();
-    hud.questTitle.textContent = quest.title;
-    hud.questDetail.textContent = quest.detail;
-    for (const tab of hud.questTabs) {
-      const selected = tab.dataset.questTrack === questTrackerMode;
-      tab.setAttribute("aria-selected", String(selected));
-      tab.dataset.ready = String(tab.dataset.questTrack === "contract" && guildCommissionState.status === "ready_to_report");
-    }
-    const steps = Math.round(Core.distance(player, quest.target) / world.tileSize);
-    hud.questDistance.textContent = steps <= 2 ? "目標喺附近" : `距離目標約 ${steps} 步`;
+    const commission = commissionQuestInfo();
+    hud.commissionTitle.textContent = commission.title;
+    hud.commissionDetail.textContent = commission.detail;
+    const steps = Math.round(Core.distance(player, commission.target) / world.tileSize);
+    hud.commissionDistance.textContent = steps <= 2 ? "目標喺附近" : `距離目標約 ${steps} 步`;
     hud.zone.textContent = currentZone;
     stage.dataset.gameState = mode;
     stage.dataset.level = String(player.level);
     stage.dataset.hp = String(Math.ceil(player.hp));
-    stage.dataset.quest = String(questStage);
-    stage.dataset.crystals = String(crystals.size);
     stage.dataset.aliveEnemies = String(enemies.filter((enemy) => enemy.alive).length);
-    stage.dataset.bossDefeated = String(bossDefeated);
     stage.dataset.map = currentMapId;
     stage.dataset.guildMarks = String(guildMarks);
     stage.dataset.contractStatus = guildCommissionState.status === "ready_to_report"
       ? "ready"
       : activeGuildCommission() ? guildCommissionState.status : "none";
-    stage.dataset.questTracker = questTrackerMode;
     stage.dataset.skillBooks = String(totalOwnedSkillBooks());
     stage.dataset.facilityTab = facilityTab;
     if (force) drawMiniMap();
@@ -5503,17 +5303,6 @@
     };
   }
 
-  function currentFieldGateInteraction() {
-    if (currentMapId !== "field" || !world.gate) return null;
-    return {
-      ...world.gate,
-      x: world.gate.x + world.gate.w / 2,
-      y: world.gate.y + world.gate.h / 2,
-      radius: Math.max(18, Math.min(52, world.gate.w / 4)),
-      kind: "gate",
-    };
-  }
-
   function clickedExploreEntity(screenX, screenY) {
     if (world.navigation?.authoritative && typeof world.navigation.interactionAtWorldPoint === "function") {
       const authoredPoint = screenToWorldPoint(screenX, screenY);
@@ -5527,26 +5316,14 @@
         if (paddedInteraction) return paddedInteraction;
       }
     }
-    const fieldGate = currentFieldGateInteraction();
-    if (fieldGate) {
-      const gateOrigin = worldToScreen(world.gate);
-      const gatePadding = 12 * camera.zoom;
-      if (
-        screenX >= gateOrigin.x - gatePadding
-        && screenX <= gateOrigin.x + world.gate.w * camera.zoom + gatePadding
-        && screenY >= gateOrigin.y - gatePadding
-        && screenY <= gateOrigin.y + world.gate.h * camera.zoom + gatePadding
-      ) return fieldGate;
-    }
     const candidates = [
       ...world.npcs,
       ...world.boards,
       ...world.signs,
       ...world.chests.filter((chest) => !openedChests.has(chest.id)),
       ...(world.shrine ? [world.shrine] : []),
-      ...(fieldGate ? [fieldGate] : []),
       ...world.portals,
-      ...enemies.filter((enemy) => enemy.alive && (!enemy.mainBoss || questStage >= 3)),
+      ...enemies.filter((enemy) => enemy.alive),
     ];
     const anchored = candidates.map((entity) => {
       const point = worldToScreen(entity);
@@ -5558,14 +5335,6 @@
   }
 
   function setExploreClickTarget(target, entity = null) {
-    const fieldGate = currentFieldGateInteraction();
-    // Clicking the dungeon marker while the seal is still shut should route
-    // to the reachable side of the seal and interact with it, not silently
-    // stop at the nearest path node below an unreachable portal.
-    if (fieldGate && !isGateOpen() && entity?.id === world.dungeonPortalId) {
-      target = fieldGate;
-      entity = fieldGate;
-    }
     explorePortalIntentId = null;
     const distance = entity ? interactionDistanceToEntity(entity) : Infinity;
     const interactionRange = entity && !entity.type ? interactionReachForEntity(entity) : 0;
@@ -5926,7 +5695,7 @@
     scenery.sort((left, right) => left.order - right.order);
     for (const item of scenery) item.draw();
 
-    const objective = questInfo().target;
+    const objective = commissionQuestInfo().target;
     const objectiveVector = { x: (objective.x - player.x) * scale, y: (objective.y - player.y) * scale };
     const objectiveLength = Math.hypot(objectiveVector.x, objectiveVector.y) || 1;
     const objectiveLimit = radius - 12;
@@ -6203,7 +5972,7 @@
 
   function drawTelegraphs(shakeX, shakeY) {
     for (const enemy of enemies) {
-      if (!enemy.alive || enemy.windup <= 0 || (enemy.mainBoss && questStage < 3) || !inView(enemy, 140)) continue;
+      if (!enemy.alive || enemy.windup <= 0 || !inView(enemy, 140)) continue;
       const point = worldToScreen(enemy, shakeX, shakeY);
       const pulse = .45 + Math.sin(elapsed * 20) * .15;
       ctx.save();
@@ -6248,7 +6017,6 @@
 
   function depthFor(entity) {
     if (entity.kind === "house") return houseFootY(entity);
-    if (entity.kind === "gate") return entity.y + entity.h;
     if (entity.kind === "portal" && MapTransitions.transitionTypeFor(entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
       const house = world.houses?.find((candidate) => candidate.id === entity.houseId);
       // The marker belongs to the doorway's foreground plane. Draw it after
@@ -6268,10 +6036,9 @@
       if (groundKinds.has(object.kind)) drawMapProp(object, shakeX, shakeY);
       else renderables.push(object);
     }
-    if (currentMapId === "field") renderables.push({ ...world.gate, kind: "gate" });
     for (const portal of world.portals) if (inView(portal, 100)) renderables.push(portal);
     for (const npc of world.npcs) if (inView(npc, 100)) renderables.push(npc);
-    for (const enemy of enemies) if (enemy.alive && (!enemy.mainBoss || questStage >= 3) && inView(enemy, 130)) renderables.push(enemy);
+    for (const enemy of enemies) if (enemy.alive && inView(enemy, 130)) renderables.push(enemy);
     for (const drop of drops) if (drop.life > 0 && inView(drop, 60)) renderables.push(drop);
     renderables.push({ ...player, kind: "player" });
     renderables.sort((a, b) => depthFor(a) - depthFor(b));
@@ -6286,11 +6053,10 @@
     else if (entity.kind === "shrine") drawShrine(entity, shakeX, shakeY);
     else if (entity.kind === "sign") drawSign(entity, shakeX, shakeY);
     else if (entity.kind === "chest") drawChest(entity, shakeX, shakeY);
-    else if (entity.kind === "gate") drawGate(entity, shakeX, shakeY);
     else if (entity.kind === "npc") drawNpc(entity, shakeX, shakeY);
     else if (entity.kind === "portal") drawPortal(entity, shakeX, shakeY);
     else if (entity.kind === "player") drawPlayer(shakeX, shakeY);
-    else if (["coin", "potion", "crystal"].includes(entity.kind)) drawDrop(entity, shakeX, shakeY);
+    else if (["coin", "potion"].includes(entity.kind)) drawDrop(entity, shakeX, shakeY);
     else if (entity.type && enemyTypes[entity.type]) drawEnemy(entity, shakeX, shakeY);
     else drawMapProp(entity, shakeX, shakeY);
   }
@@ -6657,25 +6423,6 @@
     ctx.restore();
   }
 
-  function drawGate(gate, shakeX, shakeY) {
-    const point = worldToScreen(gate, shakeX, shakeY);
-    const w = gate.w * camera.zoom;
-    const h = gate.h * camera.zoom;
-    ctx.fillStyle = "#4a5870";
-    ctx.fillRect(point.x - 11 * camera.zoom, point.y - 4, 14 * camera.zoom, h + 8);
-    ctx.fillRect(point.x + w - 3 * camera.zoom, point.y - 4, 14 * camera.zoom, h + 8);
-    if (!isGateOpen()) {
-      const pulse = .58 + Math.sin(elapsed * 3) * .18;
-      ctx.fillStyle = "rgba(15,20,38,.92)"; ctx.fillRect(point.x, point.y, w, h);
-      ctx.strokeStyle = `rgba(174,145,255,${pulse})`; ctx.lineWidth = 2 * camera.zoom;
-      ctx.strokeRect(point.x + 2, point.y + 2, w - 4, h - 4);
-      for (let i = 0; i < 3; i += 1) {
-        const y = point.y + h * (.25 + i * .25);
-        ctx.beginPath(); ctx.arc(point.x + w * .5, y, 5 * camera.zoom, 0, Core.TAU); ctx.stroke();
-      }
-    }
-  }
-
   function drawNpc(npc, shakeX, shakeY) {
     const point = worldToScreen(npc, shakeX, shakeY);
     const scale = camera.zoom;
@@ -6950,7 +6697,7 @@
 
   function drawBossBar() {
     const boss = enemies.find((enemy) => enemy.boss && enemy.alive);
-    if (!boss || (boss.mainBoss && questStage < 3) || Core.distance(player, boss) > 520 || mode === "title") return;
+    if (!boss || Core.distance(player, boss) > 520 || mode === "title") return;
     const barWidth = Math.min(420, width * .46);
     const x = (width - barWidth) / 2;
     const y = width < 650 ? 106 : 28;
@@ -6958,7 +6705,7 @@
     ctx.strokeStyle = "rgba(245,233,202,.4)"; ctx.strokeRect(x - 7, y - 18, barWidth + 14, 34);
     ctx.fillStyle = "#4b243d"; ctx.fillRect(x, y, barWidth, 7);
     ctx.fillStyle = "#ff6b91"; ctx.fillRect(x, y, barWidth * Core.clamp(boss.hp / boss.maxHp, 0, 1), 7);
-    const english = boss.mainBoss ? "THE LIGHT EATER" : "DEEP WARDEN";
+    const english = "DEEP WARDEN";
     ctx.fillStyle = "#f5e9ca"; ctx.font = "800 10px ui-monospace, monospace"; ctx.textAlign = "center"; ctx.fillText(`${boss.name} · ${english}`, width / 2, y - 6);
   }
 
@@ -7069,10 +6816,6 @@
       if (code === "Enter" || code === "Space") respawn();
       return;
     }
-    if (mode === "victory") {
-      if (code === "Enter" || code === "Space") keepPlaying();
-      return;
-    }
     if (mode !== "playing") return;
     if (code === "KeyI") openFacility("bag");
     else if (code === "KeyL") openFacility("skills");
@@ -7175,7 +6918,7 @@
         stats: playerStats(),
         classId: playerClassId,
         x: player.x, y: player.y, facing: player.facing, moving: player.moving, locomotion: player.locomotion ? { ...player.locomotion } : null,
-        currentMapId, questStage, questTrackerMode, crystals: [...crystals], bossDefeated, pendingLevelUps,
+        currentMapId, bgm: bgm.snapshot(), pendingLevelUps,
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
         activeContracts, guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
@@ -7334,7 +7077,6 @@
       chooseUpgrade,
       save: () => saveGame(false, true),
       load: loadGame,
-      setQuestStage: (value) => { questStage = Core.clamp(Math.floor(value), 0, 5); syncDeckCapacityMilestones({ silent: true }); return window.__RPG_DEBUG__.snapshot(); },
       enterMap: (id) => transitionMap(id, maps[id]?.start),
       forceDeath: () => { player.hp = 0; playerDeath(); },
       respawn,
@@ -7413,7 +7155,6 @@
         newGame(true);
         if (name === "combat-levelup") {
           transitionMap("field", maps.field.start);
-          questStage = 1;
           player.xp = Core.xpRequired(player.level) - 5;
           const enemy = enemies.find((item) => item.id === "slime-1");
           if (!enemy) throw new Error("Combat level-up scenario could not find slime-1.");
@@ -7424,9 +7165,9 @@
           damageEnemy(enemy, 99999, { x: 1, y: 0 });
         } else if (name === "forest") {
           transitionMap("field", maps.field.start);
-          questStage = 1;
-          player.x = world.objectives.crystals.hollow.x - 80;
-          player.y = world.objectives.crystals.hollow.y + 15;
+          const target = world.enemySpawns[2] || world.start;
+          player.x = target.x - 80;
+          player.y = target.y + 15;
           camera.x = player.x;
           camera.y = player.y;
         }
@@ -7483,7 +7224,6 @@
     if (event.target === abandonCommissionPanel) closeAbandonCommission();
   });
   document.getElementById("respawnButton").addEventListener("click", respawn);
-  document.getElementById("keepPlayingButton").addEventListener("click", keepPlaying);
   document.getElementById("facilityCloseButton").addEventListener("click", closeFacility);
   facilityHelpButton?.addEventListener("click", toggleFacilityHelp);
   facilityPanel.addEventListener("click", (event) => {
@@ -7532,13 +7272,6 @@
     if (!button || button.disabled) return;
     selectBattleAction(button.dataset.battleAction);
   });
-  document.getElementById("questHud").addEventListener("click", (event) => {
-    const tab = event.target.closest("[data-quest-track]");
-    if (!tab) return;
-    questTrackerMode = tab.dataset.questTrack === "contract" ? "contract" : "main";
-    updateHud(true);
-    announce(questTrackerMode === "contract" ? "而家追蹤公會委託。" : "而家追蹤主線任務。");
-  });
   canvas.addEventListener("pointerdown", handleCanvasPointer);
   canvas.addEventListener("pointermove", handleCanvasPointerMove);
   canvas.addEventListener("pointerup", finishCanvasPointer);
@@ -7553,10 +7286,11 @@
   });
   document.getElementById("soundButton").addEventListener("click", () => {
     soundEnabled = !soundEnabled;
+    bgm.setEnabled(soundEnabled);
     try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
     const button = document.getElementById("soundButton");
     button.setAttribute("aria-pressed", String(soundEnabled));
-    button.setAttribute("aria-label", soundEnabled ? "關閉聲效" : "開啟聲效");
+    button.setAttribute("aria-label", soundEnabled ? "關閉音樂與聲效" : "開啟音樂與聲效");
     button.textContent = soundEnabled ? "♪" : "×";
     if (soundEnabled) sound.tone(520, .1, { to: 760, gain: .03 });
   });
@@ -7590,7 +7324,6 @@
     window.setTimeout(() => {
       newGame(true);
       transitionMap("field", maps.field.start);
-      questStage = 1;
       player.x = world.enemySpawns[0].x - 90;
       player.y = world.enemySpawns[0].y;
       player.invulnerable = 999;

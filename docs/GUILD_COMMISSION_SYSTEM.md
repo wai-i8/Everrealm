@@ -6,13 +6,13 @@
 
 每份委託以穩定 `id` 識別；`star`、`type`、`recommendedLevel`、`repeatable`、`objective` 與 `reward.skill_envelope_star` 由 `guild-commission-core.js` 的中央目錄擁有。V1 必須而且只可以有以下五份：
 
-| 星級 | ID | 類型 | 目標 | 推薦等級 | 報酬 |
+| rank | ID | 類型 | 目標 | 推薦等級 | 報酬 |
 | --- | --- | --- | --- | --- | --- |
-| ★ | `guild_hunt_chick_1star` | hunt | `monster_id: chick` × 5 | Lv.1 | 1★ 技能書信封 |
-| ★★ | `guild_delivery_mountain_2star` | delivery | `recipient_npc_id: mountain_delivery_recipient` | Lv.3 | 2★ 技能書信封 |
-| ★★★ | `guild_hunt_coyote_3star` | hunt | `monster_id: coyote` × 5 | Lv.4 | 3★ 技能書信封 |
-| ★★★★ | `guild_hunt_bear_4star` | hunt | `monster_id: bear` × 5 | Lv.7 | 4★ 技能書信封 |
-| ★★★★★ | `guild_hunt_snake_5star` | hunt | `monster_id: snake` × 5 | Lv.8 | 5★ 技能書信封 |
+| ☆ | `guild_hunt_chick_1star` | hunt | `monster_id: chick` × 5 | Lv.1 | ☆ 技能書信封 |
+| ☆☆ | `guild_delivery_mountain_2star` | delivery | `recipient_npc_id: mountain_delivery_recipient` | Lv.3 | ☆☆ 技能書信封 |
+| ☆☆☆ | `guild_hunt_coyote_3star` | hunt | `monster_id: coyote` × 5 | Lv.4 | ☆☆☆ 技能書信封 |
+| ☆☆☆☆ | `guild_hunt_bear_4star` | hunt | `monster_id: bear` × 5 | Lv.7 | ☆☆☆☆ 技能書信封 |
+| ★ | `guild_hunt_snake_5star` | hunt | `monster_id: snake` × 5 | Lv.8 | ★ 技能書信封 |
 
 推薦等級只作玩家指引，不是額外的接任門檻。`coyote` 是 Monster System 的郊狼，不是 `fox`；其他現有魔物不會因為存在於圖鑑而自動變成委託。
 

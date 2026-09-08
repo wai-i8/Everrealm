@@ -10,7 +10,7 @@ const ExpansionWorld = require("../expansion-world.js");
 const root = path.resolve(__dirname, "..");
 const game = fs.readFileSync(path.join(root, "game.js"), "utf8");
 
-function fieldBlocked(map, point, gateClosed) {
+function fieldBlocked(map, point) {
   const radius = 12;
   if (point.x - radius < 0 || point.y - radius < 0 || point.x + radius > map.pixelWidth || point.y + radius > map.pixelHeight) return true;
   const left = Math.floor((point.x - radius) / map.tileSize);
@@ -23,7 +23,7 @@ function fieldBlocked(map, point, gateClosed) {
       if (Core.circleRectOverlap({ ...point, radius }, { x: tx * map.tileSize, y: ty * map.tileSize, w: map.tileSize, h: map.tileSize })) return true;
     }
   }
-  return gateClosed && Core.circleRectOverlap({ ...point, radius }, map.gate);
+  return false;
 }
 
 test("exploration camera hard-locks the player to centre without changing battle layout", () => {
@@ -74,29 +74,23 @@ test("all user-facing source copy uses the renamed city", () => {
   assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /永恆國度/);
 });
 
-test("locked dungeon marker routes to the clickable seal and the opened road reaches the portal", () => {
-  assert.match(game, /function currentFieldGateInteraction\(\)/);
-  assert.match(game, /\.\.\.\(fieldGate \? \[fieldGate\] : \[\]\)/);
-  assert.match(game, /entity\?\.id === world\.dungeonPortalId[\s\S]{0,100}?entity = fieldGate/);
-
+test("dungeon passage stays reachable without a story seal", () => {
+  assert.doesNotMatch(game, /currentFieldGateInteraction|isGateOpen|mainBoss|questStage/);
   const field = ExpansionWorld.createFieldMap();
   const start = ExpansionWorld.point(37, 12);
   const portal = field.portals.find((candidate) => candidate.id === "field-to-dungeon");
-  const options = (gateClosed) => ({
+  const options = {
     bounds: { x: 0, y: 0, w: field.pixelWidth, h: field.pixelHeight },
     cellSize: Math.max(20, field.tileSize * .6),
     radius: 12,
     directions: 8,
     maxVisited: 14000,
     nearestReachable: true,
-    isWalkable: (point) => !fieldBlocked(field, point, gateClosed),
-  });
-  const locked = Core.findOverworldPath(start, portal, options(true));
-  const opened = Core.findOverworldPath(start, portal, options(false));
-  assert.ok(locked.length, "the closed seal should still yield a route to its reachable side");
-  assert.ok(locked.at(-1).y > field.gate.y + field.gate.h, "the closed route must stop south of the seal");
-  assert.ok(opened.length, "opening the seal must make the north road pathable");
-  assert.ok(Core.distance(opened.at(-1), portal) < 1, "the opened route must terminate on field-to-dungeon");
+    isWalkable: (point) => !fieldBlocked(field, point),
+  };
+  const route = Core.findOverworldPath(start, portal, options);
+  assert.ok(route.length, "the dungeon passage should be reachable from the mountain road");
+  assert.ok(Core.distance(route.at(-1), portal) < 1, "the route must terminate on field-to-dungeon");
 });
 
 test("exploration enemies never draw HP bars while tactical units retain theirs", () => {

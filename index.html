@@ -65,18 +65,14 @@
               <button type="button" data-zoom-level="mid" aria-pressed="true">中</button>
               <button type="button" data-zoom-level="near" aria-pressed="false">近</button>
             </div>
-            <button id="soundButton" class="sidebar-sound-button round-button" type="button" aria-label="關閉聲效" aria-pressed="true">♪</button>
+            <button id="soundButton" class="sidebar-sound-button round-button" type="button" aria-label="關閉音樂與聲效" aria-pressed="true">♪</button>
           </section>
 
-          <section id="questHud" class="sidebar-zone sidebar-quest quest-hud" aria-label="目前任務">
-            <div class="quest-heading" role="tablist" aria-label="任務追蹤分類">
-              <button type="button" role="tab" data-quest-track="main" aria-selected="true">主線</button>
-              <button type="button" role="tab" data-quest-track="contract" aria-selected="false">公會委託</button>
-              <i aria-hidden="true"></i>
-            </div>
-            <strong id="questTitle">去港口搵阿澄</strong>
-            <p id="questDetail">問下長明燈發生咩事</p>
-            <small id="questDistance">目標喺附近</small>
+          <section id="commissionHud" class="sidebar-zone sidebar-quest quest-hud" aria-label="公會委託">
+            <div class="quest-heading"><span>公會委託</span><i aria-hidden="true"></i></div>
+            <strong id="commissionTitle">未接公會委託</strong>
+            <p id="commissionDetail">去公會查看可重複委託</p>
+            <small id="commissionDistance">目標喺附近</small>
           </section>
         </aside>
 
@@ -311,19 +307,6 @@
           <button id="respawnButton" class="primary-button" type="button"><span>喺燈龕醒返</span><small>ENTER</small></button>
         </section>
 
-        <section id="victoryPanel" class="overlay victory-panel" aria-labelledby="victoryTitle" hidden>
-          <div class="victory-rays" aria-hidden="true"></div>
-          <p class="modal-kicker">THE NORTH LIGHT BURNS AGAIN</p>
-          <h2 id="victoryTitle">北岸，重光。</h2>
-          <blockquote>「燈唔係因為唔會熄先叫長明；<br />係每次熄咗，都有人肯再點着。」</blockquote>
-          <div class="victory-stats">
-            <div><span>最終等級</span><b id="victoryLevel">LV. 5</b></div>
-            <div><span>夜巡時間</span><b id="victoryTime">18:42</b></div>
-            <div><span>搵到寶箱</span><b id="victoryChests">3 / 3</b></div>
-          </div>
-          <button id="keepPlayingButton" class="primary-button" type="button"><span>繼續探索</span><small>ENDLESS</small></button>
-        </section>
-
         <section
           id="facilityPanel"
           class="overlay facility-overlay"
@@ -357,7 +340,7 @@
               <div class="facility-empty-state">
                 <span aria-hidden="true">✦</span>
                 <strong>公會緊整理今晚嘅委託……</strong>
-                <small>稍等一陣，任務板就會亮起。</small>
+                <small>稍等一陣，委託板就會亮起。</small>
               </div>
             </div>
 
@@ -412,6 +395,7 @@
     <script src="tactics-core.js"></script>
     <script src="fighter-skill-data.js"></script>
     <script src="skill-core.js"></script>
+    <script src="audio-core.js"></script>
     <script src="save-system.js"></script>
     <script src="fighter-effects.js"></script>
     <script src="locomotion.js"></script>

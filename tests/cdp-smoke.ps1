@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-native', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-native', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -181,13 +181,10 @@ try {
       $before = Get-GameSnapshot
       Invoke-GameExpression -Expression "(()=>{const canvas=document.getElementById('gameCanvas'),r=canvas.getBoundingClientRect();canvas.dispatchEvent(new PointerEvent('pointerdown',{pointerId:41,button:0,clientX:r.left+r.width*.64,clientY:r.top+r.height*.55,bubbles:true,cancelable:true}));return true})()" | Out-Null
       Start-Sleep -Milliseconds 650
-      $questUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const q=document.getElementById("questHud").getBoundingClientRect(),m=document.querySelector(".minimap-wrap").getBoundingClientRect(),contract=document.querySelector("[data-quest-track=contract]");contract.click();const side=window.__RPG_DEBUG__.snapshot();document.querySelector("[data-quest-track=main]").click();return {overlap:!(q.right<=m.left||q.left>=m.right||q.bottom<=m.top||q.top>=m.bottom),sideMode:side.questTrackerMode,mainMode:window.__RPG_DEBUG__.snapshot().questTrackerMode};})())') | ConvertFrom-Json
-      if ($questUi.overlap) { throw 'Quest tracker overlapped the minimap at the tested viewport.' }
-      if ($questUi.sideMode -ne 'contract' -or $questUi.mainMode -ne 'main') { throw 'Main/contract quest tabs did not switch tracking modes.' }
-      $exploreUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,stage=document.getElementById("gameStage").getBoundingClientRect(),side=document.getElementById("exploreSidebar").getBoundingClientRect(),map=document.querySelector(".minimap-wrap").getBoundingClientRect(),inventory=document.getElementById("inventoryButton").getBoundingClientRect(),skills=document.getElementById("skillTreeButton").getBoundingClientRect(),quest=document.getElementById("questHud").getBoundingClientRect(),mid=stage.left+stage.width/2,buttons=[...document.querySelectorAll("[data-zoom-level]")],fontSizes={menu:parseFloat(getComputedStyle(document.querySelector(".explore-menu-copy b")).fontSize),zoom:parseFloat(getComputedStyle(buttons[0]).fontSize),quest:parseFloat(getComputedStyle(document.getElementById("questTitle")).fontSize)};buttons.find(b=>b.dataset.zoomLevel==="far").click();const far=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="mid").click();const middle=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="near").click();const near=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="mid").click();return {sideLeft:side.left>=stage.left-1,leftTools:[inventory,skills,quest].every(r=>r.right<=mid+1),mapRight:map.left>=mid-1,overlap:!(side.right<=map.left||side.left>=map.right||side.bottom<=map.top||side.top>=map.bottom),fontSizes,far:far.targetCameraZoom,middle:middle.targetCameraZoom,near:near.targetCameraZoom,active:buttons.find(b=>b.getAttribute("aria-pressed")==="true")?.dataset.zoomLevel,stored:localStorage.getItem("everrealm-zoom")};})())') | ConvertFrom-Json
+      $exploreUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,stage=document.getElementById("gameStage").getBoundingClientRect(),side=document.getElementById("exploreSidebar").getBoundingClientRect(),map=document.querySelector(".minimap-wrap").getBoundingClientRect(),inventory=document.getElementById("inventoryButton").getBoundingClientRect(),skills=document.getElementById("skillTreeButton").getBoundingClientRect(),commission=document.getElementById("commissionHud").getBoundingClientRect(),mid=stage.left+stage.width/2,buttons=[...document.querySelectorAll("[data-zoom-level]")],fontSizes={menu:parseFloat(getComputedStyle(document.querySelector(".explore-menu-copy b")).fontSize),zoom:parseFloat(getComputedStyle(buttons[0]).fontSize),commission:parseFloat(getComputedStyle(document.getElementById("commissionTitle")).fontSize)};buttons.find(b=>b.dataset.zoomLevel==="far").click();const far=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="mid").click();const middle=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="near").click();const near=api.snapshot();buttons.find(b=>b.dataset.zoomLevel==="mid").click();return {sideLeft:side.left>=stage.left-1,leftTools:[inventory,skills,commission].every(r=>r.right<=mid+1),mapRight:map.left>=mid-1,overlap:!(side.right<=map.left||side.left>=map.right||side.bottom<=map.top||side.top>=map.bottom),fontSizes,far:far.targetCameraZoom,middle:middle.targetCameraZoom,near:near.targetCameraZoom,active:buttons.find(b=>b.getAttribute("aria-pressed")==="true")?.dataset.zoomLevel,stored:localStorage.getItem("everrealm-zoom")};})())') | ConvertFrom-Json
       if (-not $exploreUi.sideLeft -or -not $exploreUi.leftTools -or -not $exploreUi.mapRight -or $exploreUi.overlap) { throw 'Exploration UI was not split into a left tool rail and right-only minimap.' }
       if (-not ($exploreUi.far -lt $exploreUi.middle -and $exploreUi.middle -lt $exploreUi.near) -or $exploreUi.active -ne 'mid' -or $exploreUi.stored -ne 'mid') { throw 'Far/mid/near zoom controls were not ordered, selected or persisted correctly.' }
-      if ($exploreUi.fontSizes.menu -lt 11 -or $exploreUi.fontSizes.zoom -lt 11 -or $exploreUi.fontSizes.quest -lt 11) { throw 'Exploration typography remained too small at 100% browser zoom.' }
+      if ($exploreUi.fontSizes.menu -lt 11 -or $exploreUi.fontSizes.zoom -lt 11 -or $exploreUi.fontSizes.commission -lt 11) { throw 'Exploration typography remained too small at 100% browser zoom.' }
     }
     'town' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1000,840); true" | Out-Null
@@ -501,8 +498,8 @@ try {
       $deckScreenshotPath = Join-Path $runtimeOutputPath "smoke-deck-$ViewportWidth.png"
       $deckCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($deckScreenshotPath, [Convert]::FromBase64String($deckCapture.result.data))
-      $deckRewards = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setQuestStage(3);const four=api.snapshot().skills.deckCapacity;api.setGuildMarks(10);const five=api.snapshot().skills.deckCapacity;api.setQuestStage(4);api.facilityTab("deck");const final=api.snapshot();return {four,five,six:final.skills.deckCapacity,milestones:final.skills.deckUpgradeMilestones.length,slots:document.querySelectorAll(".deck-slot").length};})())') | ConvertFrom-Json
-      if ($deckRewards.four -ne 4 -or $deckRewards.five -ne 5 -or $deckRewards.six -ne 6 -or $deckRewards.milestones -ne 3 -or $deckRewards.slots -ne 6) { throw 'Main/guild DECK milestone rewards did not expand the city-gate panel from three to six slots.' }
+      $deckRewards = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;const three=api.snapshot().skills.deckCapacity;api.setGuildMarks(10);const four=api.snapshot().skills.deckCapacity;api.facilityTab("deck");const final=api.snapshot();return {three,four,milestones:final.skills.deckUpgradeMilestones.length,slots:document.querySelectorAll(".deck-slot").length};})())') | ConvertFrom-Json
+      if ($deckRewards.three -ne 3 -or $deckRewards.four -ne 4 -or $deckRewards.milestones -ne 1 -or $deckRewards.slots -ne 4) { throw 'Guild DECK milestone reward did not expand the city-gate panel from three to four slots.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.grantSkillBook(1); window.__RPG_DEBUG__.openSkillBook(1); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
       Start-Sleep -Milliseconds 90
       $fixtureUi = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setInventoryFixture(30);const cards=[...document.querySelectorAll(".inventory-grid-item")],rects=cards.map(node=>node.getBoundingClientRect());const overlaps=rects.some((a,i)=>rects.slice(i+1).some(b=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)));return {cards:cards.length,fixture:Boolean(document.querySelector("[data-item-id=fixture_material_30]")),overlaps};})())' | ConvertFrom-Json
@@ -748,7 +745,7 @@ try {
     'entrance' {
       foreach ($approach in @(@(1500,410),@(1435,120),@(1565,120),@(1500,13))) {
         $approachX = $approach[0]; $approachY = $approach[1]
-        Invoke-GameExpression -Expression "(()=>{const a=window.__RPG_DEBUG__;a.newGame('fighter');a.setPlayer({level:5});a.setQuestStage(3);a.enterMap('field');a.setEncounterGrace(30);a.teleport($approachX,$approachY);a.portalTick();if(a.collisionAt($approachX,$approachY))throw Error('Blocked start');const p=a.entityPosition('field-to-dungeon');a.clickMoveTo(p.x,p.y);return true})()" | Out-Null
+        Invoke-GameExpression -Expression "(()=>{const a=window.__RPG_DEBUG__;a.newGame('fighter');a.setPlayer({level:5});a.enterMap('field');a.setEncounterGrace(30);a.teleport($approachX,$approachY);a.portalTick();if(a.collisionAt($approachX,$approachY))throw Error('Blocked start');const p=a.entityPosition('field-to-dungeon');a.clickMoveTo(p.x,p.y);return true})()" | Out-Null
         for ($attempt=0; $attempt -lt 14; $attempt++) {
           Start-Sleep -Milliseconds 500
           $entranceState=Get-GameSnapshot
@@ -807,16 +804,6 @@ try {
       $dialogueLongCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($dialogueLongScreenshotPath, [Convert]::FromBase64String($dialogueLongCapture.result.data))
     }
-    'gate' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setQuestStage(1); window.__RPG_DEBUG__.teleportTo('gate'); window.__RPG_DEBUG__.clickMoveTo(2020,620); true" | Out-Null
-      Start-Sleep -Milliseconds 850
-      $closedGateSnapshot = Get-GameSnapshot
-      if ($closedGateSnapshot.x -ge 1970) { throw "Closed gate was bypassed at x=$($closedGateSnapshot.x)." }
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.clickMoveTo(2020,620); true" | Out-Null
-      Start-Sleep -Milliseconds 850
-      $openGateSnapshot = Get-GameSnapshot
-      if ($openGateSnapshot.x -le 1970) { throw "Click path did not cross the opened gate (x=$($openGateSnapshot.x))." }
-    }
     'levelup' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.runScenario('combat-levelup'); true" | Out-Null
       Start-Sleep -Milliseconds 600
@@ -846,28 +833,6 @@ try {
       if (-not $resumeReady) { throw 'Resume reload did not restore the RPG debug hooks.' }
       $resumeSnapshot = Get-GameSnapshot
       if ($resumeSnapshot.mode -ne 'playing' -or $resumeSnapshot.level -ne 7 -or $resumeSnapshot.coins -ne 77) { throw "Valid save did not auto-resume (mode=$($resumeSnapshot.mode), level=$($resumeSnapshot.level), coins=$($resumeSnapshot.coins))." }
-    }
-    'boss' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.teleportTo('boss-mistfang'); window.__RPG_DEBUG__.damageEnemy('boss-mistfang',99999); true" | Out-Null
-      Start-Sleep -Milliseconds 350
-    }
-    'quest' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(1); ['warden-west','warden-north','warden-hollow'].forEach(id=>window.__RPG_DEBUG__.damageEnemy(id,99999)); window.__RPG_DEBUG__.collectAllDrops(); true" | Out-Null
-      Start-Sleep -Milliseconds 600
-      Invoke-GameExpression -Expression "for(let i=0;i<10&&window.__RPG_DEBUG__.snapshot().mode==='levelup';i++) window.__RPG_DEBUG__.chooseUpgrade('edge'); window.__RPG_DEBUG__.teleportTo('gate'); true" | Out-Null
-      Start-Sleep -Milliseconds 220
-      Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',key:'e',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',key:'e',bubbles:true})); true" | Out-Null
-      Start-Sleep -Milliseconds 80
-      Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
-      Start-Sleep -Milliseconds 100
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.teleportTo('boss-mistfang'); window.__RPG_DEBUG__.damageEnemy('boss-mistfang',99999); true" | Out-Null
-      Start-Sleep -Milliseconds 600
-      Invoke-GameExpression -Expression "for(let i=0;i<10&&window.__RPG_DEBUG__.snapshot().mode==='levelup';i++) window.__RPG_DEBUG__.chooseUpgrade('edge'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
-      Start-Sleep -Milliseconds 220
-      Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',key:'e',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',key:'e',bubbles:true})); true" | Out-Null
-      Start-Sleep -Milliseconds 80
-      Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
-      Start-Sleep -Milliseconds 120
     }
     'battle' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.startBattle('slime-1'); true" | Out-Null
@@ -971,19 +936,6 @@ try {
       $mountainRecipient = Get-GameSnapshot
       $recipientUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,map:window.__RPG_DEBUG__.snapshot().currentMapId,dialogueHidden:document.getElementById("dialoguePanel").hidden,hasPortrait:Boolean(document.querySelector(".dialogue-portrait")),speaker:document.getElementById("speakerName").textContent,target:window.__RPG_DEBUG__.entityPosition("mountain_delivery_recipient")})') | ConvertFrom-Json
       if ($mountainRecipient.currentMapId -ne 'field' -or $recipientUi.mode -ne 'dialogue' -or $recipientUi.dialogueHidden -or $recipientUi.hasPortrait -or $recipientUi.speaker -ne '山地收件員' -or $null -eq $recipientUi.target) { throw "Mountain recipient dialogue preview failed (mode=$($recipientUi.mode), map=$($recipientUi.map), portrait=$($recipientUi.hasPortrait), speaker=$($recipientUi.speaker))." }
-    }
-    'bossbattle' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.startBattle('boss-mistfang'); true" | Out-Null
-      Start-Sleep -Milliseconds 150
-      $bossRound = Get-GameSnapshot
-      $fleeDisabled = [bool](Invoke-GameExpression -Expression 'document.getElementById("battleFleeButton").disabled')
-      if ($bossRound.mode -ne 'battle' -or $bossRound.battle.sourceId -ne 'boss-mistfang' -or $bossRound.battle.phase -ne 'planning_move' -or $bossRound.battle.ap -ne 10 -or $bossRound.battle.enemies.Count -ne 3 -or $bossRound.battle.plans.Count -ne 3 -or -not $fleeDisabled) {
-        throw "Boss tactical setup failed (phase=$($bossRound.battle.phase), enemies=$($bossRound.battle.enemies.Count), plans=$($bossRound.battle.plans.Count), fleeDisabled=$fleeDisabled)."
-      }
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleAction('flee'); true" | Out-Null
-      Start-Sleep -Milliseconds 80
-      $bossAfterFlee = Get-GameSnapshot
-      if ($bossAfterFlee.mode -ne 'battle' -or $bossAfterFlee.battle.phase -ne 'planning_move') { throw 'Boss battle incorrectly allowed retreat.' }
     }
     'skillbattle' {
       Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.newGame();api.enterMap('field');api.setSkillLoadout(['gale_step','starfall_array','dragon_crescent','thunder_pillar','oathbreaker','aurora_sanctuary']);api.startBattle('slime-4');api.battleAction('start');api.setBattleAp(200);return true})()" | Out-Null
@@ -1096,7 +1048,7 @@ try {
       Start-Sleep -Milliseconds 900
       $returned = Get-GameSnapshot
       if ($returned.currentMapId -ne 'world') { throw 'Clicking the return door did not return to the world.' }
-      Invoke-GameExpression -Expression '(()=>{const api=window.__RPG_DEBUG__;api.enterMap("field");api.setQuestStage(3);const door=api.entityPosition("field-to-dungeon");api.teleport(door.x,door.y+50);api.clickMoveTo(door.x,door.y);return true;})()' | Out-Null
+      Invoke-GameExpression -Expression '(()=>{const api=window.__RPG_DEBUG__;api.enterMap("field");const door=api.entityPosition("field-to-dungeon");api.teleport(door.x,door.y+50);api.clickMoveTo(door.x,door.y);return true;})()' | Out-Null
       Start-Sleep -Milliseconds 520
       $dungeonWarning = Get-GameSnapshot
       if ($dungeonWarning.mode -ne 'dialogue' -or $dungeonWarning.currentMapId -ne 'field') { throw 'Automatic dungeon portal did not preserve its under-level warning choice.' }
@@ -1199,7 +1151,7 @@ try {
       [IO.File]::WriteAllBytes($guildCommissionScreenshotPath, [Convert]::FromBase64String($guildCommissionCapture.result.data))
     }
     'expansion' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
       Start-Sleep -Milliseconds 100
       $guildUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),hidden:document.getElementById("facilityPanel").hidden,title:document.getElementById("facilityTitle").textContent,cards:document.querySelectorAll("[data-facility-action=accept]").length})') | ConvertFrom-Json
       if ($guildUi.snapshot.currentMapId -ne 'guild' -or $guildUi.snapshot.mode -ne 'facility' -or $guildUi.hidden -or $guildUi.cards -ne 5) { throw 'Guild interior or fixed V1 commission board did not open.' }
@@ -1276,6 +1228,13 @@ try {
       if ($leftRightFlips -gt 2) { throw "Monster facing alternated too often in runtime samples (flips=$leftRightFlips)." }
       $monsterFacingRuntime = [PSCustomObject]@{ target = $targetId; totalSamples = $samples.Count; movingSamples = $movingSamples.Count; desyncedFrames = $desynced.Count; leftRightFlips = $leftRightFlips }
     }
+    'bgm' {
+      $bgm = Invoke-GameExpression -Expression "JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.newGame();const town=api.snapshot().bgm;api.enterMap('guild');const interior=api.snapshot().bgm;api.enterMap('field');const mountain=api.snapshot().bgm;api.enterMap('dungeon');const mine=api.snapshot().bgm;document.getElementById('soundButton').click();const muted=api.snapshot().bgm;document.getElementById('soundButton').click();const resumed=api.snapshot().bgm;return {town,interior,mountain,mine,muted,resumed};})())" | ConvertFrom-Json
+      if ($bgm.town.key -ne 'mainTown' -or $bgm.interior.key -ne 'mainTown' -or $bgm.mountain.key -ne 'mountainField' -or $bgm.mine.key -ne 'mountainField') { throw 'BGM map-zone routing did not keep town and mountain families continuous.' }
+      if ($bgm.town.source -notmatch 'maintown\.wav' -or $bgm.mountain.source -notmatch 'mountainousareas\.wav') { throw 'BGM routing selected an unexpected source asset.' }
+      if ($bgm.muted.enabled -or $bgm.muted.activeInstances -ne 0 -or -not $bgm.resumed.enabled) { throw 'BGM mute/unmute did not toggle the single active manager.' }
+      if ($bgm.resumed.activeInstances -gt 1) { throw 'BGM manager reported more than one active instance.' }
+    }
     'autoplay' {
       Start-Sleep -Seconds $PlaySeconds
     }
@@ -1285,13 +1244,6 @@ try {
   if ($Scenario -eq 'movement') {
     if ($after.mode -ne 'playing') { throw "Movement scenario left playing mode: $($after.mode)." }
     if ([Math]::Abs([double]$after.x - [double]$before.x) -lt 20) { throw 'Click/touch movement did not move the player far enough.' }
-  }
-  if ($Scenario -eq 'boss' -and (-not $after.bossDefeated -or $after.questStage -ne 4)) {
-    throw "Boss completion failed (defeated=$($after.bossDefeated), quest=$($after.questStage))."
-  }
-  if ($Scenario -eq 'gate' -and $after.x -le 2010) { throw "Open gate did not allow passage (x=$($after.x))." }
-  if ($Scenario -eq 'quest' -and ($after.mode -ne 'victory' -or $after.questStage -ne 5 -or -not $after.bossDefeated -or $after.crystals.Count -ne 3)) {
-    throw "Main quest did not complete (mode=$($after.mode), quest=$($after.questStage), crystals=$($after.crystals.Count))."
   }
   if ($Scenario -eq 'savelevel' -and ($after.mode -ne 'playing' -or $after.pendingLevelUps -ne 0 -or $after.level -lt 2)) {
     throw "Automatic level growth did not survive save/load (mode=$($after.mode), pending=$($after.pendingLevelUps))."
@@ -1313,9 +1265,7 @@ try {
       Start-Sleep -Milliseconds 60
     }
     $afterDialogue = Get-GameSnapshot
-    if ($afterDialogue.mode -ne 'playing' -or $afterDialogue.questStage -ne 1) {
-      throw "Touch dialogue could not advance the quest (mode=$($afterDialogue.mode), quest=$($afterDialogue.questStage))."
-    }
+    if ($afterDialogue.mode -ne 'playing') { throw "Touch dialogue did not close cleanly (mode=$($afterDialogue.mode))." }
     $after = $afterDialogue
   }
 

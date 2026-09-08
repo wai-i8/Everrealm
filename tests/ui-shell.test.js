@@ -18,7 +18,7 @@ test("exploration shell keeps character tools left and reserves the right for th
   assert.match(sidebar, /id="playerHud"/);
   assert.match(sidebar, /id="inventoryButton"/);
   assert.match(sidebar, /id="skillTreeButton"/);
-  assert.match(sidebar, /id="questHud"/);
+  assert.match(sidebar, /id="commissionHud"/);
   assert.match(html, /<aside class="minimap-wrap/);
   assert.match(css, /\.explore-sidebar\s*\{[\s\S]*?left:\s*\.8rem/);
   assert.match(css, /\.minimap-wrap\s*\{[^}]*right:\s*\.8rem/);
@@ -156,7 +156,7 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.match(uiCssForTest(), /\.deck-skill-choice\s*\{[\s\S]*min-height:\s*3rem/);
   assert.match(uiCssForTest(), /\.deck-slot-list \.deck-slot\.is-filled\s*\{[\s\S]*min-height:\s*3rem/);
   assert.match(uiCssForTest(), /\.deck-slot-list \.deck-slot\.is-empty\s*\{[\s\S]*min-height:\s*2\.35rem/);
-  assert.match(fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8"), /\.deck-skill-choice \.facility-action-button:not\(:disabled\)[\s\S]*color:\s*#061923/);
+  assert.match(fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8"), /\.deck-skill-choice \.facility-action-button:not\(:disabled\)[\s\S]*color:\s*var\(--ui-text-on-teal\)/);
   assert.doesNotMatch(deck, /skill\.apCost|skillRangeText\(skill\)/);
   assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,.9fr\) minmax\(0,1.1fr\)/);
   assert.match(uiCssForTest(), /\.deck-skill-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);

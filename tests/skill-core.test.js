@@ -20,6 +20,16 @@ test("UMD build exposes LanternSkills in a browser-like global", () => {
   assert.equal(sandbox.LanternSkills.getSkill("quick_slash").name, "瞬刃");
 });
 
+test("skill-book ranks use the canonical minor/major star notation", () => {
+  assert.equal(Skills.MAX_SKILL_BOOK_RANK, 10);
+  assert.deepEqual(
+    Array.from({ length: 10 }, (_, index) => Skills.formatSkillBookRank(index + 1)),
+    ["☆", "☆☆", "☆☆☆", "☆☆☆☆", "★", "★☆", "★☆☆", "★☆☆☆", "★☆☆☆☆", "★★"],
+  );
+  assert.equal(Skills.formatSkillBookRank(0), "☆");
+  assert.equal(Skills.formatSkillBookRank(999), "★★");
+});
+
 test("catalog contains broad, immutable class-aware one-to-three-star pools", () => {
   const warriorSkills = Skills.getSkillsByClass("warrior");
   const fighterSkills = Skills.getSkillsByClass("fighter");

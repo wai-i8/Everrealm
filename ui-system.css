@@ -70,7 +70,7 @@
 .ui-close-button:hover,
 .ui-close-button:focus-visible { transform: scale(1.05); filter: brightness(1.12); }
 .ui-close-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-.facility-close-button.ui-close-button { flex: 0 0 var(--ui-control-hit); width: var(--ui-control-hit); height: var(--ui-control-hit); gap: .05rem; padding: .15rem; color: #171421; }
+.facility-close-button.ui-close-button { flex: 0 0 var(--ui-control-hit); width: var(--ui-control-hit); height: var(--ui-control-hit); gap: .05rem; padding: .15rem; color: var(--ui-text-primary); }
 .ui-info-button {
   width: var(--ui-control-hit);
   height: var(--ui-control-hit);
@@ -162,7 +162,7 @@
   background: rgba(8,16,32,.98);
   box-shadow: 4px 5px 0 rgba(0,0,0,.32), 0 .8rem 2rem rgba(0,0,0,.34);
 }
-.facility-help-popover p { margin: 0; color: #d6d9e2; font-size: .72rem; line-height: 1.55; }
+.facility-help-popover p { margin: 0; color: var(--ui-text-secondary); font-size: .72rem; line-height: 1.55; }
 .facility-header .facility-kicker { color: var(--teal); }
 .facility-header h2 { color: var(--cream); }
 .facility-header h2 { margin-block: 0; }
@@ -225,7 +225,7 @@
   filter: brightness(1.08);
 }
 .primary-button,
-.facility-action-button:not(.is-quiet) { border-image-source: var(--ui-button-gold-image) !important; color: #171421; text-shadow: none; }
+.facility-action-button:not(.is-quiet) { border-image-source: var(--ui-button-gold-image) !important; color: var(--ui-text-on-accent); text-shadow: none; }
 .facility-action-button:disabled { border-image-source: var(--ui-button-disabled-image) !important; opacity: .78; }
 .facility-action-button.is-quiet,
 .secondary-button { color: var(--cream); }
@@ -318,7 +318,7 @@
 /* Compact Deck actions keep their label on a deliberately contrasting
    secondary surface rather than letting the gold frame swallow the text. */
 .deck-skill-choice .facility-action-button:not(:disabled) {
-  color: #061923;
+  color: var(--ui-text-on-teal);
   background: var(--teal) !important;
   border-image-source: var(--ui-button-active-image) !important;
 }

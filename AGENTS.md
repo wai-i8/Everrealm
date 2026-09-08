@@ -39,6 +39,9 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 - Shared Everrealm bitmap-backed window/popup composition, responsive layout and UI states:
   `docs/UI_SYSTEM.md`
 
+- Background music assets, map-zone routing, loop/mute and single-instance playback:
+  `docs/BGM_SYSTEM.md`
+
 - Art assets / NPC visual design / battlefield art / Standard Mobile Unit 28-frame locomotion sprites / atlases / transparency / cropping / anchors / visual QA:
   `ART_PIPELINE.md`
 
