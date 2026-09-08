@@ -1095,6 +1095,155 @@
     return Number.isFinite(Number(value)) ? Number(value) : fallback;
   }
 
+  function sumModifiers(value) {
+    if (Array.isArray(value)) return value.reduce((sum, entry) => sum + finiteStat(entry, 0), 0);
+    return finiteStat(value, 0);
+  }
+
+  // Accuracy/evasion are percentage points. Accuracy intentionally remains
+  // unbounded until after evasion is applied so accuracy bonuses can counter
+  // evasive builds.
+  function resolveHitChance(options = {}) {
+    const baseAccuracy = finiteStat(options.baseAccuracy, finiteStat(options.accuracy, 100));
+    const baseEvasion = finiteStat(options.baseEvasion, finiteStat(options.evasion, 0));
+    const effectiveAccuracy = baseAccuracy
+      + sumModifiers(options.accuracyBonuses)
+      - sumModifiers(options.accuracyPenalties);
+    const effectiveEvasion = baseEvasion
+      + sumModifiers(options.evasionBonuses)
+      - sumModifiers(options.evasionPenalties);
+    const rawHitChance = (effectiveAccuracy / 100) * (1 - effectiveEvasion / 100);
+    return {
+      baseAccuracy,
+      baseEvasion,
+      effectiveAccuracy,
+      effectiveEvasion,
+      rawHitChance,
+      hitChance: Math.min(1, Math.max(0, rawHitChance)),
+    };
+  }
+
+  function calculateHitChance(options = {}) {
+    return resolveHitChance(options).hitChance;
+  }
+
+  function rollHit(options = {}, random = Math.random) {
+    const resolved = resolveHitChance(options);
+    const source = typeof random === "function" ? random() : random;
+    const roll = Math.min(.999999999, Math.max(0, finiteStat(source, 0)));
+    return { ...resolved, roll, hit: roll < resolved.hitChance };
+  }
+
+  function createSeededRng(seed = 0) {
+    let state = 2166136261;
+    for (const character of String(seed)) {
+      state ^= character.charCodeAt(0);
+      state = Math.imul(state, 16777619);
+    }
+    state >>>= 0;
+    return function seededRandom() {
+      state = (state + 0x6D2B79F5) | 0;
+      let value = Math.imul(state ^ (state >>> 15), 1 | state);
+      value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function createPendingAction(options = {}) {
+    const durability = options.skillDurability != null && Number.isFinite(Number(options.skillDurability))
+      ? Math.max(0, Number(options.skillDurability))
+      : null;
+    return {
+      id: String(options.id || `${options.actorId || "actor"}:${options.skillId || "action"}`),
+      actorId: options.actorId ?? options.actor?.id ?? null,
+      targetId: options.targetId ?? options.target?.id ?? null,
+      targetCell: options.targetCell ? { x: Number(options.targetCell.x), y: Number(options.targetCell.y) } : null,
+      skillId: options.skillId ?? null,
+      deliveryMode: options.deliveryMode || "pathless",
+      attackPath: Array.isArray(options.attackPath) ? options.attackPath.map((cell) => ({ x: Number(cell.x), y: Number(cell.y) })) : [],
+      rangeMin: options.rangeMin == null ? null : Math.max(0, Number(options.rangeMin) || 0),
+      rangeMax: options.rangeMax == null ? null : Math.max(0, Number(options.rangeMax) || 0),
+      targetArc: Array.isArray(options.targetArc) ? [...options.targetArc] : null,
+      blocksByTerrain: options.blocksByTerrain,
+      blocksByUnits: options.blocksByUnits,
+      skillDurability: durability,
+      accumulatedInterrupt: 0,
+      remainingSkillDurability: durability,
+      interrupted: false,
+      status: "pending",
+    };
+  }
+
+  function applyInterrupt(action, amount) {
+    if (!action || action.interrupted) return action;
+    const parsedAmount = typeof amount === "string" && amount.includes("*")
+      ? amount.split("*").reduce((product, part) => product * finiteStat(part, 0), 1)
+      : finiteStat(amount, 0);
+    const interrupt = Math.max(0, parsedAmount);
+    action.accumulatedInterrupt = Math.max(0, finiteStat(action.accumulatedInterrupt, 0) + interrupt);
+    action.remainingSkillDurability = action.skillDurability == null
+      ? null
+      : Math.max(0, action.skillDurability - action.accumulatedInterrupt);
+    if (action.skillDurability != null && action.accumulatedInterrupt >= action.skillDurability) {
+      action.interrupted = true;
+      action.status = "interrupted";
+    }
+    return action;
+  }
+
+  function isPendingActionInterrupted(action) {
+    return Boolean(action?.interrupted)
+      || (action?.skillDurability != null && Number(action.accumulatedInterrupt || 0) >= Number(action.skillDurability));
+  }
+
+  function resolveUnitFromState(state, id, direct) {
+    if (direct) return direct;
+    if (typeof state?.resolveUnit === "function") return state.resolveUnit(id);
+    if (Array.isArray(state?.units)) return state.units.find((unit) => unit?.id === id) || null;
+    if (state?.units && typeof state.units === "object") return state.units[id] || null;
+    return null;
+  }
+
+  function revalidatePendingAction(action, state = {}) {
+    if (!action) return { ok: false, reason: "missing-action", action };
+    if (isPendingActionInterrupted(action)) {
+      action.interrupted = true;
+      action.status = "interrupted";
+      return { ok: false, reason: "interrupted", action };
+    }
+    const actor = resolveUnitFromState(state, action.actorId, state.actor);
+    const target = resolveUnitFromState(state, action.targetId, state.target);
+    const alive = (unit) => unit && unit.alive !== false && (unit.hp === undefined || unit.hp > 0);
+    if (!alive(actor)) return { ok: false, reason: "actor-defeated", action, actor, target };
+    if (action.targetId != null && !alive(target)) return { ok: false, reason: "target-defeated", action, actor, target };
+    if (typeof state.canAct === "function" && !state.canAct(actor, action)) return { ok: false, reason: "action-prevented", action, actor, target };
+    if (typeof state.rangeResolver === "function" && !state.rangeResolver({ action, actor, target })) return { ok: false, reason: "out-of-range", action, actor, target };
+    if (typeof state.pathResolver === "function" && !state.pathResolver({ action, actor, target })) return { ok: false, reason: "invalid-path", action, actor, target };
+    if (action.deliveryMode === "linear" && actor?.cell && target?.cell && state.grid) {
+      const selectedCell = target?.cell || action.targetCell;
+      const path = facingOrthogonalPriority(actor.cell, selectedCell, actor.facing);
+      const trace = traceAttackPath({
+        origin: actor.cell,
+        target: selectedCell,
+        path,
+        facing: actor.facing,
+        grid: state.grid,
+        units: state.units || [],
+        actorId: actor.id,
+        deliveryMode: "linear",
+        blocksByTerrain: action.blocksByTerrain,
+        blocksByUnits: action.blocksByUnits,
+      });
+      if (!trace.valid || (action.targetId != null && trace.actualTarget?.id !== action.targetId)) {
+        return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
+      }
+      action.attackPath = trace.path.map((cell) => ({ ...cell }));
+      action.resolvedTargetId = trace.actualTarget?.id || null;
+    }
+    action.status = "validated";
+    return { ok: true, reason: null, action, actor, target };
+  }
+
   function calculateDamage(attacker, defender, options = {}) {
     const attack = Math.max(0, finiteStat(options.attack, finiteStat(attacker && (attacker.attack ?? attacker.power), 0)));
     const defence = Math.max(0, finiteStat(options.defence, finiteStat(defender && (defender.defence ?? defender.defense), 0)));
@@ -1150,6 +1299,14 @@
     buildTurnOrder,
     advanceTurn,
     chooseEnemyAction,
+    resolveHitChance,
+    calculateHitChance,
+    rollHit,
+    createSeededRng,
+    createPendingAction,
+    applyInterrupt,
+    isPendingActionInterrupted,
+    revalidatePendingAction,
     calculateDamage,
     applyDamage,
   };

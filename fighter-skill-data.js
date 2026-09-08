@@ -261,7 +261,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "slash_defense_up",
+            "type": "defense_up",
             "magnitude": "small"
           }
         ],
@@ -339,7 +339,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "impact_defense_up",
+            "type": "defense_up",
             "magnitude": "small"
           }
         ],
@@ -419,7 +419,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "piercing_defense_up",
+            "type": "defense_up",
             "magnitude": "small"
           }
         ],
@@ -497,7 +497,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "heat_defense_up",
+            "type": "defense_up",
             "magnitude": "small"
           }
         ],
@@ -575,7 +575,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "mental_defense_up",
+            "type": "defense_up",
             "magnitude": "small"
           }
         ],

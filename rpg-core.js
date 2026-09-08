@@ -83,7 +83,9 @@
     const weaponLevel = clamp(Math.floor(player.weaponLevel || 1), 1, 4);
     return {
       maxHp: 88 + (level - 1) * 10 + vigor * 18,
-      attack: 14 + (level - 1) * 2 + (weaponLevel - 1) * 2 + edge * 4,
+      // Level controls HP/progression; generic ATK comes from equipment and
+      // explicit upgrades, never from an automatic per-level bonus.
+      attack: 14 + (weaponLevel - 1) * 2 + edge * 4,
       speed: 132 * (1 + swift * 0.075),
       dashCooldown: Math.max(0.58, 1.05 - swift * 0.07),
       critChance: clamp(0.1 + edge * 0.025, 0.1, 0.28),
@@ -389,6 +391,9 @@
     const openedChests = Array.isArray(raw.openedChests)
       ? [...new Set(raw.openedChests.filter((value) => typeof value === "string"))].slice(0, 20)
       : [];
+    // Legacy combat fields (slash/impact/piercing/magic attack and typed
+    // defenses) are deliberately not copied. They were never part of the
+    // persisted canonical schema and have no deterministic generic mapping.
     return {
       version: 1,
       player: {

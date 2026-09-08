@@ -18,15 +18,15 @@ test("facility tabs keep portable menus separate from map-only services", () => 
   assert.equal(Expansion.normalizeFacilityTab("skills", "portable", "world"), "skills");
 });
 
-test("warrior and fighter use fixed monotonic level 1 to 40 growth tables", () => {
+test("warrior and fighter use fixed HP growth tables with stable generic ATK/DEF", () => {
   for (const classId of ["warrior", "fighter"]) {
     const table = Expansion.CLASS_LEVEL_TABLES[classId];
     assert.equal(table.length, 40);
     assert.equal(Object.isFrozen(table), true);
     for (let index = 1; index < table.length; index += 1) {
       assert.ok(table[index].maxHp > table[index - 1].maxHp, `${classId} HP at level ${index + 1}`);
-      assert.ok(table[index].attack > table[index - 1].attack, `${classId} attack at level ${index + 1}`);
-      assert.ok(table[index].defence >= table[index - 1].defence, `${classId} defence at level ${index + 1}`);
+      assert.equal(table[index].attack, table[index - 1].attack, `${classId} attack at level ${index + 1}`);
+      assert.equal(table[index].defence, table[index - 1].defence, `${classId} defence at level ${index + 1}`);
     }
   }
   assert.deepEqual(Expansion.classStatsAtLevel("fighter", 1), {
@@ -35,7 +35,7 @@ test("warrior and fighter use fixed monotonic level 1 to 40 growth tables", () =
   assert.equal(Expansion.classStatsAtLevel("warrior", 1).moveRange, 3);
   assert.equal(Expansion.classStatsAtLevel("fighter", 40).moveRange, 5);
   assert.ok(Expansion.classStatsAtLevel("warrior", 40).maxHp > Expansion.classStatsAtLevel("fighter", 40).maxHp);
-  assert.ok(Expansion.classStatsAtLevel("fighter", 40).attack > Expansion.classStatsAtLevel("warrior", 40).attack);
+  assert.equal(Expansion.classStatsAtLevel("fighter", 40).attack, Expansion.classStatsAtLevel("warrior", 40).attack);
 });
 
 test("equipment catalog normalization rejects bad entries and sanitizes stats", () => {
@@ -122,6 +122,7 @@ test("equipment stats add canonical and legacy body slots without double countin
   assert.equal(stats.maxHp, 12);
   assert.equal(stats.critChance, 0.04);
   assert.equal(stats.moveRange, 0);
+  assert.equal(stats.weight, 7);
 
   const mismatched = Expansion.equipmentStats({ weapon: "guild_mail" });
   assert.equal(mismatched.defense, 0);
@@ -164,10 +165,10 @@ test("Fighter V1 equipment is level-gated, class-locked, and supports full-body 
     assert.equal(item.requiredLevel, requiredLevel, id);
     assert.equal(item.cost, cost, id);
     assert.equal(item.classId, "fighter", id);
-    assert.deepEqual(item.stats, {
-      attack: 0, defense: 0, maxHp: 0, speed: 0, critChance: 0, moveRange: 0,
-      ...stats,
-    }, id);
+    for (const [key, value] of Object.entries(stats)) assert.equal(item.stats[key], value, `${id}.${key}`);
+    for (const key of ["attack", "defense", "maxHp", "speed", "critChance", "moveRange", "accuracy", "evasion", "weight"]) {
+      assert.equal(typeof item.stats[key], "number", `${id}.${key} is numeric`);
+    }
   }
   assert.deepEqual(Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, "white_martial_gi").occupiesSlots, ["upperBody", "lowerBody"]);
   const base = {

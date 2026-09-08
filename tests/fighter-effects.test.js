@@ -12,12 +12,11 @@ test("learned passive skills apply independently and duplicates cannot stack", (
   const skills = ["iron_body", "floating_body", "striking_body", "guarded_body", "body_targeting", "supple_body", "light_body", "poison_recovery", "sleep_recovery"].map(Skills.getSkill);
   const modifiers = Effects.passiveModifiers([...skills, skills[2]]);
   assert.equal(modifiers.attackMultiplier, 1.06);
-  assert.equal(modifiers.defenceMultiplier, 1.06);
+  assert.ok(Math.abs(modifiers.defenceMultiplier - 1.18) < 1e-8);
   assert.equal(modifiers.evasion, .06);
   assert.equal(modifiers.accuracy, .06);
   assert.equal(modifiers.speedBonus, 1);
-  assert.equal(modifiers.typedDefence.slash, .06);
-  assert.equal(modifiers.typedDefence.impact, .06);
+  assert.equal(modifiers.typedDefence, undefined);
   assert.deepEqual(modifiers.immunities.sort(), ["poison", "sleep"]);
 });
 
@@ -73,12 +72,12 @@ test("debuffs affect subsequent rounds and each cleanse removes only its authore
   assert.equal(Effects.isDisabled(target, 2, "move"), true);
 });
 
-test("stance guard and evasion last the current round, typed defence combines without double-stat reduction", () => {
+test("stance guard and evasion last the current round, generic DEF stays separate from guard", () => {
   const caster = unit("hero", 1, 2);
   cast("defense_stance", caster, [caster]);
   cast("dancing_leaf", caster, [caster]);
   const passives = Effects.passiveModifiers([Skills.getSkill("floating_body"), Skills.getSkill("supple_body")]);
-  assert.ok(Math.abs(Effects.damageMultiplier(caster, 1, passives, "impact") - .62 * .94) < 1e-8);
+  assert.ok(Math.abs(Effects.damageMultiplier(caster, 1, passives, "impact") - .62) < 1e-8);
   assert.ok(Math.abs(Effects.statusEvasion(caster, 1, passives) - .61) < 1e-8);
   assert.equal(Effects.statusEvasion(caster, 2, passives), .06);
   assert.equal(Effects.damageMultiplier(caster, 2, passives, "slash"), 1);

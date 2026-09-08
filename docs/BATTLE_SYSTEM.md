@@ -1456,6 +1456,79 @@ homing: true
 
 > 技能只按當前 action execution 真正重算出嚟嘅 attack path／trajectory 執行。
 
+## 20.5 Everrealm canonical combat stats and resolution ownership
+
+Everrealm follows **SIMPLE NUMBERS, DEEP TACTICS**. The shared runtime combat
+stats are:
+
+```text
+HP · ATK · DEF · Accuracy · Evasion · AP · Weight · Move
+```
+
+Skill/runtime mechanics add `Skill Speed`, `Interrupt` and `Skill Durability`.
+There is deliberately no STR/DEX/AGI/INT/MAG stat, separate Magic Attack or
+separate Magic Defense. Physical attacks, punches, weapons and future magic
+damage all use the same ATK-versus-DEF resolver unless a future rule explicitly
+defines an exception. Elements can remain skill tags or drive statuses and
+visuals; they do not create an elemental defense matrix.
+
+### Hit chance
+
+The battle resolver uses percentage points and the following single formula:
+
+```text
+Base Accuracy = 100%
+Base Evasion  = 0%
+
+Effective Accuracy = Base Accuracy + Accuracy bonuses - Accuracy penalties
+Effective Evasion  = Base Evasion + Evasion bonuses - Evasion penalties
+
+rawHitChance = (Effective Accuracy / 100)
+               × (1 - Effective Evasion / 100)
+Final Hit Chance = clamp(rawHitChance, 0%, 100%)
+```
+
+Effective Accuracy is not clamped before Evasion is applied. Thus 120% Accuracy
+against 20% Evasion is 96%, while 150% against 30% is a raw 105% and a final
+100%. The battle owns one seeded/testable RNG stream per encounter; hit,
+critical and authored effect rolls consume that stream rather than ad-hoc
+`Math.random()` calls.
+
+### Equipment, Weight and Move
+
+Equipment is the primary source of ATK, DEF, Accuracy, Evasion and Weight.
+Total Weight is the sum of currently equipped item records, with full-body
+items counted once by stable item ID. Weight primarily affects timing; Move is
+the actual grid traversal allowance. Existing explicit equipment `moveRange`
+modifiers are the one owner of equipment mobility changes, so light gear can
+grant `+1 Move` without introducing a second Weight threshold formula. See
+[`docs/EQUIPMENT_SYSTEM.md`](EQUIPMENT_SYSTEM.md) for the item schema.
+
+### Pending actions, Interrupt and Durability
+
+Every queued/prepared action stores its accumulated Interrupt and its skill's
+Durability. Each incoming Interrupt is added before execution:
+
+```text
+remainingSkillDurability = Skill Durability - accumulated Interrupt
+accumulated Interrupt >= Skill Durability  → interrupted/cancelled
+```
+
+An action with Durability 10 and Interrupt 6 remains pending after one hit; a
+further 6 interrupts it. Durability 6 plus Interrupt 6 interrupts immediately.
+Interrupt is not a generic stun status.
+
+Before every queued action executes, the resolver revalidates the current
+actor and intended target, alive state, action-preventing statuses, current
+positions/facing, structured `range_cells_relative` legality and the current
+shared attack path. Knockback therefore cannot make an action execute from a
+stale cell: if the new path/range is illegal it cancels, but displacement alone
+does not cancel an action that remains legal. Linear skills continue to use
+`facingOrthogonalPriority` and `traceAttackPath`. Action-level revalidation is
+performed before the skill's explicit hit-by-hit multi-hit rules; multi-hit
+path rechecks and preserved intended-target semantics remain active during the
+action.
+
 ## 21. AP
 
 每場：
@@ -1484,11 +1557,19 @@ S > A > B > C > D > E > F
 
 雙方完成 command 後：
 
-1. speed letter
-2. 敏捷／既定先手值
-3. stable actor ID
+1. Skill Speed grade, with explicit action-speed modifiers able to advance its
+   grade rank;
+2. lower total equipment Weight;
+3. higher existing initiative／先手值;
+4. stable actor ID.
 
 決定執行順序。
+
+The grade ordering is the canonical `S > A > B > C > D > E > F`. The current
+repository does not define a final numeric conversion between Weight units and
+Skill Speed grades, so the resolver preserves grade ordering and uses Weight
+as a deterministic secondary timing input; balance constants remain an explicit
+future tuning point rather than an invented continuous formula.
 
 使用 stable actor ID 係為：
 

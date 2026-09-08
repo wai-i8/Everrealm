@@ -16,6 +16,7 @@
 - 戰棋 movement、collision、攻擊路線、projectile、AP、戰鬥 AI 及戰鬥高低差規則，統一以 `docs/BATTLE_SYSTEM.md` 為唯一詳細規格。
 - 地圖 registry、入口／傳送、探索 collision、encounter zone、biome，以及探索環境如何生成戰鬥場景，統一以 `docs/MAP_SYSTEM.md` 為唯一詳細規格。
 - Guild 委託目錄、討伐／送信 state、技能書信封及回報流程，統一以 `docs/GUILD_COMMISSION_SYSTEM.md` 為唯一詳細規格。
+- 裝備 schema、canonical slots 及裝備側 stat modifiers，統一以 `docs/EQUIPMENT_SYSTEM.md` 為唯一詳細規格；battle formulas 仍由 `docs/BATTLE_SYSTEM.md` 擁有。
 
 ## 探索、角色與介面
 
@@ -57,6 +58,7 @@
 - 每格最多一個單位；不可穿過、交換或重疊，爭格／撞位會停止未完成移動。
 - 角色有上、下、左、右四方向；技能範圍、側擊／背擊及最終命中受實際位置與朝向影響。
 - 戰鬥 AP 初始 10、每輪 +10、上限 200；技能按 `S > A > B > C > D > E > F` 速度順序結算。
+- Everrealm 遵守 **SIMPLE NUMBERS, DEEP TACTICS**：通用戰鬥數值係 HP、ATK、DEF、Accuracy、Evasion、AP、Weight、Move；Skill Speed、Interrupt、Skill Durability、facing、range 同 attack path 保留作戰術深度。唔引入 MAG、獨立 Magic Attack／Defense，亦唔建立 slash／impact／piercing／elemental 攻防矩陣。
 - Everrealm 標準傷害技能以正拳 `3 AP = 1.0×` 為 baseline，總技能傷害倍率使用 `sqrt(AP / 3)`；技能說明如包含擊退、轉倒、中毒等額外非傷害 utility，最終傷害再 `×0.8`。`dealsDamage=false` 技能完全唔套用傷害公式；原作明確屬固定剩餘 HP 型嘅特殊傷害（例如留下半氣拳／留下後一拳）使用 explicit damage model，唔重複套標準倍率公式。
 - Multi-hit 技能先計整招總傷害，再拆成每 Hit；除唔盡嘅整數 remainder 永遠優先分畀後面 Hits。原作標記「判定：毎回」嘅連擊類技能，每 Hit 都按更新後 battle state 重新掃同一 attack path，因此前一 Hit 擊倒／擊殺 blocker 後，下一 Hit 可以繼續打到路線後方單位。
 - 攻擊唔係「點中邊個就必定打中邊個」。Linear 攻擊使用共用 deterministic 正交 attack-path resolver：目標喺前半面時先向前再左右轉；同橫排直接左右；目標喺後半面時先左右、再向後。實際路線上第一個合法單位／地形可以攔截。Arc 攻擊按弧線高度判斷；Pathless 攻擊冇中途 interception。詳細規則見 `docs/BATTLE_SYSTEM.md`。
@@ -111,8 +113,8 @@
 
 ## 等級與職業平衡
 
-- 等級上限為 `40`。戰士與格鬥士各自使用明確的 Lv.1–40 HP、攻擊、防禦表；取得足夠 XP 時直接套用新等級數值，不再彈出三選一成長。
-- 戰士偏向較高 HP／防禦，無裝備基礎戰棋移動為 `3`；格鬥士偏向攻擊與機動，無裝備基礎戰棋移動為 `5`。
+- 等級上限為 `40`。戰士與格鬥士各自使用明確的 Lv.1–40 HP 表；等級主要控制 HP、技能／裝備解鎖及內容進度，不會自動令通用 ATK／DEF 每級膨脹。
+- ATK、DEF、Accuracy、Evasion 同 Weight 主要由裝備、PSV、buff/debuff 及暫時戰鬥效果建立；無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，現有裝備以明確 Move modifier 改變實際可走格數。
 - 升級時按新舊最大 HP 差額回復生命，確保成長立即生效但不免費全補滿。所有舊存檔的待選升級數歸零。
 
 ## 驗收基準

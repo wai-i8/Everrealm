@@ -147,10 +147,12 @@ test("experience can grant multiple levels without losing remainder", () => {
   assert.equal(result.xp, 5);
 });
 
-test("upgrades and weapon level derive stronger stats", () => {
+test("HP still grows with level while ATK only grows from explicit upgrades", () => {
   const base = Core.deriveStats({ level: 1, weaponLevel: 1, upgrades: {} });
+  const leveled = Core.deriveStats({ level: 4, weaponLevel: 1, upgrades: {} });
   const grown = Core.deriveStats({ level: 4, weaponLevel: 3, upgrades: { vigor: 2, edge: 2, swift: 2 } });
   assert.ok(grown.maxHp > base.maxHp);
+  assert.equal(leveled.attack, base.attack);
   assert.ok(grown.attack > base.attack);
   assert.ok(grown.speed > base.speed);
   assert.ok(grown.dashCooldown < base.dashCooldown);
@@ -219,6 +221,16 @@ test("world generator returns the authored flattened navigation town", () => {
   assert.deepEqual(world.townLayout.sourceDimensions, { width: 7680, height: 4320 });
   assert.equal(world.townLayout.roadNetwork, null);
   assert.equal(Object.hasOwn(world, "townGate"), false, "the east exit is a passage, not a gate facade");
+});
+
+test("legacy typed combat fields are ignored by save sanitizer", () => {
+  const clean = Core.sanitizeSave({
+    version: 1,
+    player: { x: 100, y: 100, level: 2, attack: 999, slashAttack: 999, magicAttack: 999, slashDefense: 999, elementalDefense: 999 },
+  });
+  assert.equal(clean.player.attack, undefined);
+  assert.equal(clean.player.slashAttack, undefined);
+  assert.equal(clean.player.magicAttack, undefined);
 });
 
 test("the authored east passage is a physical bitmap trigger", () => {

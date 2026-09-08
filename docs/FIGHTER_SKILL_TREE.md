@@ -1,6 +1,6 @@
-# Everrealm Fighter Skill Tree
+# FIGHTER CANONICAL IMPLEMENTATION GUIDELINE
 
-> 現行 Everrealm 格鬥士（Fighter）技能規格。呢份文件係 gameplay source of truth；原作／研究證據保留喺 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`，但唔覆蓋本文件。
+> 現行 Everrealm 格鬥士（Fighter）技能規格及 runtime implementation source of truth。原作／研究證據保留喺 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`；嗰份係 provenance，唔覆蓋本 guideline。
 
 ## Runtime source
 
@@ -14,6 +14,33 @@
 - `display.layout.grid` 提供 authored `treeRow`／`treeColumn`，connector 只由 `requires[]` 產生。
 
 Runtime 唔從 pattern 文字猜範圍：`skill-core.js` 旋轉 `range_cells_relative`，`tactics-core.js` 以共同 `facingOrthogonalPriority` 解析 Linear attack path。原始未知值會保留 `status: uncertain` 或 `down: unlimited`，唔會被轉成假定數值。
+
+## Everrealm runtime fields and PSV migration
+
+For runtime, the authoritative fields are the `everrealm` action kind,
+`deals_damage`, delivery/path mode, `utility_effects`, damage model and
+`hit_resolution`; structured `original_reference.range.range_cells_relative`
+is the source geometry consumed by the normalized runtime skill. AP, Skill
+Speed, Interrupt, Skill Durability, target geometry, effect area and explicit
+hit/path behavior must not be duplicated into conflicting active fields.
+
+The five category-specific defensive PSVs retain their stable IDs, names,
+prerequisites, acquisition data and historical `original_reference` values,
+but their Everrealm `utility_effects` are generic `defense_up`:
+
+| PSV | Historical source effect | Everrealm runtime effect |
+|---|---|---|
+| `psv_tesshin` 鐵身 | slash defense up | generic DEF up |
+| `psv_ukimi` 浮身 | impact defense up | generic DEF up |
+| `psv_koushin` 鋼身 | piercing defense up | generic DEF up |
+| `psv_shintou_mekkyaku` 心頭滅卻 | heat defense up | generic DEF up |
+| `psv_seishin_touitsu` 精神統一 | mental defense up | generic DEF up |
+
+The remaining Fighter PSVs remain meaningful as generic stats: `psv_soshin_sokutai`
+adds Accuracy, `psv_hishin_jutai` adds Evasion, `psv_koushin_gekitai` adds ATK,
+`psv_boushin_goutai` adds generic DEF, and `psv_sokushin_keitai` adds action
+speed. No runtime resolver requires slash/impact/piercing/elemental defense or
+a separate magical attack/defense attribute.
 
 ## Skill Book rank notation
 

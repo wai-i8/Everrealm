@@ -20,7 +20,7 @@
   // Stances last the casting round; duration-N ailments last N following rounds.
 
   function passiveModifiers(skills = []) {
-    const modifiers = { attackMultiplier: 1, defenceMultiplier: 1, evasion: 0, accuracy: 0, speedBonus: 0, immunities: [], typedDefence: {} };
+    const modifiers = { attackMultiplier: 1, defenceMultiplier: 1, evasion: 0, accuracy: 0, speedBonus: 0, immunities: [] };
     const seen = new Set();
     for (const skill of skills || []) {
       if (!skill || (skill.id && seen.has(skill.id))) continue;
@@ -35,10 +35,10 @@
         else if (effect.stat === "speed") modifiers.speedBonus += 1;
         else if (effect.stat === "sleep_recovery") modifiers.immunities.push("sleep");
         else if (effect.stat === "poison_recovery") modifiers.immunities.push("poison");
-        else if (String(effect.stat).endsWith("_defence")) {
-          const type = effect.stat.replace(/_defence$/, "");
-          modifiers.typedDefence[type] = clamp((modifiers.typedDefence[type] || 0) + amount, 0, .8);
-        }
+        // Historical category-specific defense names are normalized by
+        // skill-core to generic DEF. Keep this branch only as a safe
+        // compatibility path for older in-memory skill objects.
+        else if (String(effect.stat).endsWith("_defence")) modifiers.defenceMultiplier += amount;
       }
     }
     modifiers.evasion = clamp(modifiers.evasion, 0, .8);
@@ -77,12 +77,9 @@
     return Math.max(0, Number(activeStatus(unit, "move_down", round)?.amount) || 0);
   }
 
-  function damageMultiplier(unit, round = 0, passives = {}, damageType = "impact") {
-    const aliases = { physical: "impact", storm: "heat", fire: "heat", psychic: "mind" };
-    const type = aliases[damageType] || damageType;
+  function damageMultiplier(unit, round = 0) {
     const guard = clamp(activeStatus(unit, "guard", round)?.amount || 0, 0, .85);
-    const typed = clamp(passives.typedDefence?.[type] || 0, 0, .8);
-    return (1 - guard) * (1 - typed);
+    return 1 - guard;
   }
 
   function hpChange(unit, nextHp, kind, output, label) {

@@ -99,11 +99,11 @@
 
   const LEGACY_FIGHTER_SKILL_SPECS = deepFreeze([
     // 左側 PSV 欄：圖上垂直排列，但每一招都係獨立技能，絕無前置。
-    fighterSkillSpec("iron_body", "鐵身", "時刻將氣息注入身體，提升斬擊防禦力。", 0, "PSV", "PSV", 0, 0, { passive: true, passiveStat: "slash_defence", star: 1 }),
-    fighterSkillSpec("floating_body", "浮身", "時刻將氣息注入身體，提升衝擊防禦力。", 0, "PSV", "PSV", 0, 1, { passive: true, passiveStat: "impact_defence", star: 1 }),
-    fighterSkillSpec("steel_body", "鋼身", "時刻將氣息注入身體，提升貫擊防禦力。", 0, "PSV", "PSV", 0, 2, { passive: true, passiveStat: "pierce_defence", star: 1 }),
-    fighterSkillSpec("mind_over_heat", "心火滅卻", "時刻將氣息注入身體，提升炎熱防禦力。", 0, "PSV", "PSV", 0, 3, { passive: true, passiveStat: "heat_defence", star: 1 }),
-    fighterSkillSpec("mental_focus", "精神統一", "集中精神，提升心靈防禦力。", 0, "PSV", "PSV", 0, 4, { passive: true, passiveStat: "mind_defence", star: 2 }),
+    fighterSkillSpec("iron_body", "鐵身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 0, { passive: true, passiveStat: "defence", star: 1 }),
+    fighterSkillSpec("floating_body", "浮身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 1, { passive: true, passiveStat: "defence", star: 1 }),
+    fighterSkillSpec("steel_body", "鋼身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 2, { passive: true, passiveStat: "defence", star: 1 }),
+    fighterSkillSpec("mind_over_heat", "心火滅卻", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 3, { passive: true, passiveStat: "defence", star: 1 }),
+    fighterSkillSpec("mental_focus", "精神統一", "集中精神，提升防禦力。", 0, "PSV", "PSV", 0, 4, { passive: true, passiveStat: "defence", star: 2 }),
     fighterSkillSpec("body_targeting", "狙身捉體", "精準掌握對手身體動向，提升命中率。", 0, "PSV", "PSV", 0, 5, { passive: true, passiveStat: "accuracy", star: 2 }),
     fighterSkillSpec("supple_body", "避身柔體", "令身體保持柔韌，提升迴避率。", 0, "PSV", "PSV", 0, 6, { passive: true, passiveStat: "evasion", star: 2 }),
     fighterSkillSpec("striking_body", "功身擊體", "將氣息集中於攻擊動作，提升攻擊力。", 0, "PSV", "PSV", 0, 7, { passive: true, passiveStat: "attack", star: 2 }),
@@ -285,11 +285,7 @@
       else if (type === "cleanse") effects.push({ type, statuses: cleanseStatuses(utility.statuses) });
       else if (type === "damage_reduction_stance") effects.push({ type: "guard", amount: .38, duration: 1 });
       else if (type === "auto_cleanse") effects.push({ type: "passive_stat", stat: utility.statuses?.[0] === "poison" ? "poison_recovery" : "sleep_recovery" });
-      else if (type === "slash_defense_up") effects.push({ type: "passive_stat", stat: "slash_defence", amount: .06 });
-      else if (type === "impact_defense_up") effects.push({ type: "passive_stat", stat: "impact_defence", amount: .06 });
-      else if (type === "piercing_defense_up") effects.push({ type: "passive_stat", stat: "pierce_defence", amount: .06 });
-      else if (type === "heat_defense_up") effects.push({ type: "passive_stat", stat: "heat_defence", amount: .06 });
-      else if (type === "mental_defense_up") effects.push({ type: "passive_stat", stat: "mind_defence", amount: .06 });
+      else if (["slash_defense_up", "impact_defense_up", "piercing_defense_up", "heat_defense_up", "mental_defense_up"].includes(type)) effects.push({ type: "passive_stat", stat: "defence", amount: .06 });
       else if (type === "defense_up") effects.push({ type: "passive_stat", stat: "defence", amount: .06 });
       else if (type === "accuracy_up") effects.push({ type: "passive_stat", stat: "accuracy", amount: .06 });
       else if (type === "evasion_up") effects.push({ type: "passive_stat", stat: "evasion", amount: .06 });
@@ -1464,10 +1460,17 @@
     return { status: "canLearn", reason: null, skill, state, missingPrerequisites: [] };
   }
 
+  function effectiveSpeedGradeIndex(action) {
+    const rawIndex = speedGradeIndex(action.speedGrade);
+    const bonus = Math.max(0, Math.floor(finiteNumber(action.actionSpeedBonus ?? action.speedBonus, 0)));
+    return Math.max(0, rawIndex - bonus);
+  }
+
   function orderActionsBySpeed(actions) {
     return (Array.isArray(actions) ? actions : [])
       .map((action, index) => ({ ...action, _stableOrder: index }))
-      .sort((left, right) => compareSpeedGrades(left.speedGrade, right.speedGrade)
+      .sort((left, right) => effectiveSpeedGradeIndex(left) - effectiveSpeedGradeIndex(right)
+        || finiteNumber(left.weight, 0) - finiteNumber(right.weight, 0)
         || finiteNumber(right.initiative) - finiteNumber(left.initiative)
         || String(left.actorId || "").localeCompare(String(right.actorId || ""))
         || left._stableOrder - right._stableOrder)

@@ -381,9 +381,14 @@
       attack: Math.max(1, Math.round((base.attack + gear.attack) * (passives.attackMultiplier || 1))),
       defence: Math.max(0, Math.round((base.defence + gear.defense) * (passives.defenceMultiplier || 1))),
       speed: Math.max(70, 132 + gear.speed),
+      accuracy: Math.max(0, 100 + gear.accuracy + (passives.accuracy || 0) * 100),
+      evasion: Math.max(0, gear.evasion + (passives.evasion || 0) * 100),
+      weight: Math.max(0, gear.weight),
+      move: Core.clamp(base.moveRange + gear.moveRange, 2, 7),
       critChance: Core.clamp(.1 + gear.critChance, .05, .35),
       moveRange: Core.clamp(base.moveRange + gear.moveRange, 2, 7),
       initiative: Math.max(5, Math.round(14 + gear.speed * .35 + (passives.speedBonus || 0))),
+      actionSpeedBonus: passives.speedBonus || 0,
     };
   }
 
@@ -3194,6 +3199,9 @@
       maxHp,
       attack: Math.max(5, primary ? source.damage : stats?.attack || base.damage),
       defence: primary ? source.defence : stats?.defense || base.defence || 1,
+      accuracy: 100,
+      evasion: 0,
+      weight: 0,
       moveRange: Math.max(2, primary ? source.moveRange : stats?.moveRange || base.moveRange || 4),
       turnCost: BATTLE_TURN_COST,
       attackRange,
@@ -3235,6 +3243,10 @@
       maxHp: stats.maxHp,
       attack: stats.attack,
       defence: stats.defence,
+      accuracy: stats.accuracy,
+      evasion: stats.evasion,
+      weight: stats.weight,
+      actionSpeedBonus: stats.actionSpeedBonus,
       baseMoveRange: stats.moveRange,
       moveRange: stats.moveRange,
       attackRange: 1,
@@ -3252,6 +3264,7 @@
       blocked,
       hero,
       enemies: battlePartyFor(source),
+      rng: Tactics.createSeededRng(`battle:${battleToken}:${source.instanceId || source.id}`),
       phase: "intro",
       round: 1,
       ap: 0,
@@ -3385,6 +3398,46 @@
     return battle ? [battle.hero, ...battle.enemies] : [];
   }
 
+  function battleRandom() {
+    return typeof battle?.rng === "function" ? battle.rng() : Math.random();
+  }
+
+  function battleNumber(value, fallback = 0) {
+    if (Number.isFinite(Number(value))) return Number(value);
+    if (typeof value === "string" && /^\s*-?\d+(?:\.\d+)?(?:\s*\*\s*-?\d+(?:\.\d+)?)+\s*$/.test(value)) {
+      return value.split("*").reduce((product, part) => product * Number(part), 1);
+    }
+    return fallback;
+  }
+
+  function battleTargetEvasion(unit) {
+    if (!unit) return 0;
+    const passives = unit === battle?.hero ? learnedFighterPassives() : {};
+    const status = FighterEffects?.statusEvasion(unit, battle?.round || 0, passives) || 0;
+    return Math.max(0, Number(unit.evasion) || 0, status * 100, unit === battle?.hero ? (battle.evasion || 0) * 100 : 0);
+  }
+
+  function revalidateBattlePendingAction(pending) {
+    const actor = battleUnits().find((unit) => unit.id === pending?.actorId);
+    const target = pending?.targetId == null ? null : battleUnits().find((unit) => unit.id === pending.targetId);
+    return Tactics.revalidatePendingAction(pending, {
+      actor,
+      target,
+      units: battleUnits(),
+      grid: battle.grid,
+      canAct: (unit) => !FighterEffects?.isDisabled(unit, battle.round),
+      rangeResolver: ({ action, actor: currentActor, target: currentTarget }) => {
+        if (!currentTarget || action.rangeMax == null) return true;
+        const cell = currentTarget.cell;
+        if (!Tactics.isInAttackRange(currentActor.cell, cell, action.rangeMax, action.rangeMin || 1)) return false;
+        if (!action.targetArc) return true;
+        const relative = Tactics.relativePosition(currentActor.cell, currentActor.facing, cell);
+        return action.targetArc.includes(relative)
+          || (relative === "side" && action.targetArc.some((value) => ["side", "left", "right"].includes(value)));
+      },
+    });
+  }
+
   function livingBattleEnemies() {
     return battle ? battle.enemies.filter((unit) => unit.alive && unit.hp > 0) : [];
   }
@@ -3451,6 +3504,11 @@
       }
       plan.facing = enemy.facing;
       plan.move = copyBattleCell(enemy.cell);
+      if (enemy.skill?.actionKind === "guard" || enemy.skill?.dealsDamage === false) {
+        plan.willAttack = false;
+        plan.targetCells = [];
+        continue;
+      }
       const inRange = Tactics.isInAttackRange(enemy.cell, battle.hero.cell, enemy.attackRange, enemy.minAttackRange);
       const targetPosition = Tactics.relativePosition(enemy.cell, enemy.facing, battle.hero.cell);
       const facingAllowed = (enemy.targetArc || ["front", "side"]).includes(targetPosition);
@@ -3857,17 +3915,48 @@
     if (!battle || mode !== "battle" || battle.phase !== "planning_action") return;
     const heroSkill = heroAction.type === "skill" ? Skills.getSkill(heroAction.skillId) : null;
     const heroSpeedGrade = heroSkill?.speedGrade || (heroAction.type === "potion" ? "S" : "F");
+    const heroPending = Tactics.createPendingAction({
+      id: `round-${battle.round}:hero`,
+      actorId: battle.hero.id,
+      targetId: heroAction.targetId,
+      targetCell: heroAction.targetCell,
+      skillId: heroSkill?.id,
+      skillDurability: heroSkill?.durability,
+      deliveryMode: heroSkill?.deliveryMode || "pathless",
+      rangeMin: heroSkill?.range?.min,
+      rangeMax: heroSkill?.range?.max,
+      targetArc: heroSkill?.targetArc,
+      blocksByTerrain: heroSkill?.blocksByTerrain,
+      blocksByUnits: heroSkill?.blocksByUnits,
+    });
+    const enemyPending = battle.enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
+      const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
+      return Tactics.createPendingAction({
+        id: `round-${battle.round}:${plan.enemyId}`,
+        actorId: plan.enemyId,
+        targetId: battle.hero.id,
+        targetCell: plan.targetCells[0],
+        skillId: plan.skill?.id || plan.skillId,
+        skillDurability: plan.skill?.durability,
+        deliveryMode: plan.skill?.deliveryMode || "pathless",
+        rangeMin: enemy?.minAttackRange,
+        rangeMax: enemy?.attackRange,
+        targetArc: enemy?.targetArc,
+        blocksByTerrain: plan.skill?.blocksByTerrain,
+        blocksByUnits: plan.skill?.blocksByUnits,
+      });
+    });
     const actionOrder = Skills.orderActionsBySpeed([
-      { actorId: battle.hero.id, speedGrade: heroSpeedGrade, initiative: battle.hero.initiative },
+      { actorId: battle.hero.id, speedGrade: heroSpeedGrade, weight: battle.hero.weight, actionSpeedBonus: battle.hero.actionSpeedBonus, initiative: battle.hero.initiative },
       ...battle.enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
         const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
-        return { actorId: plan.enemyId, speedGrade: plan.speedGrade || enemy?.speedGrade || "C", initiative: enemy?.initiative || 0 };
+        return { actorId: plan.enemyId, speedGrade: plan.speedGrade || enemy?.speedGrade || "C", weight: enemy?.weight || 0, actionSpeedBonus: enemy?.actionSpeedBonus || 0, initiative: enemy?.initiative || 0 };
       }),
     ]);
     battle.phase = "resolving_action";
     battle.selectedAction = null;
     battle.messageDanger = false;
-    battle.actionResolution = { elapsed: 0, applied: false, completed: false, heroAction, actionOrder };
+    battle.actionResolution = { elapsed: 0, applied: false, completed: false, heroAction, actionOrder, pendingActions: [heroPending, ...enemyPending] };
     battle.actingUnitId = null;
     battle.actingUnitIds = actionOrder.map((action) => action.actorId);
     battle.message = `${heroAction.label}已確認（速度 ${heroSpeedGrade}）——按 S → A → B → C → D → E → F 結算！`;
@@ -3956,7 +4045,7 @@
           const totalDamage = Tactics.calculateDamage(battle.hero, target, {
             defence,
             multiplier: authoredMultiplier * positional.multiplier,
-            critical: skill.area.shape === "single" && hitIndex === 0 && Math.random() < playerStats().critChance,
+            critical: skill.area.shape === "single" && hitIndex === 0 && battleRandom() < playerStats().critChance,
             minimum: skill.star + 1,
           });
           const split = Skills.splitDamageLaterHits(totalDamage, hitCount);
@@ -4023,10 +4112,18 @@
       { actorId: battle.hero.id, kind: "hero", speedGrade: heroSpeedGrade, initiative: battle.hero.initiative },
       ...enemyHits.map((hit) => ({ actorId: hit.enemy.id, kind: "enemy", speedGrade: hit.plan.speedGrade || hit.enemy.speedGrade || "C", initiative: hit.enemy.initiative, hit })),
     ]);
-    battle.actionResolution.actionOrder = orderedActions.map((action) => ({ actorId: action.actorId, speedGrade: action.speedGrade }));
+    battle.actionResolution.actionOrder = orderedActions.map((action) => ({ actorId: action.actorId, speedGrade: action.speedGrade, weight: action.weight || 0 }));
     battle.actingUnitIds = orderedActions.map((action) => action.actorId);
 
     for (const action of orderedActions) {
+      const pending = battle.actionResolution.pendingActions.find((entry) => entry.actorId === action.actorId);
+      const validation = pending ? revalidateBattlePendingAction(pending) : { ok: true };
+      if (!validation.ok) {
+        pending && (pending.status = "cancelled");
+        cancelledActions.push(action.kind === "hero" ? "阿巡" : action.hit?.enemy?.name || action.actorId);
+        continue;
+      }
+      pending && (pending.status = "executing");
       if (action.kind === "hero") {
         if (!battle.hero.alive || battle.hero.hp <= 0 || FighterEffects?.isDisabled(battle.hero, battle.round)) {
           cancelledActions.push("阿巡");
@@ -4064,14 +4161,22 @@
         }
         for (const hit of executionHits) {
           if (!hit.target.alive || hit.target.hp <= 0) continue;
-          const missChance = Math.max(0, (FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) - (learnedFighterPassives().accuracy || 0));
-          if (missChance > 0 && Math.random() < missChance) {
+          const hitRoll = Tactics.rollHit({
+            accuracy: battle.hero.accuracy,
+            evasion: battleTargetEvasion(hit.target),
+            accuracyPenalties: [(FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) * 100],
+          }, battleRandom);
+          if (!hitRoll.hit) {
             battle.effects.push({ cell: { ...hit.target.cell }, text: "MISS", color: "#a9c9ff", life: .9, maxLife: .9, offsetY: .16 });
             continue;
           }
           if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
           else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...hit.target.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
           applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount);
+          Tactics.applyInterrupt(
+            battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
+            battleNumber(skill.interrupt),
+          );
           executedHeroHits.push(hit);
         }
         for (const status of statusTargets) {
@@ -4092,7 +4197,7 @@
             const targets = skill.effects.some((effect) => effect.type === "damage")
               ? [...new Set(executedHeroHits.map((hit) => hit.target))].filter((unit) => unit.alive)
               : effectTargets;
-            const result = FighterEffects.applySkillEffects({ skill: { ...skill, effects: additional }, caster: battle.hero, targets, units: battleUnits(), grid: battle.grid, round: battle.round });
+            const result = FighterEffects.applySkillEffects({ skill: { ...skill, effects: additional }, caster: battle.hero, targets, units: battleUnits(), grid: battle.grid, round: battle.round, random: battleRandom });
             specialEffectsApplied = Boolean(result.applied);
             showFighterEffectEvents(result);
           }
@@ -4105,14 +4210,16 @@
         cancelledActions.push(hit.enemy.name);
         continue;
       }
-      // Faster displacement or stealth can invalidate an attack queued earlier.
-      if (FighterEffects?.isStealthed?.(battle.hero, battle.round)
-        || !Tactics.isInAttackRange(hit.enemy.cell, battle.hero.cell, hit.enemy.attackRange, hit.enemy.minAttackRange)) continue;
+      // The pending action was revalidated above against the current cells;
+      // never execute a prediction from the old pre-knockback position.
       hit.enemy.ap = Math.max(0, (hit.enemy.ap || 0) - (hit.plan.apCost || hit.enemy.skillCost || 0));
       const passiveStats = learnedFighterPassives();
-      const evasionChance = Math.max(battle.evasion || 0, FighterEffects?.statusEvasion(battle.hero, battle.round, passiveStats) || 0);
-      const missChance = Math.min(.9, evasionChance + (FighterEffects?.accuracyPenalty(hit.enemy, battle.round) || 0));
-      if (missChance > 0 && Math.random() < missChance) {
+      const hitRoll = Tactics.rollHit({
+        accuracy: hit.enemy.accuracy,
+        evasion: battleTargetEvasion(battle.hero),
+        accuracyPenalties: [(FighterEffects?.accuracyPenalty(hit.enemy, battle.round) || 0) * 100],
+      }, battleRandom);
+      if (!hitRoll.hit) {
         missedCells.push({ ...battle.hero.cell });
         continue;
       }
@@ -4123,8 +4230,7 @@
         guardMultiplier: 1 - activeGuard,
         minimum: 2,
       });
-      const damageType = hit.plan.skill?.effects?.some((effect) => effect.type === "poison") ? "mind" : hit.enemy.battleRole === "charger" ? "impact" : hit.enemy.battleRole === "skirmisher" ? "pierce" : "impact";
-      hit.damage = Math.max(1, Math.round(hit.damage * (FighterEffects?.damageMultiplier(battle.hero, battle.round, passiveStats, damageType) ?? 1)));
+      hit.damage = Math.max(1, Math.round(hit.damage * (FighterEffects?.damageMultiplier(battle.hero, battle.round) ?? 1)));
       if (FighterEffects) {
         const counter = FighterEffects.resolveCounter({ defender: battle.hero, attacker: hit.enemy, damage: hit.damage, isProjectile: hit.enemy.attackRange > 1, round: battle.round });
         hit.damage = counter.damage;
@@ -4135,9 +4241,13 @@
       battle.hero.hp = result.hpAfter;
       battle.hero.alive = !result.defeated;
       if (hit.plan.skill && FighterEffects && hit.plan.skill.effects?.length && battle.hero.alive) {
-        const effectResult = FighterEffects.applySkillEffects({ skill: hit.plan.skill, caster: hit.enemy, targets: [battle.hero], units: battleUnits(), grid: battle.grid, round: battle.round });
+        const effectResult = FighterEffects.applySkillEffects({ skill: hit.plan.skill, caster: hit.enemy, targets: [battle.hero], units: battleUnits(), grid: battle.grid, round: battle.round, random: battleRandom });
         showFighterEffectEvents(effectResult);
       }
+      Tactics.applyInterrupt(
+        battle.actionResolution.pendingActions.find((entry) => entry.actorId === battle.hero.id),
+        battleNumber(hit.plan.skill?.interrupt),
+      );
       executedEnemyHits.push(hit);
     }
     if (!heroExecuted) heroHeal = 0;
@@ -4242,7 +4352,7 @@
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
     const chance = ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
-    if (Math.random() >= chance) {
+    if (battleRandom() >= chance) {
       setBattleMessage(`撤退失敗（成功率 ${Math.round(chance * 100)}%），霧獸逼近咗！`, true);
       battle.phase = "planning_action";
       return updateBattleUi();
@@ -6832,7 +6942,7 @@
       selectedAction: battle.selectedAction,
       awaitingFacing: battle.awaitingFacing,
       cursor: { ...battle.cursor },
-      hero: { cell: { ...battle.hero.cell }, renderCell: battle.hero.renderCell ? { ...battle.hero.renderCell } : null, hp: battle.hero.hp, maxHp: battle.hero.maxHp, moveRange: battle.hero.moveRange, facing: battle.hero.facing, locomotion: battle.hero.locomotion ? { ...battle.hero.locomotion } : null },
+      hero: { cell: { ...battle.hero.cell }, renderCell: battle.hero.renderCell ? { ...battle.hero.renderCell } : null, hp: battle.hero.hp, maxHp: battle.hero.maxHp, attack: battle.hero.attack, defence: battle.hero.defence, accuracy: battle.hero.accuracy, evasion: battle.hero.evasion, weight: battle.hero.weight, moveRange: battle.hero.moveRange, facing: battle.hero.facing, locomotion: battle.hero.locomotion ? { ...battle.hero.locomotion } : null },
       enemies: battle.enemies.map((unit) => ({
         id: unit.id,
         primary: unit.primary,
@@ -6841,6 +6951,11 @@
         renderCell: unit.renderCell ? { ...unit.renderCell } : null,
         hp: unit.hp,
         maxHp: unit.maxHp,
+        attack: unit.attack,
+        defence: unit.defence,
+        accuracy: unit.accuracy,
+        evasion: unit.evasion,
+        weight: unit.weight,
         ap: unit.ap,
         skillName: unit.skillName,
         speedGrade: unit.speedGrade,
@@ -6892,6 +7007,16 @@
         applied: battle.actionResolution.applied,
         elapsed: battle.actionResolution.elapsed,
         actionOrder: (battle.actionResolution.actionOrder || []).map((action) => ({ ...action })),
+        pendingActions: (battle.actionResolution.pendingActions || []).map((pending) => ({
+          id: pending.id,
+          actorId: pending.actorId,
+          targetId: pending.targetId,
+          skillId: pending.skillId,
+          skillDurability: pending.skillDurability,
+          accumulatedInterrupt: pending.accumulatedInterrupt,
+          remainingSkillDurability: pending.remainingSkillDurability,
+          status: pending.status,
+        })),
       } : null,
     };
   }

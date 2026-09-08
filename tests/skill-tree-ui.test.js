@@ -131,7 +131,7 @@ test("multi-hit damage uses authored total output, hit metadata, and floating nu
   assert.match(gameSource, /const recheck = Boolean\(skill\.hitResolution\?\.recheck_attack_path_each_hit\)/);
   assert.match(gameSource, /const split = Skills\.splitDamageLaterHits\(totalDamage, hitCount\)/);
   assert.match(gameSource, /heroHitResolvers\.push\(\{ hitCount, recheck/);
-  assert.match(gameSource, /critical: skill\.area\.shape === "single" && hitIndex === 0 && Math\.random\(\) < playerStats\(\)\.critChance/);
+  assert.match(gameSource, /critical: skill\.area\.shape === "single" && hitIndex === 0 && battleRandom\(\) < playerStats\(\)\.critChance/);
   assert.match(gameSource, /applyBattleHit\(hit\.target, hit\.damage, hit\.color, hit\.hitIndex, hit\.hitCount\)/);
   assert.match(gameSource, /const spread = \(hitIndex - \(hitCount - 1\) \/ 2\) \* \.18/);
 });
