@@ -262,7 +262,12 @@
 .skill-detail-panel .skill-book-confirm-stats > div:last-child { grid-column: 1 / -1; }
 
 /* Deck/loadout ---------------------------------------------------------- */
-.deck-view-shell { width: min(100%, 31rem); margin-inline: auto; }
+.deck-view-shell { width: min(100%, 58rem); margin-inline: auto; }
+.deck-manage-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: .9rem; align-items: start; }
+.deck-management-column,
+.deck-current-column { min-width: 0; }
+.deck-management-column .facility-section-heading,
+.deck-current-column .facility-section-heading { min-height: 3.2rem; }
 .deck-slot-list { display: grid; grid-template-columns: 1fr; gap: .48rem; width: min(100%, 27rem); margin-inline: auto; }
 .deck-slot-list .deck-slot.is-filled { grid-template-columns: minmax(0,1fr); min-height: 3.6rem; padding-block: .5rem; }
 .deck-slot-list .deck-slot.is-empty { min-height: 3.35rem; padding-block: .48rem; }
@@ -299,7 +304,7 @@
 .deck-slot-empty small { color: var(--muted); }
 .deck-slot .facility-action-button { min-width: 4rem; min-height: 2rem; }
 .deck-skill-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .62rem; }
-.deck-skill-choice { min-width: 0; display: grid; grid-template-columns: 2.6rem minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
+.deck-skill-choice { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
 .deck-skill-choice .facility-action-button { min-width: 4rem; }
 .deck-skill-title { min-width: 0; display: flex; align-items: center; gap: .38rem; }
 .skill-kind-badge { position: relative; flex: 0 0 auto; width: 2.55rem; height: 1.15rem; display: inline-grid; place-items: center; overflow: hidden; border-radius: .24rem; }
@@ -736,6 +741,7 @@
   .status-character-card span { align-self: start; }
   .skill-tree-board { width: max(100%,var(--tree-min-width,50rem)); }
   .deck-skill-list { grid-template-columns: 1fr; }
+  .deck-manage-layout { grid-template-columns: 1fr; }
   .paperdoll-layout { grid-template-columns: 1fr; }
   .paperdoll-stats dl { grid-template-columns: repeat(5,minmax(0,1fr)); }
   .paperdoll-stats dl div { display: grid; justify-items: center; gap: .25rem; }
@@ -781,8 +787,8 @@
   .skill-tree-node { width: 5.3rem; }
   .skill-tree-node-trigger strong { font-size: .66rem; }
   .deck-slot-grid { grid-template-columns: 1fr; }
-  .deck-slot,
-  .deck-skill-choice { grid-template-columns: 2.35rem minmax(0,1fr); gap: .48rem; }
+  .deck-slot { grid-template-columns: 2.35rem minmax(0,1fr); gap: .48rem; }
+  .deck-skill-choice { grid-template-columns: minmax(0,1fr); gap: .48rem; }
   .deck-slot { padding: .55rem .55rem .55rem 2rem; }
   .deck-slot .facility-action-button,
   .deck-skill-choice .facility-action-button { grid-column: 1 / -1; width: 100%; max-width: none; }

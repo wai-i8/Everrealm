@@ -2814,10 +2814,13 @@
     }).join("");
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
-      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
-      return `<div class="facility-section-heading skill-list-heading"><div><small>SKILL MANAGEMENT</small><h3>戰技面板台管理</h3></div><span>初始 3 格 · 已獲 ${skillState.deckUpgradeMilestones.length} / 3 次擴充</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div>`;
+      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>可裝入 DECK</small></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
+      return `<section class="deck-management-column"><div class="facility-section-heading skill-list-heading"><div><small>LEARNED SKILLS</small><h3>已學技能</h3></div><span>可裝入 ${skillState.deckCapacity} 格</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
     })() : "";
-    facilityContent.innerHTML = `<div class="deck-view-shell ${canEdit ? "is-editable" : "is-readonly"}"><div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "城門戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-list">${slots}</div>${management}</div>`;
+    const currentDeck = `<section class="deck-current-column"><div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "目前戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-list">${slots}</div></section>`;
+    facilityContent.innerHTML = canEdit
+      ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
+      : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;
     setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板台可管理出戰技能；戰鬥只會使用目前 DECK。" : "唯讀查看目前出戰技能；要更換配置先去舊港城門戰技面板台。"}`);
   }
 

@@ -109,11 +109,17 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.doesNotMatch(status, /戰鬥規則/);
   assert.match(game, /status:\s*\["STATUS"[\s\S]*?開場 10 AP/);
   assert.match(deck, /class="deck-slot-list"/);
+  assert.match(deck, /class="deck-manage-layout"/);
+  assert.match(deck, /class="deck-management-column"/);
+  assert.match(deck, /class="deck-current-column"/);
   assert.match(deck, /facilityContext === "deck" && currentMapId === "world"/);
   assert.match(deck, /class="deck-skill-list"/);
   assert.match(deck, /data-facility-action="equip-skill"/);
   assert.doesNotMatch(viewer, /skill\.apCost \} AP · 速度/);
   assert.doesNotMatch(viewer, /skillRangeText\(skill\)/);
+  assert.doesNotMatch(deck, /skill\.apCost|skillRangeText\(skill\)/);
+  assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(uiCssForTest(), /@media \(max-width: 900px\)[\s\S]*?\.deck-manage-layout\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(uiCssForTest(), /\.deck-slot-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
 });
 
