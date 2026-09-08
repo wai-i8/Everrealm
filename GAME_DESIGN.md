@@ -30,10 +30,11 @@
 - 非戰鬥移動統一使用滑鼠點擊或觸控地面；角色使用碰撞感知最短可行路線繞過牆、樹與建築。若精確點選位置不可站立或不可到達，改以前往距離該點最近的可達空地。滑鼠按住地圖 `0.5` 秒後放開，即啟用游標跟隨，之後移動游標即可改變行走目標；再次短按則退出跟隨，執行單次點擊。觸控長按可拖動選擇目標，放開後地面目標保留最後位置，角色／設施目標則繼續追至遇敵或互動。連續追蹤最多每 `150 ms` 重算一次路線；取消觸控、切換場景、開啟彈窗或視窗失焦時清除追蹤。移除 WASD、方向鍵、手機虛擬方向盤及 `K` 快閃。
 - 非戰鬥鏡頭提供遠／中／近三級，玩家永遠鎖在畫面正中央；地圖邊界以不可行走的場景底色延伸，鏡頭不因邊界把玩家推去側欄下方。右上只放圓形小地圖；狀態、物品、裝備、DECK、技能樹等入口全部放在左側。
 - 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；公會、裝備店、療癒所、雜貨舖及旅店等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
-- 物品欄統一呈現裝備與背包：左邊角色紙娃娃顯示頭、身、武器、手、腳及飾物欄，右邊以緊湊格仔列出藥水、技能書、素材及裝備。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
+- 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊以緊湊格仔列出藥水、技能書、素材及裝備。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。
 - 所有一般彈出視窗共用網站式關閉契約：右上角永遠提供清楚可見、bitmap-backed 的 shared close control，點擊視窗外的半透明背景亦會關閉；即使底部已有「取消」按鈕，亦不可取代以上兩種離開方式。
 - 玩家長時間無操作不會再開啟阻塞式「停一停／Night Watch Paused」視窗；持久化改用無干擾的 dirty-state autosave checkpoint。狀態有意義地改變時標記 dirty，約每 5 秒只檢查並保存一次有變更的狀態；重要場景轉移、交易、技能取得、裝備或任務狀態轉移會即時保存，保存失敗會保留 dirty 等待重試。這是 client persistence checkpoint，唔預設未來 authoritative server 行為。
+- 五個主城服務 interior 的核心 NPC 共用 `160 px` service reach；互動距離由 NPC authored magenta region 到玩家 feet pivot 的最近點計算，點擊命中區在 region 外再加 `18 px` hit padding。玩家可以由 region 任一側接近，唔需要走到單一 centroid 或 NPC entity point。
 - 正常 refresh 如果有 valid save 會自動載入並直接返回探索；冇 valid save 就停留標題畫面。玩家明確選擇「返回標題」時先保存再返回標題；save load 失敗只顯示錯誤並保留現狀，唔可以靜默覆蓋存檔或開新遊戲。
 - 點擊左上角色狀態可開啟狀態欄，顯示職業、等級、XP／HP progress、攻擊、防禦、戰棋移動及 DECK；不顯示行動速度、探索移速或暴擊率。
 - 所有可互動 NPC 頭頂置中顯示名稱；任務問號／感嘆號若存在，必須以 NPC 身體中心線定位。不得把名稱燒進角色圖，避免縮放、換圖或四方向動畫後失去清晰度。角色圖點樣裁切、對齊及以 semantic anchor 維持中心線，統一依 `ART_PIPELINE.md`。flattened interior 嘅 NPC 視覺已烘焙入 master art，runtime 只顯示一個 semantic NPC entity，唔重畫角色。
@@ -91,6 +92,10 @@
 - 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。對話使用獨立 anchored gameplay overlay：深海軍藍、金色裝飾、角色肖像作輔助身份、說話者角色名／功能職稱清楚整合，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
 - 對話最後一句只會關閉對話時顯示「確定」，仍有下一句時顯示「繼續」；E／Enter 等 keyboard shortcut 可以保留但唔需要印喺 action button。探索 HUD 由角色摘要、資源、主要功能、次要視角／聲效及任務追蹤組成，並可完全收起至一個 bitmap 三角 pull-tab；收起係 UI preference，唔影響 movement、combat、stats、quest 或 progression，並可跨 map／interior／refresh 保留。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
+
+### Fighter V1 equipment
+
+格鬥士 V1 只可購買及裝備拳套系武器與下列拳腳防具；戰士武器及其他職業裝備不可跨職業使用。四件拳套武器依序為 `metal_knuckles`（Lv6，攻擊 10，450）、`giz_armguard`（Lv12，攻擊 17，1800）、`heavy_knuckles`（Lv18，攻擊 25，4050）及 `superheavy_knuckles`（Lv24，攻擊 34，7200）。防具分為 `disciple`（Lv5）、`training`（Lv14）及 `conditioning`（Lv23）三套上／下身、手、腳部件，另有 Lv10 `white_martial_gi` 及 Lv20 `colored_martial_gi` 全身套裝；完整欄位、價格、數值、互斥部位及移動加成由 `expansion-core.js` catalog 保存。等級不足或職業不符時，商店購買與裝備都必須拒絕，不能以 UI 隱藏取代核心驗證。
 
 ## 世界與美術一致性
 

@@ -181,7 +181,7 @@
   let bossDefeated = false;
   let openedChests = new Set();
   let ownedEquipment = ["novice_blade", "traveller_coat"];
-  let equipped = { weapon: "novice_blade", armor: "traveller_coat", charm: null };
+  let equipped = { head: null, weapon: "novice_blade", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
   let activeContracts = [];
   let contractRotation = 0;
   let guildCommissionState = Guild.normalizeState();
@@ -254,6 +254,30 @@
     tide_iron_knuckles: 1,
     gale_gauntlets: 2,
     dragon_knuckles: 3,
+    metal_knuckles: 0,
+    giz_armguard: 1,
+    heavy_knuckles: 2,
+    superheavy_knuckles: 3,
+  });
+  const EQUIPMENT_ICON_FALLBACK_INDEX = Object.freeze({
+    disciple_gi: 6,
+    disciple_lower: 6,
+    disciple_handguards: 7,
+    disciple_shoes: 6,
+    training_wrap: 6,
+    training_belt: 6,
+    training_bracers: 7,
+    training_zori: 6,
+    conditioning_suit: 6,
+    conditioning_skirt: 6,
+    conditioning_handguards: 7,
+    conditioning_shoes: 6,
+    white_martial_gi: 8,
+    cloth_bracers: 7,
+    barefoot_bands: 6,
+    colored_martial_gi: 8,
+    joint_bracers: 7,
+    barefoot_guard: 6,
   });
   let facilityTab = "bag";
   let facilityContext = "portable";
@@ -378,9 +402,10 @@
   }
 
   function equipmentMatchesClass(item) {
-    if (!item || item.slot !== "weapon") return true;
-    const fighterWeapon = item.classId === "fighter" || /gloves|knuckles/.test(item.id);
-    return playerClassId === "fighter" ? fighterWeapon : !fighterWeapon;
+    if (!item) return false;
+    if (item.classId === "fighter") return playerClassId === "fighter";
+    if (item.classId === "warrior") return playerClassId === "warrior";
+    return true;
   }
 
   function equippedWeaponName() {
@@ -517,7 +542,7 @@
     playerClassId = Skills.CLASS_IDS?.includes(classId) ? classId : (Skills.DEFAULT_CLASS_ID || "warrior");
     const starterWeapon = playerClassId === "fighter" ? "novice_gloves" : "novice_blade";
     ownedEquipment = [starterWeapon, "traveller_coat"];
-    equipped = { weapon: starterWeapon, armor: "traveller_coat", charm: null };
+    equipped = { head: null, weapon: starterWeapon, upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
     guildCommissionState = Guild.emptyState();
     syncGuildCommissionProjection();
     contractRotation = 0;
@@ -548,14 +573,11 @@
       coins: player.coins,
       level: player.level,
       ownedEquipment: [...new Set([starterWeapon, "traveller_coat", ...savedOwned])],
-      equipped: data.equipped || { weapon: starterWeapon, armor: "traveller_coat", charm: null },
+      classId: playerClassId,
+      equipped: data.equipped || { weapon: starterWeapon, body: "traveller_coat", charm: null },
     });
     ownedEquipment = gearState.ownedEquipment;
-    equipped = {
-      weapon: gearState.equipped.weapon || starterWeapon,
-      armor: gearState.equipped.armor || "traveller_coat",
-      charm: gearState.equipped.charm || null,
-    };
+    equipped = { ...gearState.equipped, weapon: gearState.equipped.weapon || starterWeapon, upperBody: gearState.equipped.upperBody || "traveller_coat" };
     guildCommissionState = Guild.normalizeState(data.guildCommission);
     syncGuildCommissionProjection();
     contractRotation = Core.clamp(Math.floor(Number(data.contractRotation) || guildCommissionState.cycle || 0), 0, 999999999);
@@ -1551,6 +1573,22 @@
     }
   }
 
+  function interactionDistanceToEntity(entity) {
+    if (entity?.kind === "npc" && world.navigation?.authoritative && typeof world.navigation.distanceToRegion === "function") {
+      return world.navigation.distanceToRegion("npc", player);
+    }
+    return Core.distance(player, entity);
+  }
+
+  function interactionReachForEntity(entity) {
+    if (entity?.kind === "npc" && world.navigation?.authoritative) {
+      return Number(world.navigation.serviceInteractionReachPx) || 112;
+    }
+    return ["gate", "portal", "questBoard"].includes(entity?.kind)
+      ? 82
+      : Number(entity?.interactionRadius) || 58;
+  }
+
   function addDamageNumber(x, y, text, color, important = false) {
     damageNumbers.push({ x, y, text, color, life: important ? .95 : .72, maxLife: important ? .95 : .72, important });
   }
@@ -1585,7 +1623,7 @@
     const fieldGate = currentFieldGateInteraction();
     if (fieldGate) candidates.push(fieldGate);
     nearestInteraction = candidates
-      .map((entity) => ({ entity, distance: Core.distance(player, entity) }))
+      .map((entity) => ({ entity, distance: interactionDistanceToEntity(entity) }))
       .filter((item) => {
         if (item.entity.kind === "questBoard" && item.entity.navigationRegion && typeof world.navigation?.isInRegion === "function") {
           return world.navigation.isInRegion(item.entity.navigationRegion, player) ||
@@ -1594,9 +1632,7 @@
         if (item.entity.kind === "portal" && MapTransitions.transitionTypeFor(item.entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
           return MapTransitions.pointInThreshold(item.entity, player);
         }
-        return item.distance <= (["gate", "portal", "questBoard"].includes(item.entity.kind)
-          ? 82
-          : Number(item.entity.interactionRadius) || 58);
+        return item.distance <= interactionReachForEntity(item.entity);
       })
       .sort((a, b) => a.distance - b.distance)[0]?.entity || null;
     // Interaction remains available through normal clicks/controls, but the
@@ -2167,13 +2203,16 @@
   function renderFacilitySummary() {
     const rank = guildRankInfo();
     const weapon = equipmentItem(equipped.weapon)?.name || "見習燈刃";
-    const armor = equipmentItem(equipped.armor)?.name || "旅行者短衣";
+    const upperBody = equipmentItem(equipped.upperBody)?.name || "旅行者短衣";
+    const lowerBody = equipped.lowerBody && equipped.lowerBody !== equipped.upperBody
+      ? equipmentItem(equipped.lowerBody)?.name
+      : null;
     const marks = facilityPanel.querySelector('[data-facility-summary="marks"] strong');
     const rankLabel = facilityPanel.querySelector('[data-facility-summary="rank"] strong');
     const gear = facilityPanel.querySelector('[data-facility-summary="equipped"] strong');
     if (marks) marks.textContent = `${guildMarks} 枚`;
     if (rankLabel) rankLabel.textContent = rank.name;
-    if (gear) gear.textContent = `${weapon}／${armor}`;
+    if (gear) gear.textContent = `${weapon}／${upperBody}${lowerBody ? `／${lowerBody}` : ""}`;
   }
 
   function renderGuildFacility() {
@@ -2272,15 +2311,15 @@
     const stats = playerStats();
     const maxHp = stats.maxHp;
     const items = [];
-    const equipmentSlotOrder = { weapon: 0, armor: 1, charm: 2 };
-    const equipmentSlotNames = { weapon: "武器", armor: "身體", charm: "飾物" };
+    const equipmentSlotOrder = { head: 0, weapon: 1, upperBody: 2, lowerBody: 3, hands: 4, feet: 5, charm: 6 };
+    const equipmentSlotNames = { head: "頭部", weapon: "武器", upperBody: "上身", lowerBody: "下身", hands: "手部", feet: "腳部", charm: "飾物" };
     for (const item of Expansion.DEFAULT_EQUIPMENT_CATALOG
       .filter((entry) => ownedEquipment.includes(entry.id))
-      .sort((left, right) => Number(equipped[right.slot] === right.id) - Number(equipped[left.slot] === left.id)
+      .sort((left, right) => Number(Expansion.isEquipmentEquipped({ equipped }, right.id)) - Number(Expansion.isEquipmentEquipped({ equipped }, left.id))
         || equipmentSlotOrder[left.slot] - equipmentSlotOrder[right.slot]
         || left.requiredLevel - right.requiredLevel
         || left.name.localeCompare(right.name, "zh-HK"))) {
-      const isEquipped = equipped[item.slot] === item.id;
+      const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
       const levelLocked = player.level < item.requiredLevel;
       const classLocked = !equipmentMatchesClass(item);
       items.push({
@@ -2415,11 +2454,12 @@
           <div class="paperdoll-board bag-paperdoll-board">
             ${paperdollSlotHtml("head", "頭部", null, "♙")}
             ${paperdollSlotHtml("weapon", playerClassId === "fighter" ? "拳套" : "武器", "weapon", "⚔")}
-            ${paperdollSlotHtml("body", "身體", "armor", "♜")}
+            ${paperdollSlotHtml("upperBody", "上身", "upperBody", "♜")}
             <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="220" aria-hidden="true"></canvas><strong>阿巡</strong><span>${playerClassId === "fighter" ? "格鬥士" : "戰士"} · LV.${player.level}</span></div>
             ${paperdollSlotHtml("charm", "飾物", "charm", "✦")}
-            ${paperdollSlotHtml("hands", "手部", null, "◇")}
-            ${paperdollSlotHtml("feet", "腳部", null, "▽")}
+            ${paperdollSlotHtml("lowerBody", "下身", "lowerBody", "♜")}
+            ${paperdollSlotHtml("hands", "手部", "hands", "◇")}
+            ${paperdollSlotHtml("feet", "腳部", "feet", "▽")}
           </div>
           <dl class="bag-loadout-stats" aria-label="裝備後能力"><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>移動</dt><dd>${stats.moveRange} 格</dd></div></dl>
         </aside>
@@ -2439,11 +2479,15 @@
       const index = FIGHTER_EQUIPMENT_ICON_INDEX[item.id];
       return `<span class="atlas-icon fighter-equipment-icon-atlas ${extraClass}" style="--atlas-x:${index * 33.333333}%;--atlas-y:0%" role="img" aria-label="${item.name || "拳套"}"></span>`;
     }
-    return atlasIconHtml("equipment", EQUIPMENT_ICON_INDEX[item?.id] ?? 0, item?.name || "裝備", extraClass);
+    const index = EQUIPMENT_ICON_FALLBACK_INDEX[item?.id] ?? EQUIPMENT_ICON_INDEX[item?.id] ?? item?.iconIndex ?? 0;
+    return atlasIconHtml("equipment", index, item?.name || "裝備", extraClass);
   }
 
   function paperdollSlotHtml(visualSlot, label, equipmentSlot, placeholder) {
     const item = equipmentSlot ? equipmentItem(equipped[equipmentSlot]) : null;
+    if (equipmentSlot === "lowerBody" && item && equipped.upperBody === item.id) return `<article class="paperdoll-slot is-occupied" data-paperdoll-slot="${visualSlot}">
+      <span class="paperdoll-placeholder" aria-hidden="true">↕</span><div><small>${label}</small><strong>由一件式裝備佔用</strong><span>${item.name}</span></div>
+    </article>`;
     if (equipmentSlot && !item) return `<article class="paperdoll-slot is-empty" data-paperdoll-slot="${visualSlot}">
       <span class="paperdoll-placeholder" aria-hidden="true">${placeholder}</span><div><small>${label}</small><strong>未裝備</strong><span>已開放，可以裝備對應物品</span></div>
     </article>`;
@@ -2465,18 +2509,19 @@
 
   function renderEquipmentFacility() {
     const stats = playerStats();
-    const slotOrder = { weapon: 0, armor: 1, charm: 2 };
+    const slotOrder = { head: 0, weapon: 1, upperBody: 2, lowerBody: 3, hands: 4, feet: 5, charm: 6 };
     const collection = Expansion.DEFAULT_EQUIPMENT_CATALOG
       .filter((item) => ownedEquipment.includes(item.id) && equipmentMatchesClass(item))
       .sort((left, right) => slotOrder[left.slot] - slotOrder[right.slot]
-        || Number(equipped[right.slot] === right.id) - Number(equipped[left.slot] === left.id)
+        || Number(Expansion.isEquipmentEquipped({ equipped }, right.id)) - Number(Expansion.isEquipmentEquipped({ equipped }, left.id))
         || left.requiredLevel - right.requiredLevel)
       .map((item) => {
-        const isEquipped = equipped[item.slot] === item.id;
+        const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
         const levelLocked = player.level < item.requiredLevel;
+        const slotLabel = { head: "頭部", weapon: "武器", upperBody: "上身", lowerBody: "下身", hands: "手部", feet: "腳部", charm: "飾物" }[item.slot] || item.slot;
         return `<article class="gear-collection-item ${isEquipped ? "is-equipped" : ""} ${levelLocked ? "is-locked" : ""}">
           ${equipmentIconHtml(item, "gear-collection-icon")}
-          <div><small>${item.slot === "weapon" ? "武器" : item.slot === "armor" ? "身體" : "飾物"} · LV.${item.requiredLevel}</small><strong>${item.name}</strong><p>${item.description}</p><span>${statText(item.stats)}</span></div>
+          <div><small>${slotLabel}${item.occupiesSlots.length > 1 ? " · 一件式" : ""} · LV.${item.requiredLevel}</small><strong>${item.name}</strong><p>${item.description}</p><span>${statText(item.stats)}</span></div>
           <button class="facility-action-button${isEquipped ? " is-quiet" : ""}" type="button" data-facility-action="equip" data-item-id="${item.id}" ${isEquipped || levelLocked ? "disabled" : ""}>${isEquipped ? "裝備中" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "換上"}</button>
         </article>`;
       }).join("");
@@ -2486,29 +2531,30 @@
         <div class="paperdoll-board">
           ${paperdollSlotHtml("head", "頭部", null, "♙")}
           ${paperdollSlotHtml("weapon", "武器", "weapon", "⚔")}
-          ${paperdollSlotHtml("body", "身體", "armor", "♜")}
+          ${paperdollSlotHtml("upperBody", "上身", "upperBody", "♜")}
           <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="220" aria-hidden="true"></canvas><strong>阿巡</strong><span>巡燈人 · LV.${player.level}</span></div>
           ${paperdollSlotHtml("charm", "飾物", "charm", "✦")}
-          ${paperdollSlotHtml("hands", "手部", null, "◇")}
-          ${paperdollSlotHtml("feet", "腳部", null, "▽")}
+          ${paperdollSlotHtml("lowerBody", "下身", "lowerBody", "♜")}
+          ${paperdollSlotHtml("hands", "手部", "hands", "◇")}
+          ${paperdollSlotHtml("feet", "腳部", "feet", "▽")}
         </div>
         <aside class="paperdoll-stats"><small>CURRENT STATS</small><strong>目前能力</strong><dl><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>速度</dt><dd>${Math.round(stats.speed)}</dd></div><div><dt>移動</dt><dd>${stats.moveRange}</dd></div></dl></aside>
       </section>
       <div class="facility-section-heading skill-list-heading"><div><small>OWNED GEAR</small><h3>已擁有裝備</h3></div><span>${ownedEquipment.length} 件</span></div>
       <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>未有裝備</strong></div>'}</div>
-      <div class="facility-note"><b>未開放槽位</b><span>頭部、手部同腳部會喺往後冒險版本加入；目前唔會計入角色能力。</span></div>`;
+      <div class="facility-note"><b>裝備槽位</b><span>頭部暫未開放；上身、下身、手部同腳部會按裝備資料獨立或一件式佔用。</span></div>`;
     drawEquipmentPaperdoll();
     setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`);
   }
 
   function renderShopFacility() {
-    const slotNames = { weapon: "武器", armor: "防具", charm: "飾物" };
+    const slotNames = { weapon: "武器", upperBody: "上身", lowerBody: "下身", hands: "手部", feet: "腳部", charm: "飾物" };
     const atShop = currentMapId === "shop";
     const discountRate = guildDiscountRate();
-    const sections = Expansion.EQUIPMENT_SLOTS.map((slot) => {
+    const sections = Expansion.EQUIPMENT_SHOP_SLOTS.map((slot) => {
       const cards = Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.slot === slot && equipmentMatchesClass(item)).map((item) => {
         const owned = ownedEquipment.includes(item.id);
-        const isEquipped = equipped[slot] === item.id;
+        const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
         const levelLocked = player.level < item.requiredLevel;
         const shopCost = Math.max(0, Math.floor(item.cost * (1 - discountRate)));
         let label = isEquipped ? "裝備中" : owned ? "裝備" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : !item.purchasable ? "寶箱限定" : `${shopCost} 燈幣購買${discountRate ? `（-${Math.round(discountRate * 100)}%）` : ""}`;
@@ -3208,7 +3254,7 @@
     const beforeMax = playerStats().maxHp;
     const requestedItem = equipmentItem(itemId);
     if (!equipmentMatchesClass(requestedItem)) return showToast(playerClassId === "fighter" ? "格鬥士只可以裝備拳套。" : "戰士唔可以裝備拳套。", "danger");
-    let state = { coins: player.coins, level: player.level, ownedEquipment, equipped };
+    let state = { coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped };
     if (buyFirst) {
       if (currentMapId !== "shop") return showToast("購買裝備要親身去銀火裝備店。", "danger");
       const item = equipmentItem(itemId);
@@ -5521,6 +5567,10 @@
         const authoredInteraction = [...world.npcs, ...world.boards].find((entity) => entity.id === authoredInteractionId);
         if (authoredInteraction) return authoredInteraction;
       }
+      if (typeof world.navigation.interactionHitTest === "function" && world.navigation.interactionHitTest("npc", authoredPoint)) {
+        const paddedInteraction = world.npcs[0];
+        if (paddedInteraction) return paddedInteraction;
+      }
     }
     const fieldGate = currentFieldGateInteraction();
     if (fieldGate) {
@@ -5562,8 +5612,8 @@
       entity = fieldGate;
     }
     explorePortalIntentId = null;
-    const distance = entity ? Core.distance(player, entity) : Infinity;
-    const interactionRange = entity && !entity.type ? (["questBoard", "gate"].includes(entity.kind) ? 76 : 54) : 0;
+    const distance = entity ? interactionDistanceToEntity(entity) : Infinity;
+    const interactionRange = entity && !entity.type ? interactionReachForEntity(entity) : 0;
     if (entity && !entity.type && entity.kind !== "portal" && distance <= interactionRange) {
       nearestInteraction = entity;
       pendingClickInteractionId = null;

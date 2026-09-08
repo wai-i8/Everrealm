@@ -11,6 +11,8 @@
   const EXPECTED_WIDTH = 1672;
   const EXPECTED_HEIGHT = 941;
   const FEET_RADIUS = 3;
+  const SERVICE_INTERACTION_REACH_PX = 160;
+  const SERVICE_INTERACTION_HIT_PADDING_PX = 18;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -87,6 +89,39 @@
       return Boolean(mask && valueAt(mask, position?.x, position?.y));
     }
 
+    function nearestPointInRegion(region, position) {
+      const mask = region === "npc" ? runtime?.masks.magenta : region === "exit" ? runtime?.masks.cyan : null;
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      if (!ready || !mask || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+      let best = null;
+      for (const entry of data?.regions?.[region] || []) {
+        const bbox = entry?.bbox;
+        if (!bbox) continue;
+        const minX = Math.max(0, Math.floor(bbox.x));
+        const minY = Math.max(0, Math.floor(bbox.y));
+        const maxX = Math.min(EXPECTED_WIDTH - 1, Math.ceil(bbox.x + bbox.width) - 1);
+        const maxY = Math.min(EXPECTED_HEIGHT - 1, Math.ceil(bbox.y + bbox.height) - 1);
+        for (let py = minY; py <= maxY; py += 1) {
+          for (let px = minX; px <= maxX; px += 1) {
+            if (!mask[py * EXPECTED_WIDTH + px]) continue;
+            const distanceSquared = (px - x) ** 2 + (py - y) ** 2;
+            if (!best || distanceSquared < best.distanceSquared) best = { x: px, y: py, distanceSquared };
+          }
+        }
+      }
+      return best;
+    }
+
+    function distanceToRegion(region, position) {
+      const nearest = nearestPointInRegion(region, position);
+      return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
+    }
+
+    function interactionHitTest(region, position, padding = SERVICE_INTERACTION_HIT_PADDING_PX) {
+      return distanceToRegion(region, position) <= Math.max(0, Number(padding) || 0);
+    }
+
     function interactionAtWorldPoint(position) {
       return isRegionAt("npc", position) ? "clinic-healer-siu-moon" : null;
     }
@@ -106,6 +141,8 @@
       ready,
       failure,
       feetRadiusPx: FEET_RADIUS,
+      serviceInteractionReachPx: SERVICE_INTERACTION_REACH_PX,
+      serviceInteractionHitPaddingPx: SERVICE_INTERACTION_HIT_PADDING_PX,
       status() {
         return {
           ready,
@@ -119,6 +156,9 @@
       isPositionWalkable,
       isRegionAt,
       isInRegion,
+      nearestPointInRegion,
+      distanceToRegion,
+      interactionHitTest,
       interactionAtWorldPoint,
       valueAt,
     });
@@ -131,10 +171,15 @@
     ready: resolver.ready,
     failure: resolver.failure,
     feetRadiusPx: resolver.feetRadiusPx,
+    serviceInteractionReachPx: resolver.serviceInteractionReachPx,
+    serviceInteractionHitPaddingPx: resolver.serviceInteractionHitPaddingPx,
     status: resolver.status,
     isPositionWalkable: resolver.isPositionWalkable,
     isRegionAt: resolver.isRegionAt,
     isInRegion: resolver.isInRegion,
+    nearestPointInRegion: resolver.nearestPointInRegion,
+    distanceToRegion: resolver.distanceToRegion,
+    interactionHitTest: resolver.interactionHitTest,
     interactionAtWorldPoint: resolver.interactionAtWorldPoint,
     valueAt: resolver.valueAt,
     createResolver,

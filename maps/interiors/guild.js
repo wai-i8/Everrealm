@@ -39,7 +39,7 @@
     const boards = [{ id: "guild-request-board", kind: "questBoard", name: "公會委託", x: 4 * TILE + TILE / 2, y: 5 * TILE + TILE / 2, radius: 22, prompt: "查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission", render: false }];
     const npcs = [{
       id: "guildmaster-yin", name: "妍姐", displayName: "公會接待員", role: "公會接待員／委託回報", kind: "npc",
-      x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
+      x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
       color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32,
       appearance: "紅黑女劍士造型、赤紅披肩、黑色輕甲與高筒戰靴", zone: "reception-admin",
       services: ["guild-rank", "bounty-report", "repeatable-bounties"], render: false,
@@ -59,7 +59,7 @@
     });
     map.exits[0].navigationRegion = "exit";
     map.pixelWidth = data.source.width; map.pixelHeight = data.source.height;
-    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, sourceImage: AUTHORING, generatedRuntime: "map/guild-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
+    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, serviceInteractionReachPx: navigation.serviceInteractionReachPx, serviceInteractionHitPaddingPx: navigation.serviceInteractionHitPaddingPx, sourceImage: AUTHORING, generatedRuntime: "map/guild-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, nearestPointInRegion: navigation.nearestPointInRegion, distanceToRegion: navigation.distanceToRegion, interactionHitTest: navigation.interactionHitTest, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
     return map;
   }
   return { createGuildMap };

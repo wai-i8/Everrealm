@@ -76,7 +76,20 @@ test("equipment cannot be bought twice or when it is not for sale", () => {
   assert.equal(Expansion.purchaseEquipment(owned, "missing").reason, "not-found");
 });
 
-test("equipping owned items swaps only their matching slot", () => {
+test("equipment uses canonical body slots and migrates legacy armor saves", () => {
+  assert.deepEqual(Expansion.EQUIPMENT_SLOTS, ["head", "weapon", "upperBody", "lowerBody", "hands", "feet", "charm"]);
+  const migrated = Expansion.normalizeEquipmentState({
+    level: 10,
+    ownedEquipment: ["novice_blade", "guild_mail", "hunter_fang"],
+    equipped: { weapon: "novice_blade", armor: "guild_mail", charm: "hunter_fang" },
+  });
+  assert.deepEqual(migrated.equipped, {
+    head: null, weapon: "novice_blade", upperBody: "guild_mail", lowerBody: null,
+    hands: null, feet: null, charm: "hunter_fang",
+  });
+});
+
+test("equipping owned items swaps their matching slot and keeps canonical output", () => {
   const source = {
     coins: 0,
     level: 10,
@@ -86,15 +99,19 @@ test("equipping owned items swaps only their matching slot", () => {
   const result = Expansion.equipItem(source, "tide_iron_sword");
   assert.equal(result.ok, true);
   assert.deepEqual(result.state.equipped, {
+    head: null,
     weapon: "tide_iron_sword",
-    armor: "guild_mail",
+    upperBody: "guild_mail",
+    lowerBody: null,
+    hands: null,
+    feet: null,
     charm: "hunter_fang",
   });
   assert.equal(source.equipped.weapon, "novice_blade");
   assert.equal(Expansion.equipItem(source, "aurora_plate").reason, "not-owned");
 });
 
-test("equipment stats add all three slots and ignore mismatched IDs", () => {
+test("equipment stats add canonical and legacy body slots without double counting", () => {
   const stats = Expansion.equipmentStats({
     weapon: "tide_iron_sword",
     armor: "guild_mail",
@@ -108,6 +125,67 @@ test("equipment stats add all three slots and ignore mismatched IDs", () => {
 
   const mismatched = Expansion.equipmentStats({ weapon: "guild_mail" });
   assert.equal(mismatched.defense, 0);
+});
+
+test("Fighter V1 equipment is level-gated, class-locked, and supports full-body occupancy", () => {
+  const expected = {
+    novice_gloves: ["weapon", 1, 0, { attack: 2, speed: 2 }],
+    tide_iron_knuckles: ["weapon", 1, 95, { attack: 5, speed: 2 }],
+    gale_gauntlets: ["weapon", 7, 360, { attack: 12, speed: 8, critChance: 0.03 }],
+    dragon_knuckles: ["weapon", 15, 980, { attack: 26, defense: 3, critChance: 0.04 }],
+    metal_knuckles: ["weapon", 6, 450, { attack: 10 }],
+    giz_armguard: ["weapon", 12, 1800, { attack: 17 }],
+    heavy_knuckles: ["weapon", 18, 4050, { attack: 25 }],
+    superheavy_knuckles: ["weapon", 24, 7200, { attack: 34 }],
+    disciple_gi: ["upperBody", 5, 781, { attack: 2, defense: 1, maxHp: 2 }],
+    disciple_lower: ["lowerBody", 5, 500, { attack: 1 }],
+    disciple_handguards: ["hands", 5, 469, { attack: 1 }],
+    disciple_shoes: ["feet", 5, 469, { attack: 1 }],
+    training_wrap: ["upperBody", 14, 6125, { attack: 5, defense: 2, maxHp: 5 }],
+    training_belt: ["lowerBody", 14, 3920, { attack: 3, defense: 1 }],
+    training_bracers: ["hands", 14, 3675, { attack: 2, defense: 1 }],
+    training_zori: ["feet", 14, 3675, { attack: 2, defense: 1 }],
+    conditioning_suit: ["upperBody", 23, 16531, { attack: 9, defense: 3, maxHp: 8 }],
+    conditioning_skirt: ["lowerBody", 23, 10580, { attack: 5, defense: 2 }],
+    conditioning_handguards: ["hands", 23, 9919, { attack: 4, defense: 2 }],
+    conditioning_shoes: ["feet", 23, 9919, { attack: 4, defense: 2 }],
+    white_martial_gi: ["upperBody", 10, 4375, { attack: 2, defense: 2, moveRange: 1 }],
+    cloth_bracers: ["hands", 10, 1875, { attack: 1 }],
+    barefoot_bands: ["feet", 10, 1875, { attack: 1 }],
+    colored_martial_gi: ["upperBody", 20, 17500, { attack: 5, defense: 4, moveRange: 1 }],
+    joint_bracers: ["hands", 20, 7500, { attack: 3, defense: 1 }],
+    barefoot_guard: ["feet", 20, 7500, { attack: 3, defense: 1 }],
+  };
+  const fighterItems = Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter");
+  assert.deepEqual(fighterItems.map((item) => item.id), Object.keys(expected));
+  for (const [id, [slot, requiredLevel, cost, stats]] of Object.entries(expected)) {
+    const item = Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, id);
+    assert.equal(item.slot, slot, id);
+    assert.equal(item.requiredLevel, requiredLevel, id);
+    assert.equal(item.cost, cost, id);
+    assert.equal(item.classId, "fighter", id);
+    assert.deepEqual(item.stats, {
+      attack: 0, defense: 0, maxHp: 0, speed: 0, critChance: 0, moveRange: 0,
+      ...stats,
+    }, id);
+  }
+  assert.deepEqual(Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, "white_martial_gi").occupiesSlots, ["upperBody", "lowerBody"]);
+  const base = {
+    level: 10, classId: "fighter", ownedEquipment: ["novice_gloves", "white_martial_gi", "disciple_lower", "cloth_bracers", "barefoot_bands"],
+    equipped: { weapon: "novice_gloves" },
+  };
+  assert.equal(Expansion.equipItem({ ...base, level: 9 }, "white_martial_gi").reason, "level");
+  const full = Expansion.equipItem(base, "white_martial_gi");
+  assert.equal(full.ok, true);
+  assert.equal(full.state.equipped.upperBody, "white_martial_gi");
+  assert.equal(full.state.equipped.lowerBody, "white_martial_gi");
+  assert.equal(Expansion.equipmentStats(full.state).attack, 4);
+  const partial = Expansion.equipItem(full.state, "disciple_lower");
+  assert.equal(partial.ok, true);
+  assert.equal(partial.state.equipped.upperBody, null);
+  assert.equal(partial.state.equipped.lowerBody, "disciple_lower");
+  assert.equal(Expansion.equipmentStats(partial.state).attack, 3);
+  assert.equal(Expansion.equipItem({ ...base, classId: "warrior", ownedEquipment: [...base.ownedEquipment, "metal_knuckles"] }, "metal_knuckles").reason, "class");
 });
 
 test("contract offers are deterministic, level-gated, and rotate", () => {

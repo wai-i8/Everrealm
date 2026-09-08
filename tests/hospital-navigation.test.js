@@ -88,6 +88,8 @@ test("Clinic reuses the existing nurse and owns the exact flattened-map navigati
   assert.deepEqual(nurse.services, ["clinic-healing"]);
   assert.equal(nurse.x, 829);
   assert.equal(nurse.y + 13, 266, "nurse feet use the existing shared NPC draw baseline");
+  assert.equal(clinic.navigation.serviceInteractionReachPx, 160);
+  assert.equal(clinic.navigation.serviceInteractionHitPaddingPx, 18);
   assert.equal(clinic.exits.length, 1);
   assert.equal(clinic.exits[0].id, "clinic-to-world");
   assert.equal(clinic.exits[0].navigationRegion, "exit");
@@ -103,6 +105,10 @@ test("authored magenta click maps to the existing nurse and pathfinding uses the
   const clinic = Maps.clinic;
   assert.equal(clinic.navigation.interactionAtWorldPoint({ x: 829, y: 200 }), "clinic-healer-siu-moon");
   assert.equal(clinic.navigation.interactionAtWorldPoint({ x: 600, y: 400 }), null);
+  const nearestNpcPixel = clinic.navigation.nearestPointInRegion("npc", { x: 829, y: 200 });
+  assert.ok(nearestNpcPixel);
+  assert.equal(clinic.navigation.distanceToRegion("npc", nearestNpcPixel), 0);
+  assert.equal(clinic.navigation.interactionHitTest("npc", nearestNpcPixel), true);
   const nursePath = pathTo(clinic, clinic.spawnPoints.healer);
   const exitPath = pathTo(clinic, clinic.spawnPoints.exit);
   const blockedFurniturePath = pathTo(clinic, { x: 837, y: 310 });

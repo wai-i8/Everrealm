@@ -39,7 +39,7 @@
     ];
     const npcs = [{
       id: "inn-keeper", name: "朵姨", displayName: "旅館接待員", role: "旅館接待員／休息服務", kind: "npc",
-      x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
+      x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
       color: "#87db82", facing: "down", actor: "clerk", gender: "female", age: 41,
       appearance: "藍髮兔耳侍從造型、墨綠旅店制服、白色圍裙與短靴", zone: "front-desk", services: ["inn-rest"], render: false,
     }];
@@ -59,7 +59,7 @@
     });
     map.exits[0].navigationRegion = "exit";
     map.pixelWidth = data.source.width; map.pixelHeight = data.source.height;
-    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, sourceImage: AUTHORING, generatedRuntime: "map/inn-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
+    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, serviceInteractionReachPx: navigation.serviceInteractionReachPx, serviceInteractionHitPaddingPx: navigation.serviceInteractionHitPaddingPx, sourceImage: AUTHORING, generatedRuntime: "map/inn-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, nearestPointInRegion: navigation.nearestPointInRegion, distanceToRegion: navigation.distanceToRegion, interactionHitTest: navigation.interactionHitTest, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
     return map;
   }
   return { createInnMap };

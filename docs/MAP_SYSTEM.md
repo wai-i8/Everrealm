@@ -393,13 +393,16 @@ Biome data 最低：
 
 ## 9. Interaction Point
 
-NPC、門、工作台、委託板、寶箱等都使用 interaction point／range。
+NPC、門、工作台、委託板、寶箱等都使用 interaction point／range。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。
 
 ```js
 {
   targetId,
   interactionPoint,
-  interactionRadius
+  interactionRadius,
+  interactionRegion,
+  serviceReachPx: 160,
+  hitPaddingPx: 18
 }
 ```
 

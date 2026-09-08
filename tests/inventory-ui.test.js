@@ -19,22 +19,27 @@ test("inventory and class-specific equipment atlases exist and every catalog ite
     assert.match(mapping, new RegExp(`\\b${item.id}:\\s*${index}(?:,|\\s)`), `${item.id} should map to frame ${index}`);
   });
   const fighterMapping = gameSource.match(/const FIGHTER_EQUIPMENT_ICON_INDEX = Object\.freeze\(\{([\s\S]*?)\}\);/)?.[1] || "";
-  Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter").forEach((item, index) => {
-    assert.match(fighterMapping, new RegExp(`\\b${item.id}:\\s*${index}(?:,|\\s)`), `${item.id} should map to fighter frame ${index}`);
+  Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter" && item.slot === "weapon").forEach((item) => {
+    assert.match(fighterMapping, new RegExp(`\\b${item.id}:\\s*[0-3](?:,|\\s)`), `${item.id} should map to a fighter frame`);
+  });
+  Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter" && item.slot !== "weapon").forEach((item) => {
+    assert.match(gameSource, new RegExp(`\\b${item.id}:\\s*\\d+`), `${item.id} should map to a generic equipment frame`);
   });
   assert.match(gameSource, /fighter-equipment/, "fighter weapons should select their dedicated atlas");
   assert.match(gameSource, /"warden-lens":\s*14/, "the actual boss-drop id should use the warden-lens icon");
 });
 
-test("bag uses an icon grid and paper doll exposes all six requested visual slots", () => {
+test("bag uses an icon grid and paper doll exposes all seven canonical visual slots", () => {
   assert.match(gameSource, /class="inventory-icon-grid"/);
   assert.match(gameSource, /class="inventory-grid-item\s/);
-  for (const slot of ["weapon", "head", "body", "hands", "feet", "charm"]) {
+  for (const slot of ["weapon", "head", "upperBody", "lowerBody", "hands", "feet", "charm"]) {
     assert.match(gameSource, new RegExp(`paperdollSlotHtml\\("${slot}"`));
     assert.match(inventoryCss, new RegExp(`data-paperdoll-slot="${slot}"`));
   }
   assert.match(inventoryCss, /\.item-icon-atlas\s*\{/);
   assert.match(inventoryCss, /\.equipment-icon-atlas\s*\{/);
+  assert.match(inventoryCss, /data-paperdoll-slot="upperBody"/);
+  assert.match(inventoryCss, /data-paperdoll-slot="lowerBody"/);
 });
 
 test("bag keeps a contained loadout beside a compact selectable grid", () => {

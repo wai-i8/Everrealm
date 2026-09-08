@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -170,6 +170,7 @@ try {
   $abandonScreenshotPath = $null
   $guildHelpScreenshotPath = $null
   $guildActiveScreenshotPath = $null
+  $serviceReachResults = @()
   $monsterFacingRuntime = $null
   switch ($Scenario) {
     'title' {
@@ -318,9 +319,10 @@ try {
     }
     'clinic-authoring' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setZoom('far'); true" | Out-Null
-      Invoke-WorldPointerClick -WorldX 1016 -WorldY 434 | Out-Null
+      $clinicDoor = Invoke-GameExpression -Expression "JSON.stringify(window.__RPG_DEBUG__.entityPosition('world-to-clinic'))" | ConvertFrom-Json
+      Invoke-WorldPointerClick -WorldX ([int]$clinicDoor.x) -WorldY ([int]$clinicDoor.y) | Out-Null
       $enteredClinic = $null
-      for ($attempt = 0; $attempt -lt 36 -and (-not $enteredClinic -or $enteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
+      for ($attempt = 0; $attempt -lt 80 -and (-not $enteredClinic -or $enteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
         Start-Sleep -Milliseconds 250
         $enteredClinic = Get-GameSnapshot
       }
@@ -370,9 +372,9 @@ try {
       Start-Sleep -Milliseconds 1800
       $awayFromDoor = Get-GameSnapshot
       if ($awayFromDoor.currentMapId -ne 'world' -or -not $awayFromDoor.automaticPortalReady) { throw "Main Town did not settle away from Hospital door before re-entry (map=$($awayFromDoor.currentMapId), ready=$($awayFromDoor.automaticPortalReady))." }
-      Invoke-WorldPointerClick -WorldX 1016 -WorldY 434 | Out-Null
+      Invoke-WorldPointerClick -WorldX ([int]$clinicDoor.x) -WorldY ([int]$clinicDoor.y) | Out-Null
       $reenteredClinic = $null
-      for ($attempt = 0; $attempt -lt 36 -and (-not $reenteredClinic -or $reenteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
+      for ($attempt = 0; $attempt -lt 80 -and (-not $reenteredClinic -or $reenteredClinic.currentMapId -ne 'clinic'); $attempt += 1) {
         Start-Sleep -Milliseconds 250
         $reenteredClinic = Get-GameSnapshot
       }
@@ -398,6 +400,56 @@ try {
       $innService = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.interactWith('inn-keeper');return JSON.stringify({mode:api.snapshot().mode,choices:document.querySelectorAll('.dialogue-choice').length});})()" | ConvertFrom-Json
       if ($innService.mode -ne 'dialogue' -or $innService.choices -lt 2) { throw 'Inn service did not open from the interior NPC.' }
       Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:last-child').click(); true" | Out-Null
+    }
+    'service-reach' {
+      foreach ($entry in @(
+        @{ map = 'guild'; npc = 'guildmaster-yin'; resolver = 'LanternGuildNavigation'; expected = 'dialogue' },
+        @{ map = 'shop'; npc = 'merchant-gin'; resolver = 'LanternWeaponNavigation'; expected = 'facility' },
+        @{ map = 'general-store'; npc = 'store-merchant-gin'; resolver = 'LanternItemNavigation'; expected = 'dialogue' },
+        @{ map = 'inn'; npc = 'inn-keeper'; resolver = 'LanternInnNavigation'; expected = 'dialogue' },
+        @{ map = 'clinic'; npc = 'clinic-healer-siu-moon'; resolver = 'LanternHospitalNavigation'; expected = 'dialogue' }
+      )) {
+        $setupExpression = @'
+(()=>{
+  const api=window.__RPG_DEBUG__,nav=window.__RESOLVER__,mapId="__MAP__",npcId="__NPC__";
+  api.newGame("fighter");api.enterMap(mapId);api.setZoom("far");
+  const region=nav.data.regions.npc[0];
+  let candidate=null;
+  for(const distance of [260,240,220,200,180]) for(let angle=0;angle<Math.PI*2;angle+=Math.PI/24){
+    const point={x:region.centroid.x+Math.cos(angle)*distance,y:region.centroid.y+Math.sin(angle)*distance};
+    if(nav.isPositionWalkable(point,{radius:3})&&nav.distanceToRegion("npc",point)>160){candidate=point;break;}
+  }
+  if(!candidate) throw Error(`No walkable customer-side position found in ${mapId}`);
+  api.teleport(candidate.x,candidate.y);
+  const npc=api.entityPosition(npcId),nearest=nav.nearestPointInRegion("npc",candidate);
+  return JSON.stringify({mapId,npc,candidate,nearest,distance:nav.distanceToRegion("npc",candidate),walkable:nav.isPositionWalkable(candidate,{radius:3})});
+})()
+'@
+        $setupExpression = $setupExpression.Replace('__RESOLVER__', $entry.resolver).Replace('__MAP__', $entry.map).Replace('__NPC__', $entry.npc)
+        $setup = Invoke-GameExpression -Expression $setupExpression | ConvertFrom-Json
+        if (-not $setup.walkable -or [double]$setup.distance -le 160) { throw "Could not place customer-side service reach fixture for $($entry.map) (walkable=$($setup.walkable), distance=$($setup.distance))." }
+
+        $clickExpression = @'
+(()=>{
+  const api=window.__RPG_DEBUG__,canvas=document.getElementById("gameCanvas"),rect=canvas.getBoundingClientRect(),snap=api.snapshot(),target=__TARGET__;
+  const init={pointerId:93,button:0,clientX:rect.left+rect.width/2+(target.x-snap.x)*snap.cameraZoom,clientY:rect.top+rect.height/2+(target.y-snap.y)*snap.cameraZoom,bubbles:true,cancelable:true,pointerType:"mouse"};
+  canvas.dispatchEvent(new PointerEvent("pointerdown",init));canvas.dispatchEvent(new PointerEvent("pointerup",{...init,button:0}));return true;
+})()
+'@
+        $clickExpression = $clickExpression.Replace('__TARGET__', ($setup.nearest | ConvertTo-Json -Compress))
+        Invoke-GameExpression -Expression $clickExpression | Out-Null
+        $service = $null
+        for ($attempt = 0; $attempt -lt 60 -and (-not $service -or $service.mode -ne $entry.expected); $attempt += 1) {
+          Start-Sleep -Milliseconds 250
+          $service = Get-GameSnapshot
+        }
+        if (-not $service -or $service.mode -ne $entry.expected) { throw "Customer-side click did not reach $($entry.npc) in $($entry.map) (mode=$($service.mode), x=$($service.x), y=$($service.y), distance=$($setup.distance), remaining=$($service.explorePath.remaining))." }
+        $serviceScreenshotPath = Join-Path $runtimeOutputPath "smoke-service-reach-$($entry.map)-$ViewportWidth.png"
+        $serviceCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+        [IO.File]::WriteAllBytes($serviceScreenshotPath, [Convert]::FromBase64String($serviceCapture.result.data))
+        $serviceReachResults += [PSCustomObject]@{ map = $entry.map; npc = $entry.npc; distance = [math]::Round([double]$setup.distance, 1); mode = $service.mode; screenshot = $serviceScreenshotPath }
+      }
+      $after = Get-GameSnapshot
     }
     'latestui' {
       Invoke-GameExpression -Expression "document.getElementById('newGameButton').click(); true" | Out-Null
@@ -1015,7 +1067,7 @@ try {
       if ($manualUi.badgeHidden -or $manualUi.badge -ne '3') { throw 'Named skill manuals disappeared from the inventory badge.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.facilityTab('equipment'); true" | Out-Null
       $equipmentUi = (Invoke-GameExpression -Expression 'JSON.stringify({slots:document.querySelectorAll("[data-paperdoll-slot]").length,cards:document.querySelectorAll(".gear-collection-item").length,title:document.getElementById("facilityTitle").textContent})') | ConvertFrom-Json
-      if ($equipmentUi.slots -ne 6 -or $equipmentUi.cards -lt 2) { throw 'Equipment inventory did not render the six-slot paper doll and owned gear.' }
+      if ($equipmentUi.slots -ne 7 -or $equipmentUi.cards -lt 2) { throw 'Equipment inventory did not render the seven-slot paper doll and owned gear.' }
       $equipmentScreenshotPath = Join-Path $runtimeOutputPath "smoke-equipment-paperdoll-$ViewportWidth.png"
       $equipmentCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($equipmentScreenshotPath, [Convert]::FromBase64String($equipmentCapture.result.data))
@@ -1298,6 +1350,7 @@ try {
     guildHelpScreenshot = $guildHelpScreenshotPath
     guildActiveScreenshot = $guildActiveScreenshotPath
     guildCommissionScreenshot = $guildCommissionScreenshotPath
+    serviceReach = $serviceReachResults
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count
   } | ConvertTo-Json -Depth 8 -Compress

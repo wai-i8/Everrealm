@@ -37,7 +37,7 @@
     ];
     const npcs = [{
       id: "store-merchant-gin", name: "穀嬸", displayName: "道具店店員", role: "道具店店員／雜貨櫃台", kind: "npc",
-      x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
+      x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
       color: "#f0c36a", facing: "down", actor: "merchant", gender: "female", age: 36,
       appearance: "紅髮女商人造型、酒紅短外套、金飾腰封與高筒靴", zone: "sales-counter", services: ["general-store"], render: false,
     }];
@@ -57,7 +57,7 @@
     });
     map.exits[0].navigationRegion = "exit";
     map.pixelWidth = data.source.width; map.pixelHeight = data.source.height;
-    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, sourceImage: AUTHORING, generatedRuntime: "map/item-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
+    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, serviceInteractionReachPx: navigation.serviceInteractionReachPx, serviceInteractionHitPaddingPx: navigation.serviceInteractionHitPaddingPx, sourceImage: AUTHORING, generatedRuntime: "map/item-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, nearestPointInRegion: navigation.nearestPointInRegion, distanceToRegion: navigation.distanceToRegion, interactionHitTest: navigation.interactionHitTest, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
     return map;
   }
   return { createGeneralStoreMap };

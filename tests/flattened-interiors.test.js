@@ -66,6 +66,13 @@ test("each flattened interior uses exact white/magenta/cyan masks and one core N
     assert.equal(map.exits[0].navigationRegion, "exit");
     assert.equal(map.navigation.isRegionAt("npc", npcRegion.centroid), true);
     assert.equal(map.navigation.interactionAtWorldPoint(npcRegion.centroid), scene.npc);
+    assert.equal(map.navigation.serviceInteractionReachPx, 160);
+    assert.equal(map.navigation.serviceInteractionHitPaddingPx, 18);
+    const nearestNpcPixel = map.navigation.nearestPointInRegion("npc", npcRegion.centroid);
+    assert.ok(nearestNpcPixel);
+    assert.equal(map.navigation.distanceToRegion("npc", nearestNpcPixel), 0);
+    assert.equal(map.navigation.interactionHitTest("npc", nearestNpcPixel), true);
+    assert.equal(map.navigation.interactionHitTest("npc", { x: 0, y: 0 }), false);
     assert.equal(map.navigation.isPositionWalkable(npcRegion.centroid, { radius: 3 }), false);
     assert.equal(map.navigation.isRegionAt("exit", exitRegion.centroid), true);
     assert.equal(map.navigation.isPositionWalkable(exitRegion.centroid, { radius: 3 }), true);

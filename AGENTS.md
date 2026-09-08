@@ -6,9 +6,9 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 ## Git / worktree 安全規則（強制）
 
 - 任何會修改專案檔案的工作，在第一次編輯前必須先執行：`git status --short`、`git branch --show-current`、`git worktree list`。純讀取／研究工作不需要另建 worktree。
-- `C:\Users\lauka\Projects\Everrealm` 的 `main` 是穩定整合工作樹。一般功能、較大修改或任何平行開發都必須使用獨立 feature branch + worktree。
-- 只有明確屬於單線、低風險、範圍很小的修改（例如純文件小改），而且 `main` 開始時乾淨、沒有平行 feature 工作依賴同一個 `main` 狀態、工作會立即 review 並 commit，才可直接在 `main` 修改；完成後不可留下 dirty `main`。不可只因「看起來沒有其他 thread」而自行套用此例外，詳細條件見 `docs/DEVELOPMENT_WORKFLOW.md`。
-- 除上述 direct-main 小改例外外，每個修改工作使用專用 worktree；不同 thread／agent 絕不可共用或接管同一個實體工作目錄，也不可編輯其他工作的 worktree。預設詳細流程及路徑見 `docs/DEVELOPMENT_WORKFLOW.md`。
+- `C:\Users\lauka\Projects\Everrealm` 的 `main` 是穩定整合工作樹；正常單線 task 預設直接在乾淨 `main` 修改、驗證並 commit，完成後不可留下 dirty `main`。
+- 同一 thread／queue 的多個 task 是順序執行：後一個 task 必須從前一個 task 已提交後的最新 `main` 開始。開始任何修改前仍必須完成 Git preflight；如果 `main` dirty，立即停止並回報，不可 stash、reset、clean、覆蓋或替未知修改 commit。
+- Worktree／feature branch 只在用戶明確要求、明確要求真正並行隔離開發，或 task 已明確獲准需要 branch isolation 時使用；不可因為 queue、backlog 或存在其他 task 就自行建立。詳細流程見 `docs/DEVELOPMENT_WORKFLOW.md`。
 - Git 衝突不得靜默選擇一方、覆蓋或丟失另一方的工作；有語意歧義時必須保留兩條 branch 並停下來請用戶決定。
 - 絕不丟棄、reset、clean、強制 checkout／restore 或覆蓋既有工作；除非用戶明確要求該項破壞性操作，不得使用 `git reset --hard`、`git clean -fd` 或強制刪除 branch。
 
@@ -109,11 +109,10 @@ Do not duplicate the same rule in multiple documents.
 - When visual verification matters, use screenshots and iterate again if the result is still visibly wrong.
 - Passing automated tests is not enough for a visual task if the runtime still looks incorrect.
 
-### Integration verification
+### Verification and integration
 
-- Feature branches must complete their own relevant automated tests, feature-specific runtime smoke and visual verification before they are considered ready for integration.
-- Normal integration merges completed branches one at a time. After each merge, run `git diff --check` and only the targeted smoke verification relevant to that branch; do **not** rerun the full unrelated regression suite after every individual merge.
-- After all branches in the current integration batch are merged, run `npm test` once, then perform a basic combined game-load/runtime smoke, confirm `runtimeErrors: 0`, and confirm `main` is clean.
+- Direct-main task must complete its relevant automated tests, feature-specific runtime smoke and visual verification before commit; after commit verify `main` is clean.
+- For explicitly isolated feature branches, complete the same feature verification before integration. Merge completed branches one at a time, run `git diff --check` and targeted smoke after each merge, then run `npm test` once after the batch and confirm `runtimeErrors: 0` and clean `main`.
 - Escalate to broader cross-system verification only when risk justifies it: merge conflicts, shared/core infrastructure changes, save/schema changes, battle-core or map/transition foundation changes, overlapping cross-system runtime edits, failing tests/smoke, integration fixes, or incomplete feature-branch verification.
 - Documentation-only changes normally require diff inspection, `git diff --check` and documentation consistency review; unrelated gameplay runtime smoke is unnecessary unless the documentation drives generated/runtime behaviour or executable configuration.
 - This policy does not mean “test less everywhere”: feature work is deeply verified at feature level, while integration avoids redundant repeated full-system regression and performs one full regression after the batch.

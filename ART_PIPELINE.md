@@ -42,6 +42,8 @@ Guild、Weapon Shop、Inn、General Store 同 Hospital 五個室內場景使用�
 
 室內正式 runtime 只保留一個 authored service NPC；NPC bitmap 係背景內已烘焙嘅視覺，map NPC entity 只負責互動及服務，不再重畫第二個角色。家具、裝飾、委託板等可保留 metadata 供系統查詢，但 flattened 場景一律 `render: false`、唔以舊 procedural prop 或 marker 覆蓋 master art。出口仍然係正常 semantic physical door，玩家可以按住門區／點擊門區自然行入，離開時由 cyan exit region 驗證，整個流程唔顯示 talk／transition marker。
 
+Service NPC 的 authored magenta region 係 interaction geometry，唔係可見 sprite bounds；runtime 以 feet pivot 到 region 最近點判斷 `160 px` reach，並以 `18 px` hit padding 處理點擊命中。這套 geometry 由共用 flattened-navigation resolver 提供，不能因角色圖片透明邊、NPC centroid 或不同 interior 而另造 offset。
+
 ## 主城服務建築統一外觀規格
 
 呢一節係主城 Guild／Equipment Shop／Clinic／General Store／Inn，以及將來同級主要服務建築嘅正式 exterior bitmap contract。目的係令方正街區城市保持清晰、整齊、可重用，避免每棟建築自行發明比例、方向同入口位置。
