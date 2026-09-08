@@ -209,7 +209,7 @@ test("native Main Town camera and click conversion stay in one world space", () 
   assert.match(mainTownSource, /backgroundScene:\s*"mainTown"/);
   assert.doesNotMatch(mainTownSource, /unitScale/);
   const camera = game.match(/function targetZoom\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(camera, /const responsiveBase = width < 650 \? 1\.2 : width < 1000 \? 1\.32 : 1\.48/);
+  assert.match(camera, /return EXPLORE_ZOOM_SCALES\[exploreZoomLevel\]/);
   assert.doesNotMatch(camera, /currentMapId|pixelWidth|pixelHeight|naturalWidth/);
   assert.match(game, /function worldToScreen\(point/);
   assert.match(game, /function screenToWorldPoint\(screenX, screenY\)/);

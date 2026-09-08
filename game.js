@@ -779,11 +779,10 @@
   }
 
   function targetZoom() {
-    // Near / mid / far are one global exploration camera. The map only owns
-    // its world bounds; neither its dimensions nor its artwork resolution can
-    // change this preset.
-    const responsiveBase = width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
-    return responsiveBase * EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+    // Near / mid / far are one global exploration camera. Mid is the authored
+    // 1:1 world view; the map only owns its world bounds and cannot change a
+    // preset based on its dimensions or artwork resolution.
+    return EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
   function syncExploreZoomControls() {

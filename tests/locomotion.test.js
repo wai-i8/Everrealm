@@ -30,8 +30,19 @@ test("mobile unit layout is global and independent of map dimensions", () => {
   const first = Locomotion.layout(200, 300, 1);
   const second = Locomotion.layout(200, 300, 1);
   assert.deepEqual(first, second);
-  assert.equal(first.width, 256 * metadata.worldScale);
-  assert.equal(first.height, 256 * metadata.worldScale);
+  assert.equal(first.width, metadata.cellWidth);
+  assert.equal(first.height, metadata.cellHeight);
+  assert.equal(first.x, 72);
+  assert.equal(first.y, 76);
+  assert.equal(first.baselineY, 300);
+  assert.equal(first.centerX, 200);
+});
+
+test("native atlas pixels remain authored world pixels at every global zoom", () => {
+  const far = Locomotion.layout(200, 300, .78);
+  const near = Locomotion.layout(200, 300, 1.22);
+  assert.equal(far.width, metadata.cellWidth * .78);
+  assert.equal(near.height, metadata.cellHeight * 1.22);
 });
 
 test("animation controller preserves facing and returns immediately to Idle on STOP", () => {

@@ -9,7 +9,6 @@
     "anchorX": 128,
     "anchorY": 224,
     "gutter": 20,
-    "worldScale": 0.4,
     "directions": {
       "down": 0,
       "right": 1,

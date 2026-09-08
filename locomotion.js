@@ -10,7 +10,7 @@
   const STANDARD_MOBILE_UNIT_SPRITE = Object.freeze({
     version: 1, columns: 7, rows: 4,
     cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
-    gutter: 20, worldScale: .4,
+    gutter: 20,
     directions: Object.freeze({ down: 0, right: 1, up: 2, left: 3 }),
     idleColumn: 0, walkColumns: Object.freeze([1, 2, 3, 4, 5, 6]), walkFps: 10,
   });
@@ -63,9 +63,10 @@
   }
   function layout(x, y, scale = 1) {
     const m = STANDARD_MOBILE_UNIT_SPRITE;
-    // The fixed atlas geometry and its world projection are global. Map
-    // dimensions never change the size of a mobile unit.
-    const factor = m.worldScale * scale;
+    // The fixed atlas geometry is authored world geometry. Map dimensions
+    // never change the size of a mobile unit, and there is no migration
+    // scale between the atlas pixels and world pixels.
+    const factor = scale;
     return { x: x - m.anchorX * factor, y: y - m.anchorY * factor, width: m.cellWidth * factor, height: m.cellHeight * factor, baselineY: y, centerX: x };
   }
   // Read-only sampling of the resolver's positions. Never changes collision,

@@ -1002,12 +1002,12 @@
     ctx.save();
     try {
       ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
-      // Native world pixels are preserved by the shared camera transform;
-      // filtering is only used when the selected global zoom changes their
-      // display size.
-      const nativeScale = Math.abs(width - cropWidth) < .01 && Math.abs(height - cropHeight) < .01;
-      ctx.imageSmoothingEnabled = !nativeScale;
-      if (!nativeScale) ctx.imageSmoothingQuality = "high";
+      // This is a direct source-rect -> final-canvas draw. Keep zoom-in
+      // sampling crisp; smooth filtering is only useful when the crop is
+      // being reduced. No intermediate bitmap is created.
+      const downsampling = width < cropWidth || height < cropHeight;
+      ctx.imageSmoothingEnabled = downsampling;
+      if (downsampling) ctx.imageSmoothingQuality = "high";
       ctx.drawImage(atlas.image, sourceX, sourceY, cropWidth, cropHeight, x, y, width, height);
     } finally {
       ctx.restore();
