@@ -306,6 +306,25 @@
 
   const player = createPlayer();
 
+  // The simulation intentionally stays on its canonical 60 Hz fixed step, but
+  // browsers/displays can present at other refresh rates (for example 72/75/120
+  // Hz). Keep the previous simulation pose so exploration rendering can
+  // interpolate between fixed steps without changing gameplay speed, collision,
+  // camera presets or native-world geometry.
+  let renderInterpolationAlpha = 1;
+  let renderPreviousMapId = currentMapId;
+  const renderPreviousPlayer = { x: player.x, y: player.y };
+  const renderPreviousCamera = { x: camera.x, y: camera.y, zoom: camera.zoom };
+
+  function capturePreviousExplorationRenderState() {
+    renderPreviousMapId = currentMapId;
+    renderPreviousPlayer.x = player.x;
+    renderPreviousPlayer.y = player.y;
+    renderPreviousCamera.x = camera.x;
+    renderPreviousCamera.y = camera.y;
+    renderPreviousCamera.zoom = camera.zoom;
+  }
+
   class SoundEngine {
     constructor() { this.context = null; }
     ensure() {
@@ -4816,27 +4835,59 @@
       }
       return;
     }
-    // The map is the only world background. Any screen area outside its
-    // native bounds remains black, including small interiors at the edge.
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, width, height);
-    const shake = reducedMotion ? 0 : screenShake;
-    const shakeX = (Math.random() - .5) * shake;
-    const shakeY = (Math.random() - .5) * shake;
-    drawTiles(shakeX, shakeY);
-    drawTownWallOverlay(shakeX, shakeY);
-    drawGroundDetails(shakeX, shakeY);
-    drawTelegraphs(shakeX, shakeY);
-    drawSortedWorld(shakeX, shakeY);
-    drawProjectiles(shakeX, shakeY);
-    drawEffects(shakeX, shakeY);
-    drawAtmosphere();
-    drawBossBar();
-    if (screenFlash > .01) {
-      ctx.fillStyle = `rgba(255,107,107,${screenFlash * .19})`;
-      ctx.fillRect(0, 0, width, height);
+
+    // Render-only interpolation removes fixed-step judder on displays whose
+    // refresh rate is not an exact multiple of 60 Hz. Simulation values are
+    // restored immediately after drawing, so movement/collision/save state stay
+    // canonical. Snap instead of interpolating across teleports/map changes.
+    const simulationPlayer = { x: player.x, y: player.y };
+    const simulationCamera = { x: camera.x, y: camera.y, zoom: camera.zoom };
+    const interpolationDelta = Math.hypot(
+      simulationPlayer.x - renderPreviousPlayer.x,
+      simulationPlayer.y - renderPreviousPlayer.y,
+    );
+    const canInterpolateExploration = mode === "playing"
+      && renderPreviousMapId === currentMapId
+      && interpolationDelta <= 96;
+
+    if (canInterpolateExploration) {
+      const alpha = Core.clamp(renderInterpolationAlpha, 0, 1);
+      player.x = Core.lerp(renderPreviousPlayer.x, simulationPlayer.x, alpha);
+      player.y = Core.lerp(renderPreviousPlayer.y, simulationPlayer.y, alpha);
+      camera.x = Core.lerp(renderPreviousCamera.x, simulationCamera.x, alpha);
+      camera.y = Core.lerp(renderPreviousCamera.y, simulationCamera.y, alpha);
+      camera.zoom = Core.lerp(renderPreviousCamera.zoom, simulationCamera.zoom, alpha);
     }
-    drawMiniMap();
+
+    try {
+      // The map is the only world background. Any screen area outside its
+      // native bounds remains black, including small interiors at the edge.
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, width, height);
+      const shake = reducedMotion ? 0 : screenShake;
+      const shakeX = (Math.random() - .5) * shake;
+      const shakeY = (Math.random() - .5) * shake;
+      drawTiles(shakeX, shakeY);
+      drawTownWallOverlay(shakeX, shakeY);
+      drawGroundDetails(shakeX, shakeY);
+      drawTelegraphs(shakeX, shakeY);
+      drawSortedWorld(shakeX, shakeY);
+      drawProjectiles(shakeX, shakeY);
+      drawEffects(shakeX, shakeY);
+      drawAtmosphere();
+      drawBossBar();
+      if (screenFlash > .01) {
+        ctx.fillStyle = `rgba(255,107,107,${screenFlash * .19})`;
+        ctx.fillRect(0, 0, width, height);
+      }
+      drawMiniMap();
+    } finally {
+      player.x = simulationPlayer.x;
+      player.y = simulationPlayer.y;
+      camera.x = simulationCamera.x;
+      camera.y = simulationCamera.y;
+      camera.zoom = simulationCamera.zoom;
+    }
   }
 
   function battleLayout() {
@@ -6880,11 +6931,17 @@
       accumulator += rawDelta;
       let steps = 0;
       while (accumulator >= FIXED_STEP && steps < 7 && mode === "playing") {
+        capturePreviousExplorationRenderState();
         updateGame(FIXED_STEP);
         accumulator -= FIXED_STEP;
         steps += 1;
       }
-      if (steps >= 7) accumulator = 0;
+      if (steps >= 7) {
+        accumulator = 0;
+        renderInterpolationAlpha = 1;
+      } else {
+        renderInterpolationAlpha = Core.clamp(accumulator / FIXED_STEP, 0, 1);
+      }
     } else if (mode === "battle") {
       updateBattle(rawDelta);
     } else if (mode === "title") {
