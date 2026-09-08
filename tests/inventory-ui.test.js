@@ -65,3 +65,13 @@ test("the extra stylesheet keeps facility text readable at 100% browser zoom", (
   assert.match(inventoryCss, /\.inventory-item-copy > p[^}]*font-size:\s*\.74rem/s);
   assert.match(inventoryCss, /\.facility-content \.facility-action-button\s*\{[^}]*font-size:\s*\.74rem/s);
 });
+
+test("inventory fixture contract covers both required stress sizes without changing gameplay data", () => {
+  assert.match(gameSource, /inventoryFixtureCount = Core\.clamp\(Math\.floor\(Number\(count\) \|\| 0\), 0, 30\)/);
+  assert.match(gameSource, /id: `fixture_material_\$\{index \+ 1\}`/);
+  assert.match(gameSource, /只供版面壓力測試使用，不會寫入存檔/);
+  assert.match(inventoryCss, /\.inventory-icon-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fill/);
+  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[\s\S]*grid-template-columns/);
+  assert.match(inventoryCss, /@media \(max-width: 900px\)[\s\S]*?\.unified-inventory-layout\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(inventoryCss, /\.inventory-selected-detail\s*\{/);
+});

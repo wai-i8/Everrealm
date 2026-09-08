@@ -41,7 +41,7 @@
 .ui-modal-window > * { position: relative; z-index: 1; }
 
 /* One shared bitmap-backed close control. The bitmap provides the ornament;
-   the CSS glyph stays crisp and the hit area remains generous. */
+   the HTML button remains the generous keyboard/touch hit area. */
 .ui-close-button {
   position: relative;
   min-width: 2.7rem;
@@ -57,40 +57,18 @@
   cursor: pointer;
   transition: transform .14s ease, filter .14s ease;
 }
-.ui-close-button img,
-.ui-info-button img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.ui-close-button img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.ui-info-button img { display: block; width: 1.85rem; height: 1.85rem; object-fit: contain; pointer-events: none; }
 .ui-close-button:hover,
 .ui-close-button:focus-visible { transform: scale(1.05); filter: brightness(1.12); }
 .ui-close-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-.ui-close-glyph {
-  position: relative;
-  width: .88rem;
-  height: .88rem;
-  display: block;
-  transform: none !important;
-  font: initial !important;
-}
-.ui-close-glyph::before,
-.ui-close-glyph::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 1.05rem;
-  height: .13rem;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 1px 1px rgba(0,0,0,.55);
-}
-.ui-close-glyph::before { transform: translate(-50%, -50%) rotate(45deg); }
-.ui-close-glyph::after { transform: translate(-50%, -50%) rotate(-45deg); }
-.facility-close-button.ui-close-button { flex: 0 0 2.7rem; width: 2.7rem; height: 2.7rem; gap: .05rem; color: #171421; }
+.facility-close-button.ui-close-button { flex: 0 0 2.7rem; width: 2.7rem; height: 2.7rem; gap: .05rem; padding: .15rem; color: #171421; }
 .ui-info-button {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.7rem;
+  height: 2.7rem;
   display: inline-grid;
   place-items: center;
-  padding: .16rem;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   color: var(--cream);
@@ -140,7 +118,7 @@
 .abandon-commission-panel { z-index: 21; }
 .abandon-commission-icon { color: var(--red); border-color: rgba(255,107,107,.5); }
 
-/* The facility header remains a warm information band inside the dark stone
+/* The facility header is a dark-navy information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */
 .facility-window.ui-window { overflow: hidden; }
 .facility-header.ui-header {
@@ -216,13 +194,10 @@
 .facility-action-button,
 .primary-button,
 .secondary-button {
-  border: 0 !important;
+  border: 8px solid transparent !important;
   border-radius: .55rem !important;
-  background-color: transparent !important;
-  background-image: var(--ui-button-image) !important;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+  background: linear-gradient(145deg, rgba(34,48,77,.92), rgba(8,16,32,.96)) !important;
+  border-image: var(--ui-button-image) 14 fill / 8px / 0 stretch !important;
   box-shadow: 0 .3rem .8rem rgba(0,0,0,.36) !important;
   text-shadow: 0 1px 2px rgba(0,0,0,.45);
 }
@@ -232,38 +207,35 @@
 .facility-action-button:focus-visible,
 .primary-button:focus-visible,
 .secondary-button:focus-visible {
-  background-image: var(--ui-button-active-image) !important;
+  border-image-source: var(--ui-button-active-image) !important;
   filter: brightness(1.08);
 }
 .primary-button,
-.facility-action-button:not(.is-quiet) { background-image: var(--ui-button-gold-image) !important; color: #171421; text-shadow: none; }
-.facility-action-button:disabled { background-image: var(--ui-button-disabled-image) !important; opacity: .78; }
+.facility-action-button:not(.is-quiet) { border-image-source: var(--ui-button-gold-image) !important; color: #171421; text-shadow: none; }
+.facility-action-button:disabled { border-image-source: var(--ui-button-disabled-image) !important; opacity: .78; }
 .facility-action-button.is-quiet,
 .secondary-button { color: var(--cream); }
 
 .facility-tab {
-  border: 0 !important;
+  border: 7px solid transparent !important;
   border-radius: .45rem .45rem 0 0;
-  background-image: var(--ui-tab-image) !important;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+  background: rgba(8,16,32,.72) !important;
+  border-image: var(--ui-tab-image) 14 fill / 7px / 0 stretch !important;
 }
 .facility-tab:hover,
 .facility-tab:focus-visible,
 .facility-tab.is-active,
 .facility-tab[aria-selected="true"] {
-  background-image: var(--ui-tab-active-image) !important;
+  border-image-source: var(--ui-tab-active-image) !important;
 }
 
 .equipment-icon,
 .skill-card-icon,
 .facility-summary-icon,
 .skill-book-cover {
-  background-image: var(--ui-slot-image);
-  background-position: center;
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
+  background: rgba(8,16,32,.64);
+  border: 6px solid transparent;
+  border-image: var(--ui-slot-image) 16 fill / 6px / 0 stretch;
 }
 /* Full cards already carry their own selected/locked surface styles in
    inventory-overhaul.css. Keep the bitmap slot treatment on the compact
@@ -273,9 +245,10 @@
 /* Skill nodes keep the prerequisite SVG as the dynamic layer, while their
    visible body comes from the authored bitmap node frame. */
 .skill-tree-node {
-  border: 0 !important;
+  border: 7px solid transparent !important;
   border-radius: .5rem !important;
-  background: transparent var(--ui-node-image) center / 100% 100% no-repeat !important;
+  background: rgba(12,20,39,.9) !important;
+  border-image: var(--ui-node-image) 16 fill / 7px / 0 stretch !important;
   box-shadow: 3px 4px 0 rgba(0,0,0,.28) !important;
 }
 .skill-tree-node-trigger { background: transparent !important; text-shadow: 0 1px 2px rgba(0,0,0,.65); }

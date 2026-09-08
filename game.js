@@ -2105,8 +2105,8 @@
       .join(" · ");
   }
 
-  function setFacilityFooter(message, hint = "<kbd>ESC</kbd> 返回地圖") {
-    facilityFooter.innerHTML = `<p>${message}</p><div class="facility-footer-actions"><span>${hint}</span><button class="facility-footer-button" type="button" data-facility-footer-action="return-title">返回標題</button></div>`;
+  function setFacilityFooter(message) {
+    facilityFooter.innerHTML = `<p>${message}</p><div class="facility-footer-actions"><button class="facility-footer-button" type="button" data-facility-footer-action="return-title">返回標題</button></div>`;
   }
 
   function renderFacilitySummary() {
@@ -2372,7 +2372,7 @@
         </section>
       </section>`;
     drawEquipmentPaperdoll();
-    setFacilityFooter(`<span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。`, `<kbd>I</kbd> 關閉 · <kbd>ESC</kbd> 返回地圖`);
+    setFacilityFooter(`<span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。`);
   }
 
   function equipmentIconHtml(item, extraClass = "") {
@@ -2439,7 +2439,7 @@
       <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>未有裝備</strong></div>'}</div>
       <div class="facility-note"><b>未開放槽位</b><span>頭部、手部同腳部會喺往後冒險版本加入；目前唔會計入角色能力。</span></div>`;
     drawEquipmentPaperdoll();
-    setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`, `<kbd>I</kbd> 物品欄 · <kbd>ESC</kbd> 返回地圖`);
+    setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`);
   }
 
   function renderShopFacility() {
@@ -2564,8 +2564,7 @@
           <div><dt>戰棋移動</dt><dd>${stats.moveRange} 格</dd></div>
           <div><dt>DECK</dt><dd>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity}</dd></div>
         </dl>
-      </section>
-      <div class="facility-note"><b>戰鬥規則</b><span>開場 10 AP、每輪 +10；技能以速度級別排序，先被打倒嘅角色會失去未執行行動。</span></div>`;
+      </section>`;
     const statusCanvas = document.getElementById("statusCharacterCanvas");
     if (statusCanvas) Art.drawCharacter(statusCanvas.getContext("2d"), { actor: "player", classId: playerClassId, x: statusCanvas.width / 2, y: statusCanvas.height - 12, scale: 3.15, state: "idle", facing: "down", phase: elapsed });
     setFacilityFooter(`<span aria-hidden="true">◎</span> 撳左上角角色卡可隨時查看完整能力。`);
@@ -2810,13 +2809,16 @@
     const slots = skillState.deckSlots.map((skillId, index) => {
       const skill = skillId ? Skills.getSkill(skillId) : null;
       return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}"><span class="deck-slot-number">${index + 1}</span>${skill
-        ? `<div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">移除</button>` : ""}`
-        : `<div class="deck-slot-empty"><strong>沒有技能</strong><small>${canEdit ? "從下方已學技能揀一招" : "呢一格尚未裝設技能"}</small></div>`}</article>`;
+        ? `<div class="deck-slot-copy"><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>目前已裝設</small></div>`
+        : `<div class="deck-slot-empty"><strong>沒有技能</strong><small>${canEdit ? "喺戰技面板台選擇技能" : "尚未裝設技能"}</small></div>`}</article>`;
     }).join("");
-    const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
-    const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button>` : `<span class="deck-readonly-state">${equipped.has(skill.id) ? "使用中" : "已學會"}</span>`}</article>`).join("");
-    facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "城門戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-grid">${slots}</div><div class="facility-section-heading skill-list-heading"><div><small>LEARNED ARTS</small><h3>已學技能</h3></div><span>初始 3 格 · 已獲 ${skillState.deckUpgradeMilestones.length} / 3 次擴充</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他已學技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div>`;
-    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "撳技能即可更換；戰鬥只會顯示 DECK 入面嘅技能。" : "任何地方都可以查看；要更換技能先去舊港城門戰技面板台。"}`);
+    const management = canEdit ? (() => {
+      const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
+      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
+      return `<div class="facility-section-heading skill-list-heading"><div><small>SKILL MANAGEMENT</small><h3>戰技面板台管理</h3></div><span>初始 3 格 · 已獲 ${skillState.deckUpgradeMilestones.length} / 3 次擴充</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div>`;
+    })() : "";
+    facilityContent.innerHTML = `<div class="deck-view-shell ${canEdit ? "is-editable" : "is-readonly"}"><div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "城門戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-list">${slots}</div>${management}</div>`;
+    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板台可管理出戰技能；戰鬥只會使用目前 DECK。" : "唯讀查看目前出戰技能；要更換配置先去舊港城門戰技面板台。"}`);
   }
 
   function openGuildSkillBook(star) {
@@ -2935,7 +2937,7 @@
     const availableTabs = availableFacilityTabs();
     facilityTab = Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
     const copy = {
-      status: ["STATUS", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清。"],
+      status: ["STATUS", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
       bag: ["ADVENTURER BAG · ITEMS", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
       equipment: ["GEAR LOADOUT · EQUIPMENT", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
       deck: ["DECK", facilityContext === "deck" ? "城門戰技面板" : "戰技面板", facilityContext === "deck" ? "喺城門設定今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換技能先去舊港城門。"],

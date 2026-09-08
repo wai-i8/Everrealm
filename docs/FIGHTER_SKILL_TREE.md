@@ -140,7 +140,7 @@ Height validation compares `target.height - caster.height` against `up` and `dow
 
 ### Effects
 
-Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, invisible, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action.
+Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, invisible, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action. The normal left-menu `戰技面板` is a read-only vertical current-loadout viewer: it renders only normalized `deckSlots`, with compact slot number/badge/name summaries and no learned-skill catalogue or edit controls. Skill management remains at the main-town east-gate DECK console; no new PSV equipability is implied by the badge.
 
 ### Compatibility
 

@@ -20,13 +20,6 @@
 .facility-tabs[data-visible-tabs="status bag equipment shop skills codex"],
 .facility-tabs[data-visible-tabs="status bag equipment deck skills codex"] { grid-template-columns: repeat(6,minmax(0,1fr)); }
 
-/* Keep the topic strip slim; content carries the visual hierarchy. */
-.facility-header { min-height: 4.35rem; padding: .55rem 1rem .5rem 1.15rem; }
-.facility-kicker { margin-bottom: .16rem; font-size: .48rem; font-weight: 650; letter-spacing: .13em; }
-.facility-header h2 { font-size: clamp(.98rem,1.45vw,1.18rem); font-weight: 780; letter-spacing: -.012em; }
-.facility-header p:last-child { margin-top: .18rem; font-size: .64rem; line-height: 1.4; }
-.facility-close-button { flex-basis: 2.4rem; width: 2.4rem; height: 2.4rem; }
-.facility-header-actions { flex-shrink: 0; }
 .facility-summary small { font-size: .65rem; }
 .facility-summary strong { font-size: .76rem; }
 .facility-tab b { font-size: .74rem; }
@@ -269,6 +262,15 @@
 .skill-detail-panel .skill-book-confirm-stats > div:last-child { grid-column: 1 / -1; }
 
 /* Deck/loadout ---------------------------------------------------------- */
+.deck-view-shell { width: min(100%, 31rem); margin-inline: auto; }
+.deck-slot-list { display: grid; grid-template-columns: 1fr; gap: .48rem; width: min(100%, 27rem); margin-inline: auto; }
+.deck-slot-list .deck-slot.is-filled { grid-template-columns: minmax(0,1fr); min-height: 3.6rem; padding-block: .5rem; }
+.deck-slot-list .deck-slot.is-empty { min-height: 3.35rem; padding-block: .48rem; }
+.deck-slot-list .deck-slot-copy,
+.deck-slot-list .deck-slot-empty { min-width: 0; display: grid; gap: .18rem; }
+.deck-slot-list .deck-slot-copy small { color: var(--muted); font-size: .62rem; }
+.deck-view-shell.is-readonly .facility-section-heading { margin-bottom: .65rem; }
+.deck-view-shell.is-editable .deck-slot-list { width: 100%; }
 .deck-slot-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(14rem,1fr)); gap: .65rem; counter-reset: deck; }
 .deck-slot {
   position: relative;
@@ -751,12 +753,9 @@
 }
 
 @media (max-width: 650px) {
-  .facility-header { min-height: 4.2rem; padding: .5rem .65rem .46rem .78rem; }
-  .facility-kicker { margin-bottom: .12rem; font-size: .46rem; }
-  .facility-header h2 { font-size: .94rem; }
-  .facility-header p:last-child { max-width: min(68vw,18rem); margin-top: .14rem; font-size: .61rem; line-height: 1.35; }
-  .facility-close-button { flex-basis: 2.25rem; width: 2.25rem; height: 2.25rem; }
-  .ui-info-button { width: 2rem; height: 2rem; }
+  .facility-close-button { flex-basis: 2.5rem; width: 2.5rem; height: 2.5rem; }
+  .ui-info-button { width: 2.5rem; height: 2.5rem; }
+  .ui-info-button img { width: 1.6rem; height: 1.6rem; }
   .facility-summary small { font-size: .59rem; }
   .facility-summary strong, .facility-tab b { font-size: .67rem; }
   .facility-content .facility-section-heading h3 { font-size: .88rem; }

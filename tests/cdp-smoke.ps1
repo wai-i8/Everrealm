@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -430,6 +430,67 @@ try {
       for ($attempt = 0; $attempt -lt 30 -and (Get-GameSnapshot).battle.phase -ne 'planning_action'; $attempt += 1) { Start-Sleep -Milliseconds 100 }
       $punchRange = (Invoke-GameExpression -Expression 'JSON.stringify(window.__RPG_DEBUG__.battleSkillRange("kentotsu"))') | ConvertFrom-Json
       if ($punchRange.Count -ne 5) { throw "Straight Punch did not expose exactly five front/side range cells (count=$($punchRange.Count))." }
+    }
+    'finalui' {
+      Invoke-GameExpression -Expression "document.getElementById('newGameButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      Invoke-GameExpression -Expression "document.querySelector('[data-class-choice=fighter]').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 160
+
+      Invoke-GameExpression -Expression "document.getElementById('statusButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $statusCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-status-$ViewportWidth.png"), [Convert]::FromBase64String($statusCapture.result.data))
+
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $unselectedUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const panel=document.querySelector(".unified-inventory-layout"),detail=document.querySelector(".inventory-empty-selection"),cards=[...document.querySelectorAll(".inventory-grid-item")],rect=panel?.getBoundingClientRect();return {detail:Boolean(detail),cards:cards.length,scroll:document.documentElement.scrollWidth<=innerWidth+1,character:Boolean(document.querySelector(".bag-paperdoll-board .paperdoll-avatar canvas")),panelWidth:rect?.width||0};})())') | ConvertFrom-Json
+      if (-not $unselectedUi.detail -or -not $unselectedUi.character -or -not $unselectedUi.scroll) { throw 'Inventory unselected state was not contained or did not expose one empty selection state.' }
+      $unselectedCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-inventory-unselected-$ViewportWidth.png"), [Convert]::FromBase64String($unselectedCapture.result.data))
+
+      $fixture20 = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setInventoryFixture(20);const cards=[...document.querySelectorAll("[data-item-id^=fixture_material_]")],rects=cards.map(node=>node.getBoundingClientRect()),overlap=rects.some((a,i)=>rects.slice(i+1).some(b=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)));return {cards:cards.length,overlap,viewport:document.documentElement.scrollWidth<=innerWidth+1,contained:document.querySelector(".bag-items-panel")?.scrollWidth<=document.querySelector(".bag-items-panel")?.clientWidth+1};})())') | ConvertFrom-Json
+      if ($fixture20.cards -ne 20 -or $fixture20.overlap -or -not $fixture20.viewport -or -not $fixture20.contained) { throw "Inventory 20-item fixture failed (cards=$($fixture20.cards), overlap=$($fixture20.overlap), viewport=$($fixture20.viewport), contained=$($fixture20.contained))." }
+      $fixture20Capture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-inventory-20-$ViewportWidth.png"), [Convert]::FromBase64String($fixture20Capture.result.data))
+
+      $fixture30 = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setInventoryFixture(30);const cards=[...document.querySelectorAll("[data-item-id^=fixture_material_]")],rects=cards.map(node=>node.getBoundingClientRect()),overlap=rects.some((a,i)=>rects.slice(i+1).some(b=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)));return {cards:cards.length,overlap,viewport:document.documentElement.scrollWidth<=innerWidth+1,contained:document.querySelector(".bag-items-panel")?.scrollWidth<=document.querySelector(".bag-items-panel")?.clientWidth+1};})())') | ConvertFrom-Json
+      if ($fixture30.cards -ne 30 -or $fixture30.overlap -or -not $fixture30.viewport -or -not $fixture30.contained) { throw "Inventory 30-item fixture failed (cards=$($fixture30.cards), overlap=$($fixture30.overlap), viewport=$($fixture30.viewport), contained=$($fixture30.contained))." }
+      $fixture30Capture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-inventory-30-$ViewportWidth.png"), [Convert]::FromBase64String($fixture30Capture.result.data))
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=fixture_material_30]').click(); true" | Out-Null
+      if (-not (Invoke-GameExpression -Expression 'Boolean(document.querySelector(".inventory-selected-detail:not(.inventory-empty-selection)"))')) { throw 'Inventory selected detail was not reachable after the 30-item fixture.' }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setInventoryFixture(0); window.__RPG_DEBUG__.setPlayer({hp:1}); window.__RPG_DEBUG__.facilityTab('bag'); true" | Out-Null
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=healing_potion]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=use-potion]').click(); true" | Out-Null
+      if ((Get-GameSnapshot).potions -ge 2) { throw 'Consumable Use did not consume a potion at runtime.' }
+      $selectedCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-inventory-selected-$ViewportWidth.png"), [Convert]::FromBase64String($selectedCapture.result.data))
+
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setPlayer({coins:999}); window.__RPG_DEBUG__.enterMap('shop'); window.__RPG_DEBUG__.openFacility('shop'); window.__RPG_DEBUG__.buyEquip('tide_iron_knuckles'); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=novice_gloves]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=equip]').click(); true" | Out-Null
+      if ((Get-GameSnapshot).equipped.weapon -ne 'novice_gloves') { throw 'Equipment Equip/Swap did not update the active weapon at runtime.' }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.grantSkillBook(1); window.__RPG_DEBUG__.openSkillBook(1); window.__RPG_DEBUG__.facilityTab('bag'); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id^=manual_]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=use-manual]').click(); true" | Out-Null
+      if (Invoke-GameExpression -Expression 'document.getElementById("skillBookConfirmPanel").hidden') { throw 'Skill-book manual action did not open its confirmation dialog.' }
+      Invoke-GameExpression -Expression "document.getElementById('skillBookCancelButton').click(); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('deck'); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $deckViewer = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const slots=[...document.querySelectorAll(".deck-slot")],rects=slots.map(node=>node.getBoundingClientRect()),text=slots.map(node=>node.textContent).join(" ");return {slots:slots.length,filled:document.querySelectorAll(".deck-slot.is-filled").length,actions:document.querySelectorAll("[data-facility-action=equip-skill],[data-facility-action=unequip-skill]").length,learned:Boolean(document.querySelector(".deck-skill-list")),icons:document.querySelectorAll(".deck-slot .skill-card-icon").length,vertical:rects.every((rect,index)=>index===0||rect.top>rects[index-1].top),metadata:/AP|速度|射程|範圍/.test(text)};})())') | ConvertFrom-Json
+      if ($deckViewer.slots -lt 3 -or $deckViewer.actions -ne 0 -or $deckViewer.learned -or $deckViewer.icons -ne 0 -or -not $deckViewer.vertical -or $deckViewer.metadata) { throw 'Normal DECK viewer still exposed management controls, metadata, or a non-vertical skill icon wall.' }
+      $deckCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-deck-$ViewportWidth.png"), [Convert]::FromBase64String($deckCapture.result.data))
+
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('skills'); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=skill-detail][data-skill-id=kentotsu]').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $detailCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-skill-detail-$ViewportWidth.png"), [Convert]::FromBase64String($detailCapture.result.data))
+      Invoke-GameExpression -Expression "document.getElementById('skillDetailDismissButton').click(); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('equipment'); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $equipmentCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes((Join-Path $runtimeOutputPath "final-equipment-$ViewportWidth.png"), [Convert]::FromBase64String($equipmentCapture.result.data))
     }
     'artwalk' {
       Invoke-GameExpression -Expression @'

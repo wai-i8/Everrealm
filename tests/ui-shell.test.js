@@ -74,6 +74,7 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
   assert.match(html, /id="facilityHelpButton"/);
   assert.match(html, /id="facilityHelpPopover"/);
   assert.match(html, /assets\/ui\/ui-close-v2\.png/);
+  assert.doesNotMatch(html, /ui-close-glyph/);
   assert.doesNotMatch(html, /id="facilitySubtitle"/);
   assert.match(game, /function returnToTitle\(\)/);
   assert.match(game, /data-facility-footer-action="return-title"/);
@@ -83,6 +84,42 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
     assert.ok(fs.statSync(assetPath).size > 1000, `${filename} should contain bitmap art`);
   }
 });
+
+test("shared controls keep the info secondary and all modal close visuals bitmap-backed", () => {
+  const uiCss = fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8");
+  assert.match(uiCss, /\.ui-info-button\s*\{[\s\S]*?width:\s*2\.7rem[\s\S]*?height:\s*2\.7rem/);
+  assert.match(uiCss, /\.ui-info-button img\s*\{[\s\S]*?width:\s*1\.85rem[\s\S]*?height:\s*1\.85rem/);
+  assert.match(uiCss, /\.facility-close-button\.ui-close-button\s*\{[\s\S]*?width:\s*2\.7rem/);
+  assert.match(uiCss, /border-image:\s*var\(--ui-frame-image\)/);
+  assert.doesNotMatch(uiCss, /ui-close-glyph/);
+  assert.doesNotMatch(uiCss, /background-size:\s*100%\s+100%/);
+  for (const id of ["skillBookConfirmCloseButton", "skillDetailCloseButton", "abandonCommissionCloseButton"]) {
+    const close = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0] || "";
+    assert.match(close, /assets\/ui\/ui-close-v2\.png/);
+    assert.doesNotMatch(close, /ESC|ui-close-glyph/);
+  }
+  assert.match(game, /if \(code === "Escape" \|\| code === "KeyE"\) closeSkillDetail\(\)/);
+  assert.doesNotMatch(game, /function setFacilityFooter\(message, hint/);
+});
+
+test("Status and normal Deck are summary-first and keep management at the station", () => {
+  const status = game.match(/function renderStatusFacility\(\)\s*\{([\s\S]*?)\r?\n  \}/)?.[1] || "";
+  const deck = game.match(/function renderDeckFacility\(\)\s*\{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function openGuildSkillBook/)?.[1] || "";
+  const viewer = deck.split("const management")[0];
+  assert.doesNotMatch(status, /戰鬥規則/);
+  assert.match(game, /status:\s*\["STATUS"[\s\S]*?開場 10 AP/);
+  assert.match(deck, /class="deck-slot-list"/);
+  assert.match(deck, /facilityContext === "deck" && currentMapId === "world"/);
+  assert.match(deck, /class="deck-skill-list"/);
+  assert.match(deck, /data-facility-action="equip-skill"/);
+  assert.doesNotMatch(viewer, /skill\.apCost \} AP · 速度/);
+  assert.doesNotMatch(viewer, /skillRangeText\(skill\)/);
+  assert.match(uiCssForTest(), /\.deck-slot-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+});
+
+function uiCssForTest() {
+  return fs.readFileSync(path.join(rpgRoot, "inventory-overhaul.css"), "utf8");
+}
 
 test("skill manual dialog exposes the shared website-style dismissal controls", () => {
   const dialog = html.match(/<section id="skillBookConfirmPanel"[\s\S]*?<\/section>/)?.[0] || "";

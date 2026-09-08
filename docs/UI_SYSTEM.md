@@ -77,11 +77,14 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 每個 major window 只有一個主標題。header 依次包含小型 uppercase kicker、
 主標題、右上角 shared bitmap-backed 說明入口及 close button；長說明放入可
 點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
-`ui-close-button`/`facility-close-button` 共用，裝飾 bitmap 與可 keyboard focus
-嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或 ESC 位置。標題不可
-依賴裝飾 glyph 才能辨識功能；裝飾唔可以佔用 content 空間。Top-level facility
-header 使用深海軍藍資訊帶；Skill Detail 等 nested modal 用較輕量層級，唔重複
-整個 top-level page header。
+`ui-close-button`/`facility-close-button` 共用，使用 `assets/ui/ui-close-v2.png`；
+info 使用 `assets/ui/ui-info-v1.png`，可保持約 40–44px hit target，但 visible
+art 明顯小於 X（約 28–32px），X 永遠係 primary action。裝飾 bitmap 與可
+keyboard focus 嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或 ESC
+位置，close control 亦不可顯示可見 ESC。標題不可依賴裝飾 glyph 才能辨識功能；
+裝飾唔可以佔用 content 空間。Top-level facility header 使用深海軍藍資訊帶；
+Skill Detail 等 nested modal 使用同一 bitmap X 但較輕量層級，唔重複整個
+top-level page header。Info/X sizing 由 shared component 統一，唔按頁分叉。
 
 ### Buttons and tabs
 
@@ -112,10 +115,14 @@ Status、Inventory、Equipment 以共用 base frame 為主。Status 左邊係角
 兩者嘅 slot、button、selected state 必須一致。
 
 Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及 DECK 容量；
-Inventory 左側紙娃娃區必須以 contained grid 保持六個部位完整可見，右側物品格
-只顯示圖示與短名稱，完整描述及動作集中喺 selected detail。DECK 以兩欄 desktop
-列表、窄屏單欄呈現；可出戰指令標示 `CMD`，被動技能標示 `PSV`，PSV 永遠唔提供
-裝入動作。
+戰鬥開場 AP、每輪 AP 增加及速度排序等補充規則只放喺 Status `[i]` help，唔喺
+主內容永久顯示教學條。Inventory 左側紙娃娃區必須以 contained grid 保持六個部位完整可見，右側物品格
+只顯示圖示與短名稱，完整描述及動作集中喺 selected detail。一般左側選單嘅
+`戰技面板` 係唯讀 current-loadout viewer：只顯示目前 DECK slots，使用窄身
+直向列表、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示
+已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。真正技能配置
+只喺主城東門戰技面板台管理。可出戰指令標示 `CMD`，被動技能標示 `PSV`，PSV
+永遠唔提供裝入動作。
 
 ### Guild variant
 
@@ -188,11 +195,14 @@ generic popup background。
 
 ### 9.1 Focused window patterns
 
-Decorative UI bitmaps are never the sizing system: frames use stretch-safe border
-composition (9-slice/border-image or repeat-safe pieces), while HTML/CSS owns
-layout, typography, containment and scrolling. Major windows share one top-right
-bitmap-backed `ui-close-button` and one shell; nested detail dialogs use a lighter
-hierarchy instead of repeating a page header. Skill Detail metadata is a
+Decorative UI bitmaps are never the sizing system: ornate frames, buttons, tabs,
+slots and skill nodes use stretch-safe border composition (9-slice/border-image,
+segmented pieces or native-size art); only plain repeat-safe textures may stretch.
+HTML/CSS owns layout, typography, containment and scrolling. Major windows share
+one top-right bitmap-backed `ui-close-button` and one shell; nested detail dialogs
+use the same bitmap X at a lighter hierarchy instead of repeating a page header.
+The info bitmap is visibly secondary to X while its wrapper remains an accessible
+hit target. Skill Detail metadata is a
 single-column label/value row pattern with bounded, non-breaking labels and
 wrapping values. Inventory uses a contained character/equipment region beside a
 compact item grid and a separate selected-item detail region; grid content must
@@ -200,9 +210,11 @@ never overlap the character region. Grid/Flex tracks use `minmax(0, 1fr)` and
 narrow layouts stack rather than introduce horizontal overflow. Canvas remains
 limited to genuinely dynamic diagrams such as range patterns and prerequisite
 connectors; window chrome, slots, rows and buttons remain DOM/CSS. These screens
-require desktop and narrow-viewport runtime screenshots, inspection of the actual
-rendered result, and a final `runtimeErrors: 0` check; automated tests alone are
-insufficient.
+require desktop and narrow-viewport runtime screenshots, including unselected and
+selected Inventory, both inventory stress fixtures, the vertical Deck, Skill Tree,
+Skill Detail, another facility header and valid-save refresh/resume; each result
+must be opened and inspected and the run must report `runtimeErrors: 0`. Automated
+tests alone are insufficient.
 
 - 本文件擁有 major UI 組合、層級、狀態、dynamic sizing 同 responsive 規則。
 - `ART_PIPELINE.md` 擁有 UI bitmap 透明底、atlas safe area、9-slice crop、export
