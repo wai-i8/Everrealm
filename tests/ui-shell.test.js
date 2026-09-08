@@ -206,6 +206,7 @@ test("Dialogue is a compact anchored role-only overlay with vertical choices", (
 test("native Main Town camera and click conversion stay in one world space", () => {
   assert.match(mainTownSource, /pixelWidth:\s*navigationPackage\.source\.width/);
   assert.match(mainTownSource, /pixelHeight:\s*navigationPackage\.source\.height/);
+  assert.match(mainTownSource, /art:[\s\S]*unitScale:\s*1/);
   assert.match(game, /currentMapId === "world"[\s\S]*?\? 1/);
   assert.match(game, /function worldToScreen\(point/);
   assert.match(game, /function screenToWorldPoint\(screenX, screenY\)/);
@@ -215,13 +216,17 @@ test("native Main Town camera and click conversion stay in one world space", () 
   assert.match(game, /const responsiveBase = currentMapId === "world"\s*\n\s*\? 1/);
   assert.match(game, /const viewportWorldWidth = width \/ zoom/);
   assert.match(game, /const viewportWorldHeight = height \/ zoom/);
+  assert.match(game, /function explorationUnitScale\(\)/);
+  assert.match(game, /unitScale: explorationUnitScale\(\)/);
   assert.doesNotMatch(game, /targetZoom\(\)[\s\S]{0,180}(naturalWidth|pixelWidth|pixelHeight)/);
   assert.match(game, /sourceWidth: crop\.sw/);
   assert.match(game, /sourceHeight: crop\.sh/);
   assert.match(game, /destination: \{ x: crop\.dx, y: crop\.dy, width: crop\.dw, height: crop\.dh \}/);
   assert.match(game, /Art\.drawMainTownBackground\(ctx, \{[\s\S]*?sourceWidth: crop\.sw[\s\S]*?width: crop\.dw/);
   assert.match(game, /canvas: \{ cssWidth: width, cssHeight: height, dpr, backingWidth: canvas\.width/);
+  assert.match(game, /ctx\.setTransform\(dpr, 0, 0, dpr, 0, 0\)/);
   assert.match(characterArt, /ctx\.drawImage\(atlas\.image, sourceX, sourceY, cropWidth, cropHeight/);
+  assert.doesNotMatch(css, /#gameCanvas[^}]*image-rendering:\s*pixelated/);
   assert.doesNotMatch(game, /world\.pixelWidth\s*\/\s*2048|world\.pixelHeight\s*\/\s*1152/);
 });
 

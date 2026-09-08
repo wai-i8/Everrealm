@@ -784,6 +784,13 @@
     return responsiveBase * EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
+  function explorationUnitScale() {
+    const authoredScale = Number(world?.art?.unitScale);
+    return Number.isFinite(authoredScale) && authoredScale > 0
+      ? authoredScale
+      : Locomotion.STANDARD_MOBILE_UNIT_SPRITE.worldScale;
+  }
+
   function syncExploreZoomControls() {
     stage.dataset.zoomLevel = exploreZoomLevel;
     for (const button of document.querySelectorAll("[data-zoom-level]")) {
@@ -6516,7 +6523,8 @@
     Art.drawCharacter(ctx, {
       x: point.x,
       y: point.y + 13 * camera.zoom,
-      scale: camera.zoom * 1.05,
+      scale: camera.zoom,
+      unitScale: explorationUnitScale(),
       actor: "player",
       classId: playerClassId,
       facing: player.facing,
@@ -6556,6 +6564,7 @@
         x: point.x,
         y: point.y + enemy.radius * .72 * scale,
         scale: scale * (enemy.boss ? 1.03 : .98),
+        unitScale: explorationUnitScale(),
         type: enemy.type,
         facing: enemy.facing,
         phase: enemy.anim,

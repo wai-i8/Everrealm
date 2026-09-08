@@ -61,9 +61,13 @@
     const column = animation.state === "walk" ? m.walkColumns[Math.floor(Math.max(0, animation.time || 0) * m.walkFps + 1e-9) % m.walkColumns.length] : m.idleColumn;
     return { facing, row, column, index: row * m.columns + column, sx: column * m.cellWidth, sy: row * m.cellHeight, sw: m.cellWidth, sh: m.cellHeight };
   }
-  function layout(x, y, scale = 1) {
+  function layout(x, y, scale = 1, unitScale = STANDARD_MOBILE_UNIT_SPRITE.worldScale) {
     const m = STANDARD_MOBILE_UNIT_SPRITE;
-    const factor = m.worldScale * scale;
+    // The fixed atlas geometry is shared everywhere.  A scene may explicitly
+    // declare how its authored world pixels project that atlas into world
+    // pixels; native flattened scenes use 1:1, while legacy procedural scenes
+    // keep the contract default for compatibility.
+    const factor = Math.max(.01, Number(unitScale) || m.worldScale) * scale;
     return { x: x - m.anchorX * factor, y: y - m.anchorY * factor, width: m.cellWidth * factor, height: m.cellHeight * factor, baselineY: y, centerX: x };
   }
   // Read-only sampling of the resolver's positions. Never changes collision,

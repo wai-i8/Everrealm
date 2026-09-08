@@ -204,7 +204,7 @@
       pixelHeight: navigationPackage.source.height,
       tiles,
       tileTypes: TILES,
-      art: { flattened: true, background: ART_BACKGROUND, master: ART_BACKGROUND, authoring: AUTHORING_IMAGE, sourceDimensions: { width: navigationPackage.source.width, height: navigationPackage.source.height }, masterSha256: navigationPackage.source.sha256, authoringSha256: navigationPackage.authoring.sha256 },
+      art: { flattened: true, background: ART_BACKGROUND, master: ART_BACKGROUND, authoring: AUTHORING_IMAGE, unitScale: 1, sourceDimensions: { width: navigationPackage.source.width, height: navigationPackage.source.height }, masterSha256: navigationPackage.source.sha256, authoringSha256: navigationPackage.authoring.sha256 },
       navigation,
       houses,
       trees: [],

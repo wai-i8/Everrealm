@@ -109,7 +109,7 @@ button { font: inherit; }
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.25'/%3E%3C/svg%3E");
   mix-blend-mode: soft-light;
 }
-#gameCanvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; touch-action: none; outline: none; }
+#gameCanvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 
 .game-stage[data-game-state="battle"] :is(.explore-sidebar,.minimap-wrap,.location-banner,.interaction-prompt) {
   opacity: 0;

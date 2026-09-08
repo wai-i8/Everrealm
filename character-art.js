@@ -520,27 +520,29 @@
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
+    const unitScale = Math.max(.01, Number(settings.unitScale) || Locomotion.STANDARD_MOBILE_UNIT_SPRITE.worldScale);
+    const visualScale = scale * unitScale;
     const profile = monsterVisualProfiles[id] || null;
-    const box = Locomotion.layout(x, y, scale);
+    const box = Locomotion.layout(x, y, scale, unitScale);
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, scale, 15, .34);
+      drawGroundShadow(ctx, x, y, visualScale, 15, .34);
       if (settings.selected) {
         ctx.strokeStyle = settings.selectionColor || "#ffc857";
-        ctx.lineWidth = 1.4 * scale;
-        ctx.beginPath(); ctx.ellipse(x, y, 20 * scale, 6 * scale, 0, 0, TAU); ctx.stroke();
+        ctx.lineWidth = 1.4 * visualScale;
+        ctx.beginPath(); ctx.ellipse(x, y, 20 * visualScale, 6 * visualScale, 0, 0, TAU); ctx.stroke();
       }
       if (settings.state === "hurt") ctx.globalAlpha *= .64;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(atlas.image, selected.sx, selected.sy, selected.sw, selected.sh, box.x, box.y, box.width, box.height);
     } finally { ctx.restore(); }
-    const nameAnchorX = x + (profile?.nameOffsetX || 0) * scale;
-    const nameAnchorY = profile ? y - profile.nameLift * scale : box.y - 4 * scale;
+    const nameAnchorX = x + (profile?.nameOffsetX || 0) * visualScale;
+    const nameAnchorY = profile ? y - profile.nameLift * visualScale : box.y - 4 * visualScale;
     return { ...box, left: box.x, right: box.x + box.width, top: box.y, bottom: y,
       nameAnchorX, nameAnchorY,
       markerAnchorX: nameAnchorX,
-      markerAnchorY: profile ? nameAnchorY - 20 * scale : box.y - 23 * scale,
+      markerAnchorY: profile ? nameAnchorY - 20 * visualScale : box.y - 23 * visualScale,
       atlas: atlas.src, frame: selected.index, facing: selected.facing };
   }
 

@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-native', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -204,6 +204,15 @@ try {
       $townNative = Get-GameSnapshot
       $render = $townNative.mainTownRender
       if ($townNative.mode -ne 'playing' -or $townNative.currentMapId -ne 'world' -or $townNative.exploreZoomLevel -ne 'mid' -or [math]::Abs([double]$render.cameraZoom - 1) -gt .01 -or [math]::Abs([double]$render.source.width - [double]$render.canvas.cssWidth) -gt 1.1 -or [math]::Abs([double]$render.source.height - [double]$render.canvas.cssHeight) -gt 1.1 -or $render.image.width -ne 7680 -or $render.image.height -ne 4320) { throw "Native Main Town crop did not stay at 1:1 default view ($($render | ConvertTo-Json -Compress))." }
+    }
+    'town-reference' {
+      # Keep the Guild frontage and central fountain in one native-scale crop,
+      # matching the supplied visual reference without changing the camera.
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.teleport(3659,1760); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townReference = Get-GameSnapshot
+      $render = $townReference.mainTownRender
+      if ($townReference.mode -ne 'playing' -or $townReference.currentMapId -ne 'world' -or $townReference.exploreZoomLevel -ne 'mid' -or [math]::Abs([double]$render.cameraZoom - 1) -gt .01 -or [math]::Abs([double]$render.source.width - [double]$render.canvas.cssWidth) -gt 1.1 -or [math]::Abs([double]$render.source.height - [double]$render.canvas.cssHeight) -gt 1.1 -or $render.image.width -ne 7680 -or $render.image.height -ne 4320) { throw "Reference Main Town crop did not stay at 1:1 default view ($($render | ConvertTo-Json -Compress))." }
     }
     'town-guild' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(700,400); true" | Out-Null
