@@ -88,7 +88,7 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
 test("shared controls keep the info secondary and all modal close visuals bitmap-backed", () => {
   const uiCss = fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8");
   assert.match(uiCss, /\.ui-info-button\s*\{[\s\S]*?width:\s*2\.7rem[\s\S]*?height:\s*2\.7rem/);
-  assert.match(uiCss, /\.ui-info-button img\s*\{[\s\S]*?width:\s*1\.85rem[\s\S]*?height:\s*1\.85rem/);
+  assert.match(uiCss, /\.ui-info-button img\s*\{[\s\S]*?width:\s*1\.75rem[\s\S]*?height:\s*1\.75rem/);
   assert.match(uiCss, /\.facility-close-button\.ui-close-button\s*\{[\s\S]*?width:\s*2\.7rem/);
   assert.match(uiCss, /border-image:\s*var\(--ui-frame-image\)/);
   assert.doesNotMatch(uiCss, /ui-close-glyph/);
