@@ -40,7 +40,7 @@ test("active NPCs expose functional map labels without changing identity or rout
     ["shop", "merchant-gin", "銀姐", "裝備店店員", ["equipment-shop", "sell", "compare-equipment"]],
     ["general-store", "store-merchant-gin", "穀嬸", "道具店店員", ["general-store"]],
     ["inn", "inn-keeper", "朵姨", "旅館接待員", ["inn-rest"]],
-    ["clinic", "clinic-healer-siu-moon", "小滿", "醫療所護士", ["clinic-healing"]],
+    ["clinic", "clinic-healer-siu-moon", "小滿", "護士", ["clinic-healing"]],
     ["field", "mountain_delivery_recipient", "洛安", "山地收件員", ["guild-delivery"]],
     ["dungeon", "lost-explorer-kai", "露娜", "坑道探索者", ["dungeon-tip"]],
   ];
@@ -56,4 +56,5 @@ test("active NPCs expose functional map labels without changing identity or rout
   assert.match(game, /drawNpcName\(anchorX, nameY, npcDisplayName\(npc\)\)/);
   assert.match(game, /if \(entity\.kind === "npc"\) return `同\$\{npcDisplayName\(entity\)\}傾偈`/);
   assert.match(game, /speaker: npc\.name/);
+  assert.match(game, /const speakerLabel = speakerNpc \? npcDisplayName\(speakerNpc\)/);
 });

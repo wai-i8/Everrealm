@@ -20,7 +20,7 @@
 
 討伐委託以 canonical Monster ID 及每次生成的穩定 `instanceId` 記錄擊殺。只有接受後、符合目標 ID 的活躍委託會增加進度；錯誤魔物、接受前擊殺，以及同一個生成實例的重複事件都不計算。多個符合目標的戰鬥單位各自以實例計算一次。
 
-送信委託以 token 形式存在委託 state，不需要佔用一般物品欄。玩家必須到 `field` 與穩定 ID `mountain_delivery_recipient` 互動；只有該 NPC 可以完成目標。地圖／互動標籤顯示為「山地收件員」；角色對話仍可使用已建立的個人身份「洛安」。NPC 使用獨立成年男性山地信使 bitmap／對話肖像，位於遠離主城東門、靠近山路北段的可達區域，精確位置由 `maps/mountain-field.js` 擁有。沒有活躍送信時只顯示 ambient 對話；送信進行中會收信並完成 objective；已送達後只提示玩家回公會回報；錯誤 NPC 或重複點擊不會改變 state。
+送信委託以 token 形式存在委託 state，不需要佔用一般物品欄。玩家必須到 `field` 與穩定 ID `mountain_delivery_recipient` 互動；只有該 NPC 可以完成目標。地圖／互動標籤及角色對話 speaker 都顯示「山地收件員」；舊個人身份只保留於 internal compatibility data。NPC 使用獨立成年男性山地信使 bitmap，位於遠離主城東門、靠近山路北段的可達區域，精確位置由 `maps/mountain-field.js` 擁有。沒有活躍送信時只顯示 ambient 對話；送信進行中會收信並完成 objective；已送達後只提示玩家回公會回報；錯誤 NPC 或重複點擊不會改變 state。
 
 狀態流程是：
 

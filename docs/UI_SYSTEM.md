@@ -117,7 +117,10 @@ Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bit
 DECK slot number 只作細小 secondary index；read-only viewer 只顯示 index、CMD/PSV
 badge 同技能名，empty slot 的 content 必須完全 blank，唔顯示「空」、「沒有技能」或
 「尚未裝設」。配置頁左右兩欄各自維持單欄 list，`可裝入 DECK` 等 redundant copy
-省略，`裝入`／`卸下` 只用 compact、high-contrast action。
+省略，`裝入`／`卸下` 只用 compact、high-contrast action。配置頁左右兩欄仍可保留，
+但 list row 要按內容密度收窄，唔可以用 feature-card 高度留大塊空白；學習技能列
+同目前配置列只保留 badge、技能名、slot index（如適用）及 action。容量只喺右欄
+標題旁顯示一次，唔再顯示「可裝入 DECK」或「可裝入 N 格」等上下文重複文案。
 
 ### Panel sizing, identity and progressive disclosure
 
@@ -146,7 +149,11 @@ Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 f
 ### Exploration HUD
 
 探索左側 HUD 固定以 character summary、quick resources、main functions、secondary
-view/audio controls、quest tracker 呢個優先次序組成。頂部使用
+view/audio controls、quest tracker 呢個優先次序組成。expanded state 必須係實際
+DOM／layout recomposition：角色摘要係 compact header，資源同武器係 quick-info
+strip，主要功能係視覺主層，視角／聲效係獨立 secondary row，任務係 compact
+independent section；唔可以只喺舊 card stack 上加裝飾。短資料唔應拆成多個同等
+重量嘅 nested card，music control 亦唔可孤立喺一個大空盒內。頂部使用
 `assets/ui/ui-sidebar-toggle-v1.png` bitmap pull-tab；expanded state 顯示完整 HUD，
 collapsed state 只保留呢個 bitmap tab，唔留 portrait、menu rail、quest card 或暗色
 strip。collapse 係 UI preference，儲存於 localStorage，跨 map/interior/refresh 保留，
@@ -161,17 +168,15 @@ Dialogue continuation button 由 actual line state 決定：仍有下一句顯�
 ### Anchored dialogue overlay
 
 Dialogue 係獨立嘅 anchored gameplay overlay，唔套用 Inventory、Status、Skill Tree
-嗰種 generic major window。桌面版固定於 viewport lower portion，world 保持可見；
-panel width 同 height 由 text／choice count content-driven，設合理 min/max，超出時
-只喺內部 scroll。portrait 係 supporting identity，desktop 約佔 panel 18–25%，使用
-shared dark fantasy/gold portrait frame，唔可以壓過 text/actions。speaker name 同
-functional role 整合喺 body heading，choices 預設單欄直向排列；窄屏可縮細 portrait
-或將其移到 heading 上方，但不得產生 horizontal overflow。click、touch、keyboard、
+嗰種 generic major window。普通 NPC dialogue portrait-free，唔保留 portrait column、
+空白身份欄或 portrait asset space。桌面版固定於 viewport lower portion，world 保持可見；
+panel width 同 height 由 text／choice count content-driven，設合理 min/max，短句只佔
+所需高度，超出時只喺內部 scroll。speaker 只顯示功能角色名，唔以個人姓名或「姓名｜
+職稱」作 ordinary runtime identity；choices 預設單欄直向排列。click、touch、keyboard、
 numeric shortcut 同既有 branching/service action 必須保持。
 
-Dialogue frame、portrait frame、button、CMD/PSV badge、close/info control 用
-HTML/CSS 加 bitmap；Canvas 只負責真正 dynamic portrait artwork 或其他 dynamic
-rendering，唔畫 generic dialogue chrome。細節 bitmap 只能用 border-image、9-slice
+Dialogue frame、button、CMD/PSV badge、close/info control 用 HTML/CSS 加 bitmap；
+Canvas 唔負責 ordinary dialogue portrait 或 generic dialogue chrome。細節 bitmap 只能用 border-image、9-slice
 或 segmented stretch-safe composition，禁止 `background-size: 100% 100%`；dialogue
 同其他 panel 都要做 desktop 及 narrow runtime screenshot QA，並實際打開檢查，
 `runtimeErrors` 必須為 `0`。
@@ -186,7 +191,7 @@ Status、Inventory、Equipment 以共用 base frame 為主。Status 左邊係角
 
 Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及 DECK 容量；
 戰鬥開場 AP、每輪 AP 增加及速度排序等補充規則只放喺 Status `[i]` help，唔喺
-主內容永久顯示教學條。Inventory 左側紙娃娃區必須以 contained grid 保持六個部位完整可見，右側物品格
+主內容永久顯示教學條。Inventory 左側紙娃娃區必須以 contained grid 保持七個 canonical 部位完整可見，右側物品格
 只顯示圖示與短名稱，完整描述及動作集中喺 selected detail。一般左側選單嘅
 `戰技面板` 係唯讀 current-loadout viewer：只顯示目前 DECK slots，使用窄身
 直向列表、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示

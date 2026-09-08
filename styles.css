@@ -615,7 +615,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   min-width: 0;
   transform: translateX(-50%);
   display: grid;
-  grid-template-columns: minmax(7rem, 8.4rem) minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
   border: 10px solid transparent;
@@ -625,28 +624,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   box-shadow: 6px 8px 0 rgba(3,6,14,.65), 0 1.2rem 3rem rgba(0,0,0,.42);
   text-align: left;
 }
-.dialogue-portrait {
-  min-width: 0;
-  min-height: 8.4rem;
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  overflow: hidden;
-  border-right: 1px solid rgba(82,220,203,.25);
-  background:
-    radial-gradient(circle at 64% 12%, rgba(255,200,87,.14), transparent 4.2rem),
-    linear-gradient(160deg, rgba(31,52,83,.88), rgba(11,20,40,.95));
-}
-.dialogue-portrait::after {
-  content: "";
-  position: absolute;
-  inset: .45rem;
-  border: 1px solid rgba(255,200,87,.22);
-  border-radius: .45rem;
-  pointer-events: none;
-}
-.dialogue-portrait canvas { width: 100%; height: auto; aspect-ratio: 176 / 208; object-fit: contain; }
 .dialogue-body {
   min-width: 0;
   min-height: 8.4rem;
@@ -1159,8 +1136,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .minimap-wrap { right: .45rem; top: .45rem; width: 7rem; height: 7rem; }
   .quest-hud { right: .45rem; top: 5.8rem; width: 11.7rem; padding: .5rem .55rem; }
   .quest-hud strong { font-size: .72rem; }.quest-hud p { font-size: .67rem; }.quest-hud small { font-size: .64rem; }
-  .dialogue-panel { bottom: 1rem; width: calc(100% - 1rem); grid-template-columns: minmax(6.2rem, 7rem) minmax(0, 1fr); }
-  .dialogue-portrait, .dialogue-body { min-height: 8rem; }.dialogue-body { padding: .8rem .75rem .6rem; }.dialogue-body p { font-size: .76rem; }
+  .dialogue-panel { bottom: 1rem; width: calc(100% - 1rem); }.dialogue-body { min-height: 8rem; padding: .8rem .75rem .6rem; }.dialogue-body p { font-size: .76rem; }
   .upgrade-grid { grid-template-columns: 1fr; max-width: 26rem; gap: .45rem; }
   .upgrade-card { min-height: 4.7rem; flex-direction: row; align-items: center; padding: .65rem .75rem; }
   .upgrade-icon { flex: 0 0 2.4rem; }
@@ -1224,8 +1200,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   h1 { font-size: clamp(3.4rem,18vw,5rem); }
   .title-copy { margin: .7rem 0 1rem; }.title-actions { flex-direction: column; gap: .45rem; }
   .control-strip { display: none; }
-  .dialogue-panel { grid-template-columns: 5.4rem minmax(0, 1fr); }
-  .dialogue-portrait { min-height: 7rem; }
+  .dialogue-panel { width: calc(100% - 1rem); }
   .dialogue-body { min-height: 7rem; padding-left: .68rem; padding-right: .68rem; }
   .speaker-role { font-size: .48rem; }
   .speaker-name { font-size: .75rem; }
@@ -1322,4 +1297,209 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Exploration sidebar recomposition ------------------------------------
+   The rail is one information hierarchy: compact identity, quick info,
+   primary functions, secondary controls, then the quest summary.  The zones
+   are intentionally lighter than the old stack of independent HUD cards. */
+#exploreSidebar {
+  width: 11rem;
+  max-height: calc(100% - 1.6rem);
+  gap: .26rem;
+  padding: 2.05rem .42rem .48rem;
+  border: 1px solid rgba(245,233,202,.3);
+  border-radius: .22rem .9rem .9rem .22rem;
+  background: linear-gradient(155deg, rgba(17,29,52,.95), rgba(7,13,27,.93));
+  box-shadow: 4px 5px 0 rgba(3,6,14,.46), 0 .7rem 1.8rem rgba(0,0,0,.2);
+  backdrop-filter: blur(7px);
+}
+#exploreSidebar > .sidebar-zone { position: relative; width: 100%; min-width: 0; }
+#exploreSidebar .sidebar-character {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-height: 3.05rem;
+  display: flex;
+  align-items: center;
+  gap: .38rem;
+  padding: .25rem .1rem .35rem;
+  border: 0;
+  border-bottom: 1px solid rgba(82,220,203,.24);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+#exploreSidebar .sidebar-character .portrait { flex-basis: 1.9rem; width: 1.9rem; height: 1.9rem; }
+#exploreSidebar .sidebar-character .player-bars { gap: .2rem; }
+#exploreSidebar .sidebar-character .bar { height: .5rem; }
+#exploreSidebar .sidebar-character .xp-bar { height: .28rem; }
+#exploreSidebar .sidebar-character .bar span { font-size: .42rem; }
+#exploreSidebar .sidebar-character .name-row strong { font-size: .66rem; }
+#exploreSidebar .sidebar-character .name-row span { font-size: .5rem; }
+#exploreSidebar .sidebar-quick-info {
+  display: grid;
+  gap: .22rem;
+  padding: .25rem .08rem .3rem;
+  border-bottom: 1px solid rgba(245,233,202,.16);
+}
+#exploreSidebar #resourceHud.resource-hud {
+  position: static;
+  inset: auto;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: .3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#exploreSidebar #resourceHud > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .24rem;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+#exploreSidebar #resourceHud b { font-size: .65rem; }
+#exploreSidebar .weapon-summary {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .4rem;
+  color: var(--muted);
+  font-size: .54rem;
+}
+#exploreSidebar .weapon-summary strong {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  overflow: hidden;
+  color: var(--cream);
+  font-size: .6rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#exploreSidebar .weapon-summary strong b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#exploreSidebar .sidebar-primary.explore-function-menu {
+  display: grid;
+  gap: 0;
+  padding: .2rem .18rem;
+  border: 1px solid rgba(82,220,203,.35);
+  border-radius: .52rem;
+  background: rgba(5,12,26,.42);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#exploreSidebar .sidebar-primary .explore-menu-button {
+  min-height: 2.05rem;
+  grid-template-columns: 1.48rem minmax(0,1fr);
+  gap: .34rem;
+  padding: .2rem .24rem;
+  border: 0;
+  border-bottom: 1px solid rgba(245,233,202,.13);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#exploreSidebar .sidebar-primary .explore-menu-button:last-child { border-bottom: 0; }
+#exploreSidebar .sidebar-primary .explore-menu-button:hover,
+#exploreSidebar .sidebar-primary .explore-menu-button:focus-visible {
+  transform: none;
+  border-color: rgba(245,233,202,.13);
+  border-radius: .3rem;
+  background: rgba(255,200,87,.09);
+}
+#exploreSidebar .sidebar-primary .explore-menu-icon { width: 1.36rem; height: 1.36rem; font-size: .66rem; }
+#exploreSidebar .sidebar-primary .explore-menu-copy small { display: none; }
+#exploreSidebar .sidebar-primary .explore-menu-copy b { font-size: .68rem; }
+#exploreSidebar .sidebar-secondary {
+  display: flex;
+  align-items: center;
+  gap: .28rem;
+  padding: .28rem .08rem .3rem;
+  border-bottom: 1px solid rgba(245,233,202,.16);
+}
+#exploreSidebar .sidebar-secondary .explore-zoom-control {
+  flex: 1;
+  min-width: 0;
+  grid-template-columns: minmax(1.8rem,1fr) repeat(3,1.48rem);
+  gap: .14rem;
+  padding: 0;
+}
+#exploreSidebar .sidebar-secondary .explore-zoom-control > span { padding-left: 0; font-size: .52rem; letter-spacing: .07em; }
+#exploreSidebar .sidebar-secondary .explore-zoom-control button { min-height: 1.48rem; font-size: .56rem; }
+#exploreSidebar .sidebar-secondary .sidebar-sound-button {
+  flex: 0 0 1.65rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-color: rgba(245,233,202,.24);
+  background: rgba(4,8,18,.5);
+  box-shadow: none;
+}
+#exploreSidebar .sidebar-quest.quest-hud {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  padding: .3rem .08rem .08rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+#exploreSidebar .sidebar-quest .quest-heading { gap: .18rem; margin-bottom: .28rem; font-size: .56rem; }
+#exploreSidebar .sidebar-quest .quest-heading i { background: linear-gradient(90deg, rgba(255,200,87,.42), transparent); }
+#exploreSidebar .sidebar-quest .quest-heading button { padding: .16rem .22rem; font-size: .58rem; }
+#exploreSidebar .sidebar-quest strong { margin-bottom: .15rem; font-size: .66rem; }
+#exploreSidebar .sidebar-quest p { font-size: .59rem; line-height: 1.35; }
+#exploreSidebar .sidebar-quest small { margin-top: .25rem; font-size: .56rem; }
+#exploreSidebar.is-collapsed {
+  width: 2.7rem;
+  height: 2.7rem;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* Ordinary NPC dialogue is a single content-driven text surface. */
+.dialogue-panel {
+  display: block;
+  width: min(44rem, calc(100% - 2rem));
+  max-height: min(14rem, calc(100% - 2rem));
+}
+.dialogue-body {
+  min-height: 0;
+  max-height: min(14rem, calc(100% - 2rem));
+  overflow-y: auto;
+  padding: .68rem .9rem .62rem;
+  background: rgba(13,23,43,.86);
+}
+.dialogue-speaker { padding-bottom: .34rem; border-bottom: 1px solid rgba(82,220,203,.2); }
+.dialogue-speaker .speaker-name { color: var(--gold); font-size: .78rem; }
+.dialogue-body p { margin: .52rem 0 .58rem; font-size: .79rem; line-height: 1.55; }
+.dialogue-next { margin-top: .08rem; min-height: 1.85rem; min-width: 5rem; }
+
+@media (max-width: 530px) {
+  #exploreSidebar { width: 9.3rem; padding: 1.88rem .34rem .4rem; }
+  #exploreSidebar .sidebar-primary .explore-menu-button { min-height: 1.9rem; }
+  #exploreSidebar .sidebar-secondary .explore-zoom-control { grid-template-columns: minmax(1.55rem,1fr) repeat(3,1.25rem); }
+  #exploreSidebar .sidebar-secondary .explore-zoom-control button { min-height: 1.35rem; }
+  .dialogue-panel { width: calc(100% - 1rem); max-height: min(12rem, calc(100% - 1rem)); }
+  .dialogue-body { max-height: min(12rem, calc(100% - 1rem)); padding: .58rem .68rem .52rem; }
+  .dialogue-body p { font-size: .73rem; }
 }

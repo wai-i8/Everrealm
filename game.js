@@ -95,8 +95,6 @@
   const abandonCommissionPanel = document.getElementById("abandonCommissionPanel");
   const battlePortraitCanvas = document.getElementById("selectedUnitPortraitCanvas");
   const battlePortraitCtx = battlePortraitCanvas.getContext("2d");
-  const dialoguePortraitCanvas = document.getElementById("dialoguePortraitCanvas");
-  const dialoguePortraitCtx = dialoguePortraitCanvas.getContext("2d");
   const battleUi = {
     encounterTitle: document.getElementById("battleEncounterTitle"),
     encounterSubtitle: document.getElementById("battleEncounterSubtitle"),
@@ -798,8 +796,9 @@
 
   function targetZoom() {
     // Main Town artwork and its navigation package share native 1:1 pixels.
-    // The old responsive baseline was tuned for the previous compact maps and
-    // magnified this 8K scene before the shared camera transform was applied.
+    // Its base view is intentionally 1.0: the camera crops a window over the
+    // large world.  These are explicit responsive/view controls, never a
+    // scale derived from the loaded image dimensions or a fit-to-map fallback.
     const responsiveBase = currentMapId === "world"
       ? 1
       : width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
@@ -857,7 +856,6 @@
     ctx.imageSmoothingEnabled = false;
     camera.zoom = targetZoom();
     syncBattleFacingPicker();
-    if (!dialoguePanel.hidden) drawDialoguePortrait();
   }
 
   function isGateOpen() {
@@ -1837,7 +1835,7 @@
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: ["齋磨同一把舊刀始終有限。我同銀姐搬晒新貨入工房：短刀夠快、重刃破甲，護甲仲會改你行幾多格。"],
+      lines: ["齋磨同一把舊刀始終有限。我同裝備店店員搬晒新貨入工房：短刀夠快、重刃破甲，護甲仲會改你行幾多格。"],
       choices: [
         {
           label: "入銀火裝備店",
@@ -1980,59 +1978,19 @@
     mode = "dialogue";
     stage.dataset.gameState = mode;
     keys.clear();
-    const portraitActors = {
-      "小滿": "healer",
-      "妍姐": "guildmaster", "阿寶": "clerk", "諾拉": "adventurer", "麗雅": "duelist",
-      "銀姐": "merchant", "阿月": "armorer", "莎菲": "tailor", "露娜": "explorer", "洛安": "mountainCourier",
-    };
-    const speakerNpc = world?.npcs?.find((npc) => npc.name === config.speaker);
+    const speakerNpc = world?.npcs?.find((npc) => npc.name === config.speaker || npc.id === config.speaker || npc.displayName === config.speaker);
+    const speakerLabel = speakerNpc ? npcDisplayName(speakerNpc) : (config.speaker || "指定角色");
     dialogue = {
       ...config,
-      actor: config.actor || portraitActors[config.speaker] || "villager",
-      speakerRole: config.speakerRole || speakerNpc?.displayName || "",
+      speaker: speakerLabel,
       lines: config.lines || ["……"],
       index: 0,
     };
     dialogueChoiceIndex = 0;
     document.getElementById("speakerName").textContent = dialogue.speaker;
-    const speakerRole = document.getElementById("speakerRole");
-    speakerRole.textContent = dialogue.speakerRole;
-    speakerRole.hidden = !dialogue.speakerRole;
-    document.getElementById("dialoguePortrait").style.setProperty("--speaker-color", dialogue.color || "#315d66");
     dialoguePanel.hidden = false;
     renderDialogue();
     sound.tone(520, .05, { gain: .014 });
-  }
-
-  function syncCanvasBackingSize(canvas) {
-    const bounds = canvas.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return false;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    const nextWidth = Math.max(1, Math.round(bounds.width * pixelRatio));
-    const nextHeight = Math.max(1, Math.round(bounds.height * pixelRatio));
-    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-      canvas.width = nextWidth;
-      canvas.height = nextHeight;
-    }
-    return true;
-  }
-
-  function drawDialoguePortrait() {
-    const portraitActor = dialogue?.actor || "villager";
-    dialoguePortraitCanvas.dataset.actor = portraitActor;
-    if (!syncCanvasBackingSize(dialoguePortraitCanvas)) return;
-    dialoguePortraitCtx.clearRect(0, 0, dialoguePortraitCanvas.width, dialoguePortraitCanvas.height);
-    Art.drawPortrait(dialoguePortraitCtx, {
-      x: 0,
-      y: 0,
-      width: dialoguePortraitCanvas.width,
-      height: dialoguePortraitCanvas.height,
-      actor: portraitActor,
-      expression: portraitActor === "smith" ? "determined" : "happy",
-      background: "#1e2b45",
-      backgroundEnd: "#0b1224",
-      frame: false,
-    });
   }
 
   function drawPlayerHudPortrait() {
@@ -2107,7 +2065,6 @@
       choices.innerHTML = "";
       next.hidden = false;
     }
-    drawDialoguePortrait();
   }
 
   function advanceDialogue() {
@@ -2923,16 +2880,14 @@
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
       const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
-      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><div><small>LEARNED SKILLS</small><h3 id="deckLearnedHeading">已學技能</h3></div><span>可裝入 ${skillState.deckCapacity} 格</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
+      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><div><h3 id="deckLearnedHeading">已學技能</h3></div></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
     })() : "";
-    const currentDeckHeading = canEdit
-      ? `<div class="deck-region-heading"><div><small>CURRENT DECK</small><h3 id="deckCurrentHeading">目前配置</h3></div><strong class="deck-capacity">${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</strong></div>`
-      : `<div class="deck-region-heading"><span>目前出戰技能</span><strong class="deck-capacity">${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</strong></div>`;
+    const currentDeckHeading = `<div class="deck-region-heading"><div><h3 id="deckCurrentHeading">目前配置</h3></div><strong class="deck-capacity">已裝 ${skillState.equippedSkillIds.length} / ${skillState.deckCapacity}</strong></div>`;
     const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="目前戰技面板">${currentDeckHeading}<div class="deck-slot-list">${slots}</div></section>`;
     facilityContent.innerHTML = canEdit
       ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
       : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;
-    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板台可管理出戰技能；戰鬥只會使用目前 DECK。" : "唯讀查看目前出戰技能；要更換配置先去舊港城門戰技面板台。"}`);
+    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板台可管理出戰技能；戰鬥只會使用目前配置。" : "唯讀查看目前配置；要更換配置先去舊港城門戰技面板台。"}`);
   }
 
   function openGuildSkillBook(star) {
@@ -6019,6 +5974,27 @@
     };
   }
 
+  function mainTownBackgroundCrop(shakeX = 0, shakeY = 0) {
+    const mapWidth = Math.max(1, Number(world?.pixelWidth) || 1);
+    const mapHeight = Math.max(1, Number(world?.pixelHeight) || 1);
+    const zoom = Math.max(.001, camera.zoom);
+    const viewportWorldWidth = width / zoom;
+    const viewportWorldHeight = height / zoom;
+    const sw = Math.min(mapWidth, viewportWorldWidth);
+    const sh = Math.min(mapHeight, viewportWorldHeight);
+    const sx = Core.clamp(camera.x - sw * .5, 0, Math.max(0, mapWidth - sw));
+    const sy = Core.clamp(camera.y - sh * .5, 0, Math.max(0, mapHeight - sh));
+    return {
+      sx, sy, sw, sh,
+      dx: (sx - camera.x) * zoom + width * .5 + shakeX,
+      dy: (sy - camera.y) * zoom + height * .5 + shakeY,
+      dw: sw * zoom,
+      dh: sh * zoom,
+      viewportWorldWidth,
+      viewportWorldHeight,
+    };
+  }
+
   function inView(point, margin = 100) {
     const screen = worldToScreen(point);
     return screen.x >= -margin && screen.y >= -margin && screen.x <= width + margin && screen.y <= height + margin;
@@ -6026,12 +6002,16 @@
 
   function drawTiles(shakeX, shakeY) {
     if (currentMapId === "world" && world.art?.flattened) {
-      const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
+      const crop = mainTownBackgroundCrop(shakeX, shakeY);
       Art.drawMainTownBackground(ctx, {
-        x: topLeft.x,
-        y: topLeft.y,
-        width: world.pixelWidth * camera.zoom,
-        height: world.pixelHeight * camera.zoom,
+        sourceX: crop.sx,
+        sourceY: crop.sy,
+        sourceWidth: crop.sw,
+        sourceHeight: crop.sh,
+        x: crop.dx,
+        y: crop.dy,
+        width: crop.dw,
+        height: crop.dh,
       });
       return;
     }
@@ -7202,6 +7182,10 @@
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
+        mainTownRender: currentMapId === "world" && world.art?.flattened ? (() => {
+          const crop = mainTownBackgroundCrop();
+          return { source: { x: crop.sx, y: crop.sy, width: crop.sw, height: crop.sh }, destination: { x: crop.dx, y: crop.dy, width: crop.dw, height: crop.dh }, image: { width: world.pixelWidth, height: world.pixelHeight }, canvas: { cssWidth: width, cssHeight: height, dpr, backingWidth: canvas.width, backingHeight: canvas.height }, cameraZoom: camera.zoom };
+        })() : null,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
         facility: mode === "facility" ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
         checkpoint: { ...checkpoint },
@@ -7597,7 +7581,6 @@
   drawPlayerHudPortrait();
   window.addEventListener("lantern-art-ready", () => {
     drawPlayerHudPortrait();
-    if (!dialoguePanel.hidden) drawDialoguePortrait();
   });
   resize();
   updateHud(true);

@@ -889,3 +889,67 @@
   .gear-collection-icon { width: 3rem; height: 3rem; }
   .gear-collection-item .facility-action-button { grid-column: 1 / -1; width: 100%; max-width: none; }
 }
+
+/* Deck surfaces stay dense even when the surrounding facility grows.  The
+   number is an integrated rail marker, while skill identity carries the
+   visual weight and actions remain compact secondary controls. */
+.deck-view-shell.is-editable { width: min(100%, 50rem); }
+.deck-view-shell.is-readonly { width: min(100%, 25rem); }
+.deck-manage-layout { width: min(100%, 48rem); margin-inline: auto; gap: .78rem; }
+.deck-region-heading { min-height: 2.05rem; margin: .05rem 0 .4rem; align-items: center; }
+.deck-region-heading h3 { margin: 0; font-size: .96rem; }
+.deck-region-heading small { display: none; }
+.deck-capacity { font-size: .7rem; letter-spacing: .02em; }
+.deck-skill-list { gap: .28rem; }
+.deck-skill-choice {
+  min-height: 3rem;
+  padding: .3rem .42rem;
+  border-radius: .48rem;
+}
+.deck-skill-choice .facility-action-button {
+  min-width: 3.6rem;
+  min-height: 1.85rem;
+  padding: .18rem .34rem;
+  font-size: .62rem;
+}
+.deck-slot-list { gap: .28rem; }
+.deck-slot-list .deck-slot.is-filled {
+  min-height: 3rem;
+  padding: .22rem .45rem .22rem 2rem;
+}
+.deck-slot-list .deck-slot.is-empty {
+  min-height: 2.35rem;
+  padding: .18rem .45rem .18rem 2rem;
+}
+.deck-slot-number {
+  left: .32rem;
+  top: .28rem;
+  bottom: .28rem;
+  width: 1.15rem;
+  height: auto;
+  transform: none;
+  border: 0;
+  border-right: 1px solid rgba(255,200,87,.25);
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,200,87,.72);
+  font-size: .52rem;
+}
+.deck-slot.is-empty .deck-slot-number { border-right-color: rgba(245,233,202,.16); color: rgba(245,233,202,.42); }
+.deck-slot-action { min-width: 3.7rem !important; min-height: 1.82rem !important; padding: .2rem .34rem !important; font-size: .62rem !important; }
+.deck-slot strong,
+.deck-skill-choice strong { font-size: .8rem; }
+
+@media (max-width: 900px) {
+  .deck-view-shell.is-editable { width: min(100%, 32rem); }
+  .deck-manage-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 650px) {
+  .deck-slot,
+  .deck-skill-choice { grid-template-columns: minmax(0,1fr) auto; }
+  .deck-slot { padding-left: 2rem; }
+  .deck-slot .facility-action-button,
+  .deck-skill-choice .facility-action-button { grid-column: auto; width: auto; max-width: none; }
+  .deck-slot.is-empty { grid-template-columns: 1fr; }
+}

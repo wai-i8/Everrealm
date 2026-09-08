@@ -21,7 +21,7 @@
           <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="收起探索功能列" aria-expanded="true">
             <img src="assets/ui/ui-sidebar-toggle-v1.png" alt="" aria-hidden="true" />
           </button>
-          <section id="playerHud" class="player-hud hud-card" role="button" tabindex="0" aria-label="打開角色狀態欄">
+          <section id="playerHud" class="sidebar-zone sidebar-character player-hud" role="button" tabindex="0" aria-label="打開角色狀態欄">
             <div class="portrait art-portrait" aria-hidden="true"><canvas id="playerHudPortraitCanvas" width="112" height="112"></canvas></div>
             <div class="player-bars">
               <div class="name-row"><strong>阿巡</strong><span id="levelValue">LV. 1</span></div>
@@ -30,13 +30,15 @@
             </div>
           </section>
 
-          <section id="resourceHud" class="resource-hud hud-card" aria-label="物資">
-            <span><i class="coin-icon" aria-hidden="true"></i><b id="coinValue">0</b></span>
-            <span><i class="potion-icon" aria-hidden="true"></i><b id="potionValue">2</b></span>
-            <span><i class="blade-icon" aria-hidden="true"></i><b id="weaponValue">舊刀 +0</b></span>
+          <section class="sidebar-zone sidebar-quick-info" aria-label="快捷資訊">
+            <div id="resourceHud" class="resource-hud" aria-label="物資">
+              <span><i class="coin-icon" aria-hidden="true"></i><b id="coinValue">0</b></span>
+              <span><i class="potion-icon" aria-hidden="true"></i><b id="potionValue">2</b></span>
+            </div>
+            <div class="weapon-summary"><span>目前武器</span><strong><i class="blade-icon" aria-hidden="true"></i><b id="weaponValue">舊刀 +0</b></strong></div>
           </section>
 
-          <nav class="explore-function-menu" aria-label="角色功能">
+          <nav class="sidebar-zone sidebar-primary explore-function-menu" aria-label="主要功能">
             <button id="statusButton" class="explore-menu-button" type="button" aria-label="打開角色狀態欄">
               <span class="explore-menu-icon" aria-hidden="true">◎</span>
               <span class="explore-menu-copy"><b>狀態</b><small>STATUS</small></span>
@@ -54,18 +56,19 @@
               <span class="explore-menu-icon" aria-hidden="true">✧</span>
               <span class="explore-menu-copy"><b>技能樹</b><small>L · SKILLS</small></span>
             </button>
+          </nav>
+
+          <section class="sidebar-zone sidebar-secondary" aria-label="次要控制">
             <div id="zoomControl" class="explore-zoom-control" role="group" aria-label="地圖視角">
               <span>視角</span>
               <button type="button" data-zoom-level="far" aria-pressed="false">遠</button>
               <button type="button" data-zoom-level="mid" aria-pressed="true">中</button>
               <button type="button" data-zoom-level="near" aria-pressed="false">近</button>
             </div>
-            <div class="sidebar-utility-buttons" aria-label="系統功能">
-              <button id="soundButton" class="round-button" type="button" aria-label="關閉聲效" aria-pressed="true">♪</button>
-            </div>
-          </nav>
+            <button id="soundButton" class="sidebar-sound-button round-button" type="button" aria-label="關閉聲效" aria-pressed="true">♪</button>
+          </section>
 
-          <section id="questHud" class="quest-hud hud-card" aria-label="目前任務">
+          <section id="questHud" class="sidebar-zone sidebar-quest quest-hud" aria-label="目前任務">
             <div class="quest-heading" role="tablist" aria-label="任務追蹤分類">
               <button type="button" role="tab" data-quest-track="main" aria-selected="true">主線</button>
               <button type="button" role="tab" data-quest-track="contract" aria-selected="false">公會委託</button>
@@ -267,12 +270,8 @@
         </section>
 
         <section id="dialoguePanel" class="dialogue-panel" aria-live="polite" hidden>
-          <div id="dialoguePortrait" class="dialogue-portrait art-portrait" aria-hidden="true">
-            <canvas id="dialoguePortraitCanvas" width="176" height="208"></canvas>
-          </div>
           <div class="dialogue-body">
             <div class="dialogue-speaker" aria-label="對話角色">
-              <span id="speakerRole" class="speaker-role" hidden></span>
               <span id="speakerName" class="speaker-name">阿澄</span>
             </div>
             <p id="dialogueText"></p>

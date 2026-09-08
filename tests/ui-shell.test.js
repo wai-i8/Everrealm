@@ -7,6 +7,7 @@ const rpgRoot = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(rpgRoot, "index.html"), "utf8");
 const game = fs.readFileSync(path.join(rpgRoot, "game.js"), "utf8");
 const css = fs.readFileSync(path.join(rpgRoot, "styles.css"), "utf8");
+const characterArt = fs.readFileSync(path.join(rpgRoot, "character-art.js"), "utf8");
 const worldSource = fs.readFileSync(path.join(rpgRoot, "world.js"), "utf8");
 const mainTownSource = fs.readFileSync(path.join(rpgRoot, "maps", "main-town.js"), "utf8");
 const transitionsSource = fs.readFileSync(path.join(rpgRoot, "map", "map-transitions.js"), "utf8");
@@ -24,6 +25,21 @@ test("exploration shell keeps character tools left and reserves the right for th
   assert.match(css, /\.explore-sidebar\.is-collapsed\s*\{[\s\S]*?overflow:\s*visible/);
   assert.match(game, /HUD_COLLAPSED_KEY = "everrealm-hud-collapsed"/);
   assert.match(game, /setHudCollapsed\(!hudCollapsed\)/);
+});
+
+test("expanded exploration sidebar is structurally recomposed into hierarchy zones", () => {
+  const sidebar = html.match(/<aside id="exploreSidebar"[\s\S]*?<\/aside>/)?.[0] || "";
+  for (const zone of ["sidebar-character", "sidebar-quick-info", "sidebar-primary", "sidebar-secondary", "sidebar-quest"]) {
+    assert.match(sidebar, new RegExp(`class="[^"]*${zone}`));
+  }
+  assert.match(sidebar, /class="weapon-summary"/);
+  assert.match(sidebar, /class="sidebar-sound-button round-button"/);
+  assert.doesNotMatch(sidebar, /sidebar-utility-buttons/);
+  assert.doesNotMatch(sidebar, /resourceHud[^>]*hud-card/);
+  assert.match(css, /#exploreSidebar \.sidebar-primary\.explore-function-menu/);
+  assert.match(css, /#exploreSidebar \.sidebar-secondary/);
+  assert.match(css, /#exploreSidebar \.sidebar-quest\.quest-hud/);
+  assert.match(css, /#exploreSidebar\.is-collapsed[\s\S]*?background:\s*transparent/);
 });
 
 test("three persisted exploration zoom levels are wired to the camera", () => {
@@ -135,6 +151,12 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.match(deck, /class="deck-capacity"/);
   assert.match(deck, /data-facility-action="unequip-skill"/);
   assert.match(deck, /class="deck-slot \$\{skill \? "is-filled" : "is-empty"\}"/);
+  assert.doesNotMatch(deck, /LEARNED SKILLS|CURRENT DECK|目前 DECK|可裝入 DECK|可裝入 \d+ 格/);
+  assert.equal((deck.match(/<h3 id="deckCurrentHeading">目前配置<\/h3>/g) || []).length, 1);
+  assert.match(uiCssForTest(), /\.deck-skill-choice\s*\{[\s\S]*min-height:\s*3rem/);
+  assert.match(uiCssForTest(), /\.deck-slot-list \.deck-slot\.is-filled\s*\{[\s\S]*min-height:\s*3rem/);
+  assert.match(uiCssForTest(), /\.deck-slot-list \.deck-slot\.is-empty\s*\{[\s\S]*min-height:\s*2\.35rem/);
+  assert.match(fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8"), /\.deck-skill-choice \.facility-action-button:not\(:disabled\)[\s\S]*color:\s*#061923/);
   assert.doesNotMatch(deck, /skill\.apCost|skillRangeText\(skill\)/);
   assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,.9fr\) minmax\(0,1.1fr\)/);
   assert.match(uiCssForTest(), /\.deck-skill-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
@@ -157,21 +179,24 @@ test("Deck sizing and shared badge readability are content-driven", () => {
   assert.doesNotMatch(game, /return skill\.tags\.includes\("passive"\) \? "✦" : "◆"/);
 });
 
-test("Dialogue is a shared anchored overlay with integrated role and vertical choices", () => {
+test("Dialogue is a compact anchored role-only overlay with vertical choices", () => {
   assert.match(html, /id="dialoguePanel" class="dialogue-panel"/);
-  assert.match(html, /id="dialoguePortrait"/);
-  assert.match(html, /id="speakerRole" class="speaker-role"/);
+  assert.doesNotMatch(html, /dialoguePortrait|speakerRole/);
   assert.match(html, /id="speakerName" class="speaker-name"/);
   assert.match(html, /id="dialogueText"/);
   assert.match(html, /id="dialogueChoices" class="dialogue-choices" role="list"/);
-  assert.match(game, /speakerRole: config\.speakerRole \|\| speakerNpc\?\.displayName/);
-  assert.match(game, /backgroundEnd: "#0b1224",[\s\S]*frame: false/);
+  assert.match(game, /const speakerLabel = speakerNpc \? npcDisplayName\(speakerNpc\)/);
+  assert.match(game, /speaker: speakerLabel/);
+  assert.doesNotMatch(game, /drawDialoguePortrait|dialoguePortrait|speakerRole/);
   assert.match(game, /button\.setAttribute\("aria-pressed"/);
   assert.match(game, /nextLabel\.textContent = atEnd \? "確定" : "繼續"/);
   assert.match(game, /next\.dataset\.dialogueState = atEnd/);
+  assert.doesNotMatch(html, /dialogue-portrait/);
   assert.doesNotMatch(html, /<kbd>E<\/kbd>\s*(繼續|確定)/);
+  assert.doesNotMatch(css, /dialogue-portrait/);
   assert.match(css, /\.dialogue-panel\s*\{[\s\S]*border-image: var\(--ui-frame-image\)/);
-  assert.match(css, /\.dialogue-panel\s*\{[\s\S]*max-height: min\(17rem/);
+  assert.match(css, /\.dialogue-panel\s*\{[\s\S]*width: min\(44rem/);
+  assert.match(css, /\.dialogue-body\s*\{[\s\S]*min-height: 0/);
   assert.match(css, /\.dialogue-choices\s*\{[\s\S]*display: grid[\s\S]*grid-template-columns: 1fr/);
   assert.match(css, /\.dialogue-choice\s*\{[\s\S]*border-image: var\(--ui-button-image\)/);
   assert.doesNotMatch(css, /\.dialogue-choices\s*\{[^}]*flex-wrap/);
@@ -186,8 +211,18 @@ test("native Main Town camera and click conversion stay in one world space", () 
   assert.match(game, /function screenToWorldPoint\(screenX, screenY\)/);
   assert.match(game, /const worldPoint = screenToWorldPoint\(screenX, screenY\)/);
   assert.match(game, /const authoredPoint = screenToWorldPoint\(screenX, screenY\)/);
-  assert.match(game, /width: world\.pixelWidth \* camera\.zoom/);
-  assert.match(game, /height: world\.pixelHeight \* camera\.zoom/);
+  assert.match(game, /function mainTownBackgroundCrop\(shakeX = 0, shakeY = 0\)/);
+  assert.match(game, /const responsiveBase = currentMapId === "world"\s*\n\s*\? 1/);
+  assert.match(game, /const viewportWorldWidth = width \/ zoom/);
+  assert.match(game, /const viewportWorldHeight = height \/ zoom/);
+  assert.doesNotMatch(game, /targetZoom\(\)[\s\S]{0,180}(naturalWidth|pixelWidth|pixelHeight)/);
+  assert.match(game, /sourceWidth: crop\.sw/);
+  assert.match(game, /sourceHeight: crop\.sh/);
+  assert.match(game, /destination: \{ x: crop\.dx, y: crop\.dy, width: crop\.dw, height: crop\.dh \}/);
+  assert.match(game, /Art\.drawMainTownBackground\(ctx, \{[\s\S]*?sourceWidth: crop\.sw[\s\S]*?width: crop\.dw/);
+  assert.match(game, /canvas: \{ cssWidth: width, cssHeight: height, dpr, backingWidth: canvas\.width/);
+  assert.match(characterArt, /ctx\.drawImage\(atlas\.image, sourceX, sourceY, cropWidth, cropHeight/);
+  assert.doesNotMatch(game, /world\.pixelWidth\s*\/\s*2048|world\.pixelHeight\s*\/\s*1152/);
 });
 
 function uiCssForTest() {

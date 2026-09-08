@@ -12,7 +12,7 @@
 
 精確房間、走廊、家具／裝飾、敵人、寶箱及 spawn 由 `maps/mine.js` 定義。
 
-坑道內的永久提示 NPC `lost-explorer-kai` 使用「坑道探索者」作為地圖／互動標籤；對話肖像保留已建立的個人身份「露娜」。其服務為 `dungeon-tip`，只提供路線與回音燈提示。
+坑道內的永久提示 NPC `lost-explorer-kai` 使用「坑道探索者」作為地圖／互動標籤及普通對話 speaker；舊個人身份只保留作 internal compatibility metadata，普通對話不使用肖像。其服務為 `dungeon-tip`，只提供路線與回音燈提示。
 # Monster ecology
 
 Runtime enemy spawns use `raccoon`, `frog`, `wild_boar`, `turtle`, `snake`, and `bear`. The final bear is a map-owned boss flag, while species combat and reward data remain in `map/monster-blueprints.js`.

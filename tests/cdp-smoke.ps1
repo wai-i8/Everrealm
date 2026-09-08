@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-native', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -201,6 +201,13 @@ try {
       $townPlaza = Get-GameSnapshot
       if ($townPlaza.mode -ne 'playing' -or $townPlaza.currentMapId -ne 'world') { throw 'Town plaza visual preview did not remain in the main town.' }
     }
+    'town-native' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.teleport(3878,2048); true" | Out-Null
+      Start-Sleep -Milliseconds 2600
+      $townNative = Get-GameSnapshot
+      $render = $townNative.mainTownRender
+      if ($townNative.mode -ne 'playing' -or $townNative.currentMapId -ne 'world' -or $townNative.exploreZoomLevel -ne 'mid' -or [math]::Abs([double]$render.cameraZoom - 1) -gt .01 -or [math]::Abs([double]$render.source.width - [double]$render.canvas.cssWidth) -gt 1.1 -or [math]::Abs([double]$render.source.height - [double]$render.canvas.cssHeight) -gt 1.1 -or $render.image.width -ne 7680 -or $render.image.height -ne 4320) { throw "Native Main Town crop did not stay at 1:1 default view ($($render | ConvertTo-Json -Compress))." }
+    }
     'town-guild' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(700,400); true" | Out-Null
       Start-Sleep -Milliseconds 2600
@@ -283,8 +290,8 @@ try {
       if ($clinicMap.mode -ne 'playing' -or $clinicMap.currentMapId -ne 'clinic') { throw 'Clinic interior did not remain visible.' }
       $clinicService = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.interactWith('clinic-healer-siu-moon');return JSON.stringify({mode:api.snapshot().mode,choices:document.querySelectorAll('.dialogue-choice').length});})()" | ConvertFrom-Json
       if ($clinicService.mode -ne 'dialogue' -or $clinicService.choices -lt 2) { throw 'Clinic healer service did not open from the interior NPC.' }
-      $clinicServiceUi = (Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,role:document.getElementById("speakerRole").textContent,choices:document.querySelectorAll(".dialogue-choice").length,choiceLayout:getComputedStyle(document.getElementById("dialogueChoices")).gridTemplateColumns})') | ConvertFrom-Json
-      if ($clinicServiceUi.speaker -ne '小滿' -or $clinicServiceUi.role -ne '醫療所護士' -or $clinicServiceUi.choices -lt 2 -or ($clinicServiceUi.choiceLayout -split '\s+').Count -ne 1) { throw "Clinic dialogue identity or vertical choices regressed (speaker=$($clinicServiceUi.speaker), role=$($clinicServiceUi.role), choices=$($clinicServiceUi.choices), columns=$($clinicServiceUi.choiceLayout))." }
+      $clinicServiceUi = (Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,portrait:Boolean(document.querySelector(".dialogue-portrait")),choices:document.querySelectorAll(".dialogue-choice").length,choiceLayout:getComputedStyle(document.getElementById("dialogueChoices")).gridTemplateColumns})') | ConvertFrom-Json
+      if ($clinicServiceUi.speaker -ne '護士' -or $clinicServiceUi.portrait -or $clinicServiceUi.choices -lt 2 -or ($clinicServiceUi.choiceLayout -split '\s+').Count -ne 1) { throw "Clinic dialogue role/portrait or vertical choices regressed (speaker=$($clinicServiceUi.speaker), portrait=$($clinicServiceUi.portrait), choices=$($clinicServiceUi.choices), columns=$($clinicServiceUi.choiceLayout))." }
       $dialogueServiceScreenshotPath = Join-Path $runtimeOutputPath "smoke-dialogue-clinic-$ViewportWidth.png"
       $dialogueServiceCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($dialogueServiceScreenshotPath, [Convert]::FromBase64String($dialogueServiceCapture.result.data))
@@ -350,8 +357,8 @@ try {
         $nurseDebug = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,snap=api.snapshot(),npc=api.entityPosition("clinic-healer-siu-moon"),canvas=document.getElementById("gameCanvas"),rect=canvas.getBoundingClientRect();return {snap,npc,rect:{left:rect.left,top:rect.top,width:rect.width,height:rect.height},nursePoint:{x:(($nurseClientX)-rect.left)*(canvas.width/rect.width),y:(($nurseClientY)-rect.top)*(canvas.height/rect.height)},npcRegion:window.LanternHospitalNavigation.isRegionAt("npc",{x:829,y:200})}})())'.Replace('$nurseClientX', [string]$nurseClick.clientX).Replace('$nurseClientY', [string]$nurseClick.clientY) | ConvertFrom-Json
         throw "Authored magenta nurse click did not open the existing dialogue (mode=$($nurseDialogue.mode), x=$($nurseDialogue.x), y=$($nurseDialogue.y), click=$($nurseClick.clientX),$($nurseClick.clientY), debug=$($nurseDebug | ConvertTo-Json -Compress -Depth 8))."
       }
-      $clinicService = Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,choices:document.querySelectorAll(".dialogue-choice").length,actor:document.getElementById("dialoguePortraitCanvas").dataset.actor})' | ConvertFrom-Json
-      if ($clinicService.speaker -ne '小滿' -or $clinicService.choices -lt 2 -or $clinicService.actor -ne 'healer') { throw "Existing Hospital nurse service/dialogue changed (speaker=$($clinicService.speaker), choices=$($clinicService.choices), actor=$($clinicService.actor))." }
+      $clinicService = Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,choices:document.querySelectorAll(".dialogue-choice").length,portrait:Boolean(document.querySelector(".dialogue-portrait"))})' | ConvertFrom-Json
+      if ($clinicService.speaker -ne '護士' -or $clinicService.choices -lt 2 -or $clinicService.portrait) { throw "Existing Hospital nurse service/dialogue changed (speaker=$($clinicService.speaker), choices=$($clinicService.choices), portrait=$($clinicService.portrait))." }
       Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:last-child').click(); true" | Out-Null
       Start-Sleep -Milliseconds 250
 
@@ -767,12 +774,12 @@ try {
       if ($dialogueSnapshot.mode -ne 'dialogue') { throw "Touch dialogue did not open: $($dialogueSnapshot.mode)." }
       $dialogueLabelUi = Invoke-GameExpression -Expression 'JSON.stringify({state:document.getElementById("dialogueNext").dataset.dialogueState,label:document.querySelector(".dialogue-next-label").textContent,aria:document.getElementById("dialogueNext").getAttribute("aria-label")})' | ConvertFrom-Json
       if ($dialogueLabelUi.state -ne 'continue' -or $dialogueLabelUi.label -ne '繼續' -or $dialogueLabelUi.aria -ne '繼續對話') { throw "Dialogue continue state was not explicit (state=$($dialogueLabelUi.state), label=$($dialogueLabelUi.label))." }
-      $dialoguePortraitUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const canvas=document.getElementById("dialoguePortraitCanvas"),rect=canvas.getBoundingClientRect();return {speaker:document.getElementById("speakerName").textContent,actor:canvas.dataset.actor,displayWidth:rect.width,displayHeight:rect.height,canvasWidth:canvas.width,canvasHeight:canvas.height,art:window.LanternArt.spriteStatus()};})())') | ConvertFrom-Json
+      $dialoguePortraitUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const panel=document.getElementById("dialoguePanel"),rect=panel.getBoundingClientRect();return {speaker:document.getElementById("speakerName").textContent,hasPortrait:Boolean(document.querySelector(".dialogue-portrait")),panelWidth:rect.width,panelHeight:rect.height,art:window.LanternArt.spriteStatus()};})())') | ConvertFrom-Json
       # Keep this comparison ASCII-only so Windows PowerShell 5.1 does not
       # reinterpret the UTF-8 source literal through the active ANSI codepage.
-      $expectedGuildMaster = ([string][char]0x598D) + ([string][char]0x59D0)
+      $expectedGuildMaster = ([string][char]0x516C) + ([string][char]0x6703) + ([string][char]0x63A5) + ([string][char]0x5F85) + ([string][char]0x54E1)
       if ($dialoguePortraitUi.speaker -ne $expectedGuildMaster) { throw "Expected Guild Master dialogue, got $($dialoguePortraitUi.speaker)." }
-      if ($dialoguePortraitUi.actor -ne 'guildmaster') { throw "Expected Guild Master portrait actor guildmaster, got $($dialoguePortraitUi.actor)." }
+      if ($dialoguePortraitUi.hasPortrait) { throw 'Ordinary dialogue unexpectedly rendered a portrait.' }
       foreach ($asset in @(
         @('npcMap', 'assets/npc-map-chibi-v4.png'),
         @('npcPortraits', 'assets/npc-dialogue-portraits-v4.png'),
@@ -791,12 +798,7 @@ try {
         if (-not $status.ready -or $status.failed) { throw "Expected $($asset[0]) art to be ready without failure." }
         if ($status.src -ne $asset[1]) { throw "Expected $($asset[0]) source $($asset[1]), got $($status.src)." }
       }
-      if ($dialoguePortraitUi.displayWidth -lt 1 -or $dialoguePortraitUi.displayHeight -lt 1 -or $dialoguePortraitUi.canvasWidth -lt 1 -or $dialoguePortraitUi.canvasHeight -lt 1) { throw 'Dialogue portrait canvas did not have a visible display and backing size.' }
-      $displayAspect = [double]$dialoguePortraitUi.displayWidth / [double]$dialoguePortraitUi.displayHeight
-      $backingAspect = [double]$dialoguePortraitUi.canvasWidth / [double]$dialoguePortraitUi.canvasHeight
-      if ([Math]::Abs($displayAspect - $backingAspect) -gt 0.02) {
-        throw "Dialogue portrait canvas was stretched (display=$displayAspect, backing=$backingAspect)."
-      }
+      if ($dialoguePortraitUi.panelWidth -lt 1 -or $dialoguePortraitUi.panelHeight -lt 1 -or $dialoguePortraitUi.panelWidth -gt 820) { throw 'Dialogue panel did not have a bounded content-driven layout.' }
       Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
       Start-Sleep -Milliseconds 80
       $dialogueTerminalUi = Invoke-GameExpression -Expression 'JSON.stringify({state:document.getElementById("dialogueNext").dataset.dialogueState,label:document.querySelector(".dialogue-next-label").textContent,aria:document.getElementById("dialogueNext").getAttribute("aria-label")})' | ConvertFrom-Json
@@ -967,8 +969,8 @@ try {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); window.__RPG_DEBUG__.acceptOffer('guild_delivery_mountain_2star'); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setEncounterGrace(30); const target=window.__RPG_DEBUG__.entityPosition('mountain_delivery_recipient'); window.__RPG_DEBUG__.teleport(target.x-42,target.y); window.__RPG_DEBUG__.interactWith('mountain_delivery_recipient'); true" | Out-Null
       Start-Sleep -Milliseconds 260
       $mountainRecipient = Get-GameSnapshot
-      $recipientUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,map:window.__RPG_DEBUG__.snapshot().currentMapId,dialogueHidden:document.getElementById("dialoguePanel").hidden,portraitActor:document.getElementById("dialoguePortraitCanvas").dataset.actor,speaker:document.getElementById("speakerName").textContent,target:window.__RPG_DEBUG__.entityPosition("mountain_delivery_recipient")})') | ConvertFrom-Json
-      if ($mountainRecipient.currentMapId -ne 'field' -or $recipientUi.mode -ne 'dialogue' -or $recipientUi.dialogueHidden -or $recipientUi.portraitActor -ne 'mountainCourier' -or $recipientUi.speaker -ne '洛安' -or $null -eq $recipientUi.target) { throw "Mountain recipient dialogue preview failed (mode=$($recipientUi.mode), map=$($recipientUi.map), portrait=$($recipientUi.portraitActor), speaker=$($recipientUi.speaker))." }
+      $recipientUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,map:window.__RPG_DEBUG__.snapshot().currentMapId,dialogueHidden:document.getElementById("dialoguePanel").hidden,hasPortrait:Boolean(document.querySelector(".dialogue-portrait")),speaker:document.getElementById("speakerName").textContent,target:window.__RPG_DEBUG__.entityPosition("mountain_delivery_recipient")})') | ConvertFrom-Json
+      if ($mountainRecipient.currentMapId -ne 'field' -or $recipientUi.mode -ne 'dialogue' -or $recipientUi.dialogueHidden -or $recipientUi.hasPortrait -or $recipientUi.speaker -ne '山地收件員' -or $null -eq $recipientUi.target) { throw "Mountain recipient dialogue preview failed (mode=$($recipientUi.mode), map=$($recipientUi.map), portrait=$($recipientUi.hasPortrait), speaker=$($recipientUi.speaker))." }
     }
     'bossbattle' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.startBattle('boss-mistfang'); true" | Out-Null

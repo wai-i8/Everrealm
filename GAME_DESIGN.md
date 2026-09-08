@@ -29,6 +29,7 @@
 - 開始新遊戲時先選 **戰士** 或 **格鬥士**。戰士使用刀劍；格鬥士使用拳套，初始技能為「正拳」。職業會限制可裝備武器、初始技能及可學技能分支。
 - 非戰鬥移動統一使用滑鼠點擊或觸控地面；角色使用碰撞感知最短可行路線繞過牆、樹與建築。若精確點選位置不可站立或不可到達，改以前往距離該點最近的可達空地。滑鼠按住地圖 `0.5` 秒後放開，即啟用游標跟隨，之後移動游標即可改變行走目標；再次短按則退出跟隨，執行單次點擊。觸控長按可拖動選擇目標，放開後地面目標保留最後位置，角色／設施目標則繼續追至遇敵或互動。連續追蹤最多每 `150 ms` 重算一次路線；取消觸控、切換場景、開啟彈窗或視窗失焦時清除追蹤。移除 WASD、方向鍵、手機虛擬方向盤及 `K` 快閃。
 - 非戰鬥鏡頭提供遠／中／近三級，玩家永遠鎖在畫面正中央；地圖邊界以不可行走的場景底色延伸，鏡頭不因邊界把玩家推去側欄下方。右上只放圓形小地圖；狀態、物品、裝備、DECK、技能樹等入口全部放在左側。
+- 主城可見 artwork、native gameplay world 同 authored navigation 都固定為 `7680 × 4320`；玩家約 `128 × 192` 嘅 sprite proportion 係以呢個原生尺度 authored。camera 係圍繞玩家裁切 viewport 嘅 window，唔係將全張主城 fit 入 gameplay viewport；8K source 尺寸亦唔會自動改變所選 view mode。background、entity、collision 同 screen／world conversion 共用同一 camera transform，DPR 只提高 Canvas output resolution，唔改變 world viewport。
 - 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；公會、裝備店、療癒所、雜貨舖及旅店等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
 - 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊以緊湊格仔列出藥水、技能書、素材及裝備。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。
@@ -86,11 +87,11 @@
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
-- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。配置管理採用 summary-first compact rows，容量只喺目前配置標題旁顯示一次，唔顯示 `可裝入 DECK`／`可裝入 N 格`。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
 - 城門粉紅色 authoring region 嘅「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。粉紅區唔係 NPC、對話點或出口；舊 deck sign／bitmap 不再係 canonical trigger。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
-- 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；已有且仍然需要的個人角色身份只保留在對話層，不另 invent 新名字。主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
-- 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。對話使用獨立 anchored gameplay overlay：深海軍藍、金色裝飾、角色肖像作輔助身份、說話者角色名／功能職稱清楚整合，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
-- 對話最後一句只會關閉對話時顯示「確定」，仍有下一句時顯示「繼續」；E／Enter 等 keyboard shortcut 可以保留但唔需要印喺 action button。探索 HUD 由角色摘要、資源、主要功能、次要視角／聲效及任務追蹤組成，並可完全收起至一個 bitmap 三角 pull-tab；收起係 UI preference，唔影響 movement、combat、stats、quest 或 progression，並可跨 map／interior／refresh 保留。
+- 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；普通服務／提示 NPC 嘅個人身份只保留作 internal compatibility metadata，唔進入 player-facing label、quest copy 或 dialogue speaker。具名劇情 NPC 必須有明確未來設計批准先可例外使用個人名；主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
+- 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。普通 NPC 對話使用獨立 anchored、portrait-free gameplay overlay：深海軍藍、金色裝飾、只顯示功能角色名，panel 依短句／選項內容收窄，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
+- 對話最後一句只會關閉對話時顯示「確定」，仍有下一句時顯示「繼續」；E／Enter 等 keyboard shortcut 可以保留但唔需要印喺 action button。探索 HUD 由 compact character header、quick resource／weapon strip、primary functions、獨立 secondary 視角／聲效 controls 及 compact quest tracker 組成，係實際 DOM／layout recomposition 而唔係只加裝飾；並可完全收起至一個 bitmap 三角 pull-tab。收起係 UI preference，唔影響 movement、combat、stats、quest 或 progression，並可跨 map／interior／refresh 保留。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
 
 ### Fighter V1 equipment

@@ -24,7 +24,7 @@
 
 主城使用一對同尺寸、同座標空間嘅 flattened scene 圖：`assets/main-town/maintown.jpg` 係唯一玩家可見 master art；`assets/main-town/maintown_walkable.jpg` 係唯一 navigation／interaction authoring source。兩張供應圖固定為 `7680 × 4320` 原圖 pixel space，唔存在另外一層 foreground／occlusion navigation art。
 
-Main Town runtime 直接以呢個 `7680 × 4320` native world coordinate space 繪製 master art；地圖尺寸係 1:1 world pixels，唔可以再加一層 legacy compact-map scale、CSS 放大或 per-map image transform。相機 zoom 只負責玩家視角（far／mid／near）與 viewport responsive framing，必須同 navigation、feet pivot、click-to-world inverse 使用同一個 camera transform。
+Main Town runtime 直接以呢個 `7680 × 4320` native world coordinate space 繪製 master art；地圖尺寸係 1:1 world pixels，唔可以再加一層 legacy compact-map scale、CSS 放大或 per-map image transform。相機係 viewport window：每幀以 camera center 同 viewport world size 從 native image 取 source crop，直接 draw 到 final Canvas backing output，唔先將全圖 downsample 到中間 gameplay canvas。相機 zoom 只負責玩家視角（far／mid／near）與 viewport responsive framing，必須同 navigation、feet pivot、click-to-world inverse 使用同一個 camera transform；DPR 只按 CSS viewport 放大 backing store／輸出採樣密度，唔改變 world size 或 crop。
 
 `maintown_walkable.jpg` 以白色定義 walkable ground、青色定義六個固定 transition、粉紅色定義城門 DECK configuration interaction；其他顏色全部 blocked。`tools/generate-main-town-navigation.js`（由 `tools/compile-main-town-navigation.py` 執行 JPG 分類）將 pair deterministic 編譯成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔載入 authoring JPG、唔使用 Canvas／OffscreenCanvas pixel readback，亦唔由 visible art alpha、舊 bitmap 或物件位置推導 collision。
 
@@ -507,7 +507,7 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 
 ## NPC 共用索引
 
-角色 atlas 共用索引保存已建立的對話／肖像身份；它不是地圖標籤的來源。正式 runtime NPC 必須另外提供 `displayName` 作世界／互動功能標籤，例如 `guildmaster-yin` 顯示「公會接待員」而對話身份仍可為「妍姐」。Dialogue nameplate 可並列顯示既有個人身份與功能職稱（例如「小滿｜醫療所護士」），讓非劇情服務 NPC 嘅用途清楚可見。不得為了功能標籤另造新的個人名字；精確 mapping 由各 owning `maps/**/*.js` 保存。
+角色 atlas 共用索引保留既有 art／internal compatibility identity；它不是地圖標籤的來源。正式 runtime NPC 必須另外提供 `displayName` 作世界／互動功能標籤，例如 `guildmaster-yin` 顯示「公會接待員」。普通服務／提示 NPC 嘅個人姓名只留喺 owning map data 供 save、actor index 或舊資料兼容，唔出現在世界 label、quest copy 或 dialogue nameplate；ordinary dialogue 亦唔需要肖像欄。只有明確批准嘅具名劇情角色先可以另行定義 player-facing personal identity。
 
 | Index | Actor | 對話／肖像身份 |
 |---:|---|---|

@@ -990,6 +990,10 @@
     if (!atlas?.ready || !atlas.image) return false;
     const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
     const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    const sourceX = Math.max(0, Math.min(sourceWidth - 1, Number.isFinite(Number(settings.sourceX)) ? Number(settings.sourceX) : 0));
+    const sourceY = Math.max(0, Math.min(sourceHeight - 1, Number.isFinite(Number(settings.sourceY)) ? Number(settings.sourceY) : 0));
+    const cropWidth = Math.max(.001, Math.min(sourceWidth - sourceX, Number(settings.sourceWidth) || sourceWidth));
+    const cropHeight = Math.max(.001, Math.min(sourceHeight - sourceY, Number(settings.sourceHeight) || sourceHeight));
     const width = Math.max(1, Number(settings.width) || sourceWidth);
     const height = Math.max(1, Number(settings.height) || sourceHeight);
     const x = Number(settings.x) || 0;
@@ -997,9 +1001,13 @@
     ctx.save();
     try {
       ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(atlas.image, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
+      // At the canonical 1:1 Main Town view, keep native source pixels
+      // discrete. Intentional far/near camera modes still use high-quality
+      // filtering because they deliberately change the world-to-screen ratio.
+      const nativeScale = Math.abs(width - cropWidth) < .01 && Math.abs(height - cropHeight) < .01;
+      ctx.imageSmoothingEnabled = !nativeScale;
+      if (!nativeScale) ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, sourceX, sourceY, cropWidth, cropHeight, x, y, width, height);
     } finally {
       ctx.restore();
     }
