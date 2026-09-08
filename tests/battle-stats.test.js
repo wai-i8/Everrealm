@@ -125,6 +125,57 @@ test("pending action revalidation cancels stale adjacent attacks but preserves l
   assert.equal(sideResult.ok, true);
 });
 
+test("knockback revalidates a queued Fighter skill from the actor's current cell", () => {
+  const grid = Tactics.createGrid(8, 8);
+  const skill = Skills.getSkill("sunkei");
+  const target = { id: "a", side: "ally", alive: true, hp: 40, cell: { x: 1, y: 2 } };
+  const actor = { id: "b", side: "enemy", alive: true, hp: 40, cell: { x: 2, y: 2 }, facing: "left" };
+  const validate = (action) => Tactics.revalidatePendingAction(action, {
+    actor,
+    target,
+    units: [actor, target],
+    grid,
+    rangeResolver: ({ actor: currentActor, target: currentTarget }) => Skills.validateSkillTarget(skill, currentActor.cell, currentTarget.cell, {
+      grid,
+      facing: currentActor.facing,
+      actorTeam: currentActor.side,
+      actorId: currentActor.id,
+      targetUnit: currentTarget,
+    }).ok,
+  });
+
+  const pending = Tactics.createPendingAction({
+    actorId: actor.id,
+    targetId: target.id,
+    targetCell: target.cell,
+    skillId: skill.id,
+    deliveryMode: skill.deliveryMode,
+    skillDurability: skill.durability,
+  });
+  Tactics.applyInterrupt(pending, 1);
+  assert.equal(pending.interrupted, false, "the queued action survives below its Durability threshold");
+
+  // A resolves first with knockback; B must not use the old adjacent cell.
+  actor.cell = { x: 3, y: 2 };
+  assert.equal(validate(pending).reason, "out-of-range");
+  assert.equal(pending.interrupted, false);
+
+  // Displacement alone is not a blanket cancellation: a new position that
+  // still has the target in 寸勁's current legal geometry remains executable.
+  actor.cell = { x: 3, y: 3 };
+  actor.facing = "left";
+  target.cell = { x: 2, y: 3 };
+  const stillLegal = Tactics.createPendingAction({
+    actorId: actor.id,
+    targetId: target.id,
+    targetCell: target.cell,
+    skillId: skill.id,
+    deliveryMode: skill.deliveryMode,
+    skillDurability: skill.durability,
+  });
+  assert.equal(validate(stillLegal).ok, true);
+});
+
 test("generic ATK/DEF damage ignores obsolete category fields", () => {
   const skill = Skills.getSkill("kentotsu");
   const multiplier = Skills.calculateSkillDamageMultiplier(skill);

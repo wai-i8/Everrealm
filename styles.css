@@ -510,27 +510,29 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-turn-order li b { overflow: hidden; text-overflow: ellipsis; font-size: .68rem; white-space: nowrap; }
 .turn-avatar { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; border-radius: .58rem; font-size: .67rem; font-weight: 900; }
 .ally-avatar { color: #09201d; background: var(--teal); }.enemy-avatar { color: #231226; background: var(--violet); }
-.battle-action-dock { left: 50%; bottom: .7rem; width: min(70rem,calc(100% - 1.4rem)); transform: translateX(-50%); padding: .58rem .68rem .5rem; }
+.battle-action-dock { left: 50%; bottom: .7rem; width: min(70rem,calc(100% - 1.4rem)); transform: translateX(-50%); padding: .42rem .58rem .36rem; }
 .battle-action-heading { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; margin: 0 .16rem .42rem; }
 .battle-action-heading > span { color: var(--gold); font-size: .68rem; font-weight: 900; letter-spacing: .06em; }.battle-action-heading small { color: var(--teal); font-size: .67rem; }
 .battle-skill-buttons { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: .38rem; }
 .battle-skill-buttons.is-move-phase { grid-template-columns: repeat(2,minmax(0,1fr)); }
-.battle-skill-buttons.is-action-phase { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.battle-skill-buttons.is-action-phase { grid-template-columns: repeat(auto-fit,minmax(7rem,1fr)); }
 .battle-actions-loading { grid-column: 2 / -1; align-self: center; color: var(--muted); font-size: .68rem; text-align: center; }
 .battle-skill-button {
-  min-width: 0; min-height: 3.55rem; display: grid; grid-template-columns: 2rem minmax(0,1fr) auto; align-items: center; gap: .42rem;
-  padding: .42rem .38rem; border: 1px solid rgba(245,233,202,.24); border-radius: .62rem; text-align: left;
+  min-width: 0; min-height: 2.35rem; display: grid; grid-template-columns: 1.55rem minmax(0,1fr) auto; align-items: center; gap: .32rem;
+  padding: .28rem .34rem; border: 1px solid rgba(245,233,202,.24); border-radius: .52rem; text-align: left;
   color: var(--cream); background: rgba(7,12,25,.55); cursor: pointer; transition: transform .12s ease,border-color .12s ease,background .12s ease;
 }
-.battle-skill-button > i { width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid currentColor; border-radius: .68rem; font-style: normal; font-size: .82rem; background: rgba(255,255,255,.04); }
-.battle-skill-button > span { min-width: 0; display: grid; gap: .2rem; }.battle-skill-button b { overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }.battle-skill-button small { overflow: hidden; color: var(--muted); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
+.battle-skill-button > i { width: 1.5rem; height: 1.5rem; display: grid; place-items: center; border: 1px solid currentColor; border-radius: .5rem; font-style: normal; font-size: .7rem; background: rgba(255,255,255,.04); }
+.battle-skill-button > span { min-width: 0; display: grid; gap: .08rem; }.battle-skill-button b { overflow: hidden; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }.battle-skill-button small { overflow: hidden; color: var(--muted); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
 .battle-skill-button em { color: var(--cream); font-style: normal; }.battle-skill-button kbd { min-width: 1.35rem; padding-inline: .24rem; font-size: .6rem; }
 .battle-skill-button:hover, .battle-skill-button:focus-visible, .battle-skill-button.is-selected { transform: translateY(-2px); border-color: currentColor; background: rgba(39,52,86,.94); }
 .battle-skill-button:disabled, .battle-skill-button[aria-disabled="true"] { opacity: .42; cursor: not-allowed; filter: grayscale(.5); transform: none; }
 .move-skill { color: var(--teal); }.attack-skill { color: var(--gold); }.lantern-skill { color: var(--violet); }.potion-skill { color: var(--red); }.end-turn-skill { color: var(--green); }.flee-skill { color: var(--muted); }
-.battle-skill-button.star-2-skill { color: #a9c9ff; }.battle-skill-button.star-3-skill { color: #ff9dd3; border-color: rgba(255,157,211,.42); }
+.battle-utility-button { opacity: .72; }.battle-target-context { min-width: 0; display: flex; align-items: center; gap: .5rem; min-height: 2.35rem; padding: .25rem .6rem; border: 1px solid rgba(255,200,87,.48); border-radius: .52rem; color: var(--cream); background: rgba(255,200,87,.09); }
+.battle-target-context strong { color: var(--gold); font-size: .78rem; }.battle-target-context span { color: var(--cream); font: 800 .66rem/1 ui-monospace,monospace; }.battle-target-context small { color: var(--muted); font-size: .65rem; }
+.cancel-target-button { max-width: 9rem; color: var(--muted); }
 .battle-skill-button b, .battle-skill-button kbd { color: var(--cream); }
-.battle-hint { position: relative; z-index: 1; margin: .42rem 0 0; color: var(--muted); text-align: center; font-size: .67rem; }
+.battle-hint { position: relative; z-index: 1; margin: .28rem 0 0; color: var(--muted); text-align: center; font-size: .62rem; }
 .battle-hint > span { margin-right: .22rem; color: var(--gold); }
 .battle-facing-picker {
   position: absolute;
@@ -1109,7 +1111,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 @media (max-width: 1120px) {
   .battle-skill-buttons { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .battle-skill-buttons.is-move-phase { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .battle-skill-buttons.is-action-phase { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .battle-skill-buttons.is-action-phase { grid-template-columns: repeat(auto-fit,minmax(7rem,1fr)); }
   .selected-unit-card { top: .8rem; bottom: auto; }
 }
 
@@ -1150,7 +1152,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .battle-skill-buttons { gap: .3rem; }
   .battle-skill-buttons.is-move-phase { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .battle-skill-buttons.is-action-phase { grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .battle-skill-button { min-height: 3rem; grid-template-columns: 1.75rem minmax(0,1fr); gap: .3rem; padding: .32rem; }
+  .battle-skill-button { min-height: 2.35rem; grid-template-columns: 1.55rem minmax(0,1fr); gap: .3rem; padding: .28rem; }
   .battle-skill-button > i { width: 1.75rem; height: 1.75rem; border-radius: .55rem; }
   .battle-skill-button kbd { display: none; }.battle-skill-button small { font-size: .62rem; }
   .facility-window { max-height: 100%; min-height: min(32rem,100%); }
@@ -1236,10 +1238,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .selected-unit-copy > strong { margin: .2rem 0 .35rem; font-size: .78rem; }
   .selected-unit-heading { font-size: .62rem; }.unit-status-list { position: absolute; right: .48rem; top: .38rem; margin: 0; }
   .battle-action-heading { margin-bottom: .32rem; }.battle-action-heading small { font-size: .62rem; }
-  .battle-skill-buttons.is-action-phase { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .battle-skill-button { min-height: 2.75rem; grid-template-columns: 1.6rem minmax(0,1fr); }
+  .battle-skill-buttons.is-action-phase { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .battle-skill-button { min-height: 2.35rem; grid-template-columns: 1.45rem minmax(0,1fr); }
   .battle-skill-button > i { width: 1.55rem; height: 1.55rem; font-size: .68rem; }
-  .battle-skill-button b { font-size: .67rem; }.battle-skill-button small { display: none; }
+  .battle-skill-button b { font-size: .64rem; }.battle-skill-button small { display: block; font-size: .56rem; }
   .battle-hint { overflow: hidden; margin-top: .3rem; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
   .battle-facing-picker { width: 0; height: 0; }
   .battle-facing-picker button { width: 1.35rem; height: 1.35rem; font-size: .48rem; }

@@ -1,8 +1,8 @@
 ﻿# 幸福 Online / STRUGARDEN 格鬥士技能樹參考
 
-> 類型：Historical Reference / Research Data  
-> 用途：保存《幸福 Online / ストラガーデン》格鬥士技能樹嘅前置關係，供 Everrealm 長期設計參考。  
-> **呢份文件唔係 Everrealm 現行技能平衡規格。** Everrealm 真正技能／DECK 設計仍以 `GAME_DESIGN.md` 及相關 system docs 為準。
+> 類型：Active structured Fighter implementation guideline / source data
+> 用途：保存並規範 Everrealm 格鬥士技能樹嘅 AP、速度、Interrupt、Durability、`range_cells_relative`、效果區域及命中／路徑欄位。
+> 原作名稱與研究證據仍保留喺本文件；現行 Everrealm 的跨系統平衡與 runtime 入口另見 `docs/FIGHTER_SKILL_TREE.md`，兩者不得以未結構化文字取代明確欄位。
 
 ## 命名原則
 

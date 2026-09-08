@@ -3426,8 +3426,28 @@
       grid: battle.grid,
       canAct: (unit) => !FighterEffects?.isDisabled(unit, battle.round),
       rangeResolver: ({ action, actor: currentActor, target: currentTarget }) => {
-        if (!currentTarget || action.rangeMax == null) return true;
-        const cell = currentTarget.cell;
+        const cell = currentTarget?.cell || action.targetCell;
+        if (!cell) return action.rangeMax == null;
+
+        // Fighter CMD skills own exact actor-local target geometry. Resolve it
+        // again at execution time so knockback, displacement or a facing
+        // change cannot reuse the range that was valid when the round began.
+        const skill = action.skillId ? Skills.getSkill(action.skillId) : null;
+        if (skill) {
+          const actorTeam = currentActor?.side || (currentActor?.id === battle.hero.id ? "ally" : "enemy");
+          const validation = Skills.validateSkillTarget(skill, currentActor.cell, cell, {
+            grid: battle.grid,
+            battlefield: battle.battlefield,
+            heightMap: battle.battlefield?.heightMap,
+            heightAt: battleCellHeight,
+            facing: currentActor.facing,
+            actorTeam,
+            actorId: currentActor.id,
+            targetUnit: currentTarget ? { ...currentTarget, team: currentTarget.side || currentTarget.team } : null,
+          });
+          return validation.ok;
+        }
+        if (action.rangeMax == null) return true;
         if (!Tactics.isInAttackRange(currentActor.cell, cell, action.rangeMax, action.rangeMin || 1)) return false;
         if (!action.targetArc) return true;
         const relative = Tactics.relativePosition(currentActor.cell, currentActor.facing, cell);
@@ -3681,6 +3701,7 @@
     }
     if (action === "lantern-skill" || action === "flare") action = "skill:lantern_shot";
     battle.messageDanger = false;
+    if (action === "cancel-target") return cancelBattleTargetSelection();
     if (action === "flee") return fleeBattle();
     if (battle.phase === "planning_move") {
       if (action === "reset-move" || action === "move") return resetBattleMoveDraft();
@@ -3693,7 +3714,7 @@
       if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id)) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id))) return setBattleMessage("呢招未裝備喺技能欄。", true);
       if (battle.ap < skill.apCost) return setBattleMessage(`${skill.name}要 ${skill.apCost} AP；可以待機儲力。`, true);
       battle.selectedAction = action;
-      battle.message = `${skillStars(skill.star)} ${skill.name} · ${skillRangeText(skill)}。${skill.description}`;
+      battle.message = "請喺棋盤揀發光目標；按 Esc 或右鍵取消。";
       if (skill.targeting.mode === "self") return resolvePlayerBattleSkill(skill, battle.hero.cell, battle.hero);
     } else if (action === "potion") {
       return useBattlePotion();
@@ -3701,6 +3722,15 @@
       return beginActionResolution({ type: "wait", label: "待機" });
     }
     updateBattleUi();
+  }
+
+  function cancelBattleTargetSelection() {
+    if (!battle || battle.phase !== "planning_action" || !battleSkillFromAction(battle.selectedAction)) return false;
+    battle.selectedAction = null;
+    battle.message = "揀一招；棋盤會顯示合法目標。";
+    battle.messageDanger = false;
+    updateBattleUi();
+    return true;
   }
 
   function setBattleMessage(message, danger = false) {
@@ -3838,8 +3868,9 @@
     refreshEnemyAttackPlansAfterMovement();
     battle.movementResolution = null;
     battle.phase = "planning_action";
-    const firstSkill = equippedBattleSkills()[0] || Skills.getSkill(Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0]);
-    battle.selectedAction = firstSkill ? `skill:${firstSkill.id}` : null;
+    // Action selection is an explicit step. Do not silently enter target
+    // selection for the first equipped skill before the player chooses it.
+    battle.selectedAction = null;
     battle.cursor = { ...battle.hero.cell };
     battle.actingUnitIds = [];
     for (const unit of stoppedUnits) {
@@ -3849,8 +3880,8 @@
       battle.effects.push({ cell: { ...battle.hero.cell }, text: "停定！", color: "#52dccb", life: .75, maxLife: .75 });
     }
     battle.message = stoppedUnits.length
-      ? "移動途中撞到其他單位，未走完嘅路線已經 STOP；依家按實際企位同朝向出招。"
-      : "移動完成。依家揀攻擊、技能、飲藥或者待機；側擊 +15%，背擊 +35%。";
+      ? "移動 STOP；按實際企位揀招。"
+      : "移動完成；揀一招，棋盤會顯示合法目標。";
     battle.autoTimer = .28;
     updateBattleUi();
     announce(stoppedUnits.length ? "有單位被卡住，移動停止。請選擇今輪行動。" : "移動完成。請選擇今輪行動。");
@@ -4457,26 +4488,38 @@
       battleUi.potionCount = null;
       return;
     }
+    const selectedSkill = battleSkillFromAction(battle.selectedAction);
+    if (selectedSkill) {
+      buttons.innerHTML = `
+        <div class="battle-target-context" role="status" aria-live="polite">
+          <strong>${selectedSkill.name}</strong><span>${selectedSkill.apCost} AP</span><small>選擇目標</small>
+        </div>
+        <button class="battle-skill-button cancel-target-button" type="button" data-battle-action="cancel-target" aria-keyshortcuts="Escape">
+          <i aria-hidden="true">×</i><span><b>取消</b><small>返回揀招式</small></span><kbd>ESC</kbd>
+        </button>`;
+      battleUi.potionCount = null;
+      return;
+    }
     const keyLabels = ["2", "3", "4", "5", "6", "7"];
     const skillButtons = equippedBattleSkills().map((skill, index) => {
       const id = skill.id === "quick_slash" ? ' id="battleAttackButton"' : skill.id === "lantern_shot" ? ' id="battleLanternButton"' : "";
-      const className = skill.star === 3 ? "star-3-skill" : skill.star === 2 ? "star-2-skill" : skill.tags.includes("magic") ? "lantern-skill" : "attack-skill";
+      const className = skill.tags.includes("magic") ? "lantern-skill" : "attack-skill";
       const action = `skill:${skill.id}`;
       const selected = battle.selectedAction === action;
       const disabled = battle.ap < skill.apCost;
       return `<button${id} class="battle-skill-button ${className}${selected ? " is-selected" : ""}" type="button" data-battle-action="${action}" aria-keyshortcuts="${keyLabels[index]}" ${disabled ? "disabled" : ""}>
-        <i aria-hidden="true">${skillIcon(skill)}</i><span><b>${skillStars(skill.star)} ${skill.name}</b><small>${skillRangeText(skill)}</small></span><kbd>${keyLabels[index]}</kbd>
+        <i aria-hidden="true">${skillIcon(skill)}</i><span><b>${skill.name}</b><small>${skill.apCost} AP</small></span><kbd>${keyLabels[index]}</kbd>
       </button>`;
     }).join("");
     buttons.innerHTML = `
       ${skillButtons}
-      <button id="battlePotionButton" class="battle-skill-button potion-skill" type="button" data-battle-action="potion" aria-keyshortcuts="Q" ${player.potions > 0 && battle.hero.hp < battle.hero.maxHp ? "" : "disabled"}>
+      <button id="battlePotionButton" class="battle-skill-button battle-utility-button potion-skill" type="button" data-battle-action="potion" aria-keyshortcuts="Q" ${player.potions > 0 && battle.hero.hp < battle.hero.maxHp ? "" : "disabled"}>
         <i aria-hidden="true">♥</i><span><b>飲藥</b><small><em id="battlePotionCount">${player.potions}</em> 支剩低</small></span><kbd>8</kbd>
       </button>
-      <button id="battleEndTurnButton" class="battle-skill-button end-turn-skill" type="button" data-battle-action="end-turn" aria-keyshortcuts="E">
+      <button id="battleEndTurnButton" class="battle-skill-button battle-utility-button end-turn-skill" type="button" data-battle-action="end-turn" aria-keyshortcuts="E">
         <i aria-hidden="true">✓</i><span><b>待機</b><small>保留 AP · 無減傷</small></span><kbd>9</kbd>
       </button>
-      <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
+      <button id="battleFleeButton" class="battle-skill-button battle-utility-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
         <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
       </button>`;
     battleUi.potionCount = document.getElementById("battlePotionCount");
@@ -4493,7 +4536,7 @@
     const phaseCopy = {
       planning_move: ["同步移動部署", "撳格仔加路點；揀箭嘴定朝向並確認"],
       resolving_move: ["雙方移動中", "所有單位沿路線同步逐格前進"],
-      planning_action: ["選擇今輪出招", "只可向前、左、右出招；背面係死角"],
+      planning_action: ["選擇招式", "揀技能後選擇發光目標"],
       resolving_action: ["雙方同步出招", "傷害會喺同一時點結算"],
       victory: ["戰鬥勝利！", "霧散開咗"],
       defeat: ["燈火熄滅", "返回落腳燈位"],
@@ -4505,7 +4548,7 @@
     battleUi.unitName.textContent = "阿巡";
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
     battleUi.hpText.textContent = `${Math.ceil(battle.hero.hp)} / ${battle.hero.maxHp}`;
-    battleUi.actionPoints.textContent = `燈力 AP ${battle.ap} / ${BATTLE_AP_MAX}`;
+    battleUi.actionPoints.textContent = `AP ${battle.ap} / ${BATTLE_AP_MAX}`;
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
     battlePortraitCtx.clearRect(0, 0, battlePortraitCanvas.width, battlePortraitCanvas.height);
     Art.drawPortrait(battlePortraitCtx, {
@@ -5387,6 +5430,11 @@
 
   function handleBattlePointer(event) {
     if (mode !== "battle" || !battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
+    if (event.button === 2) {
+      event.preventDefault();
+      if (battle.phase === "planning_action") cancelBattleTargetSelection();
+      return;
+    }
     const cell = battleCellFromPointer(event);
     if (!cell) return;
     event.preventDefault();
@@ -6872,6 +6920,10 @@
         updateBattleUi();
         return;
       }
+      if (battle.phase === "planning_action" && code === "Escape" && battleSkillFromAction(battle.selectedAction)) {
+        cancelBattleTargetSelection();
+        return;
+      }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code)) {
         const direction = code === "ArrowUp" ? { x: 0, y: -1 } : code === "ArrowDown" ? { x: 0, y: 1 } : code === "ArrowLeft" ? { x: -1, y: 0 } : { x: 1, y: 0 };
         battle.cursor.x = Core.clamp(battle.cursor.x + direction.x, 0, BATTLE_WIDTH - 1);
@@ -7385,6 +7437,9 @@
     selectBattleAction(button.dataset.battleAction);
   });
   canvas.addEventListener("pointerdown", handleCanvasPointer);
+  canvas.addEventListener("contextmenu", (event) => {
+    if (mode === "battle") event.preventDefault();
+  });
   canvas.addEventListener("pointermove", handleCanvasPointerMove);
   canvas.addEventListener("pointerup", finishCanvasPointer);
   canvas.addEventListener("pointercancel", (event) => cancelExplorePointerTracking(event.pointerId));

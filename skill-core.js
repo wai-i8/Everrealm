@@ -951,11 +951,13 @@
   function isTargetInRange(skillOrId, origin, target, options = {}) {
     const skill = getSkill(skillOrId);
     if (!skill || !validCell(origin) || !validCell(target)) return false;
-    if (!skill.legacyAlias) {
-      const exact = exactRangeCells(skill, origin, options.facing || "down");
-      if (exact) return exact.some((cell) => sameCell(cell, target));
-      if (skill.range?.type === "unknown" || skill.range?.min == null || skill.range?.max == null) return false;
-    }
+    // Authored relative cells are the complete geometry, including for
+    // compatibility aliases.  An alias may change the public id or target
+    // arc, but it must never widen a canonical Fighter range into a generic
+    // adjacent-cell fallback.
+    const exact = exactRangeCells(skill, origin, options.facing || "down");
+    if (exact) return exact.some((cell) => sameCell(cell, target));
+    if (skill.range?.type === "unknown" || skill.range?.min == null || skill.range?.max == null) return false;
     const min = wholeNumber(skill.range && skill.range.min);
     const max = wholeNumber(skill.range && skill.range.max);
     const dx = Math.abs(Math.trunc(Number(target.x)) - Math.trunc(Number(origin.x)));

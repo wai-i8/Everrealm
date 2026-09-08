@@ -231,8 +231,51 @@ test("range checks include dead zones, self skills, and cardinal restrictions", 
   assert.equal(Skills.isTargetInRange("guard_stance", origin, { x: 3, y: 4 }), false);
   assert.equal(Skills.isTargetInRange("thunder_pillar", origin, { x: 3, y: 8 }), true);
   assert.equal(Skills.isTargetInRange("thunder_pillar", origin, { x: 4, y: 7 }), false);
-  assert.equal(Skills.isTargetInRange("straight_punch", origin, { x: 4, y: 2 }), true, "one-cell fists include a diagonal front cell");
-  assert.equal(Skills.isTargetInRange("straight_punch", origin, { x: 5, y: 2 }), false);
+  assert.equal(Skills.isTargetInRange("straight_punch", origin, { x: 2, y: 4 }), true, "legacy Fighter aliases retain canonical target cells");
+  assert.equal(Skills.isTargetInRange("straight_punch", origin, { x: 4, y: 2 }), false, "legacy aliases must not widen to generic adjacent cells");
+});
+
+test("Fighter CMD ranges match canonical relative cells exactly across every facing", () => {
+  const origin = { x: 6, y: 6 };
+  const facings = ["down", "right", "up", "left"];
+  const namedPatterns = {
+    kentotsu: [[-1, 1], [0, 1], [1, 1], [-1, 0], [1, 0]],
+    haiken: [[-1, -1], [0, -1], [1, -1]],
+    jinken: [[0, 1], [-1, 0], [1, 0]],
+    sunkei: [[0, 1], [-1, 0], [1, 0]],
+  };
+
+  for (const [id, cells] of Object.entries(namedPatterns)) {
+    assert.deepEqual(Skills.getSkill(id).rangeCellsRelative, cells, `${id} canonical range`);
+  }
+
+  const structuredCommands = FighterData.skills.filter((raw) => raw.type === "CMD"
+    && Array.isArray(raw.original_reference?.range?.range_cells_relative));
+  assert.ok(structuredCommands.length >= 50, "all structured Fighter commands should be included in the audit");
+  for (const raw of structuredCommands) {
+    const skill = Skills.getSkill(raw.id);
+    assert.deepEqual(skill.rangeCellsRelative, raw.original_reference.range.range_cells_relative, `${raw.id} normalized range`);
+    for (const facing of facings) {
+      const expected = new Set();
+      for (const [lateral, depth] of raw.original_reference.range.range_cells_relative) {
+        const world = facing === "right"
+          ? { x: origin.x + depth, y: origin.y + lateral }
+          : facing === "up"
+            ? { x: origin.x - lateral, y: origin.y - depth }
+            : facing === "left"
+              ? { x: origin.x - depth, y: origin.y - lateral }
+              : { x: origin.x + lateral, y: origin.y + depth };
+        expected.add(`${world.x},${world.y}`);
+      }
+      const actual = new Set();
+      for (let y = origin.y - 6; y <= origin.y + 6; y += 1) {
+        for (let x = origin.x - 6; x <= origin.x + 6; x += 1) {
+          if (Skills.isTargetInRange(skill, origin, { x, y }, { facing })) actual.add(`${x},${y}`);
+        }
+      }
+      assert.deepEqual(actual, expected, `${raw.id} must not widen or lose cells while facing ${facing}`);
+    }
+  }
 });
 
 test("single, line, cone, cross and radius patterns return deterministic cells", () => {

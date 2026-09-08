@@ -1234,7 +1234,9 @@
         blocksByTerrain: action.blocksByTerrain,
         blocksByUnits: action.blocksByUnits,
       });
-      if (!trace.valid || (action.targetId != null && trace.actualTarget?.id !== action.targetId)) {
+      const hitIntendedTarget = action.targetId == null || trace.actualTarget?.id === action.targetId;
+      const invalidated = trace.stoppedReason === "terrain" || !hitIntendedTarget;
+      if (invalidated) {
         return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
       }
       action.attackPath = trace.path.map((cell) => ({ ...cell }));

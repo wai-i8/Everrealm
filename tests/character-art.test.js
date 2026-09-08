@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const Art = require("../character-art.js");
+const Locomotion = require("../locomotion.js");
+const characterArtSource = fs.readFileSync(path.join(__dirname, "..", "character-art.js"), "utf8");
 
 test("named NPCs own unique glasses-free frames and the generic fallback never uses the eyewear frame", () => {
   const namedRoles = [
@@ -81,6 +83,46 @@ test("monster visual profiles provide semantic name anchors independent of atlas
   }
   assert.ok(profiles.bear.nameLift > profiles.fox.nameLift, "large monsters need a higher label anchor");
   assert.ok(profiles.snake.nameLift > profiles.wild_boar.nameLift, "tall source art needs a higher label anchor");
+});
+
+test("standard battle labels use audited visible tops for small and large units", () => {
+  const ids = ["fighter", "raccoon", "turtle", "wild_boar"];
+  const layout = Locomotion.layout(320, 500, 1);
+  const frame = (id) => {
+    const selected = Locomotion.frame({ state: "idle", facing: "down" });
+    const bounds = Locomotion.frameVisualBounds(id, selected.index);
+    return {
+      visualTop: layout.y + (bounds.sy - selected.sy),
+      nameY: layout.y + (bounds.sy - selected.sy) - 4,
+      bounds,
+    };
+  };
+  for (const id of ids) {
+    assert.equal(Locomotion.STANDARD_MOBILE_UNIT_VISUAL_BOUNDS[id].length, 28, `${id} frame audit`);
+    const result = frame(id);
+    assert.ok(result.bounds && result.bounds.sw > 0 && result.bounds.sh > 0, `${id} should have an opaque frame bound`);
+    assert.equal(result.nameY, result.visualTop - 4, `${id} label gap`);
+  }
+  assert.ok(frame("raccoon").visualTop > frame("turtle").visualTop, "small raccoon label follows its shorter visible body");
+  assert.ok(frame("wild_boar").visualTop < frame("raccoon").visualTop, "boar label follows its taller visible body");
+  assert.match(characterArtSource, /const opaque = opaqueAtlasFrame\(atlas, selected\.index\);[\s\S]*const visualTop = box\.y \+ \(opaque\.sy - selected\.sy\)/);
+  assert.match(characterArtSource, /const nameAnchorY = visualTop - 4 \* visualScale/);
+  const locomotionBlock = characterArtSource.match(/function drawLocomotion\([\s\S]*?\n  \}/)?.[0] || "";
+  assert.doesNotMatch(locomotionBlock, /nameLift/);
+});
+
+test("turtle and boar keep their species locomotion atlas through actions", () => {
+  assert.equal(Locomotion.assets.turtle, "assets/locomotion/turtle-v1.png");
+  assert.equal(Locomotion.assets.wild_boar, "assets/locomotion/wild-boar-v1.png");
+  assert.notEqual(Locomotion.assets.turtle, Locomotion.assets.slime);
+  assert.notEqual(Locomotion.assets.wild_boar, Locomotion.assets.slime);
+  const bitmapEnemyBlock = characterArtSource.match(/function drawBitmapEnemy\([\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(bitmapEnemyBlock, /drawLocomotion\(ctx, settings, settings\.type\)/);
+  assert.match(characterArtSource, /\["hurt", "attack"\]\.includes\(settings\.state\)/);
+  assert.doesNotMatch(bitmapEnemyBlock, /type === "turtle"[\s\S]{0,160}slime|type === "wild_boar"[\s\S]{0,160}slime/);
+  for (const source of [Locomotion.assets.turtle, Locomotion.assets.wild_boar]) {
+    assert.equal(fs.existsSync(path.join(__dirname, "..", source)), true, source);
+  }
 });
 
 test("semantic pivots align asymmetric cut-outs without changing their scale", () => {

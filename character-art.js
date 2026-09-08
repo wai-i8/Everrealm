@@ -299,7 +299,17 @@
   };
 
   for (const [id, src] of Object.entries(Locomotion.assets)) {
-    spriteAtlases[`locomotion_${id}`] = { src, standard: true, image: null, ready: false, failed: false };
+    const m = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
+    spriteAtlases[`locomotion_${id}`] = {
+      src,
+      standard: true,
+      columns: m.columns,
+      rows: m.rows,
+      visualBounds: Array.from({ length: m.columns * m.rows }, (_, index) => Locomotion.frameVisualBounds(id, index)),
+      image: null,
+      ready: false,
+      failed: false,
+    };
   }
 
   function loadSpriteAtlases() {
@@ -313,7 +323,7 @@
         const m = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
         atlas.ready = !atlas.standard || (image.naturalWidth === m.columns * m.cellWidth && image.naturalHeight === m.rows * m.cellHeight);
         atlas.failed = !atlas.ready;
-        if (!atlas.standard && !atlas.background) {
+        if (!atlas.background) {
           atlas.alphaBounds = scanAtlasAlphaBounds(atlas);
         }
         if (typeof globalThis.dispatchEvent === "function" && typeof CustomEvent === "function") {
@@ -408,7 +418,7 @@
   }
 
   function opaqueAtlasFrame(atlas, index) {
-    return atlas.alphaBounds?.[index] || safeAtlasFrame(atlas, index);
+    return atlas.alphaBounds?.[index] || atlas.visualBounds?.[index] || safeAtlasFrame(atlas, index);
   }
 
   function fitFrameToBaseline(bounds, options = {}) {
@@ -512,17 +522,24 @@
   }
 
   function drawLocomotion(ctx, settings, id) {
-    if (![undefined, "idle", "walk", "hurt"].includes(settings.state)) return false;
+    if (![undefined, "idle", "walk", "hurt", "attack"].includes(settings.state)) return false;
     const atlas = spriteAtlases[`locomotion_${id}`];
     if (!atlas?.ready || !atlas.image) return false;
     const animation = settings.locomotion || { state: settings.state, facing: settings.facing, time: settings.phase || 0 };
-    const selected = Locomotion.frame(settings.state === "hurt" ? Locomotion.create(settings.facing) : animation);
+    // Standard Mobile Unit atlases currently provide Idle+Walk only.  During
+    // an action, keep the same species atlas and use its current idle-facing
+    // frame rather than falling through to an unrelated legacy monster.
+    const selected = Locomotion.frame(["hurt", "attack"].includes(settings.state)
+      ? Locomotion.create(settings.facing || animation.facing)
+      : animation);
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
     const visualScale = scale;
-    const profile = monsterVisualProfiles[id] || null;
     const box = Locomotion.layout(x, y, scale);
+    const opaque = opaqueAtlasFrame(atlas, selected.index);
+    const visualTop = box.y + (opaque.sy - selected.sy) * visualScale;
+    const visualCenterX = box.x + (opaque.sx - selected.sx + opaque.sw / 2) * visualScale;
     ctx.save();
     try {
       drawGroundShadow(ctx, x, y, visualScale, 15, .34);
@@ -536,12 +553,12 @@
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(atlas.image, selected.sx, selected.sy, selected.sw, selected.sh, box.x, box.y, box.width, box.height);
     } finally { ctx.restore(); }
-    const nameAnchorX = x + (profile?.nameOffsetX || 0) * visualScale;
-    const nameAnchorY = profile ? y - profile.nameLift * visualScale : box.y - 4 * visualScale;
-    return { ...box, left: box.x, right: box.x + box.width, top: box.y, bottom: y,
+    const nameAnchorX = visualCenterX;
+    const nameAnchorY = visualTop - 4 * visualScale;
+    return { ...box, left: box.x, right: box.x + box.width, top: visualTop, bottom: y,
       nameAnchorX, nameAnchorY,
       markerAnchorX: nameAnchorX,
-      markerAnchorY: profile ? nameAnchorY - 20 * visualScale : box.y - 23 * visualScale,
+      markerAnchorY: nameAnchorY - 20 * visualScale,
       atlas: atlas.src, frame: selected.index, facing: selected.facing };
   }
 

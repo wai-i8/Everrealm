@@ -250,6 +250,10 @@ anchorY = 固定腳底／接地 baseline Y
 
 角色頭髮、尾巴、翼、拳套、法杖、腳步伸展，都唔可以令 anchor 跟 alpha bounding box 移動。
 
+### Visual Bounds for Runtime Labels
+
+標準 locomotion atlas 嘅 actor name 必須貼近每格實際可見內容嘅頂部，而唔係固定貼住 256px cell 邊界。資產稽核產生嘅每 frame visual bounds（`left`、`top`、`width`，腳底固定對齊 `anchorY`）由 `locomotion.js` 保存並由 renderer 使用；瀏覽器 file-hosted canvas 若因 cross-origin taint 無法即時讀 alpha，runtime 必須使用同一份 audited bounds metadata，唔可以退回物種 magic name lift 或每 frame 手工 offset。
+
 ### Walk Cycle
 
 每方向 6 個 walk frames 必須構成完整循環：

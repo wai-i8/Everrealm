@@ -266,3 +266,22 @@ test("battle starts immediately and hides every enemy route or danger-cell previ
   assert.match(game, /const barY = \(artBox\?\.bottom/);
 });
 
+test("battle commands are compact action-select controls with a separate target-select context", () => {
+  const renderer = game.match(/function renderBattleActionButtons\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const actionMarkup = renderer.slice(renderer.indexOf("const keyLabels"));
+  assert.match(actionMarkup, /<b>\$\{skill\.name\}<\/b><small>\$\{skill\.apCost\} AP<\/small>/);
+  assert.doesNotMatch(actionMarkup, /skillStars|skillRangeText|skill\.description|單體|射程|速度|Interrupt|Durability/);
+  assert.doesNotMatch(actionMarkup, /star-[23]-skill/);
+  assert.match(renderer, /battle-target-context/);
+  assert.match(renderer, /\$\{selectedSkill\.name\}<\/strong><span>\$\{selectedSkill\.apCost\} AP/);
+  assert.match(renderer, /data-battle-action="cancel-target"/);
+  assert.match(game, /function cancelBattleTargetSelection\(\)/);
+  assert.match(game, /event\.button === 2/);
+  assert.match(game, /battle\.phase === "planning_action" && code === "Escape"/);
+  assert.match(game, /const selectable = new Set\(battleTargetTiles\(\)/);
+  assert.match(game, /const skillRange = new Set\(\(selectedSkill \? battleSkillRangeTiles\(selectedSkill\) : \[\]\)/);
+  assert.match(css, /\.battle-action-dock \{[\s\S]*padding: \.42rem \.58rem \.36rem/);
+  assert.match(css, /\.battle-skill-button \{[\s\S]*min-height: 2\.35rem/);
+  assert.match(css, /\.battle-utility-button \{ opacity: \.72/);
+});
+
