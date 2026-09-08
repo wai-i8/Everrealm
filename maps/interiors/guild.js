@@ -36,9 +36,9 @@
       { id: "guild-lamp-west", kind: "wallSconce", ...point(5, 6), radius: 8, solid: false, render: false, zone: "waiting-lounge" },
       { id: "guild-lamp-east", kind: "wallSconce", ...point(16, 6), radius: 8, solid: false, render: false, zone: "waiting-lounge" },
     ];
-    const boards = [{ id: "guild-request-board", kind: "questBoard", name: "霧都委託板", x: 4 * TILE + TILE / 2, y: 5 * TILE + TILE / 2, radius: 22, prompt: "查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission", render: false }];
+    const boards = [{ id: "guild-request-board", kind: "questBoard", name: "公會委託", x: 4 * TILE + TILE / 2, y: 5 * TILE + TILE / 2, radius: 22, prompt: "查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission", render: false }];
     const npcs = [{
-      id: "guildmaster-yin", name: "妍姐", role: "公會會長／前台接待", kind: "npc",
+      id: "guildmaster-yin", name: "妍姐", displayName: "公會接待員", role: "公會接待員／委託回報", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
       color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32,
       appearance: "紅黑女劍士造型、赤紅披肩、黑色輕甲與高筒戰靴", zone: "reception-admin",
@@ -52,7 +52,7 @@
         entrance: { outward: "south", approachPoint: entry, threshold: { shape: "rect", x: exitRegion.bbox.x, y: exitRegion.bbox.y, w: exitRegion.bbox.width, h: exitRegion.bbox.height }, approachDistance: 0, entryFacing: "up", returnFacing: "down", marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 } },
       },
       map: {
-        id: MAP_IDS.GUILD, name: "霧都冒險者公會", shortName: "冒險者公會", kind: "interior", type: "interior", theme: "guild", ambient: "warm-hall",
+        id: MAP_IDS.GUILD, name: "公會", shortName: "公會", kind: "interior", type: "interior", theme: "guild", ambient: "warm-hall",
         start: entry, spawnPoints: { entrance: entry, counter: { x: npcFeet.x, y: npcFeet.y - 13 }, exit: exitPoint }, boards, worldBuildingId: "keeper-house",
         art: { flattened: true, background: "guild", backgroundScene: "guild", master: ART, authoring: AUTHORING, sourceDimensions: { width: data.source.width, height: data.source.height }, rendering: data.rendering },
       },

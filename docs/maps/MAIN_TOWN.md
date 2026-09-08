@@ -51,7 +51,7 @@ movement:
 | 服務 | runtime portal | doorway center x | trigger / threshold `[x,y,w,h]` | example anchor |
 | --- | --- | ---: | --- | --- |
 | 銀火裝備店 | `world-to-shop` | 378 | `[358,427,40,8]` | `[358,430]` |
-| 拾燈公會 | `world-to-guild` | 687 | `[665,350,44,8]` | `[665,353]` |
+| 公會 | `world-to-guild` | 687 | `[665,350,44,8]` | `[665,353]` |
 | 霧草療癒所 | `world-to-clinic` | 1016 | `[996,430,40,8]` | `[996,433]` |
 | 霧穀雜貨舖 | `world-to-general-store` | 378 | `[358,766,40,8]` | `[358,769]` |
 | 霧燈旅店 | `world-to-inn` | 1004 | `[984,768,40,8]` | `[984,772]` |

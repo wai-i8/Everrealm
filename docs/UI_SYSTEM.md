@@ -100,6 +100,13 @@ top-level page header。Info/X sizing 由 shared component 統一，唔按頁分
 資訊分組使用 `ui-inset` / `facility-*` card，frame 內再加一層深色石材 inset。
 分隔線用低對比 cream 或 gold，唔以大量標籤、emoji 或重複邊框製造噪音。
 
+每個頁面只保留一個清楚的主身份；header 已經提供主標題時，content 不再重複
+另一個 page／section title。任務或委託卡遵守 summary-first：先顯示狀態、名稱
+及當下最重要的目標，再按需要呈現推薦、進度、報酬與 contextual action。規則、
+教學及其他次要說明使用 shared `[i]` progressive disclosure，唔永久佔用主要內容。
+Player-facing copy 必須使用自然遊戲語言，唔顯示 implementation、resolver 或
+catalogue ownership 術語；世界／互動 label 應以清楚的功能角色說明用途。
+
 ### Slots
 
 Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bitmap slot
@@ -127,7 +134,10 @@ Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及
 ### Guild variant
 
 Guild window 可以有非常克制嘅金色 guild accent、委託星級同 progress meter，
-但仍然使用相同 base frame、字級、padding、button 和 scroll rules。
+但仍然使用相同 base frame、字級、padding、button 和 scroll rules。正式頁面身份
+為「公會委託」；接受後卡片必須用內容驅動的緊湊 layout 完整容納 status、objective、
+recommendation、progress、reward 同 contextual action。卡片不可因 decorative frame
+或固定高度令操作被裁切，窄屏則自然堆疊。
 
 ### Skill variant
 

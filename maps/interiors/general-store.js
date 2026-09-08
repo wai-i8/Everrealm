@@ -36,7 +36,7 @@
       { id: "store-banner", kind: "banner", ...point(10, 1.3), color: "#f0c36a", emblem: "basket", solid: false, render: false, zone: "sales-counter" },
     ];
     const npcs = [{
-      id: "store-merchant-gin", name: "穀嬸", role: "雜貨商／前台", kind: "npc",
+      id: "store-merchant-gin", name: "穀嬸", displayName: "道具店店員", role: "道具店店員／雜貨櫃台", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
       color: "#f0c36a", facing: "down", actor: "merchant", gender: "female", age: 36,
       appearance: "紅髮女商人造型、酒紅短外套、金飾腰封與高筒靴", zone: "sales-counter", services: ["general-store"], render: false,

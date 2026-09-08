@@ -79,7 +79,7 @@
       { id: "ruin-cache", kind: "chest", ...point(39, 4), radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
     ];
     const npcs = [
-      { id: "mountain_delivery_recipient", name: "洛安", role: "山地信使", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "mountainCourier", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", zone: "far-field-clearing", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
+      { id: "mountain_delivery_recipient", name: "洛安", displayName: "山地收件員", role: "山地收件員／公會送信", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "mountainCourier", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", zone: "far-field-clearing", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
     ];
     const enemySpawns = [
       { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },

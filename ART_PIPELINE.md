@@ -502,7 +502,9 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 
 ## NPC 共用索引
 
-| Index | Actor | NPC |
+角色 atlas 共用索引保存已建立的對話／肖像身份；它不是地圖標籤的來源。正式 runtime NPC 必須另外提供 `displayName` 作世界／互動功能標籤，例如 `guildmaster-yin` 顯示「公會接待員」而對話身份仍可為「妍姐」。不得為了功能標籤另造新的個人名字；精確 mapping 由各 owning `maps/**/*.js` 保存。
+
+| Index | Actor | 對話／肖像身份 |
 |---:|---|---|
 | 0 | `keeper` | 阿澄 |
 | 1 | `smith` | 鐵叔 |

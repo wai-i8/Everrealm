@@ -36,7 +36,7 @@
       { id: "shop-lamp-right", kind: "wallSconce", ...point(12, 4), radius: 8, solid: false, render: false, zone: "sales-counter" },
     ];
     const npcs = [{
-      id: "merchant-gin", name: "銀姐", role: "銀火店主／裝備櫃台", kind: "npc",
+      id: "merchant-gin", name: "銀姐", displayName: "裝備店店員", role: "裝備店店員／裝備櫃台", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
       color: "#f2a96b", facing: "down", actor: "merchant", gender: "female", age: 36,
       appearance: "紅髮海盜女商人造型、酒紅船長外套、金飾腰封與高筒靴",

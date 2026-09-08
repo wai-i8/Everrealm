@@ -629,7 +629,7 @@
     stage.dataset.gameState = mode;
     sound.start();
     showLocation("霧都主城", true);
-    if (!skipIntro) showToast("撳地面行入公會，再同妍姐傾偈。", "good");
+    if (!skipIntro) showToast("撳地面行入公會，再同公會接待員傾偈。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
     if (!testingMode) saveImportant(false);
@@ -1198,8 +1198,8 @@
       const deckUpgrade = grantDeckCapacityMilestone("main:light-eater-defeated", { silent: true });
       player.coins += enemy.coins;
       sound.crystal();
-      showToast(`吞燈獸倒下咗！返去公會搵妍姐。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
-      announce(`擊敗吞燈獸。任務更新：返回公會搵妍姐${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
+      showToast(`吞燈獸倒下咗！返去公會搵公會接待員。${deckUpgrade.awarded ? ` · DECK 增至 ${deckUpgrade.capacity} 格` : ""}`, "good");
+      announce(`擊敗吞燈獸。任務更新：返回公會搵公會接待員${deckUpgrade.awarded ? `；戰技面板增至 ${deckUpgrade.capacity} 格` : ""}`);
       saveImportant(false);
       return;
     }
@@ -1573,7 +1573,7 @@
   }
 
   function interactionLabel(entity) {
-    if (entity.kind === "npc") return `同${entity.name}傾偈`;
+    if (entity.kind === "npc") return `同${npcDisplayName(entity)}傾偈`;
     if (entity.kind === "chest") return "打開寶箱";
     if (entity.kind === "shrine") return "喺燈龕休息";
     if (entity.kind === "gate") return isGateOpen() ? "查看封印" : "觸摸封印";
@@ -1618,7 +1618,7 @@
       });
     }
     if (guildCommissionState.status === "ready_to_report" && guildCommissionState.deliveryCompleted) {
-      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["公會封信我已經收妥喇。你返去拾燈公會回報，就可以領取委託報酬。"] });
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["公會封信我已經收妥喇。你返公會回報，就可以領取委託報酬。"] });
     }
     const result = Guild.deliver(guildCommissionState, npc.id);
     if (!result.changed) {
@@ -1633,7 +1633,7 @@
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返去拾燈公會向阿寶回報，就可以領取技能書信封。"],
+      lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返公會向接待員回報，就可以領取技能書信封。"],
     });
   }
 
@@ -2066,12 +2066,16 @@
     return Guild.listAvailable(guildCommissionState);
   }
 
+  function npcDisplayName(npc) {
+    return npc?.displayName || npc?.name || "指定角色";
+  }
+
   function contractTargetName(target) {
     const blueprint = ExpansionWorld.monsterBlueprint(target);
     if (blueprint) return blueprint.name_zh;
     for (const map of Object.values(maps)) {
       const npc = map.npcs?.find((candidate) => candidate.id === target);
-      if (npc) return npc.name;
+      if (npc) return npcDisplayName(npc);
     }
     return "指定收件人";
   }
@@ -2139,14 +2143,19 @@
       ? `${state.progress} / ${commission.objective.count}`
       : state.deliveryCompleted ? "已送達" : "尚未送達";
     const activeHtml = active ? `
-      <article class="facility-feature-card ${guildCommissionState.status === "ready_to_report" ? "is-ready" : ""}">
-        <div class="facility-card-heading"><span class="facility-chip">${activeStatus}</span><strong>${"★".repeat(active.star)} ${active.title}</strong></div>
-        <p>${active.description}</p>
-        <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${active.recommendedLevel}</b></div>
-        <div class="facility-card-meta"><span>${objectiveText(active)}</span><b>${objectiveProgress(active, guildCommissionState)}</b></div>
-        <div class="contract-progress"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
-        <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(active)}</b></div>
-        <div class="facility-action-row">${activeAction}${abandonAction}</div>
+      <article class="facility-feature-card guild-commission-card ${guildCommissionState.status === "ready_to_report" ? "is-ready" : ""}">
+        <div class="guild-commission-card-summary">
+          <div class="facility-card-heading"><span class="facility-chip">${activeStatus}</span><strong>${"★".repeat(active.star)} ${active.title}</strong></div>
+          <p>${active.description}</p>
+        </div>
+        <dl class="guild-commission-details">
+          <div data-field="objective"><dt>目標</dt><dd>${objectiveText(active)}</dd></div>
+          <div data-field="recommendation"><dt>建議等級</dt><dd>Lv.${active.recommendedLevel}</dd></div>
+          <div data-field="progress"><dt>進度</dt><dd>${objectiveProgress(active, guildCommissionState)}</dd></div>
+          <div data-field="reward"><dt>獎勵</dt><dd>${skillBookRewardText(active)}</dd></div>
+        </dl>
+        <div class="contract-progress" role="progressbar" aria-label="委託進度" aria-valuemin="0" aria-valuemax="${active.objective.count}" aria-valuenow="${Math.min(active.objective.count, guildCommissionState.progress)}"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
+        <div class="facility-action-row guild-commission-actions">${activeAction}${abandonAction}</div>
       </article>` : "";
     const offersHtml = active ? "" : offers.map((offer) => `
       <article class="facility-list-card">
@@ -2156,14 +2165,13 @@
         <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${offer.recommendedLevel}</b></div>
         <div class="facility-card-meta"><span>${objectiveText(offer)}</span><b>${offer.type === "hunt" ? `0 / ${offer.objective.count}` : "尚未送達"}</b></div>
         <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(offer)}</b></div>
-        <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "接受委託" : "要返拾燈公會接受"}</button>
+        <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "接受委託" : "要返公會接受"}</button>
       </article>`).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>GUILD COMMISSIONS · V1</small><h3>公會委託板</h3></div><span>${active ? "一份進行中" : "五份固定委託"}</span></div>
-      ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>查看可以喺任何地方；接受、送達及回報要親身返拾燈公會或山地收件人。</span></div>' : ""}
-      ${activeHtml || `<div class="facility-card-grid">${offersHtml}</div>`}
-      <div class="facility-note"><b>公會規矩</b><span>同一時間只接一份；完成目標後必須返公會回報。五份委託均可無限重接。</span></div>`;
-    setFacilityFooter(`<span aria-hidden="true">✦</span> 委託獎勵係技能書信封；開封後由 canonical Fighter 技能資料抽取技能書。`);
+      <div class="guild-commission-state-line" aria-live="polite"><span>${active ? "進行中" : "可接委託"}</span><strong>${active ? "1 / 1" : `${offers.length} 份`}</strong><small>${active ? "完成目標後返公會回報" : "選擇一份開始今晚工作"}</small></div>
+      ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>查看可以喺任何地方；接受同回報要親身返公會，送信要去山地收件員處。</span></div>' : ""}
+      ${activeHtml || `<div class="facility-card-grid">${offersHtml}</div>`}`;
+    setFacilityFooter(`<span aria-hidden="true">✦</span> 完成目標後返公會回報；技能書信封可以喺物品欄開封。`);
   }
 
   function totalOwnedSkillBooks() {
@@ -2257,8 +2265,8 @@
         category: "公會委託獎勵",
         categoryKey: "skillbook",
         quantity: count,
-        description: `開封後從 canonical Fighter 技能資料中抽取同星級技能書（${pool.length} 招）。`,
-        detail: "收到技能書後仍須符合 Fighter 前置才能學習",
+        description: `開封後由格鬥士技能池抽取同星級技能書（${pool.length} 招）。`,
+        detail: "收到技能書後仍須符合格鬥士前置才能學習",
         action: "open-envelope", actionLabel: "開封", envelopeStar: star,
       });
     }
@@ -2944,7 +2952,7 @@
       bag: ["ADVENTURER BAG · ITEMS", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
       equipment: ["GEAR LOADOUT · EQUIPMENT", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
       deck: ["DECK", facilityContext === "deck" ? "城門戰技面板" : "戰技面板", facilityContext === "deck" ? "喺城門設定今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換技能先去舊港城門。"],
-      guild: ["GUILD HALL · COMMISSIONS", "拾燈公會", "接受固定委託，完成討伐或送信後返嚟領取技能書信封。"],
+      guild: ["GUILD COMMISSIONS", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
       shop: ["SILVER FLAME · EQUIPMENT", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
       skills: ["SKILL TREE", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
       codex: ["FIELD NOTES · MONSTER CODEX", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
@@ -2982,7 +2990,7 @@
     const normalizedContext = ["portable", "guild", "shop", "deck", "deck-view"].includes(nextContext) ? nextContext : "portable";
     const availableTabs = Expansion.facilityTabsForContext(normalizedContext, currentMapId);
     if (!availableTabs.includes(tab) && ["guild", "shop", "deck"].includes(tab)) {
-      showToast(tab === "guild" ? "公會功能要親身入拾燈公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "DECK 要去舊港城門嘅戰技面板台設定。", "danger");
+      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "DECK 要去舊港城門嘅戰技面板台設定。", "danger");
       return false;
     }
     facilityContext = normalizedContext;
@@ -3038,7 +3046,7 @@
   }
 
   function acceptGuildOffer(offerId) {
-    if (currentMapId !== "guild") return showToast("要親身返拾燈公會先接到委託。", "danger");
+    if (currentMapId !== "guild") return showToast("要親身返公會先接到委託。", "danger");
     const result = Guild.accept(guildCommissionState, offerId);
     if (!result.ok) return showToast(result.reason === "already-active" ? "同一時間只可以接一份委託。" : "搵唔到呢份委託。", "danger");
     guildCommissionState = result.state;
@@ -3051,10 +3059,10 @@
   }
 
   function claimGuildContract(contractId) {
-    if (currentMapId !== "guild") return showToast("要返拾燈公會先可以回報。", "danger");
+    if (currentMapId !== "guild") return showToast("要返公會先可以回報。", "danger");
     const active = activeGuildCommission();
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
-    if (contractId && expectedId && contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+    if (contractId && expectedId && contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     const result = Guild.report(guildCommissionState);
     if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
     guildCommissionState = result.state;
@@ -3069,7 +3077,7 @@
   function openAbandonCommission(contractId) {
     const active = activeGuildCommission();
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
-    if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+    if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     pendingAbandonContractId = expectedId;
     document.getElementById("abandonCommissionTitle").textContent = `確定放棄「${active.title}」？`;
     document.getElementById("abandonCommissionDescription").textContent = active.type === "hunt"
@@ -3092,7 +3100,7 @@
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (!pendingAbandonContractId || pendingAbandonContractId !== expectedId) {
       closeAbandonCommission(false);
-      return showToast("委託資料已更新，請重新查看公會委託板。", "danger");
+      return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     }
     const result = Guild.abandon(guildCommissionState);
     if (!result.ok) {
@@ -3123,7 +3131,7 @@
     guildCommissionState = consumed.state;
     skillState = granted.state;
     sound.crystal();
-    showToast(`開封抽到「${skill.name}」技能書；仍須符合 Fighter 前置先可以學習。`, "good");
+    showToast(`開封抽到「${skill.name}」技能書；仍須符合格鬥士前置先可以學習。`, "good");
     announce(`獲得格鬥士技能書：${skill.name}`);
     if (mode === "facility") renderFacility();
     updateHud(true);
@@ -4578,7 +4586,7 @@
 
   function mainQuestInfo() {
     const copy = questStage === 0
-      ? { title: "入公會搵妍姐", detail: "問下長明燈發生咩事" }
+      ? { title: "入公會搵接待員", detail: "問下長明燈發生咩事" }
       : questStage === 1
         ? { title: "城外失落嘅霧晶", detail: `搵齊霧晶　${crystals.size} / 3` }
         : questStage === 2
@@ -4586,7 +4594,7 @@
           : questStage === 3
             ? { title: "坑道口嘅黑影", detail: "擊敗吞燈獸" }
             : questStage === 4
-              ? { title: "帶光返城", detail: "返公會搵妍姐" }
+              ? { title: "帶光返城", detail: "返公會搵接待員" }
               : { title: "霧都重光", detail: "探索寶箱、升級同繼續夜巡" };
     const targetMapId = questStage >= 1 && questStage <= 3 ? "field" : currentMapId === "guild" ? "guild" : "world";
     if (currentMapId !== targetMapId) {
@@ -4628,7 +4636,7 @@
     const guildBoard = currentMapId === "guild" ? world.boards[0] || world.start : null;
     if (!contract) return {
       title: "未接公會委託",
-      detail: currentMapId === "guild" ? "查看委託板，揀一份今晚嘅工作" : "去拾燈公會查看可重複委託",
+      detail: currentMapId === "guild" ? "查看公會委託，揀一份今晚嘅工作" : "去公會查看可重複委託",
       target: guildBoard || routeToMap("guild"),
     };
     if (guildCommissionState.status === "ready_to_report") return {
@@ -4713,7 +4721,7 @@
   }
 
   function zoneForPosition(position) {
-    if (currentMapId === "guild") return "拾燈公會";
+    if (currentMapId === "guild") return "公會";
     if (currentMapId === "shop") return "銀火裝備店";
     if (currentMapId === "clinic") return "霧草療癒所";
     if (currentMapId === "general-store") return "霧穀雜貨舖";
@@ -6568,7 +6576,7 @@
       // The Hospital nurse is already part of the supplied flattened bitmap.
       // Keep the semantic NPC for collision, authored-hotspot clicks and the
       // existing service flow without drawing a duplicate sprite over it.
-      drawNpcName(point.x, point.y - 69 * scale, npc.name);
+      drawNpcName(point.x, point.y - 69 * scale, npcDisplayName(npc));
       return;
     }
     const actors = {
@@ -6590,7 +6598,7 @@
     const nameY = artBox?.nameAnchorY ?? point.y - 56 * scale;
     const markerX = (artBox?.markerAnchorX ?? anchorX) + (Number(npc.markerOffsetX) || 0) * scale;
     const markerY = artBox?.markerAnchorY ?? point.y - 88 * scale;
-    drawNpcName(anchorX, nameY, npc.name);
+    drawNpcName(anchorX, nameY, npcDisplayName(npc));
   }
 
   function drawNpcName(x, y, name) {

@@ -38,7 +38,8 @@
     const npcs = [{
       id: "clinic-healer-siu-moon",
       name: "小滿",
-      role: "療癒師／前台",
+      displayName: "醫療所護士",
+      role: "醫療所護士／療癒服務",
       kind: "npc",
       x: NPC_FEET.x,
       y: NPC_FEET.y - 13,

@@ -91,7 +91,8 @@
     const npcs = [{
       id: "lost-explorer-kai",
       name: "露娜",
-      role: "迷路女法師",
+      displayName: "坑道探索者",
+      role: "坑道探索者／路線提示",
       kind: "npc",
       ...point(14, 22),
       radius: 12,

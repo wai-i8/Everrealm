@@ -161,6 +161,8 @@ try {
   $fighterTreeDetailScreenshotPath = $null
   $fighterTreeBottomScreenshotPath = $null
   $abandonScreenshotPath = $null
+  $guildHelpScreenshotPath = $null
+  $guildActiveScreenshotPath = $null
   $monsterFacingRuntime = $null
   switch ($Scenario) {
     'title' {
@@ -265,7 +267,7 @@ try {
       if ($equipmentMap.mode -ne 'playing' -or $equipmentMap.currentMapId -ne 'shop') { throw 'Equipment shop interior did not remain visible.' }
     }
     'clinic' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('clinic'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(400,280); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('clinic'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleportTo('clinic-healer-siu-moon'); true" | Out-Null
       Start-Sleep -Milliseconds 2600
       $clinicMap = Get-GameSnapshot
       if ($clinicMap.mode -ne 'playing' -or $clinicMap.currentMapId -ne 'clinic') { throw 'Clinic interior did not remain visible.' }
@@ -357,7 +359,7 @@ try {
       if ($after.currentMapId -ne 'clinic') { throw "Hospital re-entry immediately bounced back outside (map=$($after.currentMapId))." }
     }
     'general-store' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('general-store'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(400,280); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('general-store'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleportTo('store-merchant-gin'); true" | Out-Null
       Start-Sleep -Milliseconds 2600
       $generalStoreMap = Get-GameSnapshot
       if ($generalStoreMap.mode -ne 'playing' -or $generalStoreMap.currentMapId -ne 'general-store') { throw 'General store interior did not remain visible.' }
@@ -366,7 +368,7 @@ try {
       Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:last-child').click(); true" | Out-Null
     }
     'inn' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('inn'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(400,280); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('inn'); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleportTo('inn-keeper'); true" | Out-Null
       Start-Sleep -Milliseconds 2600
       $innMap = Get-GameSnapshot
       if ($innMap.mode -ne 'playing' -or $innMap.currentMapId -ne 'inn') { throw 'Inn interior did not remain visible.' }
@@ -911,13 +913,13 @@ try {
       if ($areaResolved.battle.phase -ne 'resolving_action' -or $areaResolved.battle.action.skillId -ne 'starfall_array' -or $areaResolved.battle.ap -ne 170 -or $defeatedByArea -lt 1) { throw 'Three-star area skill did not spend 30 AP or damage its previewed footprint.' }
     }
     'guildmap' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
       Start-Sleep -Milliseconds 160
       $guildMap = Get-GameSnapshot
       if ($guildMap.mode -ne 'playing' -or $guildMap.currentMapId -ne 'guild') { throw 'Guild map did not remain visible.' }
     }
     'shopmap' {
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('shop'); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('shop'); window.__RPG_DEBUG__.teleportTo('merchant-gin'); true" | Out-Null
       Start-Sleep -Milliseconds 160
       $shopMap = Get-GameSnapshot
       if ($shopMap.mode -ne 'playing' -or $shopMap.currentMapId -ne 'shop') { throw 'Shop map did not remain visible.' }
@@ -1034,16 +1036,34 @@ try {
       $targets = @('chick', 'mountain_delivery_recipient', 'coyote', 'bear', 'snake')
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
       Start-Sleep -Milliseconds 120
-      $board = (Invoke-GameExpression -Expression 'JSON.stringify({offers:window.__RPG_DEBUG__.offers().map(o=>({id:o.id,star:o.star,type:o.type})),acceptCards:document.querySelectorAll("[data-facility-action=accept]").length,internalIds:document.body.innerText.includes("mountain_delivery_recipient")})') | ConvertFrom-Json
-      if ($board.offers.Count -ne 5 -or $board.acceptCards -ne 5 -or $board.internalIds) { throw 'Guild V1 board did not render exactly five user-facing commission offers.' }
+      $board = (Invoke-GameExpression -Expression 'JSON.stringify({offers:window.__RPG_DEBUG__.offers().map(o=>({id:o.id,star:o.star,type:o.type})),acceptCards:document.querySelectorAll("[data-facility-action=accept]").length,internalIds:document.body.innerText.includes("mountain_delivery_recipient"),title:document.getElementById("facilityTitle").textContent,duplicate:document.querySelectorAll(".facility-content h3").length,permanentRules:document.querySelectorAll(".facility-content .facility-note:not(.is-warning)").length,developerCopy:document.body.innerText.includes("canonical Fighter")})') | ConvertFrom-Json
+      if ($board.offers.Count -ne 5 -or $board.acceptCards -ne 5 -or $board.internalIds -or $board.title -ne '公會委託' -or $board.duplicate -ne 0 -or $board.permanentRules -ne 0 -or $board.developerCopy) { throw 'Guild V1 board did not render one clear, player-facing commission identity.' }
       $guildBoardScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-board-$ViewportWidth.png"
       $guildBoardCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($guildBoardScreenshotPath, [Convert]::FromBase64String($guildBoardCapture.result.data))
+      Invoke-GameExpression -Expression "document.getElementById('facilityHelpButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      $helpUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("facilityHelpPopover").hidden,text:document.getElementById("facilityHelpText").textContent})') | ConvertFrom-Json
+      if ($helpUi.hidden -or -not $helpUi.text.Contains('一份委託') -or -not $helpUi.text.Contains('返公會回報') -or -not $helpUi.text.Contains('重複接受')) { throw 'Guild info popover did not expose the commission rules.' }
+      $guildHelpScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-help-$ViewportWidth.png"
+      $guildHelpCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($guildHelpScreenshotPath, [Convert]::FromBase64String($guildHelpCapture.result.data))
+      Invoke-GameExpression -Expression "document.getElementById('facilityHelpButton').click(); true" | Out-Null
 
       for ($index = 0; $index -lt $commissionIds.Count; $index += 1) {
         $commissionId = $commissionIds[$index]
         $targetId = $targets[$index]
         $star = $index + 1
+        if ($index -eq 0) {
+          Invoke-GameExpression -Expression "window.__RPG_DEBUG__.acceptOffer('$commissionId'); true" | Out-Null
+          Start-Sleep -Milliseconds 100
+          $activeCardUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const card=document.querySelector(".guild-commission-card"),rect=card?.getBoundingClientRect(),buttons=[...document.querySelectorAll(".guild-commission-card .facility-action-button")],buttonRects=buttons.map(button=>button.getBoundingClientRect());return {card:Boolean(card),status:card?.querySelector(".facility-chip")?.textContent||"",name:card?.querySelector(".facility-card-heading strong")?.textContent||"",objective:card?.querySelector("[data-field=objective]")?.textContent||"",fields:card?.querySelectorAll(".guild-commission-details dt").length||0,progress:Boolean(card?.querySelector(".contract-progress")),reward:Boolean([...card?.querySelectorAll("dt")||[]].find(node=>node.textContent==="獎勵")),actionInside:Boolean(rect&&buttonRects.every(buttonRect=>buttonRect.left>=rect.left&&buttonRect.right<=rect.right&&buttonRect.top>=rect.top&&buttonRect.bottom<=rect.bottom)),buttonCount:buttons.length,developerCopy:card?.textContent.includes("canonical Fighter")||false};})())') | ConvertFrom-Json
+          if (-not $activeCardUi.card -or $activeCardUi.status -ne '進行中' -or -not $activeCardUi.name.Contains('山雀仔討伐') -or -not $activeCardUi.objective.Contains('山雀') -or $activeCardUi.fields -ne 4 -or -not $activeCardUi.progress -or -not $activeCardUi.reward -or -not $activeCardUi.actionInside -or $activeCardUi.buttonCount -ne 2 -or $activeCardUi.developerCopy) { throw "Accepted Guild commission card did not keep its summary, fields and actions contained: $($activeCardUi | ConvertTo-Json -Compress)" }
+          $guildActiveScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-active-$ViewportWidth.png"
+          $guildActiveCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+          [IO.File]::WriteAllBytes($guildActiveScreenshotPath, [Convert]::FromBase64String($guildActiveCapture.result.data))
+          Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); true" | Out-Null
+        }
         Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.acceptOffer('$commissionId');api.closeFacility();if('$targetId'==='mountain_delivery_recipient'){api.enterMap('field');api.setEncounterGrace(30);const target=api.entityPosition('$targetId');api.clickMoveTo(target.x,target.y);return true;}for(let i=1;i<=5;i++)api.recordGuildKill('$targetId','${commissionId}:'+i);api.enterMap('guild');api.openFacility('guild');return true})()" | Out-Null
         if ($targetId -eq 'mountain_delivery_recipient') {
           $nearRecipient = $false
@@ -1228,6 +1248,8 @@ try {
     abandonScreenshot = $abandonScreenshotPath
     monsterFacingRuntime = $monsterFacingRuntime
     guildBoardScreenshot = $guildBoardScreenshotPath
+    guildHelpScreenshot = $guildHelpScreenshotPath
+    guildActiveScreenshot = $guildActiveScreenshotPath
     guildCommissionScreenshot = $guildCommissionScreenshotPath
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count

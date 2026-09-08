@@ -38,7 +38,7 @@
       { id: "inn-banner", kind: "banner", ...point(10, 1.3), color: "#87db82", emblem: "bed", solid: false, render: false, zone: "front-desk" },
     ];
     const npcs = [{
-      id: "inn-keeper", name: "朵姨", role: "旅店老闆娘／前台", kind: "npc",
+      id: "inn-keeper", name: "朵姨", displayName: "旅館接待員", role: "旅館接待員／休息服務", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12, interactionRadius: 114,
       color: "#87db82", facing: "down", actor: "clerk", gender: "female", age: 41,
       appearance: "藍髮兔耳侍從造型、墨綠旅店制服、白色圍裙與短靴", zone: "front-desk", services: ["inn-rest"], render: false,
