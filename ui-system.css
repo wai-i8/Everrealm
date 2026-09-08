@@ -109,7 +109,7 @@
 .skill-book-confirm-panel::before { display: none; }
 .skill-book-confirm-panel > .ui-modal-window { min-height: 0; }
 .skill-book-confirm-panel > .ui-modal-window > p:not(.modal-kicker) { max-width: 34rem; margin-inline: auto; }
-.skill-detail-panel > .ui-modal-window { text-align: left; }
+.skill-detail-panel > .ui-modal-window { max-height: min(52rem, calc(100vh - 1rem)); text-align: left; }
 .skill-detail-panel > .ui-modal-window > .modal-kicker,
 .skill-detail-panel > .ui-modal-window > h2 { text-align: center; }
 .skill-detail-panel > .ui-modal-window > .modal-actions { margin-inline: auto; }
