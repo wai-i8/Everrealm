@@ -468,8 +468,10 @@ try {
 
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setPlayer({coins:999}); window.__RPG_DEBUG__.enterMap('shop'); window.__RPG_DEBUG__.openFacility('shop'); window.__RPG_DEBUG__.buyEquip('tide_iron_knuckles'); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
       Start-Sleep -Milliseconds 100
+      Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=tide_iron_knuckles]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=equip]').click(); true" | Out-Null
+      if ((Get-GameSnapshot).equipped.weapon -ne 'tide_iron_knuckles') { throw 'Equipment Equip did not update the active weapon at runtime.' }
       Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id=novice_gloves]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=equip]').click(); true" | Out-Null
-      if ((Get-GameSnapshot).equipped.weapon -ne 'novice_gloves') { throw 'Equipment Equip/Swap did not update the active weapon at runtime.' }
+      if ((Get-GameSnapshot).equipped.weapon -ne 'novice_gloves') { throw 'Equipment Swap did not return to the original weapon at runtime.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.grantSkillBook(1); window.__RPG_DEBUG__.openSkillBook(1); window.__RPG_DEBUG__.facilityTab('bag'); true" | Out-Null
       Start-Sleep -Milliseconds 80
       Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id^=manual_]').click(); document.querySelector('.inventory-selected-detail [data-facility-action=use-manual]').click(); true" | Out-Null
