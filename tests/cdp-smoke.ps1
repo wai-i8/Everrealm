@@ -158,6 +158,9 @@ try {
   $equipmentScreenshotPath = $null
   $statusScreenshotPath = $null
   $deckScreenshotPath = $null
+  $deckViewerScreenshotPath = $null
+  $dialogueServiceScreenshotPath = $null
+  $dialogueLongScreenshotPath = $null
   $fighterTreeDetailScreenshotPath = $null
   $fighterTreeBottomScreenshotPath = $null
   $abandonScreenshotPath = $null
@@ -273,7 +276,21 @@ try {
       if ($clinicMap.mode -ne 'playing' -or $clinicMap.currentMapId -ne 'clinic') { throw 'Clinic interior did not remain visible.' }
       $clinicService = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.interactWith('clinic-healer-siu-moon');return JSON.stringify({mode:api.snapshot().mode,choices:document.querySelectorAll('.dialogue-choice').length});})()" | ConvertFrom-Json
       if ($clinicService.mode -ne 'dialogue' -or $clinicService.choices -lt 2) { throw 'Clinic healer service did not open from the interior NPC.' }
-      Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:last-child').click(); true" | Out-Null
+      $clinicServiceUi = (Invoke-GameExpression -Expression 'JSON.stringify({speaker:document.getElementById("speakerName").textContent,role:document.getElementById("speakerRole").textContent,choices:document.querySelectorAll(".dialogue-choice").length,choiceLayout:getComputedStyle(document.getElementById("dialogueChoices")).gridTemplateColumns})') | ConvertFrom-Json
+      if ($clinicServiceUi.speaker -ne '小滿' -or $clinicServiceUi.role -ne '醫療所護士' -or $clinicServiceUi.choices -lt 2 -or ($clinicServiceUi.choiceLayout -split '\s+').Count -ne 1) { throw "Clinic dialogue identity or vertical choices regressed (speaker=$($clinicServiceUi.speaker), role=$($clinicServiceUi.role), choices=$($clinicServiceUi.choices), columns=$($clinicServiceUi.choiceLayout))." }
+      $dialogueServiceScreenshotPath = Join-Path $runtimeOutputPath "smoke-dialogue-clinic-$ViewportWidth.png"
+      $dialogueServiceCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($dialogueServiceScreenshotPath, [Convert]::FromBase64String($dialogueServiceCapture.result.data))
+      Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit2',key:'2',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'Digit2',key:'2',bubbles:true})); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $clinicAfterCancel = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),potions:document.getElementById("potionValue").textContent})') | ConvertFrom-Json
+      if ($clinicAfterCancel.snapshot.mode -ne 'playing' -or $clinicAfterCancel.snapshot.coins -ne 12 -or $clinicAfterCancel.potions -ne '2') { throw "Clinic cancel keyboard choice changed service state (mode=$($clinicAfterCancel.snapshot.mode), coins=$($clinicAfterCancel.snapshot.coins), potions=$($clinicAfterCancel.potions))." }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.interactWith('clinic-healer-siu-moon'); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      Invoke-GameExpression -Expression "document.querySelector('.dialogue-choice:first-child').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $clinicAfterService = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),potions:document.getElementById("potionValue").textContent})') | ConvertFrom-Json
+      if ($clinicAfterService.snapshot.mode -ne 'playing' -or $clinicAfterService.snapshot.coins -ne 4 -or $clinicAfterService.potions -ne '3') { throw "Clinic service choice did not apply (mode=$($clinicAfterService.snapshot.mode), coins=$($clinicAfterService.snapshot.coins), potions=$($clinicAfterService.potions))." }
     }
     'clinic-return' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); const door=window.__RPG_DEBUG__.entityPosition('world-to-clinic'); window.__RPG_DEBUG__.teleport(door.x-300,door.y); window.__RPG_DEBUG__.clickMoveTo(door.x,door.y); true" | Out-Null
@@ -401,9 +418,12 @@ try {
       $farDeck = Get-GameSnapshot
       $farDeckUi = (Invoke-GameExpression -Expression 'JSON.stringify({actions:document.querySelectorAll("[data-facility-action=equip-skill],[data-facility-action=unequip-skill]").length,tabs:!!document.getElementById("facilityTabs"),summary:!!document.getElementById("facilitySummary")})') | ConvertFrom-Json
       if ($farDeck.mode -ne 'facility' -or $farDeck.facility.context -ne 'deck-view' -or $farDeckUi.actions -ne 0 -or $farDeckUi.tabs -or $farDeckUi.summary) { throw "Portable DECK did not open as a focused read-only view (mode=$($farDeck.mode), context=$($farDeck.facility.context))." }
+      $deckViewerScreenshotPath = Join-Path $runtimeOutputPath "smoke-deck-viewer-$ViewportWidth.png"
+      $deckViewerCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($deckViewerScreenshotPath, [Convert]::FromBase64String($deckViewerCapture.result.data))
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.teleportTo('harbour-gate-deck-console'); window.__RPG_DEBUG__.interactWith('harbour-gate-deck-console'); true" | Out-Null
       Start-Sleep -Milliseconds 100
-      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,cmd:document.querySelectorAll(".skill-kind-badge.is-cmd").length,empty:[...document.querySelectorAll(".deck-slot.is-empty strong")].every(node=>node.textContent==="\u6c92\u6709\u6280\u80fd")})') | ConvertFrom-Json
+      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,cmd:document.querySelectorAll(".skill-kind-badge.is-cmd").length,empty:[...document.querySelectorAll(".deck-slot.is-empty strong")].every(node=>node.textContent==="\u7a7a")})') | ConvertFrom-Json
       if ($deckUi.snapshot.facility.context -ne 'deck' -or $deckUi.slots -ne 3 -or $deckUi.filled -ne 1 -or $deckUi.cmd -lt 1 -or -not $deckUi.empty) { throw 'City-gate DECK panel did not show the editable fighter loadout with correctly named empty slots and CMD badge.' }
       $deckScreenshotPath = Join-Path $runtimeOutputPath "smoke-deck-$ViewportWidth.png"
       $deckCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
@@ -674,7 +694,7 @@ try {
     }
     'dialogue' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
-      Start-Sleep -Milliseconds 220
+      Start-Sleep -Milliseconds 2600
       Invoke-GameExpression -Expression "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',key:'e',bubbles:true})); window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',key:'e',bubbles:true})); true" | Out-Null
       Start-Sleep -Milliseconds 120
       $dialogueSnapshot = Get-GameSnapshot
@@ -709,6 +729,11 @@ try {
       if ([Math]::Abs($displayAspect - $backingAspect) -gt 0.02) {
         throw "Dialogue portrait canvas was stretched (display=$displayAspect, backing=$backingAspect)."
       }
+      Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $dialogueLongScreenshotPath = Join-Path $runtimeOutputPath "smoke-dialogue-long-$ViewportWidth.png"
+      $dialogueLongCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($dialogueLongScreenshotPath, [Convert]::FromBase64String($dialogueLongCapture.result.data))
     }
     'gate' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setQuestStage(1); window.__RPG_DEBUG__.teleportTo('gate'); window.__RPG_DEBUG__.clickMoveTo(2020,620); true" | Out-Null
@@ -1243,6 +1268,9 @@ try {
     equipmentScreenshot = $equipmentScreenshotPath
     statusScreenshot = $statusScreenshotPath
     deckScreenshot = $deckScreenshotPath
+    deckViewerScreenshot = $deckViewerScreenshotPath
+    dialogueServiceScreenshot = $dialogueServiceScreenshotPath
+    dialogueLongScreenshot = $dialogueLongScreenshotPath
     fighterTreeDetailScreenshot = $fighterTreeDetailScreenshotPath
     fighterTreeBottomScreenshot = $fighterTreeBottomScreenshotPath
     abandonScreenshot = $abandonScreenshotPath

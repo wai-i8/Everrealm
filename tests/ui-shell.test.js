@@ -68,7 +68,7 @@ test("flattened town art, exact east passage and DECK console are wired", () => 
 
 test("facility modals keep one focused topic without summary or cross-panel tab rows", () => {
   assert.doesNotMatch(html, /id="facilitySummary"|id="facilityTabs"/);
-  assert.match(game, /<strong>沒有技能<\/strong>/);
+  assert.match(game, /<strong>空<\/strong>/);
   assert.match(game, /openFacility\("deck", "deck-view"\)/);
   assert.match(game, /facilityContext === "deck" && currentMapId === "world"/);
   assert.match(html, /id="facilityHelpButton"/);
@@ -77,7 +77,8 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
   assert.doesNotMatch(html, /ui-close-glyph/);
   assert.doesNotMatch(html, /id="facilitySubtitle"/);
   assert.match(game, /function returnToTitle\(\)/);
-  assert.match(game, /data-facility-footer-action="return-title"/);
+  assert.doesNotMatch(html, /facilityReturnTitleButton|data-facility-footer-action="return-title"/);
+  assert.match(game, /facilityFooter\.hidden = true/);
   for (const filename of ["ui-close-v2.png", "ui-info-v1.png", "ui-badge-cmd-v1.png", "ui-badge-psv-v1.png"]) {
     const assetPath = path.join(rpgRoot, "assets", "ui", filename);
     assert.equal(fs.existsSync(assetPath), true, `${filename} should exist`);
@@ -117,10 +118,48 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.match(deck, /data-facility-action="equip-skill"/);
   assert.doesNotMatch(viewer, /skill\.apCost \} AP · 速度/);
   assert.doesNotMatch(viewer, /skillRangeText\(skill\)/);
+  assert.doesNotMatch(viewer, /已學技能|AP|速度|射程|範圍/);
+  assert.match(deck, /class="deck-view-shell is-readonly"/);
+  assert.match(deck, /class="deck-capacity"/);
+  assert.match(deck, /data-facility-action="unequip-skill"/);
   assert.doesNotMatch(deck, /skill\.apCost|skillRangeText\(skill\)/);
-  assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,.9fr\) minmax\(0,1.1fr\)/);
+  assert.match(uiCssForTest(), /\.deck-skill-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+  assert.doesNotMatch(uiCssForTest(), /\.deck-skill-list\s*\{[^}]*auto-fit|\.deck-skill-list\s*\{[^}]*repeat\(/);
   assert.match(uiCssForTest(), /@media \(max-width: 900px\)[\s\S]*?\.deck-manage-layout\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(uiCssForTest(), /\.deck-slot-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+});
+
+test("Deck sizing and shared badge readability are content-driven", () => {
+  const uiCss = fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8");
+  assert.match(uiCss, /--ui-panel-compact-max:\s*34rem/);
+  assert.match(uiCss, /--ui-panel-medium-max:\s*48rem/);
+  assert.match(uiCss, /--ui-panel-wide-max:\s*66rem/);
+  assert.match(uiCss, /data-panel-size="compact"/);
+  assert.match(uiCss, /data-panel-size="wide"\]\[data-facility-tab="deck"\][\s\S]*min-height:\s*0/);
+  assert.match(game, /facilityPanel\.dataset\.panelSize = facilityTab === "deck"/);
+  assert.match(uiCss, /--ui-skill-badge-width/);
+  assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-width\)/);
+  assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-height\)/);
+  assert.doesNotMatch(game, /return skill\.tags\.includes\("passive"\) \? "✦" : "◆"/);
+});
+
+test("Dialogue is a shared anchored overlay with integrated role and vertical choices", () => {
+  assert.match(html, /id="dialoguePanel" class="dialogue-panel"/);
+  assert.match(html, /id="dialoguePortrait"/);
+  assert.match(html, /id="speakerRole" class="speaker-role"/);
+  assert.match(html, /id="speakerName" class="speaker-name"/);
+  assert.match(html, /id="dialogueText"/);
+  assert.match(html, /id="dialogueChoices" class="dialogue-choices" role="list"/);
+  assert.match(game, /speakerRole: config\.speakerRole \|\| speakerNpc\?\.displayName/);
+  assert.match(game, /backgroundEnd: "#0b1224",[\s\S]*frame: false/);
+  assert.match(game, /button\.setAttribute\("aria-pressed"/);
+  assert.match(css, /\.dialogue-panel\s*\{[\s\S]*border-image: var\(--ui-frame-image\)/);
+  assert.match(css, /\.dialogue-panel\s*\{[\s\S]*max-height: min\(17rem/);
+  assert.match(css, /\.dialogue-choices\s*\{[\s\S]*display: grid[\s\S]*grid-template-columns: 1fr/);
+  assert.match(css, /\.dialogue-choice\s*\{[\s\S]*border-image: var\(--ui-button-image\)/);
+  assert.doesNotMatch(css, /\.dialogue-choices\s*\{[^}]*flex-wrap/);
+  assert.doesNotMatch(css, /\.dialogue-choice\.selected, \.dialogue-choice:hover\s*\{[^}]*background: var\(--gold\)/);
 });
 
 function uiCssForTest() {

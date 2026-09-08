@@ -319,20 +319,27 @@
 
 /* Deck/loadout ---------------------------------------------------------- */
 .deck-view-shell { width: min(100%, 58rem); margin-inline: auto; }
-.deck-manage-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: .9rem; align-items: start; }
+.deck-view-shell.is-readonly { width: min(100%, 24rem); }
+.deck-view-shell.is-editable { width: min(100%, 54rem); }
+.deck-manage-layout { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); gap: .9rem; align-items: start; }
 .deck-management-column,
 .deck-current-column { min-width: 0; }
-.deck-management-column .facility-section-heading,
-.deck-current-column .facility-section-heading { min-height: 3.2rem; }
+.deck-region-heading { min-width: 0; min-height: 3.2rem; display: flex; align-items: end; justify-content: space-between; gap: .75rem; margin: .15rem 0 .65rem; }
+.deck-region-heading > div { min-width: 0; }
+.deck-region-heading small { color: var(--gold); font: 800 .5rem/1 ui-monospace,monospace; letter-spacing: .14em; }
+.deck-region-heading h3 { margin: .22rem 0 0; font-size: 1.04rem; }
+.deck-region-heading > span { color: var(--muted); font-size: .74rem; }
+.deck-capacity { flex: 0 0 auto; color: var(--teal); font: 800 .78rem/1 ui-monospace,monospace; white-space: nowrap; }
 .deck-slot-list { display: grid; grid-template-columns: 1fr; gap: .48rem; width: min(100%, 27rem); margin-inline: auto; }
 .deck-slot-list .deck-slot.is-filled { grid-template-columns: minmax(0,1fr); min-height: 3.6rem; padding-block: .5rem; }
-.deck-slot-list .deck-slot.is-empty { min-height: 3.35rem; padding-block: .48rem; }
+.deck-slot-list .deck-slot.is-empty { min-height: 2.9rem; padding-block: .35rem; opacity: .74; }
 .deck-slot-list .deck-slot-copy,
 .deck-slot-list .deck-slot-empty { min-width: 0; display: grid; gap: .18rem; }
-.deck-slot-list .deck-slot-copy small { color: var(--muted); font-size: .62rem; }
-.deck-view-shell.is-readonly .facility-section-heading { margin-bottom: .65rem; }
+.deck-view-shell.is-readonly .deck-current-column { width: 100%; }
+.deck-view-shell.is-readonly .deck-region-heading { min-height: 2.25rem; align-items: center; }
+.deck-view-shell.is-readonly .deck-region-heading > span { color: var(--muted); font-size: .72rem; }
 .deck-view-shell.is-editable .deck-slot-list { width: 100%; }
-.deck-slot-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(14rem,1fr)); gap: .65rem; counter-reset: deck; }
+.deck-slot-grid { display: grid; grid-template-columns: 1fr; gap: .65rem; counter-reset: deck; }
 .deck-slot {
   position: relative;
   min-width: 0;
@@ -358,14 +365,14 @@
 .deck-skill-choice small { color: var(--teal); font-size: .72rem; line-height: 1.45; }
 .deck-slot-empty { padding-left: .3rem; }
 .deck-slot-empty small { color: var(--muted); }
-.deck-slot .facility-action-button { min-width: 4rem; min-height: 2rem; }
-.deck-skill-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .62rem; }
+.deck-slot-action { justify-self: end; min-width: 4.2rem !important; min-height: 2rem !important; padding: .25rem .45rem !important; font-size: .65rem !important; }
+.deck-skill-list { display: grid; grid-template-columns: 1fr; gap: .62rem; }
 .deck-skill-choice { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
-.deck-skill-choice .facility-action-button { min-width: 4rem; }
+.deck-skill-choice .facility-action-button { min-width: 4.2rem; min-height: 2rem; padding: .25rem .45rem; font-size: .65rem; }
 .deck-skill-title { min-width: 0; display: flex; align-items: center; gap: .38rem; }
-.skill-kind-badge { position: relative; flex: 0 0 auto; width: 2.55rem; height: 1.15rem; display: inline-grid; place-items: center; overflow: hidden; border-radius: .24rem; }
-.skill-kind-badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
-.skill-kind-badge b { position: relative; z-index: 1; color: #fff6d7; font: 900 .48rem/1 ui-monospace,monospace; letter-spacing: .05em; text-shadow: 0 1px 2px #111827; }
+.skill-kind-badge { position: relative; flex: 0 0 var(--ui-skill-badge-width); width: var(--ui-skill-badge-width); height: var(--ui-skill-badge-height); display: inline-grid; place-items: center; overflow: hidden; border-radius: .24rem; }
+.skill-kind-badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .9; }
+.skill-kind-badge b { position: relative; z-index: 1; color: #fff6d7; font: 900 .59rem/1 ui-monospace,monospace; letter-spacing: .05em; text-shadow: 0 1px 2px #111827; }
 .skill-kind-badge.is-psv b { color: #f4eaff; }
 .deck-readonly-state { justify-self: end; padding: .28rem .48rem; border: 1px solid rgba(82,220,203,.35); border-radius: 999px; color: var(--teal); font: 800 .62rem/1 ui-monospace,monospace; }
 

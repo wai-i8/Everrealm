@@ -1915,14 +1915,19 @@
       "妍姐": "guildmaster", "阿寶": "clerk", "諾拉": "adventurer", "麗雅": "duelist",
       "銀姐": "merchant", "阿月": "armorer", "莎菲": "tailor", "露娜": "explorer", "洛安": "mountainCourier",
     };
+    const speakerNpc = world?.npcs?.find((npc) => npc.name === config.speaker);
     dialogue = {
       ...config,
       actor: config.actor || portraitActors[config.speaker] || "villager",
+      speakerRole: config.speakerRole || speakerNpc?.displayName || "",
       lines: config.lines || ["……"],
       index: 0,
     };
     dialogueChoiceIndex = 0;
     document.getElementById("speakerName").textContent = dialogue.speaker;
+    const speakerRole = document.getElementById("speakerRole");
+    speakerRole.textContent = dialogue.speakerRole;
+    speakerRole.hidden = !dialogue.speakerRole;
     document.getElementById("dialoguePortrait").style.setProperty("--speaker-color", dialogue.color || "#315d66");
     dialoguePanel.hidden = false;
     renderDialogue();
@@ -1954,8 +1959,9 @@
       height: dialoguePortraitCanvas.height,
       actor: portraitActor,
       expression: portraitActor === "smith" ? "determined" : "happy",
-      background: dialogue?.color || "#26385d",
-      backgroundEnd: "#111a31",
+      background: "#1e2b45",
+      backgroundEnd: "#0b1224",
+      frame: false,
     });
   }
 
@@ -2014,6 +2020,9 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = `dialogue-choice${index === dialogueChoiceIndex ? " selected" : ""}`;
+        button.setAttribute("role", "listitem");
+        button.setAttribute("aria-pressed", String(index === dialogueChoiceIndex));
+        button.setAttribute("aria-keyshortcuts", `Digit${index + 1}`);
         button.textContent = `${index + 1}. ${choice.label}`;
         button.addEventListener("click", () => chooseDialogueOption(index));
         choices.appendChild(button);
@@ -2110,7 +2119,11 @@
   }
 
   function setFacilityFooter(message) {
-    facilityFooter.innerHTML = `<p>${message}</p><div class="facility-footer-actions"><button class="facility-footer-button" type="button" data-facility-footer-action="return-title">返回標題</button></div>`;
+    // Facility explanations belong in the shared header [i] popover. Keep
+    // the footer available for future immediate actions without reserving a
+    // permanent strip for instructional copy.
+    facilityFooter.replaceChildren();
+    facilityFooter.hidden = true;
   }
 
   function renderFacilitySummary() {
@@ -2486,7 +2499,7 @@
     if (skill.tags.includes("mobility")) return "✣";
     if (skill.tags.includes("magic")) return "✦";
     if (skill.tags.includes("ranged")) return "➶";
-    return skill.tags.includes("passive") ? "✦" : "◆";
+    return skill.tags.includes("passive") ? "✦" : "·";
   }
 
   function skillBadgeMarkup(skill) {
@@ -2816,16 +2829,22 @@
     const equipped = new Set(skillState.equippedSkillIds);
     const slots = skillState.deckSlots.map((skillId, index) => {
       const skill = skillId ? Skills.getSkill(skillId) : null;
-      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}"><span class="deck-slot-number">${index + 1}</span>${skill
-        ? `<div class="deck-slot-copy"><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>目前已裝設</small></div>`
-        : `<div class="deck-slot-empty"><strong>沒有技能</strong><small>${canEdit ? "喺戰技面板台選擇技能" : "尚未裝設技能"}</small></div>`}</article>`;
+      const removeAction = canEdit && skill
+        ? `<button class="facility-action-button is-quiet deck-slot-action" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">卸下</button>`
+        : "";
+      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" aria-label="第 ${index + 1} 格${skill ? `：${skill.name}` : "：空"}"><span class="deck-slot-number">${index + 1}</span>${skill
+        ? `<div class="deck-slot-copy"><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div>${removeAction}`
+        : `<div class="deck-slot-empty"><strong>空</strong></div>`}</article>`;
     }).join("");
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
       const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>可裝入 DECK</small></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
-      return `<section class="deck-management-column"><div class="facility-section-heading skill-list-heading"><div><small>LEARNED SKILLS</small><h3>已學技能</h3></div><span>可裝入 ${skillState.deckCapacity} 格</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
+      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><div><small>LEARNED SKILLS</small><h3 id="deckLearnedHeading">已學技能</h3></div><span>可裝入 ${skillState.deckCapacity} 格</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
     })() : "";
-    const currentDeck = `<section class="deck-current-column"><div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "目前戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-list">${slots}</div></section>`;
+    const currentDeckHeading = canEdit
+      ? `<div class="deck-region-heading"><div><small>CURRENT DECK</small><h3 id="deckCurrentHeading">目前配置</h3></div><strong class="deck-capacity">${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</strong></div>`
+      : `<div class="deck-region-heading"><span>目前出戰技能</span><strong class="deck-capacity">${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</strong></div>`;
+    const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="目前戰技面板">${currentDeckHeading}<div class="deck-slot-list">${slots}</div></section>`;
     facilityContent.innerHTML = canEdit
       ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
       : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;
@@ -2951,7 +2970,7 @@
       status: ["STATUS", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
       bag: ["ADVENTURER BAG · ITEMS", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
       equipment: ["GEAR LOADOUT · EQUIPMENT", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
-      deck: ["DECK", facilityContext === "deck" ? "城門戰技面板" : "戰技面板", facilityContext === "deck" ? "喺城門設定今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換技能先去舊港城門。"],
+      deck: ["DECK", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板台。"],
       guild: ["GUILD COMMISSIONS", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
       shop: ["SILVER FLAME · EQUIPMENT", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
       skills: ["SKILL TREE", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
@@ -2959,6 +2978,11 @@
     }[facilityTab];
     stage.dataset.facilityTab = facilityTab;
     stage.dataset.facilityContext = facilityContext;
+    facilityPanel.dataset.facilityContext = facilityContext;
+    facilityPanel.dataset.facilityTab = facilityTab;
+    facilityPanel.dataset.panelSize = facilityTab === "deck"
+      ? facilityContext === "deck-view" ? "compact" : "wide"
+      : facilityTab === "status" ? "medium" : "wide";
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
     document.getElementById("facilityKicker").textContent = copy[0];
     document.getElementById("facilityTitle").textContent = copy[1];
@@ -7374,9 +7398,6 @@
   document.getElementById("keepPlayingButton").addEventListener("click", keepPlaying);
   document.getElementById("facilityCloseButton").addEventListener("click", closeFacility);
   facilityHelpButton?.addEventListener("click", toggleFacilityHelp);
-  facilityFooter.addEventListener("click", (event) => {
-    if (event.target.closest("[data-facility-footer-action='return-title']")) returnToTitle();
-  });
   facilityPanel.addEventListener("click", (event) => {
     if (event.target === facilityPanel) closeFacility();
     else if (facilityHelpPopover && !facilityHelpPopover.hidden && !event.target.closest(".facility-help-popover, #facilityHelpButton")) setFacilityHelpOpen(false);

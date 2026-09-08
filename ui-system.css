@@ -12,6 +12,11 @@
   --ui-node-image: url("assets/ui/ui-skill-node-v1.png");
   --ui-close-image: url("assets/ui/ui-close-v2.png");
   --ui-info-image: url("assets/ui/ui-info-v1.png");
+  --ui-panel-compact-max: 34rem;
+  --ui-panel-medium-max: 48rem;
+  --ui-panel-wide-max: 66rem;
+  --ui-skill-badge-width: 3.45rem;
+  --ui-skill-badge-height: 1.5rem;
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -121,6 +126,11 @@
 /* The facility header is a dark-navy information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */
 .facility-window.ui-window { overflow: hidden; }
+.facility-window.ui-window { width: min(var(--ui-panel-wide-max), 100%); }
+.facility-overlay[data-panel-size="compact"] .facility-window { width: min(var(--ui-panel-compact-max), 100%); min-height: 0; }
+.facility-overlay[data-panel-size="medium"] .facility-window { width: min(var(--ui-panel-medium-max), 100%); min-height: min(30rem, 100%); }
+.facility-overlay[data-panel-size="wide"] .facility-window { width: min(var(--ui-panel-wide-max), 100%); }
+.facility-overlay[data-panel-size="wide"][data-facility-tab="deck"] .facility-window { min-height: 0; }
 .facility-header.ui-header {
   position: relative;
   display: flex;

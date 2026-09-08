@@ -85,8 +85,10 @@
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
-- 一般左側選單嘅 `戰技面板` 係窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城東門旁的「戰技面板台」編輯；管理流程保留喺該面板台。空槽統一顯示「沒有技能」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城東門旁的「戰技面板台」編輯；管理流程保留喺該面板台。空槽顯示簡潔嘅「空」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 城門「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
 - 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；已有且仍然需要的個人角色身份只保留在對話層，不另 invent 新名字。主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
+- 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。對話使用獨立 anchored gameplay overlay：深海軍藍、金色裝飾、角色肖像作輔助身份、說話者角色名／功能職稱清楚整合，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
 
 ## 世界與美術一致性

@@ -61,7 +61,7 @@ decoration，HTML/CSS 才係內容尺寸、對齊同 scroll 嘅 sizing system。
 Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要同時具備：
 
 - `min-width` / `min-height` 只保證最小可讀性；
-- `max-width: min(66rem, 100vw - 2rem)`；
+- panel width follows its sizing tier; the wide ceiling is `min(66rem, 100vw - 2rem)`；
 - `max-height: min(44rem, 100vh - 2rem)`；
 - header、footer 固定喺 frame 內，content 以 `minmax(0, 1fr)` 伸縮；
 - content 超過 viewport 時只由 content scroll，唔令 frame 或 controls 被推出畫面；
@@ -112,6 +112,48 @@ catalogue ownership 術語；世界／互動 label 應以清楚的功能角色�
 Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bitmap slot
 底、中心放 item/icon、右下顯示數量、HTML 顯示名稱及少量 meta。selected / equipped
 用 teal 或 gold ring；locked 用降低飽和度加鎖定 copy；空 slot 保留框但唔放大字元填空。
+
+### Panel sizing, identity and progressive disclosure
+
+Panel 唔可以因為 viewport 仲有空位就預設最大寬度；寬度必須按 task complexity
+同 content density 決定。共用 sizing tiers 如下：
+
+- `compact`：簡單唯讀資訊、短直向列表、確認；
+- `medium`：較豐富但仍然單一主題嘅資料；
+- `wide`：真正需要兩欄嘅管理、Inventory、Skill Tree 或 configuration。
+
+`facility-panel` 以 `data-panel-size` 套用同一套 compact／medium／wide max-width。正常左側 `戰技面板` viewer 使用 compact bounded content region；城門 `戰技配置` 先使用 wide 兩欄 shell。短名單或 slot list 要用 `max-width`、`minmax(0, 1fr)`、Grid/Flex containment，唔可以因 screen space 拉成一大片空白。
+
+一個 screen 只保留一個 primary page identity。eyebrow、header、body title 同 footer
+唔可以用稍為不同嘅字眼重複同一個頁名；section label 只可用於真正不同嘅 subsection。
+Summary-first list／slot 只顯示完成當前 task 所需嘅名稱、狀態同最少 meta。永久教學、
+規則同次要解釋放入 shared `[i]`，footer 唔應該變成全寬 help strip。
+
+語意上係 list 嘅 learned skills 同 DECK slots 必須保持單欄直向順序；gallery/grid
+只適用於 genuinely grid-like content。CMD／PSV badge 在 Deck viewer、Deck config
+同 learned-skill list 都要保持清楚可讀，使用 shared visible-size token。
+
+Return-to-title 係 system/menu-level operation，唔係 Deck、Inventory、Status、Skill
+Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 feature page
+只用 shared bitmap-backed X 關閉。
+
+### Anchored dialogue overlay
+
+Dialogue 係獨立嘅 anchored gameplay overlay，唔套用 Inventory、Status、Skill Tree
+嗰種 generic major window。桌面版固定於 viewport lower portion，world 保持可見；
+panel width 同 height 由 text／choice count content-driven，設合理 min/max，超出時
+只喺內部 scroll。portrait 係 supporting identity，desktop 約佔 panel 18–25%，使用
+shared dark fantasy/gold portrait frame，唔可以壓過 text/actions。speaker name 同
+functional role 整合喺 body heading，choices 預設單欄直向排列；窄屏可縮細 portrait
+或將其移到 heading 上方，但不得產生 horizontal overflow。click、touch、keyboard、
+numeric shortcut 同既有 branching/service action 必須保持。
+
+Dialogue frame、portrait frame、button、CMD/PSV badge、close/info control 用
+HTML/CSS 加 bitmap；Canvas 只負責真正 dynamic portrait artwork 或其他 dynamic
+rendering，唔畫 generic dialogue chrome。細節 bitmap 只能用 border-image、9-slice
+或 segmented stretch-safe composition，禁止 `background-size: 100% 100%`；dialogue
+同其他 panel 都要做 desktop 及 narrow runtime screenshot QA，並實際打開檢查，
+`runtimeErrors` 必須為 `0`。
 
 ## 5. Screen variants
 

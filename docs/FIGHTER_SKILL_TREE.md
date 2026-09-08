@@ -140,7 +140,13 @@ Height validation compares `target.height - caster.height` against `up` and `dow
 
 ### Effects
 
-Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, invisible, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action. The normal left-menu `戰技面板` is a read-only vertical current-loadout viewer: it renders only normalized `deckSlots`, with compact slot number/badge/name summaries and no learned-skill catalogue or edit controls. Skill management remains at the main-town east-gate DECK console; no new PSV equipability is implied by the badge.
+Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, invisible, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action.
+
+### Two distinct Deck surfaces
+
+The normal left-menu `戰技面板` is a read-only, compact, vertical current-loadout viewer. It renders only the normalized current `deckSlots`, with slot number, readable CMD/PSV badge and skill name; occupied slots do not show AP, speed, range, long descriptions or edit controls, and the viewer never renders the learned-skill catalogue.
+
+The town-gate `戰技配置` console is the editable management surface. Its left side is the learned, equipable-skill list in one vertical column; its right side is the current Deck in one vertical column. `裝入` and `卸下` continue to use the existing compatibility, uniqueness, capacity, class and CMD/PSV rules. The Skill Tree remains responsible for learning/unlocking and Skill Detail, not either Deck surface.
 
 ### Compatibility
 
