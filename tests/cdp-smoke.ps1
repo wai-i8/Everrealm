@@ -111,6 +111,7 @@ try {
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
+    '--autoplay-policy=no-user-gesture-required',
     '--remote-allow-origins=*',
     "--remote-debugging-port=$port",
     "--user-data-dir=$profilePath",
@@ -1266,11 +1267,12 @@ try {
       $monsterFacingRuntime = [PSCustomObject]@{ target = $targetId; totalSamples = $samples.Count; movingSamples = $movingSamples.Count; desyncedFrames = $desynced.Count; leftRightFlips = $leftRightFlips }
     }
     'bgm' {
-      $bgm = Invoke-GameExpression -Expression "JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.newGame();const town=api.snapshot().bgm;api.enterMap('guild');const interior=api.snapshot().bgm;api.enterMap('field');const mountain=api.snapshot().bgm;api.enterMap('dungeon');const mine=api.snapshot().bgm;document.getElementById('soundButton').click();const muted=api.snapshot().bgm;document.getElementById('soundButton').click();const resumed=api.snapshot().bgm;return {town,interior,mountain,mine,muted,resumed};})())" | ConvertFrom-Json
-      if ($bgm.town.key -ne 'mainTown' -or $bgm.interior.key -ne 'mainTown' -or $bgm.mountain.key -ne 'mountainField' -or $bgm.mine.key -ne 'mountainField') { throw 'BGM map-zone routing did not keep town and mountain families continuous.' }
-      if ($bgm.town.source -notmatch 'maintown\.wav' -or $bgm.mountain.source -notmatch 'mountainousareas\.wav') { throw 'BGM routing selected an unexpected source asset.' }
-      if ($bgm.muted.enabled -or $bgm.muted.activeInstances -ne 0 -or -not $bgm.resumed.enabled) { throw 'BGM mute/unmute did not toggle the single active manager.' }
-      if ($bgm.resumed.activeInstances -gt 1) { throw 'BGM manager reported more than one active instance.' }
+      $bgm = Invoke-GameExpression -Expression "(async()=>{const api=window.__RPG_DEBUG__,wait=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));api.newGame();await wait(700);const townBefore=api.snapshot().bgm;api.enterMap('clinic');await wait(180);const clinic=api.snapshot().bgm;api.enterMap('world');await wait(180);const townAfter=api.snapshot().bgm;api.enterMap('shop');await wait(180);const shop=api.snapshot().bgm;api.enterMap('field');await wait(700);const mountain=api.snapshot().bgm;api.enterMap('world');await wait(700);const returned=api.snapshot().bgm;api.enterMap('dungeon');const mine=api.snapshot().bgm;document.getElementById('soundButton').click();const muted=api.snapshot().bgm;api.enterMap('field');const mutedMountain=api.snapshot().bgm;document.getElementById('soundButton').click();await wait(120);const resumed=api.snapshot().bgm;return JSON.stringify({townBefore,clinic,townAfter,shop,mountain,returned,mine,muted,mutedMountain,resumed});})()" | ConvertFrom-Json
+      if ($bgm.townBefore.key -ne 'mainTown' -or $bgm.clinic.key -ne 'mainTown' -or $bgm.townAfter.key -ne 'mainTown' -or $bgm.shop.key -ne 'mainTown' -or $bgm.mountain.key -ne 'mountainField' -or $bgm.returned.key -ne 'mainTown' -or $bgm.mine.key -ne 'mountainField') { throw 'BGM map-zone routing did not keep town and mountain families continuous.' }
+      if ($bgm.townBefore.source -notmatch 'maintown\.wav' -or $bgm.mountain.source -notmatch 'mountainousareas\.wav') { throw 'BGM routing selected an unexpected source asset.' }
+      if ($bgm.clinic.currentTime -lt $bgm.townBefore.currentTime - 0.05 -or $bgm.townAfter.currentTime -lt $bgm.clinic.currentTime - 0.05 -or $bgm.shop.currentTime -lt $bgm.townAfter.currentTime - 0.05) { throw "Same-zone BGM playback position moved backwards or reset (town=$($bgm.townBefore.currentTime), clinic=$($bgm.clinic.currentTime), returned=$($bgm.townAfter.currentTime), shop=$($bgm.shop.currentTime))." }
+      if ($bgm.muted.enabled -or $bgm.muted.activeInstances -ne 0 -or $bgm.mutedMountain.activeInstances -ne 0 -or -not $bgm.resumed.enabled) { throw 'BGM mute/unmute did not toggle the single active manager.' }
+      if ($bgm.resumed.activeInstances -gt 1 -or $bgm.mutedMountain.activeInstances -gt 1) { throw 'BGM manager reported more than one active instance.' }
     }
     'autoplay' {
       Start-Sleep -Seconds $PlaySeconds
@@ -1339,6 +1341,7 @@ try {
     guildHelpScreenshot = $guildHelpScreenshotPath
     guildActiveScreenshot = $guildActiveScreenshotPath
     guildCommissionScreenshot = $guildCommissionScreenshotPath
+    bgmEvidence = $bgm
     serviceReach = $serviceReachResults
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count
