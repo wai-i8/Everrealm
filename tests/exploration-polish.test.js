@@ -32,7 +32,8 @@ test("exploration camera hard-locks the player to centre without changing battle
   assert.match(cameraUpdate, /camera\.y = player\.y/);
   assert.doesNotMatch(cameraUpdate, /Core\.clamp\(player\.[xy]/);
   assert.match(game, /if \(battle && mode === "battle"\)/);
-  assert.match(game, /\["world", "field"\]\.includes\(currentMapId\)[\s\S]{0,180}?ctx\.fillRect\(0, 0, width, height\)/);
+  assert.match(game, /ctx\.fillStyle = "#000";\s*ctx\.fillRect\(0, 0, width, height\)/);
+  assert.match(game, /function drawAtmosphere\(\) \{[\s\S]*?ctx\.clip\(\)/);
 });
 
 test("exploration monster facing uses travelled direction, diagonal hysteresis, and a turn cooldown", () => {

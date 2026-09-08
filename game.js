@@ -774,21 +774,11 @@
   }
 
   function targetZoom() {
-    // Main Town artwork and its navigation package share native 1:1 pixels.
-    // Its base view is intentionally 1.0: the camera crops a window over the
-    // large world.  These are explicit responsive/view controls, never a
-    // scale derived from the loaded image dimensions or a fit-to-map fallback.
-    const responsiveBase = currentMapId === "world"
-      ? 1
-      : width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
+    // Near / mid / far are one global exploration camera. The map only owns
+    // its world bounds; neither its dimensions nor its artwork resolution can
+    // change this preset.
+    const responsiveBase = width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
     return responsiveBase * EXPLORE_ZOOM_SCALES[exploreZoomLevel];
-  }
-
-  function explorationUnitScale() {
-    const authoredScale = Number(world?.art?.unitScale);
-    return Number.isFinite(authoredScale) && authoredScale > 0
-      ? authoredScale
-      : Locomotion.STANDARD_MOBILE_UNIT_SPRITE.worldScale;
   }
 
   function syncExploreZoomControls() {
@@ -4477,9 +4467,8 @@
 
   function updateCamera(dt) {
     const zoom = targetZoom();
-    // Exploration is player-locked even at the map boundary. drawTiles clips to
-    // valid tiles and the themed canvas backdrop safely fills the area beyond a
-    // small map, so the left tool rail can never cover the player.
+    // Exploration is player-locked even at the map boundary. The world
+    // renderer paints the native map and leaves the overflow region black.
     camera.x = player.x;
     camera.y = player.y;
     camera.zoom = Core.lerp(camera.zoom, zoom, 1 - Math.exp(-5 * dt));
@@ -4662,11 +4651,9 @@
       }
       return;
     }
-    ctx.fillStyle = ["world", "field"].includes(currentMapId)
-      ? "#132f30"
-      : currentMapId === "dungeon"
-        ? "#111826"
-        : "#241f24";
+    // The map is the only world background. Any screen area outside its
+    // native bounds remains black, including small interiors at the edge.
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, width, height);
     const shake = reducedMotion ? 0 : screenShake;
     const shakeX = (Math.random() - .5) * shake;
@@ -5537,9 +5524,7 @@
     const centreX = mapWidth / 2;
     const centreY = mapHeight / 2;
     const radius = Math.min(mapWidth, mapHeight) * .485;
-    const flattenedTownArt = currentMapId === "world" && world.art?.flattened;
-    const flattenedInteriorArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
-    const flattenedMapArt = flattenedTownArt || flattenedInteriorArt;
+    const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 22 : 18;
     const scale = flattenedMapArt
       ? Math.min((mapWidth - 12) / world.pixelWidth, (mapHeight - 12) / world.pixelHeight)
@@ -5558,10 +5543,7 @@
     miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
     if (flattenedMapArt) {
-      if (flattenedInteriorArt) Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
-        x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
-      });
-      else Art.drawMainTownBackground(miniCtx, {
+      Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
         x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
       });
     }
@@ -5750,7 +5732,7 @@
     };
   }
 
-  function mainTownBackgroundCrop(shakeX = 0, shakeY = 0) {
+  function flattenedBackgroundCrop(shakeX = 0, shakeY = 0) {
     const mapWidth = Math.max(1, Number(world?.pixelWidth) || 1);
     const mapHeight = Math.max(1, Number(world?.pixelHeight) || 1);
     const zoom = Math.max(.001, camera.zoom);
@@ -5777,9 +5759,9 @@
   }
 
   function drawTiles(shakeX, shakeY) {
-    if (currentMapId === "world" && world.art?.flattened) {
-      const crop = mainTownBackgroundCrop(shakeX, shakeY);
-      Art.drawMainTownBackground(ctx, {
+    if (world.art?.flattened && world.art?.backgroundScene) {
+      const crop = flattenedBackgroundCrop(shakeX, shakeY);
+      Art.drawFlattenedBackground(ctx, world.art.backgroundScene, {
         sourceX: crop.sx,
         sourceY: crop.sy,
         sourceWidth: crop.sw,
@@ -5788,16 +5770,6 @@
         y: crop.dy,
         width: crop.dw,
         height: crop.dh,
-      });
-      return;
-    }
-    if (world.art?.flattened && world.art?.backgroundScene) {
-      const topLeft = worldToScreen({ x: 0, y: 0 }, shakeX, shakeY);
-      Art.drawFlattenedBackground(ctx, world.art.backgroundScene, {
-        x: topLeft.x,
-        y: topLeft.y,
-        width: world.pixelWidth * camera.zoom,
-        height: world.pixelHeight * camera.zoom,
       });
       return;
     }
@@ -6524,7 +6496,6 @@
       x: point.x,
       y: point.y + 13 * camera.zoom,
       scale: camera.zoom,
-      unitScale: explorationUnitScale(),
       actor: "player",
       classId: playerClassId,
       facing: player.facing,
@@ -6564,7 +6535,6 @@
         x: point.x,
         y: point.y + enemy.radius * .72 * scale,
         scale: scale * (enemy.boss ? 1.03 : .98),
-        unitScale: explorationUnitScale(),
         type: enemy.type,
         facing: enemy.facing,
         phase: enemy.anim,
@@ -6680,6 +6650,14 @@
   }
 
   function drawAtmosphere() {
+    const left = (0 - camera.x) * camera.zoom + width * .5;
+    const top = (0 - camera.y) * camera.zoom + height * .5;
+    const right = (world.pixelWidth - camera.x) * camera.zoom + width * .5;
+    const bottom = (world.pixelHeight - camera.y) * camera.zoom + height * .5;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.max(0, left), Math.max(0, top), Math.max(0, Math.min(width, right) - Math.max(0, left)), Math.max(0, Math.min(height, bottom) - Math.max(0, top)));
+    ctx.clip();
     const vignette = ctx.createRadialGradient(width * .5, height * .52, Math.min(width, height) * .16, width * .5, height * .52, Math.max(width, height) * .72);
     vignette.addColorStop(0, "rgba(4,8,18,0)");
     vignette.addColorStop(.62, "rgba(4,8,18,.08)");
@@ -6701,6 +6679,7 @@
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 14); ctx.stroke();
       }
     }
+    ctx.restore();
     ctx.restore();
   }
 
@@ -6934,8 +6913,8 @@
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
-        mainTownRender: currentMapId === "world" && world.art?.flattened ? (() => {
-          const crop = mainTownBackgroundCrop();
+        flattenedMapRender: world.art?.flattened && world.art?.backgroundScene ? (() => {
+          const crop = flattenedBackgroundCrop();
           return { source: { x: crop.sx, y: crop.sy, width: crop.sw, height: crop.sh }, destination: { x: crop.dx, y: crop.dy, width: crop.dw, height: crop.dh }, image: { width: world.pixelWidth, height: world.pixelHeight }, canvas: { cssWidth: width, cssHeight: height, dpr, backingWidth: canvas.width, backingHeight: canvas.height }, cameraZoom: camera.zoom };
         })() : null,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },

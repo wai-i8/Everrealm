@@ -84,6 +84,12 @@ Hospital、Guild、Equipment Shop、Inn、Item／General Store 同 Main Town 使
 
 Main Town runtime 保留 supplied `7680 × 4320` native visible artwork、gameplay world 同 navigation pixels，採用 1:1 world-to-source mapping；camera 只從 native world 以 viewport world size crop 圍繞玩家取景，唔將全張 8K scene fit 入 gameplay viewport，亦不得套用舊 compact-map baseline、第二層圖片縮放、CSS 放大或獨立 input scale。background、entity、feet pivot、collision 同 screen-to-world click conversion 必須共用同一個 camera transform；far／mid／near 只係相機視角倍率，DPR 只影響 Canvas backing/output resolution，唔改變 world viewport。
 
+### 2.3 Native map world and shared camera
+
+Every supplied scene image is its own gameplay world: native master width and height are the map's `pixelWidth` and `pixelHeight`, and the paired navigation package uses the same coordinate space. A 7680 × 4320 town is intentionally larger than a 1672 × 941 interior; neither is normalized to an old logical map size, fit to the viewport, or resized because of image resolution. NPCs, portals, feet anchors, click targets and movement all remain in those native pixels.
+
+Player and ordinary-unit render size, exploration movement speed, and the Near/Mid/Far camera presets are global contracts. They do not read map dimensions, scene identity, or source resolution. Map dimensions only constrain world bounds and camera cropping. When a camera viewport is larger than a small map, the renderer leaves the area outside the native map black; it never stretches the map or enlarges its units to fill the screen.
+
 所有 flattened scene 共享 `feet_radius_px: 3`。feet disk 必須完全落喺 compiled authored allowlist；室內係 white／cyan 並避開 magenta，Main Town 係 white／cyan／pink 及 compiler 只在 painted region 邊界做有限 JPEG seam normalization。越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。Main Town click-to-move 使用 1px line-clear sampling 同四向 waypoints，配合 runtime X→Y collision substeps，避免跨過 authoring mask 嘅單像素 blocked edge。每張 interior 只保留一個最重要嘅核心服務／接待 NPC；家具同裝飾只保留語意 zone metadata，若已烘焙入 master art 就 `render: false`、`solid: false`。
 
 門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。

@@ -20,6 +20,8 @@ Both supplied images are `7680 × 4320`. The JPG files remain the source of trut
 
 Runtime preserves this native image space as the Main Town world: one source pixel is one world pixel before the shared camera zoom. The gameplay camera crops a viewport-sized source rectangle around the player and draws that crop directly to the final Canvas output; it does not fit the full 7680 × 4320 image into the viewport. Do not apply the legacy compact-map baseline, a second image scale, CSS enlargement, or a separate click coordinate scale. Rendering, feet anchors, movement collision, and screen-to-world input all use the same camera transform. DPR may enlarge the Canvas backing store for output quality, but never changes world size or camera crop.
 
+Main Town uses the same global player render scale, exploration movement speed, and Near/Mid/Far camera presets as every other map. Its large native dimensions affect only world bounds and how far the camera can travel; there is no Main-Town-specific entity scale, speed multiplier, zoom compensation, or fit-to-map conversion.
+
 The compiler tolerates the supplied JPG compression colours and normalizes only the small anti-aliased seam directly connecting a painted region to the white road. It does not infer scenery, invert a collision mask, or make an unmarked background area walkable. If package data is missing, malformed or dimensionally invalid, the resolver is fail-closed and all ordinary movement is blocked.
 
 ## 2. Authoring colour contract

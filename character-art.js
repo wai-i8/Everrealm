@@ -520,10 +520,9 @@
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
-    const unitScale = Math.max(.01, Number(settings.unitScale) || Locomotion.STANDARD_MOBILE_UNIT_SPRITE.worldScale);
-    const visualScale = scale * unitScale;
+    const visualScale = scale;
     const profile = monsterVisualProfiles[id] || null;
-    const box = Locomotion.layout(x, y, scale, unitScale);
+    const box = Locomotion.layout(x, y, scale);
     ctx.save();
     try {
       drawGroundShadow(ctx, x, y, visualScale, 15, .34);
@@ -986,53 +985,30 @@
     return drawBattleBitmap(ctx, atlas, settings, true);
   }
 
-  function drawMainTownBackground(ctx, options) {
-    const settings = options || {};
-    const atlas = spriteAtlases.mainTownBackground;
-    if (!atlas?.ready || !atlas.image) return false;
-    const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
-    const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
-    const sourceX = Math.max(0, Math.min(sourceWidth - 1, Number.isFinite(Number(settings.sourceX)) ? Number(settings.sourceX) : 0));
-    const sourceY = Math.max(0, Math.min(sourceHeight - 1, Number.isFinite(Number(settings.sourceY)) ? Number(settings.sourceY) : 0));
-    const cropWidth = Math.max(.001, Math.min(sourceWidth - sourceX, Number(settings.sourceWidth) || sourceWidth));
-    const cropHeight = Math.max(.001, Math.min(sourceHeight - sourceY, Number(settings.sourceHeight) || sourceHeight));
-    const width = Math.max(1, Number(settings.width) || sourceWidth);
-    const height = Math.max(1, Number(settings.height) || sourceHeight);
-    const x = Number(settings.x) || 0;
-    const y = Number(settings.y) || 0;
-    ctx.save();
-    try {
-      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
-      // At the canonical 1:1 Main Town view, keep native source pixels
-      // discrete. Intentional far/near camera modes still use high-quality
-      // filtering because they deliberately change the world-to-screen ratio.
-      const nativeScale = Math.abs(width - cropWidth) < .01 && Math.abs(height - cropHeight) < .01;
-      ctx.imageSmoothingEnabled = !nativeScale;
-      if (!nativeScale) ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(atlas.image, sourceX, sourceY, cropWidth, cropHeight, x, y, width, height);
-    } finally {
-      ctx.restore();
-    }
-    return true;
-  }
-
   function drawFlattenedBackground(ctx, scene, options) {
     const atlas = spriteAtlases[`${String(scene || "").trim()}Background`];
     if (!atlas?.ready || !atlas.image) return false;
     const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
     const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
-    if (sourceWidth !== 1672 || sourceHeight !== 941) return false;
     const settings = options || {};
-    const width = Math.max(1, Number(settings.width) || sourceWidth);
-    const height = Math.max(1, Number(settings.height) || sourceHeight);
+    const sourceX = Math.max(0, Math.min(sourceWidth - 1, Number.isFinite(Number(settings.sourceX)) ? Number(settings.sourceX) : 0));
+    const sourceY = Math.max(0, Math.min(sourceHeight - 1, Number.isFinite(Number(settings.sourceY)) ? Number(settings.sourceY) : 0));
+    const cropWidth = Math.max(.001, Math.min(sourceWidth - sourceX, Number(settings.sourceWidth) || sourceWidth));
+    const cropHeight = Math.max(.001, Math.min(sourceHeight - sourceY, Number(settings.sourceHeight) || sourceHeight));
+    const width = Math.max(1, Number(settings.width) || cropWidth);
+    const height = Math.max(1, Number(settings.height) || cropHeight);
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     ctx.save();
     try {
       ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(atlas.image, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
+      // Native world pixels are preserved by the shared camera transform;
+      // filtering is only used when the selected global zoom changes their
+      // display size.
+      const nativeScale = Math.abs(width - cropWidth) < .01 && Math.abs(height - cropHeight) < .01;
+      ctx.imageSmoothingEnabled = !nativeScale;
+      if (!nativeScale) ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, sourceX, sourceY, cropWidth, cropHeight, x, y, width, height);
     } finally {
       ctx.restore();
     }
@@ -1794,7 +1770,6 @@
     drawTerrainTile,
     drawBattleBackground,
     drawBattleGround,
-    drawMainTownBackground,
     drawFlattenedBackground,
     drawHospitalBackground,
     drawInteriorSprite,

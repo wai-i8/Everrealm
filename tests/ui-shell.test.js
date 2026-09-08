@@ -206,28 +206,36 @@ test("Dialogue is a compact anchored role-only overlay with vertical choices", (
 test("native Main Town camera and click conversion stay in one world space", () => {
   assert.match(mainTownSource, /pixelWidth:\s*navigationPackage\.source\.width/);
   assert.match(mainTownSource, /pixelHeight:\s*navigationPackage\.source\.height/);
-  assert.match(mainTownSource, /art:[\s\S]*unitScale:\s*1/);
-  assert.match(game, /currentMapId === "world"[\s\S]*?\? 1/);
+  assert.match(mainTownSource, /backgroundScene:\s*"mainTown"/);
+  assert.doesNotMatch(mainTownSource, /unitScale/);
+  const camera = game.match(/function targetZoom\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(camera, /const responsiveBase = width < 650 \? 1\.2 : width < 1000 \? 1\.32 : 1\.48/);
+  assert.doesNotMatch(camera, /currentMapId|pixelWidth|pixelHeight|naturalWidth/);
   assert.match(game, /function worldToScreen\(point/);
   assert.match(game, /function screenToWorldPoint\(screenX, screenY\)/);
   assert.match(game, /const worldPoint = screenToWorldPoint\(screenX, screenY\)/);
   assert.match(game, /const authoredPoint = screenToWorldPoint\(screenX, screenY\)/);
-  assert.match(game, /function mainTownBackgroundCrop\(shakeX = 0, shakeY = 0\)/);
-  assert.match(game, /const responsiveBase = currentMapId === "world"\s*\n\s*\? 1/);
+  assert.match(game, /function flattenedBackgroundCrop\(shakeX = 0, shakeY = 0\)/);
   assert.match(game, /const viewportWorldWidth = width \/ zoom/);
   assert.match(game, /const viewportWorldHeight = height \/ zoom/);
-  assert.match(game, /function explorationUnitScale\(\)/);
-  assert.match(game, /unitScale: explorationUnitScale\(\)/);
+  assert.doesNotMatch(game, /explorationUnitScale|unitScale:/);
   assert.doesNotMatch(game, /targetZoom\(\)[\s\S]{0,180}(naturalWidth|pixelWidth|pixelHeight)/);
   assert.match(game, /sourceWidth: crop\.sw/);
   assert.match(game, /sourceHeight: crop\.sh/);
   assert.match(game, /destination: \{ x: crop\.dx, y: crop\.dy, width: crop\.dw, height: crop\.dh \}/);
-  assert.match(game, /Art\.drawMainTownBackground\(ctx, \{[\s\S]*?sourceWidth: crop\.sw[\s\S]*?width: crop\.dw/);
+  assert.match(game, /Art\.drawFlattenedBackground\(ctx, world\.art\.backgroundScene, \{[\s\S]*?sourceWidth: crop\.sw[\s\S]*?width: crop\.dw/);
   assert.match(game, /canvas: \{ cssWidth: width, cssHeight: height, dpr, backingWidth: canvas\.width/);
   assert.match(game, /ctx\.setTransform\(dpr, 0, 0, dpr, 0, 0\)/);
   assert.match(characterArt, /ctx\.drawImage\(atlas\.image, sourceX, sourceY, cropWidth, cropHeight/);
   assert.doesNotMatch(css, /#gameCanvas[^}]*image-rendering:\s*pixelated/);
   assert.doesNotMatch(game, /world\.pixelWidth\s*\/\s*2048|world\.pixelHeight\s*\/\s*1152/);
+  const playerRender = game.match(/function drawPlayer\(shakeX, shakeY\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const playerUpdate = game.match(/function updatePlayer\(dt\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(playerRender, /scale: camera\.zoom/);
+  assert.doesNotMatch(playerRender, /currentMapId|pixelWidth|pixelHeight|unitScale/);
+  assert.match(playerUpdate, /let speed = stats\.speed/);
+  assert.doesNotMatch(playerUpdate, /currentMapId|pixelWidth|pixelHeight|mapScale|resolutionScale|unitScale/);
+  assert.match(game, /ctx\.fillStyle = "#000";\s*ctx\.fillRect\(0, 0, width, height\)/);
 });
 
 function uiCssForTest() {

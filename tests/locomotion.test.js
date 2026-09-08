@@ -26,14 +26,12 @@ test("idle and Walk frames resolve by direction without cut tables or offsets", 
   }
 });
 
-test("scene unit scale can use native world pixels without changing shared cell geometry", () => {
-  const legacy = Locomotion.layout(200, 300, 1);
-  const native = Locomotion.layout(200, 300, 1, 1);
-  assert.equal(legacy.width, 256 * metadata.worldScale);
-  assert.equal(native.width, 256);
-  assert.equal(native.height, 256);
-  assert.equal(native.baselineY, legacy.baselineY);
-  assert.equal(native.centerX, legacy.centerX);
+test("mobile unit layout is global and independent of map dimensions", () => {
+  const first = Locomotion.layout(200, 300, 1);
+  const second = Locomotion.layout(200, 300, 1);
+  assert.deepEqual(first, second);
+  assert.equal(first.width, 256 * metadata.worldScale);
+  assert.equal(first.height, 256 * metadata.worldScale);
 });
 
 test("animation controller preserves facing and returns immediately to Idle on STOP", () => {

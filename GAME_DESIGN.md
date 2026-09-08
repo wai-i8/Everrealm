@@ -28,8 +28,9 @@
 
 - 開始新遊戲時先選 **戰士** 或 **格鬥士**。戰士使用刀劍；格鬥士使用拳套，初始技能為「正拳」。職業會限制可裝備武器、初始技能及可學技能分支。
 - 非戰鬥移動統一使用滑鼠點擊或觸控地面；角色使用碰撞感知最短可行路線繞過牆、樹與建築。若精確點選位置不可站立或不可到達，改以前往距離該點最近的可達空地。滑鼠按住地圖 `0.5` 秒後放開，即啟用游標跟隨，之後移動游標即可改變行走目標；再次短按則退出跟隨，執行單次點擊。觸控長按可拖動選擇目標，放開後地面目標保留最後位置，角色／設施目標則繼續追至遇敵或互動。連續追蹤最多每 `150 ms` 重算一次路線；取消觸控、切換場景、開啟彈窗或視窗失焦時清除追蹤。移除 WASD、方向鍵、手機虛擬方向盤及 `K` 快閃。
-- 非戰鬥鏡頭提供遠／中／近三級，玩家永遠鎖在畫面正中央；地圖邊界以不可行走的場景底色延伸，鏡頭不因邊界把玩家推去側欄下方。右上只放圓形小地圖；狀態、物品、裝備、DECK、技能樹等入口全部放在左側。
+- 非戰鬥鏡頭提供遠／中／近三級，玩家永遠鎖在畫面正中央；地圖邊界以不可行走的世界邊界處理，若 viewport 超出原生地圖就顯示黑色，鏡頭不因邊界把玩家推去側欄下方。右上只放圓形小地圖；狀態、物品、裝備、DECK、技能樹等入口全部放在左側。
 - 主城可見 artwork、native gameplay world 同 authored navigation 都固定為 `7680 × 4320`；玩家約 `128 × 192` 嘅 sprite proportion 係以呢個原生尺度 authored。camera 係圍繞玩家裁切 viewport 嘅 window，唔係將全張主城 fit 入 gameplay viewport；8K source 尺寸亦唔會自動改變所選 view mode。background、entity、collision 同 screen／world conversion 共用同一 camera transform，DPR 只提高 Canvas output resolution，唔改變 world viewport。
+- 每張 supplied map image 都係自己嘅 gameplay world，native image width／height 就係 world bounds；大地圖會真實較耐行，小型 interior 會真實較快行，兩者唔會 normalize 到共同尺寸。玩家 render size、探索移速及遠／中／近 camera preset 全部係 global contract，唔由地圖尺寸或解析度推導；viewport 超出細地圖時，世界外只顯示黑色，唔拉伸地圖或放大玩家。
 - 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；公會、裝備店、療癒所、雜貨舖及旅店等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
 - 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊以緊湊格仔列出藥水、技能書、素材及裝備。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。

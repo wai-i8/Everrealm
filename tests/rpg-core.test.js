@@ -203,6 +203,10 @@ test("world generator returns the authored flattened navigation town", () => {
   assert.equal(world.kind, "town");
   assert.equal(world.width, 240);
   assert.equal(world.height, 135);
+  assert.equal(world.pixelWidth, 7680);
+  assert.equal(world.pixelHeight, 4320);
+  assert.equal(world.pixelWidth, world.width * world.tileSize);
+  assert.equal(world.pixelHeight, world.height * world.tileSize);
   assert.equal(world.tiles.length, 135);
   assert.equal(world.tiles[0].length, 240);
   assert.deepEqual(world.houses.map((house) => house.id), ["keeper-house", "forge", "tea-house", "clinic", "general-store"]);
