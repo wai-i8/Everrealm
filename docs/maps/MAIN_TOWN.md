@@ -18,6 +18,8 @@ Main Town is a flattened scene defined by a paired display image and authoring i
 
 Both supplied images are `7680 × 4320`. The JPG files remain the source of truth. The development compiler classifies their painted colour regions and writes compact RLE data into the generated JavaScript so a zero-build browser can load navigation synchronously without `fetch()`, Canvas pixel readback or an authoring-image overlay.
 
+Runtime preserves this native image space as the Main Town world: one source pixel is one world pixel before the shared camera zoom. Do not apply the legacy compact-map baseline, a second image scale, CSS enlargement, or a separate click coordinate scale. Rendering, feet anchors, movement collision, and screen-to-world input all use the same camera transform.
+
 The compiler tolerates the supplied JPG compression colours and normalizes only the small anti-aliased seam directly connecting a painted region to the white road. It does not infer scenery, invert a collision mask, or make an unmarked background area walkable. If package data is missing, malformed or dimensionally invalid, the resolver is fail-closed and all ordinary movement is blocked.
 
 ## 2. Authoring colour contract

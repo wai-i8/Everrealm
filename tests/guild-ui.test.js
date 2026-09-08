@@ -10,7 +10,7 @@ const maps = require(path.join(root, "map", "map-registry.js")).createMapRegistr
 
 test("Guild commission UI is single-identity, summary-first and progressive-disclosure", () => {
   const renderGuild = game.match(/function renderGuildFacility\(\) \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function totalOwnedSkillBooks/)?.[1] || "";
-  assert.match(game, /guild: \["GUILD COMMISSIONS", "公會委託"/);
+  assert.match(game, /guild: \["", "公會委託"/);
   assert.match(game, /一份委託只可以同時進行/);
   assert.doesNotMatch(renderGuild, /拾燈公會|公會委託板|公會規矩|canonical Fighter/);
   assert.match(renderGuild, /guild-commission-state-line/);

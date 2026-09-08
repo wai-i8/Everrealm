@@ -334,6 +334,56 @@ button { font: inherit; }
   clip-path: polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
 }
 
+/* The exploration rail has one shared bitmap pull-tab.  The rail itself is
+   only a layout surface; when collapsed it contributes no visible strip or
+   icon rail to the world. */
+.explore-sidebar {
+  padding-top: .72rem;
+}
+.sidebar-toggle {
+  position: absolute;
+  z-index: 8;
+  left: -.38rem;
+  top: -.34rem;
+  width: 2.7rem;
+  height: 2.7rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(2px 3px 0 rgba(3,6,14,.55));
+  transition: filter .14s ease, transform .14s ease;
+}
+.sidebar-toggle img {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  object-fit: contain;
+  pointer-events: none;
+}
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible { filter: brightness(1.15) drop-shadow(2px 3px 0 rgba(3,6,14,.55)); }
+.sidebar-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.explore-sidebar.is-collapsed {
+  width: 2.7rem;
+  height: 2.7rem;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.explore-sidebar.is-collapsed > :not(.sidebar-toggle) { display: none; }
+.explore-sidebar.is-collapsed .sidebar-toggle {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+.explore-sidebar.is-collapsed .sidebar-toggle img { transform: rotate(180deg); }
+.explore-sidebar.is-collapsed .sidebar-toggle:hover,
+.explore-sidebar.is-collapsed .sidebar-toggle:focus-visible { transform: translateX(2px); }
+
 .location-banner { position: absolute; z-index: 5; left: 50%; top: 12%; transform: translate(-50%,-10px); text-align: center; opacity: 0; pointer-events: none; }
 .location-banner.show { animation: locationReveal 2.3s ease both; }
 .location-banner small { display: block; color: var(--teal); font: 700 .6rem/1 ui-monospace, monospace; letter-spacing: .18em; }
@@ -649,7 +699,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   cursor: pointer;
 }
 .dialogue-next:hover, .dialogue-next:focus-visible { color: var(--cream); border-image-source: var(--ui-button-active-image) !important; }
-.dialogue-next kbd { color: var(--gold); }
 .dialogue-next i { color: var(--gold); font-style: normal; animation: nextBounce .7s ease-in-out infinite alternate; }
 .dialogue-choices {
   min-width: 0;

@@ -148,6 +148,13 @@ The normal left-menu `戰技面板` is a read-only, compact, vertical current-lo
 
 The town-gate `戰技配置` console is the editable management surface. Its left side is the learned, equipable-skill list in one vertical column; its right side is the current Deck in one vertical column. `裝入` and `卸下` continue to use the existing compatibility, uniqueness, capacity, class and CMD/PSV rules. The Skill Tree remains responsible for learning/unlocking and Skill Detail, not either Deck surface.
 
+Both Deck surfaces are content-dense list views: slot numbers use a small secondary index
+plate, occupied rows show only CMD/PSV plus the skill name (and the contextual secondary
+action on the editable console), and empty slots render a frame with blank content. They do
+not render placeholder words such as `空`／`沒有技能`／`尚未裝設`; the configuration list also
+omits redundant `可裝入 DECK` copy. These presentation rules do not change equipability,
+capacity, passive-skill restrictions or any gameplay data contract.
+
 ### Compatibility
 
 The catalog contains exactly the 65 canonical ids above. A read-only legacy alias map in `fighter-skill-data.js` accepts older Everrealm save/debug ids (for example `straight_punch → kentotsu`) without adding duplicate nodes or graph edges.

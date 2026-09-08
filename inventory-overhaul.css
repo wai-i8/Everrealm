@@ -330,9 +330,9 @@
 .deck-region-heading h3 { margin: .22rem 0 0; font-size: 1.04rem; }
 .deck-region-heading > span { color: var(--muted); font-size: .74rem; }
 .deck-capacity { flex: 0 0 auto; color: var(--teal); font: 800 .78rem/1 ui-monospace,monospace; white-space: nowrap; }
-.deck-slot-list { display: grid; grid-template-columns: 1fr; gap: .48rem; width: min(100%, 27rem); margin-inline: auto; }
-.deck-slot-list .deck-slot.is-filled { grid-template-columns: minmax(0,1fr); min-height: 3.6rem; padding-block: .5rem; }
-.deck-slot-list .deck-slot.is-empty { min-height: 2.9rem; padding-block: .35rem; opacity: .74; }
+.deck-slot-list { display: grid; grid-template-columns: 1fr; gap: .34rem; width: min(100%, 27rem); margin-inline: auto; }
+.deck-slot-list .deck-slot.is-filled { grid-template-columns: minmax(0,1fr); min-height: 2.65rem; padding-block: .34rem; }
+.deck-slot-list .deck-slot.is-empty { min-height: 2.15rem; padding-block: .22rem; opacity: .74; }
 .deck-slot-list .deck-slot-copy,
 .deck-slot-list .deck-slot-empty { min-width: 0; display: grid; gap: .18rem; }
 .deck-view-shell.is-readonly .deck-current-column { width: 100%; }
@@ -343,12 +343,12 @@
 .deck-slot {
   position: relative;
   min-width: 0;
-  min-height: 5rem;
+  min-height: 2.8rem;
   display: grid;
   grid-template-columns: 2.6rem minmax(0,1fr) auto;
   align-items: center;
-  gap: .58rem;
-  padding: .65rem .65rem .65rem 2.3rem;
+  gap: .42rem;
+  padding: .42rem .55rem .42rem 2.15rem;
   border: 1px solid rgba(245,233,202,.22);
   border-radius: .85rem;
   background: linear-gradient(145deg,rgba(34,47,75,.9),rgba(9,17,33,.96));
@@ -356,7 +356,7 @@
 }
 .deck-slot.is-filled { border-color: rgba(82,220,203,.55); box-shadow: inset 0 0 1.5rem rgba(82,220,203,.05),3px 4px 0 rgba(0,0,0,.28); }
 .deck-slot.is-empty { grid-template-columns: minmax(0,1fr); border-style: dashed; }
-.deck-slot-number { position: absolute; left: .55rem; top: .55rem; width: 1.25rem; height: 1.25rem; display: grid; place-items: center; border-radius: 50%; color: #171421; background: var(--gold); font: 900 .58rem/1 ui-monospace,monospace; }
+.deck-slot-number { position: absolute; left: .42rem; top: 50%; width: 1.08rem; height: 1.08rem; display: grid; place-items: center; transform: translateY(-50%); border: 1px solid rgba(255,200,87,.58); border-radius: .2rem; color: var(--gold); background: rgba(255,200,87,.08); font: 900 .55rem/1 ui-monospace,monospace; }
 .deck-slot > div:not(.skill-card-icon),
 .deck-skill-choice > div:not(.skill-card-icon) { min-width: 0; display: grid; gap: .25rem; }
 .deck-slot strong,
@@ -366,9 +366,9 @@
 .deck-slot-empty { padding-left: .3rem; }
 .deck-slot-empty small { color: var(--muted); }
 .deck-slot-action { justify-self: end; min-width: 4.2rem !important; min-height: 2rem !important; padding: .25rem .45rem !important; font-size: .65rem !important; }
-.deck-skill-list { display: grid; grid-template-columns: 1fr; gap: .62rem; }
-.deck-skill-choice { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
-.deck-skill-choice .facility-action-button { min-width: 4.2rem; min-height: 2rem; padding: .25rem .45rem; font-size: .65rem; }
+.deck-skill-list { display: grid; grid-template-columns: 1fr; gap: .34rem; }
+.deck-skill-choice { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .5rem; padding: .42rem .5rem; border: 1px solid rgba(245,233,202,.2); border-radius: .62rem; background: rgba(16,27,49,.88); }
+.deck-skill-choice .facility-action-button { min-width: 3.85rem; min-height: 1.85rem; padding: .2rem .4rem; font-size: .63rem; }
 .deck-skill-title { min-width: 0; display: flex; align-items: center; gap: .38rem; }
 .skill-kind-badge { position: relative; flex: 0 0 var(--ui-skill-badge-width); width: var(--ui-skill-badge-width); height: var(--ui-skill-badge-height); display: inline-grid; place-items: center; overflow: hidden; border-radius: .24rem; }
 .skill-kind-badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .9; }

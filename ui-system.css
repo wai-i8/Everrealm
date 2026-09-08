@@ -17,6 +17,9 @@
   --ui-panel-wide-max: 66rem;
   --ui-skill-badge-width: 3.45rem;
   --ui-skill-badge-height: 1.5rem;
+  --ui-control-hit: 2.5rem;
+  --ui-close-art: 2rem;
+  --ui-info-art: 1.45rem;
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -49,8 +52,8 @@
    the HTML button remains the generous keyboard/touch hit area. */
 .ui-close-button {
   position: relative;
-  min-width: 2.7rem;
-  min-height: 2.7rem;
+  min-width: var(--ui-control-hit);
+  min-height: var(--ui-control-hit);
   display: inline-grid;
   place-items: center;
   padding: .35rem;
@@ -62,15 +65,15 @@
   cursor: pointer;
   transition: transform .14s ease, filter .14s ease;
 }
-.ui-close-button img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-.ui-info-button img { display: block; width: 1.75rem; height: 1.75rem; object-fit: contain; pointer-events: none; }
+.ui-close-button img { display: block; width: var(--ui-close-art); height: var(--ui-close-art); object-fit: contain; pointer-events: none; }
+.ui-info-button img { display: block; width: var(--ui-info-art); height: var(--ui-info-art); object-fit: contain; pointer-events: none; }
 .ui-close-button:hover,
 .ui-close-button:focus-visible { transform: scale(1.05); filter: brightness(1.12); }
 .ui-close-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-.facility-close-button.ui-close-button { flex: 0 0 2.7rem; width: 2.7rem; height: 2.7rem; gap: .05rem; padding: .15rem; color: #171421; }
+.facility-close-button.ui-close-button { flex: 0 0 var(--ui-control-hit); width: var(--ui-control-hit); height: var(--ui-control-hit); gap: .05rem; padding: .15rem; color: #171421; }
 .ui-info-button {
-  width: 2.7rem;
-  height: 2.7rem;
+  width: var(--ui-control-hit);
+  height: var(--ui-control-hit);
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -136,15 +139,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  min-height: 4.55rem;
-  padding: .72rem 1rem .7rem 1.2rem;
-  border-bottom: 1px solid rgba(82,220,203,.22);
+  gap: .7rem;
+  min-height: 3.9rem;
+  padding: .42rem .72rem .42rem .95rem;
   background:
     linear-gradient(90deg, rgba(20,37,67,.98), rgba(8,18,37,.96) 70%, rgba(18,31,57,.98)),
     radial-gradient(circle at 18% -20%, rgba(255,200,87,.15), transparent 13rem);
 }
 .facility-heading-copy { min-width: 0; }
+.facility-heading-copy .facility-kicker[hidden] + h2 { margin-top: 0; }
 .facility-header-actions { display: flex; align-items: center; gap: .35rem; flex: 0 0 auto; }
 .facility-help-popover {
   position: absolute;
@@ -162,6 +165,7 @@
 .facility-help-popover p { margin: 0; color: #d6d9e2; font-size: .72rem; line-height: 1.55; }
 .facility-header .facility-kicker { color: var(--teal); }
 .facility-header h2 { color: var(--cream); }
+.facility-header h2 { margin-block: 0; }
 .facility-window.ui-window::before { opacity: .96; }
 .facility-content,
 .facility-footer { background: rgba(5,9,19,.34); }
@@ -310,6 +314,14 @@
   word-break: normal;
 }
 .ui-detail-list + .modal-actions { margin-inline: auto; }
+
+/* Compact Deck actions keep their label on a deliberately contrasting
+   secondary surface rather than letting the gold frame swallow the text. */
+.deck-skill-choice .facility-action-button:not(:disabled) {
+  color: #061923;
+  background: var(--teal) !important;
+  border-image-source: var(--ui-button-active-image) !important;
+}
 
 @media (max-width: 530px) {
   .ui-modal-window {

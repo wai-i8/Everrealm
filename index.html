@@ -18,6 +18,9 @@
         </canvas>
 
         <aside id="exploreSidebar" class="explore-sidebar" aria-label="探索功能列">
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="收起探索功能列" aria-expanded="true">
+            <img src="assets/ui/ui-sidebar-toggle-v1.png" alt="" aria-hidden="true" />
+          </button>
           <section id="playerHud" class="player-hud hud-card" role="button" tabindex="0" aria-label="打開角色狀態欄">
             <div class="portrait art-portrait" aria-hidden="true"><canvas id="playerHudPortraitCanvas" width="112" height="112"></canvas></div>
             <div class="player-bars">
@@ -274,7 +277,7 @@
             </div>
             <p id="dialogueText"></p>
             <div id="dialogueChoices" class="dialogue-choices" role="list" hidden></div>
-            <button id="dialogueNext" class="dialogue-next" type="button"><kbd>E</kbd> 繼續 <i aria-hidden="true">▼</i></button>
+            <button id="dialogueNext" class="dialogue-next" type="button"><span class="dialogue-next-label">繼續</span><i aria-hidden="true">▼</i></button>
           </div>
         </section>
 
@@ -335,7 +338,7 @@
           <div class="facility-window ui-window">
             <header class="facility-header ui-header">
               <div class="facility-heading-copy">
-                <p id="facilityKicker" class="facility-kicker">OLD HARBOUR SERVICES</p>
+                <p id="facilityKicker" class="facility-kicker" hidden aria-hidden="true"></p>
                 <h2 id="facilityTitle">公會委託</h2>
               </div>
               <div class="facility-header-actions">

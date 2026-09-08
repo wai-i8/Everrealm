@@ -160,6 +160,7 @@ try {
   $inventoryScreenshotPath = $null
   $equipmentScreenshotPath = $null
   $statusScreenshotPath = $null
+  $hudCollapsedScreenshotPath = $null
   $deckScreenshotPath = $null
   $deckViewerScreenshotPath = $null
   $dialogueServiceScreenshotPath = $null
@@ -407,6 +408,14 @@ try {
       Start-Sleep -Milliseconds 180
       $fighter = Get-GameSnapshot
       if ($fighter.mode -ne 'playing' -or $fighter.classId -ne 'fighter' -or $fighter.equipped.weapon -ne 'novice_gloves' -or $fighter.stats.moveRange -ne 5 -or $fighter.skills.deckCapacity -ne 3 -or $fighter.skills.unlockedSkillIds.Count -ne 1 -or $fighter.skills.unlockedSkillIds[0] -ne 'straight_punch') { throw 'Fighter start did not apply five-step movement, gloves, 正拳, and the initial three-slot deck.' }
+      $hudUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__,stage=document.getElementById("gameStage"),rail=document.getElementById("exploreSidebar"),toggle=document.getElementById("sidebarToggle"),beforeRect=rail.getBoundingClientRect();const before={collapsed:api.snapshot().hudCollapsed,expanded:toggle.getAttribute("aria-expanded"),width:beforeRect.width};toggle.click();const collapsed=api.snapshot(),collapsedExpanded=toggle.getAttribute("aria-expanded"),hidden=[...rail.children].filter(node=>node!==toggle).every(node=>getComputedStyle(node).display==="none"),collapsedRect=rail.getBoundingClientRect();toggle.click();const expanded=api.snapshot(),expandedAgain=toggle.getAttribute("aria-expanded");return {before,collapsed:collapsed.hudCollapsed,collapsedExpanded,hidden,narrow:collapsedRect.width<before.width*.6,expanded:expanded.hudCollapsed,expandedAgain,stored:localStorage.getItem("everrealm-hud-collapsed"),stage:stage.dataset.hudCollapsed};})())') | ConvertFrom-Json
+      if ($hudUi.before.collapsed -or $hudUi.before.expanded -ne 'true' -or -not $hudUi.collapsed -or $hudUi.collapsedExpanded -ne 'false' -or -not $hudUi.hidden -or -not $hudUi.narrow -or $hudUi.expanded -or $hudUi.expandedAgain -ne 'true' -or $hudUi.stored -ne '0' -or $hudUi.stage -ne 'false') { throw "Exploration sidebar collapse toggle did not hide and restore the full rail ($($hudUi | ConvertTo-Json -Compress))." }
+      Invoke-GameExpression -Expression "document.getElementById('sidebarToggle').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $hudCollapsedScreenshotPath = Join-Path $runtimeOutputPath "smoke-hud-collapsed-$ViewportWidth.png"
+      $hudCollapsedCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($hudCollapsedScreenshotPath, [Convert]::FromBase64String($hudCollapsedCapture.result.data))
+      Invoke-GameExpression -Expression "document.getElementById('sidebarToggle').click(); true" | Out-Null
       Invoke-GameExpression -Expression "document.getElementById('statusButton').click(); true" | Out-Null
       Start-Sleep -Milliseconds 100
       $statusUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),stats:document.querySelectorAll(".status-stat-grid>div").length,labels:[...document.querySelectorAll(".status-stat-grid dt")].map(node=>node.textContent),forbidden:[...document.querySelectorAll(".status-stat-grid dt")].some(node=>["\u901f\u5ea6","\u66b4\u64ca","\u63a2\u7d22"].some(term=>node.textContent.includes(term))),canvas:!!document.getElementById("statusCharacterCanvas"),font:parseFloat(getComputedStyle(document.querySelector(".status-stat-grid dd")).fontSize)})') | ConvertFrom-Json
@@ -428,8 +437,8 @@ try {
       [IO.File]::WriteAllBytes($deckViewerScreenshotPath, [Convert]::FromBase64String($deckViewerCapture.result.data))
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.teleportTo('harbour-gate-deck-console'); window.__RPG_DEBUG__.interactWith('harbour-gate-deck-console'); true" | Out-Null
       Start-Sleep -Milliseconds 100
-      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,cmd:document.querySelectorAll(".skill-kind-badge.is-cmd").length,empty:[...document.querySelectorAll(".deck-slot.is-empty strong")].every(node=>node.textContent==="\u7a7a")})') | ConvertFrom-Json
-      if ($deckUi.snapshot.facility.context -ne 'deck' -or $deckUi.slots -ne 3 -or $deckUi.filled -ne 1 -or $deckUi.cmd -lt 1 -or -not $deckUi.empty) { throw 'City-gate DECK panel did not show the editable fighter loadout with correctly named empty slots and CMD badge.' }
+      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,cmd:document.querySelectorAll(".skill-kind-badge.is-cmd").length,emptyStrong:document.querySelectorAll(".deck-slot.is-empty strong").length,emptyCopy:document.querySelectorAll(".deck-slot.is-empty .deck-slot-empty").length,emptyText:[...document.querySelectorAll(".deck-slot.is-empty")].map(node=>node.textContent.replace(/\d/g,"").trim()).join("")})') | ConvertFrom-Json
+      if ($deckUi.snapshot.facility.context -ne 'deck' -or $deckUi.slots -ne 3 -or $deckUi.filled -ne 1 -or $deckUi.cmd -lt 1 -or $deckUi.emptyStrong -ne 0 -or $deckUi.emptyCopy -ne 0 -or $deckUi.emptyText -ne '') { throw 'City-gate DECK panel did not show the editable fighter loadout with blank empty slots and CMD badge.' }
       $deckScreenshotPath = Join-Path $runtimeOutputPath "smoke-deck-$ViewportWidth.png"
       $deckCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($deckScreenshotPath, [Convert]::FromBase64String($deckCapture.result.data))
@@ -704,6 +713,8 @@ try {
       Start-Sleep -Milliseconds 120
       $dialogueSnapshot = Get-GameSnapshot
       if ($dialogueSnapshot.mode -ne 'dialogue') { throw "Touch dialogue did not open: $($dialogueSnapshot.mode)." }
+      $dialogueLabelUi = Invoke-GameExpression -Expression 'JSON.stringify({state:document.getElementById("dialogueNext").dataset.dialogueState,label:document.querySelector(".dialogue-next-label").textContent,aria:document.getElementById("dialogueNext").getAttribute("aria-label")})' | ConvertFrom-Json
+      if ($dialogueLabelUi.state -ne 'continue' -or $dialogueLabelUi.label -ne '繼續' -or $dialogueLabelUi.aria -ne '繼續對話') { throw "Dialogue continue state was not explicit (state=$($dialogueLabelUi.state), label=$($dialogueLabelUi.label))." }
       $dialoguePortraitUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const canvas=document.getElementById("dialoguePortraitCanvas"),rect=canvas.getBoundingClientRect();return {speaker:document.getElementById("speakerName").textContent,actor:canvas.dataset.actor,displayWidth:rect.width,displayHeight:rect.height,canvasWidth:canvas.width,canvasHeight:canvas.height,art:window.LanternArt.spriteStatus()};})())') | ConvertFrom-Json
       # Keep this comparison ASCII-only so Windows PowerShell 5.1 does not
       # reinterpret the UTF-8 source literal through the active ANSI codepage.
@@ -736,6 +747,8 @@ try {
       }
       Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
       Start-Sleep -Milliseconds 80
+      $dialogueTerminalUi = Invoke-GameExpression -Expression 'JSON.stringify({state:document.getElementById("dialogueNext").dataset.dialogueState,label:document.querySelector(".dialogue-next-label").textContent,aria:document.getElementById("dialogueNext").getAttribute("aria-label")})' | ConvertFrom-Json
+      if ($dialogueTerminalUi.state -ne 'terminal' -or $dialogueTerminalUi.label -ne '確定' -or $dialogueTerminalUi.aria -ne '確定並關閉對話') { throw "Dialogue terminal state was not explicit (state=$($dialogueTerminalUi.state), label=$($dialogueTerminalUi.label))." }
       $dialogueLongScreenshotPath = Join-Path $runtimeOutputPath "smoke-dialogue-long-$ViewportWidth.png"
       $dialogueLongCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($dialogueLongScreenshotPath, [Convert]::FromBase64String($dialogueLongCapture.result.data))
@@ -1272,6 +1285,7 @@ try {
     inventoryScreenshot = $inventoryScreenshotPath
     equipmentScreenshot = $equipmentScreenshotPath
     statusScreenshot = $statusScreenshotPath
+    hudCollapsedScreenshot = $hudCollapsedScreenshotPath
     deckScreenshot = $deckScreenshotPath
     deckViewerScreenshot = $deckViewerScreenshotPath
     dialogueServiceScreenshot = $dialogueServiceScreenshotPath

@@ -47,6 +47,7 @@
   const LEGACY_SOUND_KEY = "lanternbound-sound";
   const ZOOM_KEY = "everrealm-zoom";
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
+  const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const FIXED_STEP = 1 / 60;
   const query = new URLSearchParams(window.location.search);
   const testingMode = query.has("smoke") || query.has("autoplay");
@@ -70,6 +71,8 @@
   const facilityHelpButton = document.getElementById("facilityHelpButton");
   const facilityHelpPopover = document.getElementById("facilityHelpPopover");
   const facilityHelpText = document.getElementById("facilityHelpText");
+  const exploreSidebar = document.getElementById("exploreSidebar");
+  const sidebarToggle = document.getElementById("sidebarToggle");
   const statusButton = document.getElementById("statusButton");
   const inventoryButton = document.getElementById("inventoryButton");
   const deckButton = document.getElementById("deckButton");
@@ -278,6 +281,7 @@
   let exploreZoomLevel = Object.hasOwn(EXPLORE_ZOOM_SCALES, readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY))
     ? readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY)
     : "mid";
+  let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
 
   const player = createPlayer();
 
@@ -771,7 +775,12 @@
   }
 
   function targetZoom() {
-    const responsiveBase = width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
+    // Main Town artwork and its navigation package share native 1:1 pixels.
+    // The old responsive baseline was tuned for the previous compact maps and
+    // magnified this 8K scene before the shared camera transform was applied.
+    const responsiveBase = currentMapId === "world"
+      ? 1
+      : width < 650 ? 1.2 : width < 1000 ? 1.32 : 1.48;
     return responsiveBase * EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
@@ -782,6 +791,22 @@
       button.setAttribute("aria-pressed", String(active));
       button.classList.toggle("is-active", active);
     }
+  }
+
+  function syncHudCollapse() {
+    exploreSidebar?.classList.toggle("is-collapsed", hudCollapsed);
+    stage.dataset.hudCollapsed = String(hudCollapsed);
+    if (sidebarToggle) {
+      sidebarToggle.setAttribute("aria-expanded", String(!hudCollapsed));
+      sidebarToggle.setAttribute("aria-label", hudCollapsed ? "展開探索功能列" : "收起探索功能列");
+      sidebarToggle.title = hudCollapsed ? "展開探索功能列" : "收起探索功能列";
+    }
+  }
+
+  function setHudCollapsed(collapsed) {
+    hudCollapsed = Boolean(collapsed);
+    try { localStorage.setItem(HUD_COLLAPSED_KEY, hudCollapsed ? "1" : "0"); } catch (_) {}
+    syncHudCollapse();
   }
 
   function setExploreZoomLevel(level, options = {}) {
@@ -2020,7 +2045,11 @@
     document.getElementById("dialogueText").textContent = dialogue.lines[dialogue.index];
     const choices = document.getElementById("dialogueChoices");
     const next = document.getElementById("dialogueNext");
+    const nextLabel = next.querySelector(".dialogue-next-label");
     const atEnd = dialogue.index >= dialogue.lines.length - 1;
+    if (nextLabel) nextLabel.textContent = atEnd ? "確定" : "繼續";
+    next.dataset.dialogueState = atEnd ? "terminal" : "continue";
+    next.setAttribute("aria-label", atEnd ? "確定並關閉對話" : "繼續對話");
     if (atEnd && dialogue.choices?.length) {
       choices.hidden = false;
       next.hidden = true;
@@ -2738,7 +2767,7 @@
       </article>`;
     }).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>SKILL TREE CONTROLS</small><h3>學習狀態</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
+      <div class="facility-section-heading"><div><h3>學習狀態</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
       <div class="skill-tree-legend"><span class="is-learned"><i>技</i> 已學會</span><span class="is-ready"><i>★</i> 可學習</span><span class="is-locked"><i>?</i> 尚未解鎖</span><span class="is-equipped"><i>裝</i> DECK 使用中</span><span><i>按</i> 撳招名睇資料</span></div>
       <div class="skill-tree-scroll ui-scroll" tabindex="0" aria-label="技能樹，可橫向捲動查看所有分支">
         <div class="skill-tree-board" role="tree" aria-label="${playerClassId === "fighter" ? "格鬥士" : "戰士"}向下發展技能樹" style="--tree-height:${treeHeight}px;--tree-min-width:${treeMinWidth}rem">
@@ -2841,13 +2870,13 @@
       const removeAction = canEdit && skill
         ? `<button class="facility-action-button is-quiet deck-slot-action" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">卸下</button>`
         : "";
-      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" aria-label="第 ${index + 1} 格${skill ? `：${skill.name}` : "：空"}"><span class="deck-slot-number">${index + 1}</span>${skill
+      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" aria-label="第 ${index + 1} 格${skill ? `：${skill.name}` : ""}"><span class="deck-slot-number">${index + 1}</span>${skill
         ? `<div class="deck-slot-copy"><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div>${removeAction}`
-        : `<div class="deck-slot-empty"><strong>空</strong></div>`}</article>`;
+        : ""}</article>`;
     }).join("");
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
-      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>可裝入 DECK</small></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
+      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
       return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><div><small>LEARNED SKILLS</small><h3 id="deckLearnedHeading">已學技能</h3></div><span>可裝入 ${skillState.deckCapacity} 格</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
     })() : "";
     const currentDeckHeading = canEdit
@@ -2976,14 +3005,14 @@
     const availableTabs = availableFacilityTabs();
     facilityTab = Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
     const copy = {
-      status: ["STATUS", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
-      bag: ["ADVENTURER BAG · ITEMS", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
-      equipment: ["GEAR LOADOUT · EQUIPMENT", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
-      deck: ["DECK", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板台。"],
-      guild: ["GUILD COMMISSIONS", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
-      shop: ["SILVER FLAME · EQUIPMENT", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
-      skills: ["SKILL TREE", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
-      codex: ["FIELD NOTES · MONSTER CODEX", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
+      status: ["", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
+      bag: ["", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
+      equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
+      deck: ["", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板台。"],
+      guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
+      shop: ["", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
+      skills: ["", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
+      codex: ["", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
     }[facilityTab];
     stage.dataset.facilityTab = facilityTab;
     stage.dataset.facilityContext = facilityContext;
@@ -2993,7 +3022,11 @@
       ? facilityContext === "deck-view" ? "compact" : "wide"
       : facilityTab === "status" ? "medium" : "wide";
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
-    document.getElementById("facilityKicker").textContent = copy[0];
+    const facilityKicker = document.getElementById("facilityKicker");
+    if (facilityKicker) {
+      facilityKicker.textContent = copy[0];
+      facilityKicker.hidden = true;
+    }
     document.getElementById("facilityTitle").textContent = copy[1];
     if (facilityHelpText) facilityHelpText.textContent = copy[2];
     setFacilityHelpOpen(false);
@@ -5460,9 +5493,10 @@
     const rect = canvas.getBoundingClientRect();
     const screenX = (clientX - rect.left) * (width / Math.max(1, rect.width));
     const screenY = (clientY - rect.top) * (height / Math.max(1, rect.height));
+    const worldPoint = screenToWorldPoint(screenX, screenY);
     return {
-      x: Core.clamp((screenX - width * .5) / camera.zoom + camera.x, player.radius, world.pixelWidth - player.radius),
-      y: Core.clamp((screenY - height * .5) / camera.zoom + camera.y, player.radius, world.pixelHeight - player.radius),
+      x: Core.clamp(worldPoint.x, player.radius, world.pixelWidth - player.radius),
+      y: Core.clamp(worldPoint.y, player.radius, world.pixelHeight - player.radius),
       screenX,
       screenY,
     };
@@ -5481,10 +5515,7 @@
 
   function clickedExploreEntity(screenX, screenY) {
     if (world.navigation?.authoritative && typeof world.navigation.interactionAtWorldPoint === "function") {
-      const authoredPoint = {
-        x: (screenX - width * .5) / camera.zoom + camera.x,
-        y: (screenY - height * .5) / camera.zoom + camera.y,
-      };
+      const authoredPoint = screenToWorldPoint(screenX, screenY);
       const authoredInteractionId = world.navigation.interactionAtWorldPoint(authoredPoint);
       if (authoredInteractionId) {
         const authoredInteraction = [...world.npcs, ...world.boards].find((entity) => entity.id === authoredInteractionId);
@@ -5928,6 +5959,13 @@
     return {
       x: (point.x - camera.x) * camera.zoom + width * .5 + shakeX,
       y: (point.y - camera.y) * camera.zoom + height * .5 + shakeY,
+    };
+  }
+
+  function screenToWorldPoint(screenX, screenY) {
+    return {
+      x: (screenX - width * .5) / camera.zoom + camera.x,
+      y: (screenY - height * .5) / camera.zoom + camera.y,
     };
   }
 
@@ -7113,7 +7151,7 @@
         activeContracts, guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
-        exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(),
+        exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
         facility: mode === "facility" ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
         checkpoint: { ...checkpoint },
@@ -7375,6 +7413,7 @@
     document.getElementById("newGameButton").focus({ preventScroll: true });
   });
   document.getElementById("dialogueNext").addEventListener("click", advanceDialogue);
+  sidebarToggle?.addEventListener("click", () => setHudCollapsed(!hudCollapsed));
   dialoguePanel.addEventListener("click", (event) => {
     if (event.target.closest("button")) return;
     advanceDialogue();
@@ -7503,6 +7542,7 @@
   continueButton.hidden = !savedGameAvailable;
   document.getElementById("soundButton").setAttribute("aria-pressed", String(soundEnabled));
   syncExploreZoomControls();
+  syncHudCollapse();
   resetEnemies();
   drawPlayerHudPortrait();
   window.addEventListener("lantern-art-ready", () => {

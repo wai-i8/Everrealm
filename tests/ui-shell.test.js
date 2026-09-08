@@ -13,6 +13,7 @@ const transitionsSource = fs.readFileSync(path.join(rpgRoot, "map", "map-transit
 
 test("exploration shell keeps character tools left and reserves the right for the minimap", () => {
   const sidebar = html.match(/<aside id="exploreSidebar"[\s\S]*?<\/aside>/)?.[0] || "";
+  assert.match(sidebar, /id="sidebarToggle"/);
   assert.match(sidebar, /id="playerHud"/);
   assert.match(sidebar, /id="inventoryButton"/);
   assert.match(sidebar, /id="skillTreeButton"/);
@@ -20,6 +21,9 @@ test("exploration shell keeps character tools left and reserves the right for th
   assert.match(html, /<aside class="minimap-wrap/);
   assert.match(css, /\.explore-sidebar\s*\{[\s\S]*?left:\s*\.8rem/);
   assert.match(css, /\.minimap-wrap\s*\{[^}]*right:\s*\.8rem/);
+  assert.match(css, /\.explore-sidebar\.is-collapsed\s*\{[\s\S]*?overflow:\s*visible/);
+  assert.match(game, /HUD_COLLAPSED_KEY = "everrealm-hud-collapsed"/);
+  assert.match(game, /setHudCollapsed\(!hudCollapsed\)/);
 });
 
 test("three persisted exploration zoom levels are wired to the camera", () => {
@@ -71,7 +75,8 @@ test("flattened town art, exact east passage and DECK console are wired", () => 
 
 test("facility modals keep one focused topic without summary or cross-panel tab rows", () => {
   assert.doesNotMatch(html, /id="facilitySummary"|id="facilityTabs"/);
-  assert.match(game, /<strong>空<\/strong>/);
+  assert.doesNotMatch(game, /<strong>空<\/strong>/);
+  assert.doesNotMatch(game, /沒有技能|尚未裝設|可裝入 DECK/);
   assert.match(game, /openFacility\("deck", "deck-view"\)/);
   assert.match(game, /facilityContext === "deck" && currentMapId === "world"/);
   assert.match(html, /id="facilityHelpButton"/);
@@ -91,9 +96,13 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
 
 test("shared controls keep the info secondary and all modal close visuals bitmap-backed", () => {
   const uiCss = fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8");
-  assert.match(uiCss, /\.ui-info-button\s*\{[\s\S]*?width:\s*2\.7rem[\s\S]*?height:\s*2\.7rem/);
-  assert.match(uiCss, /\.ui-info-button img\s*\{[\s\S]*?width:\s*1\.75rem[\s\S]*?height:\s*1\.75rem/);
-  assert.match(uiCss, /\.facility-close-button\.ui-close-button\s*\{[\s\S]*?width:\s*2\.7rem/);
+  assert.match(uiCss, /--ui-control-hit:\s*2\.5rem/);
+  assert.match(uiCss, /--ui-close-art:\s*2rem/);
+  assert.match(uiCss, /--ui-info-art:\s*1\.45rem/);
+  assert.match(uiCss, /\.ui-info-button img\s*\{[\s\S]*?var\(--ui-info-art\)/);
+  assert.match(uiCss, /\.facility-close-button\.ui-close-button\s*\{[\s\S]*?var\(--ui-control-hit\)/);
+  assert.match(uiCss, /\.facility-header\.ui-header\s*\{[\s\S]*?min-height:\s*3\.9rem/);
+  assert.doesNotMatch(uiCss, /\.facility-header\.ui-header\s*\{[^}]*border-bottom:/);
   assert.match(uiCss, /border-image:\s*var\(--ui-frame-image\)/);
   assert.doesNotMatch(uiCss, /ui-close-glyph/);
   assert.doesNotMatch(uiCss, /background-size:\s*100%\s+100%/);
@@ -111,7 +120,7 @@ test("Status and normal Deck are summary-first and keep management at the statio
   const deck = game.match(/function renderDeckFacility\(\)\s*\{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function openGuildSkillBook/)?.[1] || "";
   const viewer = deck.split("const management")[0];
   assert.doesNotMatch(status, /戰鬥規則/);
-  assert.match(game, /status:\s*\["STATUS"[\s\S]*?開場 10 AP/);
+  assert.match(game, /status:\s*\[""[\s\S]*?開場 10 AP/);
   assert.match(deck, /class="deck-slot-list"/);
   assert.match(deck, /class="deck-manage-layout"/);
   assert.match(deck, /class="deck-management-column"/);
@@ -125,6 +134,7 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.match(deck, /class="deck-view-shell is-readonly"/);
   assert.match(deck, /class="deck-capacity"/);
   assert.match(deck, /data-facility-action="unequip-skill"/);
+  assert.match(deck, /class="deck-slot \$\{skill \? "is-filled" : "is-empty"\}"/);
   assert.doesNotMatch(deck, /skill\.apCost|skillRangeText\(skill\)/);
   assert.match(uiCssForTest(), /\.deck-manage-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,.9fr\) minmax\(0,1.1fr\)/);
   assert.match(uiCssForTest(), /\.deck-skill-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
@@ -157,12 +167,27 @@ test("Dialogue is a shared anchored overlay with integrated role and vertical ch
   assert.match(game, /speakerRole: config\.speakerRole \|\| speakerNpc\?\.displayName/);
   assert.match(game, /backgroundEnd: "#0b1224",[\s\S]*frame: false/);
   assert.match(game, /button\.setAttribute\("aria-pressed"/);
+  assert.match(game, /nextLabel\.textContent = atEnd \? "確定" : "繼續"/);
+  assert.match(game, /next\.dataset\.dialogueState = atEnd/);
+  assert.doesNotMatch(html, /<kbd>E<\/kbd>\s*(繼續|確定)/);
   assert.match(css, /\.dialogue-panel\s*\{[\s\S]*border-image: var\(--ui-frame-image\)/);
   assert.match(css, /\.dialogue-panel\s*\{[\s\S]*max-height: min\(17rem/);
   assert.match(css, /\.dialogue-choices\s*\{[\s\S]*display: grid[\s\S]*grid-template-columns: 1fr/);
   assert.match(css, /\.dialogue-choice\s*\{[\s\S]*border-image: var\(--ui-button-image\)/);
   assert.doesNotMatch(css, /\.dialogue-choices\s*\{[^}]*flex-wrap/);
   assert.doesNotMatch(css, /\.dialogue-choice\.selected, \.dialogue-choice:hover\s*\{[^}]*background: var\(--gold\)/);
+});
+
+test("native Main Town camera and click conversion stay in one world space", () => {
+  assert.match(mainTownSource, /pixelWidth:\s*navigationPackage\.source\.width/);
+  assert.match(mainTownSource, /pixelHeight:\s*navigationPackage\.source\.height/);
+  assert.match(game, /currentMapId === "world"[\s\S]*?\? 1/);
+  assert.match(game, /function worldToScreen\(point/);
+  assert.match(game, /function screenToWorldPoint\(screenX, screenY\)/);
+  assert.match(game, /const worldPoint = screenToWorldPoint\(screenX, screenY\)/);
+  assert.match(game, /const authoredPoint = screenToWorldPoint\(screenX, screenY\)/);
+  assert.match(game, /width: world\.pixelWidth \* camera\.zoom/);
+  assert.match(game, /height: world\.pixelHeight \* camera\.zoom/);
 });
 
 function uiCssForTest() {

@@ -14,6 +14,7 @@
 - 主城建築獨立 bitmap：`assets/guild-building-v1.png`、`assets/equipment-shop-v2.png`、`assets/clinic-building-v1.png`、`assets/general-store-building-v1.png`、`assets/inn-building-v1.png`。五張都以透明底單檔載入，唔再用 procedural house 代替有名字嘅服務建築；主城主要服務建築統一遵守下文「主城服務建築統一外觀規格」。
 - 主城實體轉場：普通建築門同東側 passage 使用 semantic physical-door／physical-passage hit region；`assets/town-door-marker-v1.png` 同 `assets/town-gate-east-v1.png` 只保留作歷史／製作來源，不屬普通 transition runtime art。runtime 不顯示門口菱形、入口 label 或 talk prompt。
 - UI：`assets/ui/ui-visual-atlas-v1.png` 係共用 fantasy window、button、tab、slot、skill-node 嘅 bitmap source atlas；HTML/CSS 負責 9-slice 式可伸縮組合，`docs/UI_SYSTEM.md` 負責玩家可見嘅組合與狀態規則。
+- 探索 HUD pull-tab：`assets/ui/ui-sidebar-toggle-v1.png` 係 genuinely transparent、單一 bitmap 三角收合／展開控制；runtime 只可縮放佢嘅 hit area，唔可以用 CSS border、文字 glyph 或額外暗色 rail 代替 collapsed state。
 - 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。
 - 裝備圖示：`assets/equipment-icon-atlas-v1.png`，4 × 4。依裝備 catalog 順序排列十五件裝備，最後一格保留透明。
@@ -22,6 +23,8 @@
 ## Main Town flattened navigation package
 
 主城使用一對同尺寸、同座標空間嘅 flattened scene 圖：`assets/main-town/maintown.jpg` 係唯一玩家可見 master art；`assets/main-town/maintown_walkable.jpg` 係唯一 navigation／interaction authoring source。兩張供應圖固定為 `7680 × 4320` 原圖 pixel space，唔存在另外一層 foreground／occlusion navigation art。
+
+Main Town runtime 直接以呢個 `7680 × 4320` native world coordinate space 繪製 master art；地圖尺寸係 1:1 world pixels，唔可以再加一層 legacy compact-map scale、CSS 放大或 per-map image transform。相機 zoom 只負責玩家視角（far／mid／near）與 viewport responsive framing，必須同 navigation、feet pivot、click-to-world inverse 使用同一個 camera transform。
 
 `maintown_walkable.jpg` 以白色定義 walkable ground、青色定義六個固定 transition、粉紅色定義城門 DECK configuration interaction；其他顏色全部 blocked。`tools/generate-main-town-navigation.js`（由 `tools/compile-main-town-navigation.py` 執行 JPG 分類）將 pair deterministic 編譯成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔載入 authoring JPG、唔使用 Canvas／OffscreenCanvas pixel readback，亦唔由 visible art alpha、舊 bitmap 或物件位置推導 collision。
 

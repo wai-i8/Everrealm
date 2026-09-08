@@ -74,12 +74,14 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 
 ### Header
 
-每個 major window 只有一個主標題。header 依次包含小型 uppercase kicker、
-主標題、右上角 shared bitmap-backed 說明入口及 close button；長說明放入可
+每個 major window 只有一個主標題。header 以 compact token 保持約 56–72px
+usable height，主標題放左側，右上角放 shared bitmap-backed 說明入口及 close
+button；English taxonomy eyebrow 只在真正增加辨識價值時保留，唔可以同中文
+頁名形成第二個 headline。長說明放入可
 點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
 `ui-close-button`/`facility-close-button` 共用，使用 `assets/ui/ui-close-v2.png`；
-info 使用 `assets/ui/ui-info-v1.png`，可保持約 40–44px hit target，但 visible
-art 明顯小於 X（約 28–32px），X 永遠係 primary action。裝飾 bitmap 與可
+info 使用 `assets/ui/ui-info-v1.png`，兩者保持約 40px hit target，但 info visible
+art 約 21–25px，close visible art 約 30–34px；X 永遠係 primary action。裝飾 bitmap 與可
 keyboard focus 嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或 ESC
 位置，close control 亦不可顯示可見 ESC。標題不可依賴裝飾 glyph 才能辨識功能；
 裝飾唔可以佔用 content 空間。Top-level facility header 使用深海軍藍資訊帶；
@@ -112,6 +114,10 @@ catalogue ownership 術語；世界／互動 label 應以清楚的功能角色�
 Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bitmap slot
 底、中心放 item/icon、右下顯示數量、HTML 顯示名稱及少量 meta。selected / equipped
 用 teal 或 gold ring；locked 用降低飽和度加鎖定 copy；空 slot 保留框但唔放大字元填空。
+DECK slot number 只作細小 secondary index；read-only viewer 只顯示 index、CMD/PSV
+badge 同技能名，empty slot 的 content 必須完全 blank，唔顯示「空」、「沒有技能」或
+「尚未裝設」。配置頁左右兩欄各自維持單欄 list，`可裝入 DECK` 等 redundant copy
+省略，`裝入`／`卸下` 只用 compact、high-contrast action。
 
 ### Panel sizing, identity and progressive disclosure
 
@@ -136,6 +142,21 @@ Summary-first list／slot 只顯示完成當前 task 所需嘅名稱、狀態同
 Return-to-title 係 system/menu-level operation，唔係 Deck、Inventory、Status、Skill
 Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 feature page
 只用 shared bitmap-backed X 關閉。
+
+### Exploration HUD
+
+探索左側 HUD 固定以 character summary、quick resources、main functions、secondary
+view/audio controls、quest tracker 呢個優先次序組成。頂部使用
+`assets/ui/ui-sidebar-toggle-v1.png` bitmap pull-tab；expanded state 顯示完整 HUD，
+collapsed state 只保留呢個 bitmap tab，唔留 portrait、menu rail、quest card 或暗色
+strip。collapse 係 UI preference，儲存於 localStorage，跨 map/interior/refresh 保留，
+唔改變 movement、keyboard、combat、stats、quest 或 progression。
+
+### Dialogue action language
+
+Dialogue continuation button 由 actual line state 決定：仍有下一句顯示「繼續」，最後一
+句只會關閉對話時顯示「確定」。E／Enter keyboard binding 可以保留，但 shortcut 唔需要
+永久印喺 player-facing button。
 
 ### Anchored dialogue overlay
 
