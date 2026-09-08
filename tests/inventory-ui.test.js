@@ -50,10 +50,13 @@ test("bag keeps a contained loadout beside a compact selectable grid", () => {
   assert.match(bagRenderer, /actionMarkup/);
   assert.match(bagRenderer, /drawEquipmentPaperdoll\(\)/);
   assert.match(bagRenderer, /完整描述與可用動作/);
-  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[^}]*grid-template-columns:\s*minmax\(15rem/s);
+  assert.match(inventoryCss, /\.unified-inventory-layout\s*\{[^}]*grid-template-columns:\s*minmax\(27rem/s);
   assert.match(inventoryCss, /@media \(max-width: 900px\)[\s\S]*?\.unified-inventory-layout\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(inventoryCss, /\.inventory-grid-item\.is-selected/);
   assert.match(inventoryCss, /\.inventory-selected-detail/);
+  assert.match(bagRenderer, /inventoryFixtureCount/);
+  assert.match(gameSource, /setInventoryFixture:/);
+  assert.match(inventoryCss, /\.bag-paperdoll-board\s*\{[^}]*grid-template-columns:\s*minmax\(9\.2rem,1fr\) 7\.4rem/s);
 });
 
 test("the extra stylesheet keeps facility text readable at 100% browser zoom", () => {

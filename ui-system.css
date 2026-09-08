@@ -10,7 +10,8 @@
   --ui-slot-selected-image: url("assets/ui/ui-slot-selected-v1.png");
   --ui-slot-disabled-image: url("assets/ui/ui-slot-disabled-v1.png");
   --ui-node-image: url("assets/ui/ui-skill-node-v1.png");
-  --ui-close-image: url("assets/ui/ui-slot-selected-v1.png");
+  --ui-close-image: url("assets/ui/ui-close-v2.png");
+  --ui-info-image: url("assets/ui/ui-info-v1.png");
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -51,11 +52,13 @@
   border: 0 !important;
   border-radius: .62rem !important;
   color: var(--cream);
-  background: transparent var(--ui-close-image) center / cover no-repeat !important;
+  background: transparent !important;
   box-shadow: 0 .3rem .8rem rgba(0,0,0,.34);
   cursor: pointer;
   transition: transform .14s ease, filter .14s ease;
 }
+.ui-close-button img,
+.ui-info-button img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ui-close-button:hover,
 .ui-close-button:focus-visible { transform: scale(1.05); filter: brightness(1.12); }
 .ui-close-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
@@ -82,7 +85,22 @@
 .ui-close-glyph::before { transform: translate(-50%, -50%) rotate(45deg); }
 .ui-close-glyph::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .facility-close-button.ui-close-button { flex: 0 0 2.7rem; width: 2.7rem; height: 2.7rem; gap: .05rem; color: #171421; }
-.facility-close-button.ui-close-button small { color: #70552f; font: 750 .58rem/1 ui-monospace, monospace; }
+.ui-info-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-grid;
+  place-items: center;
+  padding: .16rem;
+  border: 0;
+  border-radius: 50%;
+  color: var(--cream);
+  background: transparent;
+  cursor: pointer;
+  transition: transform .14s ease, filter .14s ease;
+}
+.ui-info-button:hover,
+.ui-info-button:focus-visible { transform: scale(1.06); filter: brightness(1.15); }
+.ui-info-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .ui-modal-window > .ui-close-button { position: absolute; z-index: 2; top: .65rem; right: .65rem; }
 
 /* Shared semantic hooks. Domain styles can add their own modifier while
@@ -125,6 +143,37 @@
 /* The facility header remains a warm information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */
 .facility-window.ui-window { overflow: hidden; }
+.facility-header.ui-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4.55rem;
+  padding: .72rem 1rem .7rem 1.2rem;
+  border-bottom: 1px solid rgba(82,220,203,.22);
+  background:
+    linear-gradient(90deg, rgba(20,37,67,.98), rgba(8,18,37,.96) 70%, rgba(18,31,57,.98)),
+    radial-gradient(circle at 18% -20%, rgba(255,200,87,.15), transparent 13rem);
+}
+.facility-heading-copy { min-width: 0; }
+.facility-header-actions { display: flex; align-items: center; gap: .35rem; flex: 0 0 auto; }
+.facility-help-popover {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% - .35rem);
+  right: .95rem;
+  width: min(22rem, calc(100% - 2rem));
+  padding: .72rem .82rem;
+  border: 1px solid rgba(255,200,87,.46);
+  border-radius: .65rem;
+  color: var(--cream);
+  background: rgba(8,16,32,.98);
+  box-shadow: 4px 5px 0 rgba(0,0,0,.32), 0 .8rem 2rem rgba(0,0,0,.34);
+}
+.facility-help-popover p { margin: 0; color: #d6d9e2; font-size: .72rem; line-height: 1.55; }
+.facility-header .facility-kicker { color: var(--teal); }
+.facility-header h2 { color: var(--cream); }
 .facility-window.ui-window::before { opacity: .96; }
 .facility-content,
 .facility-footer { background: rgba(5,9,19,.34); }
@@ -149,6 +198,20 @@
 .equipment-card:hover,
 .skill-card:hover,
 .codex-card:hover { border-color: rgba(82,220,203,.62); }
+
+.facility-footer-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: .55rem; }
+.facility-footer-button {
+  min-height: 1.9rem;
+  padding: .3rem .55rem;
+  border: 1px solid rgba(245,233,202,.25);
+  border-radius: .48rem;
+  color: var(--cream);
+  background: rgba(245,233,202,.06);
+  font: 750 .61rem/1 inherit;
+  cursor: pointer;
+}
+.facility-footer-button:hover,
+.facility-footer-button:focus-visible { border-color: var(--teal); color: var(--teal); }
 
 .facility-action-button,
 .primary-button,
@@ -196,8 +259,7 @@
 .equipment-icon,
 .skill-card-icon,
 .facility-summary-icon,
-.skill-book-cover,
-.status-stat-grid > div {
+.skill-book-cover {
   background-image: var(--ui-slot-image);
   background-position: center;
   background-size: 100% 100%;

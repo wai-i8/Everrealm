@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town', 'town-plaza', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'latestui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'gate', 'levelup', 'savelevel', 'resume', 'boss', 'quest', 'battle', 'mountain-art', 'mountain-recipient', 'bossbattle', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -156,6 +156,8 @@ try {
   $inventoryUi = $null
   $inventoryScreenshotPath = $null
   $equipmentScreenshotPath = $null
+  $statusScreenshotPath = $null
+  $deckScreenshotPath = $null
   $fighterTreeDetailScreenshotPath = $null
   $fighterTreeBottomScreenshotPath = $null
   $abandonScreenshotPath = $null
@@ -385,6 +387,11 @@ try {
       Start-Sleep -Milliseconds 100
       $statusUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),stats:document.querySelectorAll(".status-stat-grid>div").length,labels:[...document.querySelectorAll(".status-stat-grid dt")].map(node=>node.textContent),forbidden:[...document.querySelectorAll(".status-stat-grid dt")].some(node=>["\u901f\u5ea6","\u66b4\u64ca","\u63a2\u7d22"].some(term=>node.textContent.includes(term))),canvas:!!document.getElementById("statusCharacterCanvas"),font:parseFloat(getComputedStyle(document.querySelector(".status-stat-grid dd")).fontSize)})') | ConvertFrom-Json
       if ($statusUi.snapshot.facility.tab -ne 'status' -or $statusUi.stats -ne 5 -or -not $statusUi.canvas -or $statusUi.font -lt 11 -or $statusUi.forbidden) { throw 'Clickable character status panel did not render the focused HP/attack/defence/move/DECK stats.' }
+      $statusHelpUi = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const button=document.getElementById("facilityHelpButton"),popover=document.getElementById("facilityHelpPopover");button.click();const opened=!popover.hidden&&button.getAttribute("aria-expanded")==="true";button.click();return {opened,closed:popover.hidden,hasText:Boolean(document.getElementById("facilityHelpText").textContent)};})())' | ConvertFrom-Json
+      if (-not $statusHelpUi.opened -or -not $statusHelpUi.closed -or -not $statusHelpUi.hasText) { throw 'Shared facility help popover did not open and close from the header info control.' }
+      $statusScreenshotPath = Join-Path $runtimeOutputPath "smoke-status-$ViewportWidth.png"
+      $statusCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($statusScreenshotPath, [Convert]::FromBase64String($statusCapture.result.data))
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.facilityTab('equipment'); true" | Out-Null
       $fighterIconCount = Invoke-GameExpression -Expression 'document.querySelectorAll(".fighter-equipment-icon-atlas").length'
       if ($fighterIconCount -lt 1) { throw 'Fighter equipment did not use its dedicated glove atlas.' }
@@ -394,12 +401,18 @@ try {
       if ($farDeck.mode -ne 'facility' -or $farDeck.facility.context -ne 'deck-view' -or $farDeckUi.actions -ne 0 -or $farDeckUi.tabs -or $farDeckUi.summary) { throw "Portable DECK did not open as a focused read-only view (mode=$($farDeck.mode), context=$($farDeck.facility.context))." }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.teleportTo('harbour-gate-deck-console'); window.__RPG_DEBUG__.interactWith('harbour-gate-deck-console'); true" | Out-Null
       Start-Sleep -Milliseconds 100
-      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,empty:[...document.querySelectorAll(".deck-slot.is-empty strong")].every(node=>node.textContent==="\u6c92\u6709\u6280\u80fd")})') | ConvertFrom-Json
-      if ($deckUi.snapshot.facility.context -ne 'deck' -or $deckUi.slots -ne 3 -or $deckUi.filled -ne 1 -or -not $deckUi.empty) { throw 'City-gate DECK panel did not show the editable fighter loadout with correctly named empty slots.' }
+      $deckUi = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),slots:document.querySelectorAll(".deck-slot").length,filled:document.querySelectorAll(".deck-slot.is-filled").length,cmd:document.querySelectorAll(".skill-kind-badge.is-cmd").length,empty:[...document.querySelectorAll(".deck-slot.is-empty strong")].every(node=>node.textContent==="\u6c92\u6709\u6280\u80fd")})') | ConvertFrom-Json
+      if ($deckUi.snapshot.facility.context -ne 'deck' -or $deckUi.slots -ne 3 -or $deckUi.filled -ne 1 -or $deckUi.cmd -lt 1 -or -not $deckUi.empty) { throw 'City-gate DECK panel did not show the editable fighter loadout with correctly named empty slots and CMD badge.' }
+      $deckScreenshotPath = Join-Path $runtimeOutputPath "smoke-deck-$ViewportWidth.png"
+      $deckCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($deckScreenshotPath, [Convert]::FromBase64String($deckCapture.result.data))
       $deckRewards = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setQuestStage(3);const four=api.snapshot().skills.deckCapacity;api.setGuildMarks(10);const five=api.snapshot().skills.deckCapacity;api.setQuestStage(4);api.facilityTab("deck");const final=api.snapshot();return {four,five,six:final.skills.deckCapacity,milestones:final.skills.deckUpgradeMilestones.length,slots:document.querySelectorAll(".deck-slot").length};})())') | ConvertFrom-Json
       if ($deckRewards.four -ne 4 -or $deckRewards.five -ne 5 -or $deckRewards.six -ne 6 -or $deckRewards.milestones -ne 3 -or $deckRewards.slots -ne 6) { throw 'Main/guild DECK milestone rewards did not expand the city-gate panel from three to six slots.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.grantSkillBook(1); window.__RPG_DEBUG__.openSkillBook(1); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.openFacility('bag'); true" | Out-Null
       Start-Sleep -Milliseconds 90
+      $fixtureUi = Invoke-GameExpression -Expression 'JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.setInventoryFixture(30);const cards=[...document.querySelectorAll(".inventory-grid-item")],rects=cards.map(node=>node.getBoundingClientRect());const overlaps=rects.some((a,i)=>rects.slice(i+1).some(b=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)));return {cards:cards.length,fixture:Boolean(document.querySelector("[data-item-id=fixture_material_30]")),overlaps};})())' | ConvertFrom-Json
+      if ($fixtureUi.cards -lt 30 -or -not $fixtureUi.fixture -or $fixtureUi.overlaps) { throw "Inventory 30-item fixture overlapped or failed to render (cards=$($fixtureUi.cards), overlaps=$($fixtureUi.overlaps))." }
+      Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.setInventoryFixture(0); true' | Out-Null
       Invoke-GameExpression -Expression "document.querySelector('[data-facility-action=select-item][data-item-id^=manual_]').click(); true" | Out-Null
       Invoke-GameExpression -Expression "document.querySelector('.inventory-selected-detail [data-facility-action=use-manual]').click(); true" | Out-Null
       $manualUi = (Invoke-GameExpression -Expression 'JSON.stringify({dialogHidden:document.getElementById("skillBookConfirmPanel").hidden,manuals:Object.values(window.__RPG_DEBUG__.snapshot().skills.manualCounts).reduce((sum,value)=>sum+value,0),learned:window.__RPG_DEBUG__.snapshot().skills.unlockedSkillIds.length,stats:document.querySelectorAll("#skillBookConfirmStats>div").length})') | ConvertFrom-Json
@@ -414,7 +427,7 @@ try {
       $introHidden = Invoke-GameExpression -Expression 'document.getElementById("battleEncounterIntro").hidden'
       if ($directBattle.battle.phase -ne 'planning_move' -or -not $introHidden) { throw 'Battle did not start directly in movement planning.' }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleCommitMove(); true" | Out-Null
-      Start-Sleep -Milliseconds 1100
+      for ($attempt = 0; $attempt -lt 30 -and (Get-GameSnapshot).battle.phase -ne 'planning_action'; $attempt += 1) { Start-Sleep -Milliseconds 100 }
       $punchRange = (Invoke-GameExpression -Expression 'JSON.stringify(window.__RPG_DEBUG__.battleSkillRange("kentotsu"))') | ConvertFrom-Json
       if ($punchRange.Count -ne 5) { throw "Straight Punch did not expose exactly five front/side range cells (count=$($punchRange.Count))." }
     }
@@ -658,6 +671,19 @@ try {
       if ($levelUpSnapshot.mode -ne 'playing' -or $levelUpSnapshot.pendingLevelUps -ne 0 -or $levelUpSnapshot.level -lt 2) { throw 'Automatic class growth was not applied before save.' }
       Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.save(); window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.load(); true' | Out-Null
       Start-Sleep -Milliseconds 180
+    }
+    'resume' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setPlayer({level:7,xp:31,coins:77}); window.__RPG_DEBUG__.save(); true" | Out-Null
+      Invoke-Cdp -Method 'Page.reload' | Out-Null
+      Start-Sleep -Milliseconds 180
+      $resumeReady = $false
+      for ($attempt = 0; $attempt -lt 50 -and -not $resumeReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $resumeReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && window.__RPG_DEBUG__)')
+      }
+      if (-not $resumeReady) { throw 'Resume reload did not restore the RPG debug hooks.' }
+      $resumeSnapshot = Get-GameSnapshot
+      if ($resumeSnapshot.mode -ne 'playing' -or $resumeSnapshot.level -ne 7 -or $resumeSnapshot.coins -ne 77) { throw "Valid save did not auto-resume (mode=$($resumeSnapshot.mode), level=$($resumeSnapshot.level), coins=$($resumeSnapshot.coins))." }
     }
     'boss' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setQuestStage(3); window.__RPG_DEBUG__.teleportTo('boss-mistfang'); window.__RPG_DEBUG__.damageEnemy('boss-mistfang',99999); true" | Out-Null
@@ -1132,6 +1158,8 @@ try {
     inventoryUi = $inventoryUi
     inventoryScreenshot = $inventoryScreenshotPath
     equipmentScreenshot = $equipmentScreenshotPath
+    statusScreenshot = $statusScreenshotPath
+    deckScreenshot = $deckScreenshotPath
     fighterTreeDetailScreenshot = $fighterTreeDetailScreenshotPath
     fighterTreeBottomScreenshot = $fighterTreeBottomScreenshotPath
     abandonScreenshot = $abandonScreenshotPath

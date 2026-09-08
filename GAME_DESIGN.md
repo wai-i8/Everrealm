@@ -34,7 +34,7 @@
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。
 - 所有一般彈出視窗共用網站式關閉契約：右上角永遠提供清楚可見、bitmap-backed 的 shared close control，點擊視窗外的半透明背景亦會關閉；即使底部已有「取消」按鈕，亦不可取代以上兩種離開方式。
 - 玩家長時間無操作不會再開啟阻塞式「停一停／Night Watch Paused」視窗；持久化改用無干擾的 dirty-state autosave checkpoint。狀態有意義地改變時標記 dirty，約每 5 秒只檢查並保存一次有變更的狀態；重要場景轉移、交易、技能取得、裝備或任務狀態轉移會即時保存，保存失敗會保留 dirty 等待重試。這是 client persistence checkpoint，唔預設未來 authoritative server 行為。
-- 點擊左上角色狀態可開啟狀態欄，只顯示職業、等級、HP、攻擊、防禦、戰棋移動及 DECK；不顯示行動速度、探索移速或暴擊率。
+- 點擊左上角色狀態可開啟狀態欄，顯示職業、等級、XP／HP progress、攻擊、防禦、戰棋移動及 DECK；不顯示行動速度、探索移速或暴擊率。
 - 所有可互動 NPC 頭頂置中顯示名稱；任務問號／感嘆號若存在，必須以 NPC 身體中心線定位。不得把名稱燒進角色圖，避免縮放、換圖或四方向動畫後失去清晰度。角色圖點樣裁切、對齊及以 semantic anchor 維持中心線，統一依 `ART_PIPELINE.md`。flattened interior 嘅 NPC 視覺已烘焙入 master art，runtime 只顯示一個 semantic NPC entity，唔重畫角色。
 - NPC 的法杖、槌、寵物、托盤等外伸裝飾不得令人物世界座標、名稱或任務標記漂移；具體 atlas／anchor 實作規格見 `ART_PIPELINE.md`。正式 flattened interior 不顯示 talk／互動菱形或 transition marker。
 - 公會、裝備店、療癒所、雜貨舖及旅店嘅入口使用可見 master art 對應嘅 semantic physical door；門區只要在鏡頭內就可以直接點擊／按住行入，但唔常駐繪製 marker 或入口 label。建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體 flattened-scene contract 見 `ART_PIPELINE.md`，transition geometry 見 `docs/MAP_SYSTEM.md`。
@@ -85,6 +85,7 @@
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
 - DECK 可由左側選單在任何地方以唯讀方式查看，但只可在主城東門旁的「戰技面板台」編輯；開啟唯讀頁不會自動把玩家帶去城門。空槽統一顯示「沒有技能」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。
+- DECK 可由左側選單在任何地方以唯讀方式查看，但只可在主城東門旁的「戰技面板台」編輯；開啟唯讀頁不會自動把玩家帶去城門。空槽統一顯示「沒有技能」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。
 
 ## 世界與美術一致性

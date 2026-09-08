@@ -7,6 +7,8 @@
     <meta name="description" content="永恆國度 — 有探索、戰棋回合戰鬥、任務同角色育成嘅短篇 browser RPG。" />
     <title>永恆國度 · Everrealm</title>
     <link rel="stylesheet" href="styles.css" />
+    <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
+    <link id="everrealmUiStyles" rel="stylesheet" href="ui-system.css" />
   </head>
   <body>
     <main id="gameShell" class="game-shell">
@@ -323,7 +325,7 @@
           role="dialog"
           aria-modal="true"
           aria-labelledby="facilityTitle"
-          aria-describedby="facilitySubtitle"
+          aria-describedby="facilityHelpText"
           hidden
         >
           <div class="facility-window ui-window">
@@ -331,11 +333,18 @@
               <div class="facility-heading-copy">
                 <p id="facilityKicker" class="facility-kicker">OLD HARBOUR SERVICES</p>
                 <h2 id="facilityTitle">巡燈人公會</h2>
-                <p id="facilitySubtitle">揀一份委託，等霧都重新熱鬧起來。</p>
               </div>
-              <button id="facilityCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="關閉設施選單">
-                <span class="ui-close-glyph" aria-hidden="true"></span><small>ESC</small>
-              </button>
+              <div class="facility-header-actions">
+                <button id="facilityHelpButton" class="ui-info-button" type="button" aria-label="查看目前設施說明" aria-expanded="false" aria-controls="facilityHelpPopover">
+                  <img src="assets/ui/ui-info-v1.png" alt="" aria-hidden="true" />
+                </button>
+                <button id="facilityCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="關閉設施選單">
+                  <img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" />
+                </button>
+              </div>
+              <div id="facilityHelpPopover" class="facility-help-popover" role="note" hidden>
+                <p id="facilityHelpText">揀一個分頁查看目前資料；任何需要操作嘅按鈕都會放喺內容卡片入面。</p>
+              </div>
             </header>
 
             <div id="facilityContent" class="facility-content ui-content" role="tabpanel" tabindex="0" aria-live="polite">
@@ -348,7 +357,7 @@
 
             <footer id="facilityFooter" class="facility-footer ui-footer">
               <p><span aria-hidden="true">☾</span> 完成委託會提升公會階級，解鎖更好裝備。</p>
-              <span><kbd>ESC</kbd> 返回地圖</span>
+              <div class="facility-footer-actions"><span><kbd>ESC</kbd> 返回地圖</span><button id="facilityReturnTitleButton" class="facility-footer-button" type="button">返回標題</button></div>
             </footer>
           </div>
         </section>

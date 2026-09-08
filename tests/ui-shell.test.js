@@ -71,6 +71,17 @@ test("facility modals keep one focused topic without summary or cross-panel tab 
   assert.match(game, /<strong>沒有技能<\/strong>/);
   assert.match(game, /openFacility\("deck", "deck-view"\)/);
   assert.match(game, /facilityContext === "deck" && currentMapId === "world"/);
+  assert.match(html, /id="facilityHelpButton"/);
+  assert.match(html, /id="facilityHelpPopover"/);
+  assert.match(html, /assets\/ui\/ui-close-v2\.png/);
+  assert.doesNotMatch(html, /id="facilitySubtitle"/);
+  assert.match(game, /function returnToTitle\(\)/);
+  assert.match(game, /data-facility-footer-action="return-title"/);
+  for (const filename of ["ui-close-v2.png", "ui-info-v1.png", "ui-badge-cmd-v1.png", "ui-badge-psv-v1.png"]) {
+    const assetPath = path.join(rpgRoot, "assets", "ui", filename);
+    assert.equal(fs.existsSync(assetPath), true, `${filename} should exist`);
+    assert.ok(fs.statSync(assetPath).size > 1000, `${filename} should contain bitmap art`);
+  }
 });
 
 test("skill manual dialog exposes the shared website-style dismissal controls", () => {

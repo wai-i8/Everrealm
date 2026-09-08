@@ -67,6 +67,9 @@
   const facilityContent = document.getElementById("facilityContent");
   const facilityTabs = document.getElementById("facilityTabs");
   const facilityFooter = document.getElementById("facilityFooter");
+  const facilityHelpButton = document.getElementById("facilityHelpButton");
+  const facilityHelpPopover = document.getElementById("facilityHelpPopover");
+  const facilityHelpText = document.getElementById("facilityHelpText");
   const statusButton = document.getElementById("statusButton");
   const inventoryButton = document.getElementById("inventoryButton");
   const deckButton = document.getElementById("deckButton");
@@ -200,6 +203,7 @@
   let skillDetailReturnTarget = null;
   let selectedInventoryItemId = null;
   let inventoryCategory = "all";
+  let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .78, mid: 1, near: 1.22 });
@@ -526,6 +530,7 @@
     facilityContext = "portable";
     selectedInventoryItemId = null;
     inventoryCategory = "all";
+    inventoryFixtureCount = 0;
   }
 
   function loadExpansionProgress(raw) {
@@ -648,7 +653,7 @@
     save = Core.sanitizeSave(rawSave);
     if (!save) {
       showToast("搵唔到可用嘅存檔", "danger");
-      return;
+      return false;
     }
     closeBattleHud();
     encounterGrace = 1.2;
@@ -690,6 +695,7 @@
     showToast("歡迎返嚟，守燈人。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
+    return true;
   }
 
   function saveGame(showNotice = true, force = false) {
@@ -2099,6 +2105,10 @@
       .join(" · ");
   }
 
+  function setFacilityFooter(message, hint = "<kbd>ESC</kbd> 返回地圖") {
+    facilityFooter.innerHTML = `<p>${message}</p><div class="facility-footer-actions"><span>${hint}</span><button class="facility-footer-button" type="button" data-facility-footer-action="return-title">返回標題</button></div>`;
+  }
+
   function renderFacilitySummary() {
     const rank = guildRankInfo();
     const weapon = equipmentItem(equipped.weapon)?.name || "見習燈刃";
@@ -2153,7 +2163,7 @@
       ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>查看可以喺任何地方；接受、送達及回報要親身返拾燈公會或山地收件人。</span></div>' : ""}
       ${activeHtml || `<div class="facility-card-grid">${offersHtml}</div>`}
       <div class="facility-note"><b>公會規矩</b><span>同一時間只接一份；完成目標後必須返公會回報。五份委託均可無限重接。</span></div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">✦</span> 委託獎勵係技能書信封；開封後由 canonical Fighter 技能資料抽取技能書。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">✦</span> 委託獎勵係技能書信封；開封後由 canonical Fighter 技能資料抽取技能書。`);
   }
 
   function totalOwnedSkillBooks() {
@@ -2294,6 +2304,21 @@
       .sort(([left], [right]) => inventoryItemName(left).localeCompare(inventoryItemName(right), "zh-HK"))) {
       items.push({ id, name: inventoryItemName(id), category: "素材", categoryKey: "material", quantity: amount, description: materialDescription(id), detail: "冒險素材" });
     }
+    if (inventoryFixtureCount > 0) {
+      const fixtureNames = ["霧晶碎片", "舊銅齒輪", "潮濕苔絲", "微光粉末", "沉燈玻璃", "巡夜羽片"];
+      for (let index = 0; index < inventoryFixtureCount; index += 1) {
+        items.push({
+          id: `fixture_material_${index + 1}`,
+          name: `${fixtureNames[index % fixtureNames.length]} ${index + 1}`,
+          category: "素材 · 測試",
+          categoryKey: "material",
+          quantity: 1,
+          iconId: 4 + (index % 11),
+          description: "只供版面壓力測試使用，不會寫入存檔。",
+          detail: "UI fixture",
+        });
+      }
+    }
     const categoryLabels = { all: "全部", equipment: "裝備", consumable: "消耗品", skillbook: "技能書", material: "素材" };
     const visibleItems = items.filter((item) => inventoryCategory === "all" || item.categoryKey === inventoryCategory);
     if (!visibleItems.some((item) => item.id === selectedInventoryItemId)) selectedInventoryItemId = null;
@@ -2344,11 +2369,10 @@
           <div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div>
           ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><span aria-hidden="true">◇</span><strong>呢類物品仲係空嘅</strong><small>切換分類或探索、討伐取得更多物品。</small></div>`}
           ${detail}
-          <div class="facility-note inventory-help"><b>選取後操作</b><span>先撳物品查看完整資料，再喺詳情區執行換裝、使用、開封或學習。</span></div>
         </section>
       </section>`;
     drawEquipmentPaperdoll();
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。</p><span><kbd>I</kbd> 關閉 · <kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。`, `<kbd>I</kbd> 關閉 · <kbd>ESC</kbd> 返回地圖`);
   }
 
   function equipmentIconHtml(item, extraClass = "") {
@@ -2415,7 +2439,7 @@
       <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>未有裝備</strong></div>'}</div>
       <div class="facility-note"><b>未開放槽位</b><span>頭部、手部同腳部會喺往後冒險版本加入；目前唔會計入角色能力。</span></div>`;
     drawEquipmentPaperdoll();
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。</p><span><kbd>I</kbd> 物品欄 · <kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`, `<kbd>I</kbd> 物品欄 · <kbd>ESC</kbd> 返回地圖`);
   }
 
   function renderShopFacility() {
@@ -2441,7 +2465,7 @@
     }).join("");
     const bag = Object.entries(inventory).filter(([, amount]) => amount > 0).map(([id, amount]) => `<span>${inventoryItemName(id)} × ${amount}</span>`).join("") || "<span>素材袋仲係空嘅</span>";
     facilityContent.innerHTML = `${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去霧都「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}${sections}<div class="facility-note"><b>素材袋</b><span class="inventory-row">${bag}</span></div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">⚒</span> ${player.coins} 燈幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}輕裝快、重裝硬。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 燈幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}輕裝快、重裝硬。`);
   }
 
   function skillStars(star) {
@@ -2454,7 +2478,14 @@
     if (skill.tags.includes("mobility")) return "✣";
     if (skill.tags.includes("magic")) return "✦";
     if (skill.tags.includes("ranged")) return "➶";
-    return "╱";
+    return skill.tags.includes("passive") ? "✦" : "◆";
+  }
+
+  function skillBadgeMarkup(skill) {
+    const passive = skill.tags.includes("passive");
+    const label = passive ? "PSV" : "CMD";
+    const source = passive ? "assets/ui/ui-badge-psv-v1.png" : "assets/ui/ui-badge-cmd-v1.png";
+    return `<span class="skill-kind-badge ${passive ? "is-psv" : "is-cmd"}"><img src="${source}" alt="${label}" /><b>${label}</b></span>`;
   }
 
   function skillRangeText(skill) {
@@ -2519,22 +2550,25 @@
   function renderStatusFacility() {
     const stats = playerStats();
     const className = playerClassId === "fighter" ? "格鬥士" : "戰士";
+    const hpPercent = Core.clamp((player.hp / stats.maxHp) * 100, 0, 100);
+    const xpNeeded = Core.xpRequired(player.level);
+    const xpPercent = Core.clamp((player.xp / xpNeeded) * 100, 0, 100);
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>STATUS</small><h3>阿巡 · ${className}</h3></div><span>LV.${player.level} · ${player.xp} / ${Core.xpRequired(player.level)} XP</span></div>
+      <div class="facility-section-heading"><div><small>STATUS</small><h3>阿巡 · ${className}</h3></div><span>LV.${player.level}</span></div>
       <section class="status-layout">
-        <div class="status-character-card"><canvas id="statusCharacterCanvas" width="240" height="300" aria-hidden="true"></canvas><strong>阿巡</strong><span>${className} · ${equippedWeaponName()}</span></div>
+        <div class="status-character-card"><canvas id="statusCharacterCanvas" width="240" height="300" aria-hidden="true"></canvas><strong>阿巡</strong><span>${className} · ${equippedWeaponName()}</span><div class="status-level-line"><b>LV.${player.level}</b><span>${player.xp} / ${xpNeeded} XP</span></div><div class="status-progress xp-progress" aria-label="經驗值 ${player.xp} / ${xpNeeded}"><i style="width:${xpPercent}%"></i></div></div>
         <dl class="status-stat-grid">
-          <div class="is-hp"><dt>生命 HP</dt><dd>${Math.ceil(player.hp)} / ${stats.maxHp}</dd></div>
+          <div class="is-hp"><dt>生命 HP</dt><dd>${Math.ceil(player.hp)} / ${stats.maxHp}</dd><span class="status-progress"><i style="width:${hpPercent}%"></i></span></div>
           <div><dt>攻擊</dt><dd>${stats.attack}</dd></div>
           <div><dt>防禦</dt><dd>${stats.defence}</dd></div>
           <div><dt>戰棋移動</dt><dd>${stats.moveRange} 格</dd></div>
           <div><dt>DECK</dt><dd>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity}</dd></div>
         </dl>
       </section>
-      <div class="facility-note"><b>戰鬥規則</b><span>開場 10 AP、每輪 +10；技能以 S → A → B → C → D → E → F 排序，先被打倒嘅角色會失去未執行行動。</span></div>`;
+      <div class="facility-note"><b>戰鬥規則</b><span>開場 10 AP、每輪 +10；技能以速度級別排序，先被打倒嘅角色會失去未執行行動。</span></div>`;
     const statusCanvas = document.getElementById("statusCharacterCanvas");
     if (statusCanvas) Art.drawCharacter(statusCanvas.getContext("2d"), { actor: "player", classId: playerClassId, x: statusCanvas.width / 2, y: statusCanvas.height - 12, scale: 3.15, state: "idle", facing: "down", phase: elapsed });
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">◎</span> 撳左上角角色卡可隨時查看完整能力。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">◎</span> 撳左上角角色卡可隨時查看完整能力。`);
   }
 
   function skillTreeDepth(skill, cache = new Map()) {
@@ -2683,7 +2717,7 @@
           ${tierGuides}${nodes}
         </div>
       </div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">✧</span> 技能樹只管理學習；要去城門「戰技面板台」先可以裝入 DECK。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">✧</span> 技能樹只管理學習；要去城門「戰技面板台」先可以裝入 DECK。`);
   }
 
   function skillEffectSummary(skill) {
@@ -2776,13 +2810,13 @@
     const slots = skillState.deckSlots.map((skillId, index) => {
       const skill = skillId ? Skills.getSkill(skillId) : null;
       return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}"><span class="deck-slot-number">${index + 1}</span>${skill
-        ? `<div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><strong>${skill.name}</strong><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">移除</button>` : ""}`
+        ? `<div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">移除</button>` : ""}`
         : `<div class="deck-slot-empty"><strong>沒有技能</strong><small>${canEdit ? "從下方已學技能揀一招" : "呢一格尚未裝設技能"}</small></div>`}</article>`;
     }).join("");
     const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
-    const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><strong>${skill.name}</strong><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button>` : `<span class="deck-readonly-state">${equipped.has(skill.id) ? "使用中" : "已學會"}</span>`}</article>`).join("");
+    const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div class="skill-card-icon" aria-hidden="true">${skillIcon(skill)}</div><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div><small>${skill.apCost} AP · 速度 ${skill.speedGrade} · ${skillRangeText(skill)}</small></div>${canEdit ? `<button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button>` : `<span class="deck-readonly-state">${equipped.has(skill.id) ? "使用中" : "已學會"}</span>`}</article>`).join("");
     facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>DECK LOADOUT</small><h3>${canEdit ? "城門戰技面板" : "目前戰技面板"}</h3></div><span>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity} 格</span></div><div class="deck-slot-grid">${slots}</div><div class="facility-section-heading skill-list-heading"><div><small>LEARNED ARTS</small><h3>已學技能</h3></div><span>初始 3 格 · 已獲 ${skillState.deckUpgradeMilestones.length} / 3 次擴充</span></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他已學技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">▤</span> ${canEdit ? "撳技能即可更換；戰鬥只會顯示 DECK 入面嘅技能。" : "任何地方都可以查看；要更換技能先去舊港城門戰技面板台。"}</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "撳技能即可更換；戰鬥只會顯示 DECK 入面嘅技能。" : "任何地方都可以查看；要更換技能先去舊港城門戰技面板台。"}`);
   }
 
   function openGuildSkillBook(star) {
@@ -2890,7 +2924,7 @@
     }).join("");
     const discovered = ids.filter((type) => monsterKills[type] > 0).length;
     facilityContent.innerHTML = `<div class="facility-section-heading"><div><small>MONSTER CODEX</small><h3>霧獸觀察簿</h3></div><span>${discovered} / ${ids.length} 種</span></div><div class="codex-grid">${cards}</div>`;
-    facilityFooter.innerHTML = `<p><span aria-hidden="true">◎</span> 每次討伐都會永久記錄；稀有素材可以留畀將來製作裝備。</p><span><kbd>ESC</kbd> 返回地圖</span>`;
+    setFacilityFooter(`<span aria-hidden="true">◎</span> 每次討伐都會永久記錄；稀有素材可以留畀將來製作裝備。`);
   }
 
   function availableFacilityTabs() {
@@ -2915,7 +2949,8 @@
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
     document.getElementById("facilityKicker").textContent = copy[0];
     document.getElementById("facilityTitle").textContent = copy[1];
-    document.getElementById("facilitySubtitle").textContent = copy[2];
+    if (facilityHelpText) facilityHelpText.textContent = copy[2];
+    setFacilityHelpOpen(false);
     for (const tab of facilityTabs?.querySelectorAll("[data-facility-tab]") || []) {
       const available = availableTabs.includes(tab.dataset.facilityTab);
       const active = tab.dataset.facilityTab === facilityTab;
@@ -2961,12 +2996,36 @@
 
   function closeFacility() {
     if (mode !== "facility") return;
+    setFacilityHelpOpen(false);
     facilityPanel.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
     updateHud(true);
     pendingLevelUps = 0;
     canvas.focus({ preventScroll: true });
+  }
+
+  function setFacilityHelpOpen(open) {
+    if (!facilityHelpPopover || !facilityHelpButton) return;
+    facilityHelpPopover.hidden = !open;
+    facilityHelpButton.setAttribute("aria-expanded", String(open));
+  }
+
+  function toggleFacilityHelp() {
+    if (!facilityHelpPopover || !facilityHelpButton) return;
+    setFacilityHelpOpen(facilityHelpPopover.hidden);
+  }
+
+  function returnToTitle() {
+    if (!["playing", "facility", "battle"].includes(mode)) return;
+    if (mode !== "battle") saveGame(false, true);
+    closeBattleHud();
+    hideAllOverlays();
+    mode = "title";
+    stage.dataset.gameState = mode;
+    titleScreen.hidden = false;
+    continueButton.hidden = !hasSave();
+    updateHud(true);
   }
 
   function openDeckFromSidebar() {
@@ -7165,6 +7224,11 @@
       openFacility,
       closeFacility,
       facilityTab: (tab) => { facilityTab = tab; renderFacility(); },
+      setInventoryFixture: (count = 0) => {
+        inventoryFixtureCount = Core.clamp(Math.floor(Number(count) || 0), 0, 30);
+        if (mode === "facility" && facilityTab === "bag") renderBagFacility();
+        return window.__RPG_DEBUG__.snapshot();
+      },
       acceptOffer: (id) => acceptGuildOffer(id || currentContractOffers()[0]?.id),
       claimContract: (id) => claimGuildContract(id || activeContracts[0]?.id),
       recordGuildKill: (monsterId, instanceId) => {
@@ -7296,8 +7360,13 @@
   document.getElementById("respawnButton").addEventListener("click", respawn);
   document.getElementById("keepPlayingButton").addEventListener("click", keepPlaying);
   document.getElementById("facilityCloseButton").addEventListener("click", closeFacility);
+  facilityHelpButton?.addEventListener("click", toggleFacilityHelp);
+  facilityFooter.addEventListener("click", (event) => {
+    if (event.target.closest("[data-facility-footer-action='return-title']")) returnToTitle();
+  });
   facilityPanel.addEventListener("click", (event) => {
     if (event.target === facilityPanel) closeFacility();
+    else if (facilityHelpPopover && !facilityHelpPopover.hidden && !event.target.closest(".facility-help-popover, #facilityHelpButton")) setFacilityHelpOpen(false);
   });
   facilityTabs?.addEventListener("click", (event) => {
     const tab = event.target.closest("[data-facility-tab]");
@@ -7381,7 +7450,8 @@
   window.addEventListener("resize", resize, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
-  continueButton.hidden = !hasSave();
+  const savedGameAvailable = hasSave();
+  continueButton.hidden = !savedGameAvailable;
   document.getElementById("soundButton").setAttribute("aria-pressed", String(soundEnabled));
   syncExploreZoomControls();
   resetEnemies();
@@ -7393,6 +7463,7 @@
   resize();
   updateHud(true);
   installDebugHooks();
+  if (savedGameAvailable && !autoplay) loadGame();
   if (autoplay) {
     window.setTimeout(() => {
       newGame(true);

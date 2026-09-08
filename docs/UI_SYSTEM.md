@@ -75,12 +75,13 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 ### Header
 
 每個 major window 只有一個主標題。header 依次包含小型 uppercase kicker、
-主標題、短 subtitle 同一個位於右上角嘅 shared bitmap-backed close button。
-close button 由 `ui-close-button`/`facility-close-button` 共用，裝飾 bitmap 與
-可 keyboard focus 嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或
-ESC 位置。標題不可依賴裝飾 glyph 才能辨識功能；裝飾唔可以佔用 content 空間。
-Top-level page 用 cream topic header；Skill Detail 等 nested modal 用較輕量嘅
-層級，唔重複整個 top-level page header。
+主標題、右上角 shared bitmap-backed 說明入口及 close button；長說明放入可
+點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
+`ui-close-button`/`facility-close-button` 共用，裝飾 bitmap 與可 keyboard focus
+嘅 HTML hit area 分離；不可由各頁自行畫 plain `×`、圓圈或 ESC 位置。標題不可
+依賴裝飾 glyph 才能辨識功能；裝飾唔可以佔用 content 空間。Top-level facility
+header 使用深海軍藍資訊帶；Skill Detail 等 nested modal 用較輕量層級，唔重複
+整個 top-level page header。
 
 ### Buttons and tabs
 
@@ -109,6 +110,12 @@ Inventory、Equipment、技能書同 DECK slot 共用 slot language：固定 bit
 Status、Inventory、Equipment 以共用 base frame 為主。Status 左邊係角色 visual
 同身份，右邊係 stat groups；Inventory / Equipment 以可捲動 grid/list 表達內容，
 兩者嘅 slot、button、selected state 必須一致。
+
+Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及 DECK 容量；
+Inventory 左側紙娃娃區必須以 contained grid 保持六個部位完整可見，右側物品格
+只顯示圖示與短名稱，完整描述及動作集中喺 selected detail。DECK 以兩欄 desktop
+列表、窄屏單欄呈現；可出戰指令標示 `CMD`，被動技能標示 `PSV`，PSV 永遠唔提供
+裝入動作。
 
 ### Guild variant
 

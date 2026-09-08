@@ -26,6 +26,7 @@
 .facility-header h2 { font-size: clamp(.98rem,1.45vw,1.18rem); font-weight: 780; letter-spacing: -.012em; }
 .facility-header p:last-child { margin-top: .18rem; font-size: .64rem; line-height: 1.4; }
 .facility-close-button { flex-basis: 2.4rem; width: 2.4rem; height: 2.4rem; }
+.facility-header-actions { flex-shrink: 0; }
 .facility-summary small { font-size: .65rem; }
 .facility-summary strong { font-size: .76rem; }
 .facility-tab b { font-size: .74rem; }
@@ -63,7 +64,7 @@
 .status-character-card {
   min-height: 18rem;
   display: grid;
-  grid-template-rows: minmax(0,1fr) auto auto;
+  grid-template-rows: minmax(0,1fr) auto auto auto auto;
   justify-items: center;
   overflow: hidden;
   padding: .75rem;
@@ -99,6 +100,13 @@
 .status-stat-grid dt { color: var(--muted); font-size: .72rem; }
 .status-stat-grid dd { margin: 0; color: var(--cream); font: 850 .86rem/1 ui-monospace,monospace; }
 .status-stat-grid > div:not(.is-hp) dd { color: var(--teal); }
+.status-level-line { width: min(100%, 12rem); display: flex; justify-content: space-between; gap: .5rem; margin-top: .35rem; color: var(--muted); font-size: .62rem; }
+.status-level-line b { color: var(--gold); font: 850 .66rem/1 ui-monospace,monospace; }
+.status-progress { display: block; width: 100%; height: .35rem; overflow: hidden; margin-top: .25rem; border-radius: 999px; background: rgba(4,8,18,.65); box-shadow: inset 0 1px rgba(0,0,0,.3); }
+.status-progress i { display: block; height: 100%; min-width: 0; border-radius: inherit; background: linear-gradient(90deg,var(--red),#ffbf68); }
+.xp-progress { width: min(100%, 12rem); }
+.xp-progress i { background: linear-gradient(90deg,var(--teal),#a9f1d9); }
+.status-stat-grid .status-progress { grid-column: 1 / -1; margin-top: -.06rem; }
 
 /* Skill tree ------------------------------------------------------------ */
 .skill-tree-legend {
@@ -291,6 +299,11 @@
 .deck-skill-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .62rem; }
 .deck-skill-choice { min-width: 0; display: grid; grid-template-columns: 2.6rem minmax(0,1fr) auto; align-items: center; gap: .62rem; padding: .65rem; border: 1px solid rgba(245,233,202,.2); border-radius: .82rem; background: rgba(16,27,49,.88); }
 .deck-skill-choice .facility-action-button { min-width: 4rem; }
+.deck-skill-title { min-width: 0; display: flex; align-items: center; gap: .38rem; }
+.skill-kind-badge { position: relative; flex: 0 0 auto; width: 2.55rem; height: 1.15rem; display: inline-grid; place-items: center; overflow: hidden; border-radius: .24rem; }
+.skill-kind-badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+.skill-kind-badge b { position: relative; z-index: 1; color: #fff6d7; font: 900 .48rem/1 ui-monospace,monospace; letter-spacing: .05em; text-shadow: 0 1px 2px #111827; }
+.skill-kind-badge.is-psv b { color: #f4eaff; }
 .deck-readonly-state { justify-self: end; padding: .28rem .48rem; border: 1px solid rgba(82,220,203,.35); border-radius: 999px; color: var(--teal); font: 800 .62rem/1 ui-monospace,monospace; }
 
 .inventory-icon-grid {
@@ -563,12 +576,15 @@
    with a separate detail surface. Slots never carry long descriptions or
    actions, so item growth cannot change the grid's geometry. */
 .unified-inventory-layout {
-  grid-template-columns: minmax(15rem, .38fr) minmax(0, 1fr);
+  grid-template-columns: minmax(27rem, .7fr) minmax(31rem, 1.3fr);
   align-items: start;
 }
 .bag-loadout-panel,
 .bag-items-panel { min-width: 0; }
 .bag-loadout-panel { overflow: hidden; }
+.bag-paperdoll-board { grid-template-columns: minmax(9.2rem,1fr) 7.4rem minmax(9.2rem,1fr); }
+.bag-paperdoll-board .paperdoll-slot { grid-template-columns: 2.25rem minmax(0,1fr); }
+.bag-paperdoll-board .paperdoll-slot div > span { display: none; }
 .bag-items-panel { display: grid; gap: .7rem; }
 .inventory-heading { margin-bottom: 0; }
 .inventory-filter-bar {
@@ -708,11 +724,12 @@
 @media (max-width: 900px) {
   .facility-tabs[data-visible-tabs] { grid-template-columns: none; grid-auto-flow: column; }
   .unified-inventory-layout { grid-template-columns: 1fr; }
+  .bag-paperdoll-board { grid-template-columns: minmax(0,1fr) 8rem minmax(0,1fr); }
   .bag-loadout-panel { position: static; }
   .inventory-icon-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .status-layout { grid-template-columns: 1fr; }
-  .status-character-card { min-height: 13rem; grid-template-columns: 10rem minmax(0,1fr); grid-template-rows: 1fr auto; align-items: center; justify-items: start; }
-  .status-character-card canvas { grid-row: 1 / 3; width: 9rem; height: 11rem; justify-self: center; }
+  .status-character-card { min-height: 13rem; grid-template-columns: 10rem minmax(0,1fr); grid-template-rows: 1fr auto auto auto; align-items: center; justify-items: start; }
+  .status-character-card canvas { grid-row: 1 / 5; width: 9rem; height: 11rem; justify-self: center; }
   .status-character-card strong { align-self: end; }
   .status-character-card span { align-self: start; }
   .skill-tree-board { width: max(100%,var(--tree-min-width,50rem)); }
@@ -739,6 +756,7 @@
   .facility-header h2 { font-size: .94rem; }
   .facility-header p:last-child { max-width: min(68vw,18rem); margin-top: .14rem; font-size: .61rem; line-height: 1.35; }
   .facility-close-button { flex-basis: 2.25rem; width: 2.25rem; height: 2.25rem; }
+  .ui-info-button { width: 2rem; height: 2rem; }
   .facility-summary small { font-size: .59rem; }
   .facility-summary strong, .facility-tab b { font-size: .67rem; }
   .facility-content .facility-section-heading h3 { font-size: .88rem; }
@@ -770,6 +788,8 @@
   .deck-slot .facility-action-button,
   .deck-skill-choice .facility-action-button { grid-column: 1 / -1; width: 100%; max-width: none; }
   .deck-slot.is-empty { grid-template-columns: 1fr; }
+  .facility-footer { align-items: flex-start; flex-direction: column; gap: .45rem; }
+  .facility-footer-actions { width: 100%; justify-content: space-between; }
   .paperdoll-board {
     min-height: 0;
     grid-template-columns: repeat(2,minmax(0,1fr));
