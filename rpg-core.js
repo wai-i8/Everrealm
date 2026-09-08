@@ -6,6 +6,11 @@
   "use strict";
 
   const TAU = Math.PI * 2;
+  const EXPLORATION_MOVEMENT = Object.freeze({
+    baseWorldUnitsPerSecond: 330,
+    equipmentPointWorldUnitsPerSecond: 2.5,
+    minimumWorldUnitsPerSecond: 175,
+  });
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -86,7 +91,7 @@
       // Level controls HP/progression; generic ATK comes from equipment and
       // explicit upgrades, never from an automatic per-level bonus.
       attack: 14 + (weaponLevel - 1) * 2 + edge * 4,
-      speed: 132 * (1 + swift * 0.075),
+      speed: EXPLORATION_MOVEMENT.baseWorldUnitsPerSecond * (1 + swift * 0.075),
       dashCooldown: Math.max(0.58, 1.05 - swift * 0.07),
       critChance: clamp(0.1 + edge * 0.025, 0.1, 0.28),
     };
@@ -429,6 +434,7 @@
 
   return {
     TAU,
+    EXPLORATION_MOVEMENT,
     clamp,
     lerp,
     distance,

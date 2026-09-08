@@ -158,6 +158,15 @@ test("HP still grows with level while ATK only grows from explicit upgrades", ()
   assert.ok(grown.dashCooldown < base.dashCooldown);
 });
 
+test("exploration movement constants are native-world units", () => {
+  assert.deepEqual(Core.EXPLORATION_MOVEMENT, {
+    baseWorldUnitsPerSecond: 330,
+    equipmentPointWorldUnitsPerSecond: 2.5,
+    minimumWorldUnitsPerSecond: 175,
+  });
+  assert.equal(Core.deriveStats({ level: 1, weaponLevel: 1, upgrades: {} }).speed, 330);
+});
+
 test("save sanitizer rejects unknown schemas and corrupt coordinates", () => {
   assert.equal(Core.sanitizeSave(null), null);
   assert.equal(Core.sanitizeSave({ version: 2, player: { x: 10, y: 10 } }), null);

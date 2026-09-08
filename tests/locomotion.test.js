@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const Locomotion = require("../locomotion.js");
+const Art = require("../character-art.js");
 
 const root = path.resolve(__dirname, "..");
 const metadata = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
@@ -43,6 +44,15 @@ test("native atlas pixels remain authored world pixels at every global zoom", ()
   const near = Locomotion.layout(200, 300, 1.22);
   assert.equal(far.width, metadata.cellWidth * .78);
   assert.equal(near.height, metadata.cellHeight * 1.22);
+});
+
+test("player and monster locomotion frames own canonical world dimensions", () => {
+  assert.deepEqual(Art.locomotionWorldFrame("fighter"), { width: 256, height: 256 });
+  assert.deepEqual(Art.locomotionWorldFrame("warrior"), { width: 256, height: 256 });
+  for (const id of ["raccoon", "turtle", "chick", "fox", "wild_boar", "bear", "coyote", "frog", "snake"]) {
+    assert.deepEqual(Art.locomotionWorldFrame(id), { width: 102.4, height: 102.4 }, id);
+  }
+  assert.equal(Art.locomotionWorldFrame.length, 1);
 });
 
 test("animation controller preserves facing and returns immediately to Idle on STOP", () => {

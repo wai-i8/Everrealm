@@ -202,7 +202,10 @@
   let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
-  const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .78, mid: 1, near: 1.22 });
+  // Native-world zooms preserve the pre-migration wide-screen field of view:
+  // 1.48 * { .78, 1, 1.22 } * .4 = the constants below. This is a completed
+  // unit conversion, not a runtime map/migration scale.
+  const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
   const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
   const ITEM_ICON_INDEX = Object.freeze({
     healing_potion: 0,
@@ -362,6 +365,8 @@
       knockback: { x: 0, y: 0 },
       moving: false,
       walkCycle: 0,
+      explorationDistance: 0,
+      explorationMoveSeconds: 0,
       deathStartedAt: null,
     };
   }
@@ -380,7 +385,11 @@
       maxHp: Math.max(1, Math.round(base.maxHp + gear.maxHp)),
       attack: Math.max(1, Math.round((base.attack + gear.attack) * (passives.attackMultiplier || 1))),
       defence: Math.max(0, Math.round((base.defence + gear.defense) * (passives.defenceMultiplier || 1))),
-      speed: Math.max(70, 132 + gear.speed),
+      speed: Math.max(
+        Core.EXPLORATION_MOVEMENT.minimumWorldUnitsPerSecond,
+        Core.EXPLORATION_MOVEMENT.baseWorldUnitsPerSecond
+          + gear.speed * Core.EXPLORATION_MOVEMENT.equipmentPointWorldUnitsPerSecond,
+      ),
       accuracy: Math.max(0, 100 + gear.accuracy + (passives.accuracy || 0) * 100),
       evasion: Math.max(0, gear.evasion + (passives.evasion || 0) * 100),
       weight: Math.max(0, gear.weight),
@@ -1088,6 +1097,10 @@
     if (exploreMoveTarget && movement.hitX && movement.hitY) clearExploreMovePath();
     const travelled = { x: player.x - before.x, y: player.y - before.y };
     player.moving = Math.hypot(travelled.x, travelled.y) > .001;
+    if (player.moving) {
+      player.explorationDistance += Math.hypot(travelled.x, travelled.y);
+      player.explorationMoveSeconds += dt;
+    }
     if (player.moving) player.facing = Locomotion.facingFromDelta(travelled.x, travelled.y, player.facing);
     player.locomotion = Locomotion.update(player.locomotion, { moving: player.moving, facing: player.facing, dt });
     if (player.moving) player.walkCycle += dt * 8;
@@ -5310,7 +5323,11 @@
 
   function drawBattleUnit(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
-    const scale = layout.cell / 43;
+    // Tactical layout has its own fixed pixels-per-cell projection. The hero
+    // atlas is native 256px artwork, while monster sizing is already owned by
+    // the monster entity contract in character-art.js.
+    const heroScale = layout.cell / 107.5;
+    const monsterScale = layout.cell / 43;
     const baseline = point.y + layout.cell * .29;
     const acting = battle.phase === "resolving_action" && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id));
     const locomotion = unit.locomotion || Locomotion.create(unit.facing);
@@ -5320,7 +5337,7 @@
       artBox = Art.drawCharacter(ctx, {
         x: point.x,
         y: baseline,
-        scale,
+        scale: heroScale,
         actor: "player",
         classId: playerClassId,
         facing: unit.facing,
@@ -5342,7 +5359,7 @@
       artBox = Art.drawEnemy(ctx, {
         x: point.x,
         y: baseline,
-        scale: scale * (unit.boss ? .98 : .92),
+        scale: monsterScale * (unit.boss ? .98 : .92),
         type: unit.type,
         facing: unit.facing,
         phase: elapsed,
@@ -7078,10 +7095,11 @@
       ready: true,
       newGame: (classId) => newGame(true, classId),
       snapshot: () => ({
-        mode, level: player.level, xp: player.xp, hp: player.hp, maxHp: playerStats().maxHp,
+        mode, elapsedSeconds: elapsed, level: player.level, xp: player.xp, hp: player.hp, maxHp: playerStats().maxHp,
         stats: playerStats(),
         classId: playerClassId,
         x: player.x, y: player.y, facing: player.facing, moving: player.moving, locomotion: player.locomotion ? { ...player.locomotion } : null,
+        movementOdometer: { distanceWorldUnits: player.explorationDistance, movingSeconds: player.explorationMoveSeconds },
         currentMapId, bgm: bgm.snapshot(), pendingLevelUps,
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
@@ -7091,7 +7109,16 @@
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
         flattenedMapRender: world.art?.flattened && world.art?.backgroundScene ? (() => {
           const crop = flattenedBackgroundCrop();
-          return { source: { x: crop.sx, y: crop.sy, width: crop.sw, height: crop.sh }, destination: { x: crop.dx, y: crop.dy, width: crop.dw, height: crop.dh }, image: { width: world.pixelWidth, height: world.pixelHeight }, canvas: { cssWidth: width, cssHeight: height, dpr, backingWidth: canvas.width, backingHeight: canvas.height }, cameraZoom: camera.zoom };
+          const downsampling = crop.dw < crop.sw || crop.dh < crop.sh;
+          const atlas = Art.spriteStatus()[`${world.art.backgroundScene}Background`];
+          return {
+            source: { x: crop.sx, y: crop.sy, width: crop.sw, height: crop.sh },
+            destination: { x: crop.dx, y: crop.dy, width: crop.dw, height: crop.dh },
+            image: { width: atlas?.naturalWidth || world.pixelWidth, height: atlas?.naturalHeight || world.pixelHeight },
+            canvas: { cssWidth: width, cssHeight: height, dpr, backingWidth: canvas.width, backingHeight: canvas.height },
+            cameraZoom: camera.zoom,
+            sampling: { imageSmoothingEnabled: downsampling, imageSmoothingQuality: downsampling ? "high" : "disabled", intermediateBitmap: false },
+          };
         })() : null,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
         facility: mode === "facility" ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,

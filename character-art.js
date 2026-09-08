@@ -82,6 +82,21 @@
     snake: Object.freeze({ nameLift: 78, nameOffsetX: 0 }),
   });
 
+  // These are entity-authored frame dimensions in gameplay world units. They
+  // do not depend on the current scene, source-map resolution, camera or
+  // battle layout. Player atlases use their full native 256px frame; ordinary
+  // monster atlases retain their established 102.4-unit gameplay frame.
+  const locomotionWorldFrames = Object.freeze({
+    player: Object.freeze({ width: 256, height: 256 }),
+    monster: Object.freeze({ width: 102.4, height: 102.4 }),
+  });
+
+  function locomotionWorldFrame(id) {
+    return ["fighter", "warrior"].includes(id)
+      ? locomotionWorldFrames.player
+      : locomotionWorldFrames.monster;
+  }
+
   // Every named NPC owns one stable frame in both the map and portrait
   // atlases.  The generic villager intentionally reuses the glasses-free
   // adventurer frame: frame 11 contains eyewear and is excluded from every
@@ -535,8 +550,9 @@
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
-    const visualScale = scale;
-    const box = Locomotion.layout(x, y, scale);
+    const authoredFrame = locomotionWorldFrame(id);
+    const visualScale = scale * authoredFrame.height / selected.sh;
+    const box = Locomotion.layout(x, y, visualScale);
     const opaque = opaqueAtlasFrame(atlas, selected.index);
     const visualTop = box.y + (opaque.sy - selected.sy) * visualScale;
     const visualCenterX = box.x + (opaque.sx - selected.sx + opaque.sw / 2) * visualScale;
@@ -1778,7 +1794,15 @@
     fitFrameToBaseline,
     environmentSpriteLayout,
     environmentSpriteAnchor,
-    spriteStatus: () => Object.fromEntries(Object.entries(spriteAtlases).map(([key, atlas]) => [key, { ready: atlas.ready, failed: atlas.failed, src: atlas.src }])),
+    locomotionWorldFrames,
+    locomotionWorldFrame,
+    spriteStatus: () => Object.fromEntries(Object.entries(spriteAtlases).map(([key, atlas]) => [key, {
+      ready: atlas.ready,
+      failed: atlas.failed,
+      src: atlas.src,
+      naturalWidth: atlas.image?.naturalWidth || atlas.image?.width || 0,
+      naturalHeight: atlas.image?.naturalHeight || atlas.image?.height || 0,
+    }])),
     drawCharacter,
     drawEnemy,
     drawPortrait,

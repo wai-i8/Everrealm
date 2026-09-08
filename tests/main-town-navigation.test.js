@@ -46,6 +46,8 @@ test("Main Town uses the supplied 7680x4320 display and authoring coordinate spa
   assert.equal(packageData.authoring.image, "assets/main-town/maintown_walkable.jpg");
   assert.deepEqual([packageData.source.width, packageData.source.height], [7680, 4320]);
   assert.deepEqual([packageData.authoring.width, packageData.authoring.height], [7680, 4320]);
+  assert.deepEqual([world.pixelWidth, world.pixelHeight], [7680, 4320]);
+  assert.deepEqual([world.navigation.source.width, world.navigation.source.height], [7680, 4320]);
   assert.deepEqual(world.art.sourceDimensions, { width: 7680, height: 4320 });
   assert.equal(world.art.background, "assets/main-town/maintown.jpg");
   assert.equal(world.art.authoring, "assets/main-town/maintown_walkable.jpg");

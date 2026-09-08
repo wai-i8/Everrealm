@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -173,6 +173,8 @@ try {
   $guildActiveScreenshotPath = $null
   $serviceReachResults = @()
   $monsterFacingRuntime = $null
+  $movementEvidence = $null
+  $movementBeforeScreenshotPath = $null
   switch ($Scenario) {
     'title' {
       if ($before.mode -ne 'title') { throw "Expected title mode, got $($before.mode)." }
@@ -193,7 +195,29 @@ try {
       Start-Sleep -Milliseconds 650
       $after = Get-GameSnapshot
       $distance = [math]::Sqrt(([double]$after.x - [double]$before.x) * ([double]$after.x - [double]$before.x) + ([double]$after.y - [double]$before.y) * ([double]$after.y - [double]$before.y))
-      if ($before.currentMapId -ne 'clinic' -or $after.currentMapId -ne 'clinic' -or [double]$before.stats.speed -ne 132 -or $distance -lt 90 -or $distance -gt 105) { throw "Interior movement did not use the canonical world speed (before=$($before.x),$($before.y), after=$($after.x),$($after.y), distance=$distance, speed=$($before.stats.speed), map=$($after.currentMapId))." }
+      $interval = [double]$after.movementOdometer.movingSeconds - [double]$before.movementOdometer.movingSeconds
+      $travelled = [double]$after.movementOdometer.distanceWorldUnits - [double]$before.movementOdometer.distanceWorldUnits
+      $measuredSpeed = $travelled / $interval
+      $movementEvidence = [PSCustomObject]@{ map = $after.currentMapId; movingSeconds = $interval; distanceWorldUnits = $travelled; displacementWorldUnits = $distance; canonicalSpeedWorldUnitsPerSecond = [double]$before.stats.speed; measuredSpeedWorldUnitsPerSecond = $measuredSpeed; bodyHeightWorldUnits = 192; bodyLengthsPerSecond = $measuredSpeed / 192 }
+      if ($before.currentMapId -ne 'clinic' -or $after.currentMapId -ne 'clinic' -or [double]$before.stats.speed -ne 330 -or $distance -lt 170 -or $measuredSpeed -lt 329 -or $measuredSpeed -gt 331) { throw "Interior movement did not use the canonical world speed (before=$($before.x),$($before.y), after=$($after.x),$($after.y), distance=$distance, measuredSpeed=$measuredSpeed, speed=$($before.stats.speed), map=$($after.currentMapId))." }
+    }
+    'town-movement' {
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setZoom('mid'); window.__RPG_DEBUG__.teleport(3659,1760); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $before = Get-GameSnapshot
+      $movementBeforeScreenshotPath = Join-Path $runtimeOutputPath "movement-town-before-$ViewportWidth.png"
+      $movementBeforeCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($movementBeforeScreenshotPath, [Convert]::FromBase64String($movementBeforeCapture.result.data))
+      $movementStart = Get-GameSnapshot
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.clickMoveTo(3059,1760); true" | Out-Null
+      Start-Sleep -Milliseconds 650
+      $after = Get-GameSnapshot
+      $distance = [math]::Sqrt(([double]$after.x - [double]$movementStart.x) * ([double]$after.x - [double]$movementStart.x) + ([double]$after.y - [double]$movementStart.y) * ([double]$after.y - [double]$movementStart.y))
+      $interval = [double]$after.movementOdometer.movingSeconds - [double]$movementStart.movementOdometer.movingSeconds
+      $travelled = [double]$after.movementOdometer.distanceWorldUnits - [double]$movementStart.movementOdometer.distanceWorldUnits
+      $measuredSpeed = $travelled / $interval
+      $movementEvidence = [PSCustomObject]@{ map = $after.currentMapId; movingSeconds = $interval; distanceWorldUnits = $travelled; displacementWorldUnits = $distance; canonicalSpeedWorldUnitsPerSecond = [double]$before.stats.speed; measuredSpeedWorldUnitsPerSecond = $measuredSpeed; bodyHeightWorldUnits = 192; bodyLengthsPerSecond = $measuredSpeed / 192 }
+      if ($before.currentMapId -ne 'world' -or $after.currentMapId -ne 'world' -or [double]$before.stats.speed -ne 330 -or $distance -lt 170 -or $measuredSpeed -lt 329 -or $measuredSpeed -gt 331) { throw "Main Town movement did not use the canonical world speed (before=$($before.x),$($before.y), after=$($after.x),$($after.y), distance=$distance, measuredSpeed=$measuredSpeed, speed=$($before.stats.speed), map=$($after.currentMapId))." }
     }
     'town' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); document.querySelector('[data-zoom-level=far]').click(); window.__RPG_DEBUG__.teleport(1000,840); true" | Out-Null
@@ -1343,6 +1367,8 @@ try {
     guildCommissionScreenshot = $guildCommissionScreenshotPath
     bgmEvidence = $bgm
     serviceReach = $serviceReachResults
+    movementEvidence = $movementEvidence
+    movementBeforeScreenshot = $movementBeforeScreenshotPath
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count
   } | ConvertTo-Json -Depth 8 -Compress

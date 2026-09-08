@@ -46,7 +46,7 @@ test("three persisted exploration zoom levels are wired to the camera", () => {
   for (const level of ["far", "mid", "near"]) {
     assert.match(html, new RegExp(`data-zoom-level="${level}"`));
   }
-  assert.match(game, /EXPLORE_ZOOM_SCALES = Object\.freeze\(\{ far: \.78, mid: 1, near: 1\.22 \}\)/);
+  assert.match(game, /EXPLORE_ZOOM_SCALES = Object\.freeze\(\{ far: \.46176, mid: \.592, near: \.72224 \}\)/);
   assert.match(game, /const ZOOM_KEY = "everrealm-zoom"/);
   assert.match(game, /localStorage\.setItem\(ZOOM_KEY, level\)/);
   assert.match(game, /setExploreZoomLevel\(button\.dataset\.zoomLevel\)/);
@@ -208,6 +208,7 @@ test("native Main Town camera and click conversion stay in one world space", () 
   assert.match(mainTownSource, /pixelHeight:\s*navigationPackage\.source\.height/);
   assert.match(mainTownSource, /backgroundScene:\s*"mainTown"/);
   assert.doesNotMatch(mainTownSource, /unitScale/);
+  assert.match(game, /EXPLORE_ZOOM_SCALES = Object\.freeze\(\{ far: \.46176, mid: \.592, near: \.72224 \}\)/);
   const camera = game.match(/function targetZoom\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.match(camera, /return EXPLORE_ZOOM_SCALES\[exploreZoomLevel\]/);
   assert.doesNotMatch(camera, /currentMapId|pixelWidth|pixelHeight|naturalWidth/);
@@ -235,7 +236,24 @@ test("native Main Town camera and click conversion stay in one world space", () 
   assert.doesNotMatch(playerRender, /currentMapId|pixelWidth|pixelHeight|unitScale/);
   assert.match(playerUpdate, /let speed = stats\.speed/);
   assert.doesNotMatch(playerUpdate, /currentMapId|pixelWidth|pixelHeight|mapScale|resolutionScale|unitScale/);
+  assert.match(game, /Core\.EXPLORATION_MOVEMENT\.baseWorldUnitsPerSecond/);
+  assert.doesNotMatch(game, /currentMapId === "world"[\s\S]{0,120}(speed|zoom)/);
+  const enemyRender = game.match(/function drawEnemy\(enemy, shakeX, shakeY\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.doesNotMatch(enemyRender, /currentMapId|pixelWidth|pixelHeight|naturalWidth|naturalHeight/);
+  assert.match(characterArt, /monster: Object\.freeze\(\{ width: 102\.4, height: 102\.4 \}\)/);
+  assert.match(game, /const heroScale = layout\.cell \/ 107\.5/);
+  assert.match(game, /const monsterScale = layout\.cell \/ 43/);
   assert.match(game, /ctx\.fillStyle = "#000";\s*ctx\.fillRect\(0, 0, width, height\)/);
+});
+
+test("flattened scenes are cropped without normalization or small-map upscaling", () => {
+  const crop = game.match(/function flattenedBackgroundCrop\(shakeX = 0, shakeY = 0\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(crop, /const sw = Math\.min\(mapWidth, viewportWorldWidth\)/);
+  assert.match(crop, /const sh = Math\.min\(mapHeight, viewportWorldHeight\)/);
+  assert.match(crop, /dw: sw \* zoom/);
+  assert.match(crop, /dh: sh \* zoom/);
+  assert.doesNotMatch(crop, /Math\.max\(mapWidth, viewportWorldWidth\)|Math\.max\(mapHeight, viewportWorldHeight\)/);
+  assert.doesNotMatch(game, /world\.(pixelWidth|pixelHeight)\s*\/\s*(7680|4320|2048|1152)/);
 });
 
 function uiCssForTest() {
