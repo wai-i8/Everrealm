@@ -108,6 +108,9 @@ try {
     '--disable-gpu',
     '--hide-scrollbars',
     '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
     '--remote-allow-origins=*',
     "--remote-debugging-port=$port",
     "--user-data-dir=$profilePath",
@@ -238,9 +241,11 @@ try {
         @{ portal = 'world-to-general-store'; map = 'general-store' },
         @{ portal = 'world-to-inn'; map = 'inn' }
       )) {
-        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,door=api.entityPosition('$($entry.portal)'),info=api.transitionInfo('$($entry.portal)');api.newGame();api.clickPortal('$($entry.portal)');return JSON.stringify({door,info,approach:info.entrance.approachPoint,blocked:api.collisionAt(door.x,door.y,12),start:api.snapshot()});})()" | ConvertFrom-Json
+        $doorData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,door=api.entityPosition('$($entry.portal)'),info=api.transitionInfo('$($entry.portal)'),approach=info.entrance.approachPoint;api.newGame();api.teleport(approach.x,approach.y);api.clickPortal('$($entry.portal)');return JSON.stringify({door,info,approach,blocked:api.collisionAt(door.x,door.y,12),start:api.snapshot()});})()" | ConvertFrom-Json
         $arrived = $false
-        for ($attempt = 0; $attempt -lt 18 -and -not $arrived; $attempt += 1) {
+        # Main Town now uses the supplied 7680px-wide authoring coordinate
+        # space; the farthest doorway can take longer than the old 4.5s cap.
+        for ($attempt = 0; $attempt -lt 80 -and -not $arrived; $attempt += 1) {
           Start-Sleep -Milliseconds 250
           $doorSnapshot = Get-GameSnapshot
           $arrived = $doorSnapshot.currentMapId -eq $entry.map -and $doorSnapshot.mode -eq 'playing'
@@ -249,7 +254,7 @@ try {
         Start-Sleep -Milliseconds 500
         $exitData = Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,exit=api.entityPosition('$($entry.map)-to-world'),info=api.transitionInfo('$($entry.map)-to-world'),approach=info.entrance.approachPoint;api.teleport(approach.x,approach.y-30);api.portalTick();api.clickMoveTo(exit.x,exit.y);return JSON.stringify({exit,info,approach:{x:approach.x,y:approach.y-30},blocked:api.collisionAt(approach.x,approach.y-30,12),start:api.snapshot()});})()" | ConvertFrom-Json
         $returned = $false
-        for ($attempt = 0; $attempt -lt 18 -and -not $returned; $attempt += 1) {
+        for ($attempt = 0; $attempt -lt 80 -and -not $returned; $attempt += 1) {
           Start-Sleep -Milliseconds 250
           $returnSnapshot = Get-GameSnapshot
           $returned = $returnSnapshot.currentMapId -eq 'world' -and $returnSnapshot.mode -eq 'playing'

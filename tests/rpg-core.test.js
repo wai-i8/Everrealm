@@ -201,18 +201,18 @@ test("world generator returns the authored flattened navigation town", () => {
   const world = World.createWorld();
   assert.equal(world.id, "world");
   assert.equal(world.kind, "town");
-  assert.equal(world.width, 48);
-  assert.equal(world.height, 36);
-  assert.equal(world.tiles.length, 36);
-  assert.equal(world.tiles[0].length, 48);
+  assert.equal(world.width, 240);
+  assert.equal(world.height, 135);
+  assert.equal(world.tiles.length, 135);
+  assert.equal(world.tiles[0].length, 240);
   assert.deepEqual(world.houses.map((house) => house.id), ["keeper-house", "forge", "tea-house", "clinic", "general-store"]);
   assert.equal(world.enemySpawns.length, 0, "monsters belong in the separate field map");
   assert.equal(world.rendering, "flattened");
   assert.equal(world.art.flattened, true);
   assert.equal(world.navigation.authoritative, true);
-  assert.deepEqual(world.navigation.connectivity.central_seed, [687, 698]);
-  assert.equal(world.townLayout.style, "flattened-final-navigation-package");
-  assert.deepEqual(world.townLayout.sourceDimensions, { width: 1536, height: 1152 });
+  assert.deepEqual(world.navigation.connectivity.central_seed, [3878, 2048]);
+  assert.equal(world.townLayout.style, "flattened-jpg-authoring-package");
+  assert.deepEqual(world.townLayout.sourceDimensions, { width: 7680, height: 4320 });
   assert.equal(world.townLayout.roadNetwork, null);
   assert.equal(world.townGate, null, "the east exit is a passage, not a gate facade");
 });
@@ -220,7 +220,7 @@ test("world generator returns the authored flattened navigation town", () => {
 test("the authored east passage is a physical bitmap trigger", () => {
   const world = World.createWorld();
   const passage = world.townLayout.eastPassage;
-  assert.deepEqual(passage.trigger, { shape: "rect", x: 1180, y: 518, w: 12, h: 28 });
+  assert.deepEqual(passage.trigger, { shape: "rect", x: 6167, y: 1963, w: 230, h: 260 });
   assert.equal(passage.destination, "field");
   assert.equal(passage.transitionType, "physical-passage");
   assert.deepEqual(world.portals[0].trigger, passage.trigger);
@@ -231,6 +231,8 @@ test("authored service and east anchors are connected to the central seed", () =
   const deckConsole = world.boards.find((board) => board.id === "harbour-gate-deck-console");
   const eastExit = world.portals.find((portal) => portal.id === "world-to-field");
   assert.equal(deckConsole.boardId, "deck-loadout");
+  assert.equal(deckConsole.render, false);
+  assert.equal(deckConsole.navigationRegion, "deck-configuration");
   assert.equal(eastExit.targetMap, "field");
   assert.equal(eastExit.targetSpawn, "westGate");
   for (const [name, result] of Object.entries(world.navigation.connectivity.results)) assert.equal(result.reachable, true, `${name} should be reachable`);
@@ -242,8 +244,8 @@ test("normal town services use physical door entries and the east passage uses a
   assert.equal(eastPassage.interactionMode, "passage");
   assert.equal(eastPassage.transitionType, "physical-passage");
   assert.equal(eastPassage.passageId, "east-town-passage");
-  assert.deepEqual(world.houses.map((house) => house.doorway.centerX), [687, 378, 1004, 1016, 378]);
-  assert.deepEqual(world.houses.map((house) => house.doorway.trigger.h), [8, 8, 8, 8, 8]);
+  assert.deepEqual(world.houses.map((house) => house.doorway.centerX), [3659, 2073, 5262, 5282, 2048]);
+  assert.deepEqual(world.houses.map((house) => house.doorway.trigger.h), [184, 160, 150, 164, 154]);
   assert.deepEqual(world.houses.map((house) => house.entryPortalId), [
     "world-to-guild", "world-to-shop", "world-to-inn", "world-to-clinic", "world-to-general-store",
   ]);

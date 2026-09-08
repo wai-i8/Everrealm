@@ -922,8 +922,13 @@
       cellSize: authoritativeNavigation
         ? Math.max(12, navigationRadius * 4)
         : Math.max(20, world.tileSize * .6),
+      sampleStep: authoritativeNavigation ? 1 : undefined,
       radius: navigationRadius,
-      directions: 8,
+      // Authoritative bitmap movement resolves each frame with X then Y
+      // collision, so keep click routes cardinal. This prevents a diagonal
+      // waypoint from slipping into a one-pixel mask boundary between the
+      // two axis collision checks.
+      directions: authoritativeNavigation ? 4 : 8,
       maxVisited: 14000,
       nearestReachable: true,
       isWalkable: (point) => !isBlocked({ x: point.x, y: point.y, radius: navigationRadius }),
@@ -1557,6 +1562,10 @@
     nearestInteraction = candidates
       .map((entity) => ({ entity, distance: Core.distance(player, entity) }))
       .filter((item) => {
+        if (item.entity.kind === "questBoard" && item.entity.navigationRegion && typeof world.navigation?.isInRegion === "function") {
+          return world.navigation.isInRegion(item.entity.navigationRegion, player) ||
+            Core.distance(player, item.entity.approachPoint || item.entity) <= (Number(item.entity.interactionRadius) || 80);
+        }
         if (item.entity.kind === "portal" && MapTransitions.transitionTypeFor(item.entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
           return MapTransitions.pointInThreshold(item.entity, player);
         }
@@ -5476,10 +5485,10 @@
         x: (screenX - width * .5) / camera.zoom + camera.x,
         y: (screenY - height * .5) / camera.zoom + camera.y,
       };
-      const authoredNpcId = world.navigation.interactionAtWorldPoint(authoredPoint);
-      if (authoredNpcId) {
-        const authoredNpc = world.npcs.find((npc) => npc.id === authoredNpcId);
-        if (authoredNpc) return authoredNpc;
+      const authoredInteractionId = world.navigation.interactionAtWorldPoint(authoredPoint);
+      if (authoredInteractionId) {
+        const authoredInteraction = [...world.npcs, ...world.boards].find((entity) => entity.id === authoredInteractionId);
+        if (authoredInteraction) return authoredInteraction;
       }
     }
     const fieldGate = currentFieldGateInteraction();
@@ -5547,9 +5556,14 @@
       }
       pendingClickInteractionId = null;
     } else if (entity && !entity.type && entity.kind !== "portal") {
+      if (entity.kind === "questBoard" && entity.approachPoint) {
+        destination = { x: entity.approachPoint.x, y: entity.approachPoint.y };
+        pendingClickInteractionId = entity.id;
+      } else {
       const away = Core.normalize({ x: player.x - entity.x, y: player.y - entity.y });
       destination = { x: entity.x + away.x * 34, y: entity.y + away.y * 34 };
       pendingClickInteractionId = entity.id;
+      }
     } else {
       pendingClickInteractionId = null;
     }
@@ -5853,6 +5867,7 @@
       queueEnvironment("shrine", point.x, point.y, Math.max(11, 88 * scale), point.y);
     }
     for (const board of world.boards || []) {
+      if (board.render === false) continue;
       const point = mapPoint(board.x, board.y + 15);
       if (currentMapId === "world") queueEnvironment("questBoard", point.x, point.y, Math.max(9, 76 * scale), point.y);
       else queueInterior("indoorQuestBoard", point.x, point.y, Math.max(9, 68 * scale), Math.max(8, 58 * scale), point.y);

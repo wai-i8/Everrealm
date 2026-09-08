@@ -1,156 +1,230 @@
 {
   "source": {
-    "filename": "01-1000186771.png",
-    "width": 1536,
-    "height": 1152,
-    "sha256": "7dc2aaf968cbcbdb337c332a5a736997a6e0f115a86790f78762f45cefee1819"
+    "filename": "maintown.jpg",
+    "width": 7680,
+    "height": 4320,
+    "sha256": "ec3c62e44a3ce2c15e8f2651c10e3d8a9bdbeb696a2e6bc4b9edacc795a00f74"
+  },
+  "authoring": {
+    "image": "assets/main-town/maintown_walkable.jpg",
+    "filename": "maintown_walkable.jpg",
+    "width": 7680,
+    "height": 4320,
+    "sha256": "24cc6965e61c16a14a936379df0f9ff394af5939a384eddce63b2228b9009fd1",
+    "colors": {
+      "white": [
+        255,
+        255,
+        255
+      ],
+      "cyan": [
+        0,
+        255,
+        255
+      ],
+      "pink": [
+        255,
+        0,
+        255
+      ]
+    },
+    "matching": "JPEG colour distance <=20 per channel; white uses the largest 8-connected white component; cyan and pink use connected components"
   },
   "coordinate_system": "original image pixels; origin top-left; x right, y down; rectangles half-open [x,x+width), [y,y+height)",
-  "rendering": "flattened; no foreground or depth sorting",
-  "movement_rule": "A feet disk must be completely inside the white walkable allowlist. Collision mask is supplemental solid objects, NOT the complete blocked map. Never derive walkability by inverting collision.",
+  "rendering": "flattened; no foreground or depth sorting; authoring image is never rendered",
+  "movement_rule": "A feet disk must be completely inside the compiled white walkable region, an authored cyan transition region, or the authored pink deck region. Only a <=3 px JPEG anti-alias seam directly shared by those authored regions is normalized. Every other pixel is blocked. Navigation data is an allowlist and never falls back to tiles or visible art.",
+  "feet_radius_px": 3,
   "building_triggers": [
     {
       "name": "Weapon Shop",
-      "doorway_center_x": 378,
-      "trigger_center_x": 378,
+      "region_id": "weapon-shop",
+      "region_value": 1,
+      "doorway_center_x": 2073,
+      "trigger_center_x": 2073,
       "rectangle": {
-        "x": 358,
-        "y": 427,
-        "width": 40,
-        "height": 8
-      }
+        "x": 1943,
+        "y": 1759,
+        "width": 261,
+        "height": 160
+      },
+      "portal_id": "world-to-shop",
+      "target_map": "shop",
+      "return_direction": "down"
     },
     {
       "name": "Guild",
-      "doorway_center_x": 687,
-      "trigger_center_x": 687,
+      "region_id": "guild",
+      "region_value": 2,
+      "doorway_center_x": 3659,
+      "trigger_center_x": 3659,
       "rectangle": {
-        "x": 665,
-        "y": 350,
-        "width": 44,
-        "height": 8
-      }
+        "x": 3514,
+        "y": 1472,
+        "width": 291,
+        "height": 184
+      },
+      "portal_id": "world-to-guild",
+      "target_map": "guild",
+      "return_direction": "down"
     },
     {
       "name": "Hospital / Clinic",
-      "doorway_center_x": 1016,
-      "trigger_center_x": 1016,
+      "region_id": "hospital-clinic",
+      "region_value": 3,
+      "doorway_center_x": 5282,
+      "trigger_center_x": 5282,
       "rectangle": {
-        "x": 996,
-        "y": 430,
-        "width": 40,
-        "height": 8
-      }
+        "x": 5149,
+        "y": 1756,
+        "width": 267,
+        "height": 164
+      },
+      "portal_id": "world-to-clinic",
+      "target_map": "clinic",
+      "return_direction": "down"
     },
     {
       "name": "Item / General Store",
-      "doorway_center_x": 378,
-      "trigger_center_x": 378,
+      "region_id": "item-general-store",
+      "region_value": 4,
+      "doorway_center_x": 2048,
+      "trigger_center_x": 2048,
       "rectangle": {
-        "x": 358,
-        "y": 766,
-        "width": 40,
-        "height": 8
-      }
+        "x": 1907,
+        "y": 2920,
+        "width": 282,
+        "height": 154
+      },
+      "portal_id": "world-to-general-store",
+      "target_map": "general-store",
+      "return_direction": "down"
     },
     {
       "name": "Inn",
-      "doorway_center_x": 1004,
-      "trigger_center_x": 1004,
+      "region_id": "inn",
+      "region_value": 5,
+      "doorway_center_x": 5262,
+      "trigger_center_x": 5262,
       "rectangle": {
-        "x": 984,
-        "y": 768,
-        "width": 40,
-        "height": 8
-      }
+        "x": 5126,
+        "y": 2920,
+        "width": 273,
+        "height": 150
+      },
+      "portal_id": "world-to-inn",
+      "target_map": "inn",
+      "return_direction": "down"
     }
   ],
   "east_exit": {
-    "x": 1180,
-    "y": 518,
-    "width": 12,
-    "height": 28,
-    "destination": "Mountain Field"
+    "x": 6167,
+    "y": 1963,
+    "width": 230,
+    "height": 260,
+    "region_id": "east-exit",
+    "region_value": 6,
+    "destination": "Mountain Field",
+    "portal_id": "world-to-field"
   },
-  "other_exits": [],
+  "deck_interaction": {
+    "x": 5865,
+    "y": 1689,
+    "width": 247,
+    "height": 296,
+    "region_id": "deck-configuration",
+    "region_value": 7,
+    "function": "deck configuration interaction",
+    "object_kind": "deckInteraction",
+    "approach_anchor": [
+      5807,
+      2033
+    ]
+  },
   "files": {
-    "walkable": "main-town-walkable-mask.png",
-    "collision": "main-town-collision-mask.png",
-    "triggers": "main-town-trigger-mask.png",
-    "review": "main-town-navigation-review.png"
+    "display": "assets/main-town/maintown.jpg",
+    "authoring": "assets/main-town/maintown_walkable.jpg",
+    "generated": "map/main-town-navigation.generated.js"
   },
   "connectivity": {
     "feet_radius_px": 3,
-    "method": "Euclidean distance transform >3; 4-connected flood fill; anchor intersects trigger rectangle; conservative no diagonal corner cutting",
+    "method": "8-connected compiled allowlist with a conservative clear feet disk; anchors are derived from the supplied colour components",
     "central_seed": [
-      687,
-      698
+      3878,
+      2048
     ],
     "results": {
       "Weapon Shop": {
         "reachable": true,
-        "reachable_anchor_pixels": 200,
+        "reachable_anchor_pixels": 37000,
         "example_anchor": [
-          358,
-          430
+          2071,
+          2009
         ]
       },
       "Guild": {
         "reachable": true,
-        "reachable_anchor_pixels": 220,
+        "reachable_anchor_pixels": 45704,
         "example_anchor": [
-          665,
-          353
+          3663,
+          1746
         ]
       },
       "Hospital / Clinic": {
         "reachable": true,
-        "reachable_anchor_pixels": 181,
+        "reachable_anchor_pixels": 37018,
         "example_anchor": [
-          996,
-          433
+          5281,
+          2010
         ]
       },
       "Item / General Store": {
         "reachable": true,
-        "reachable_anchor_pixels": 200,
+        "reachable_anchor_pixels": 39013,
         "example_anchor": [
-          358,
-          769
+          2049,
+          3164
         ]
       },
       "Inn": {
         "reachable": true,
-        "reachable_anchor_pixels": 160,
+        "reachable_anchor_pixels": 34189,
         "example_anchor": [
-          984,
-          772
+          5262,
+          3160
         ]
       },
       "East exit": {
         "reachable": true,
-        "reachable_anchor_pixels": 253,
+        "reachable_anchor_pixels": 44812,
         "example_anchor": [
-          1180,
-          518
+          6067,
+          2092
         ]
       }
     }
   },
-  "ambiguities": [
-    "Painterly/soft curb and vegetation boundaries have several pixels of visual uncertainty; manually traced, not pixel-perfect.",
-    "Flattened silhouettes of bottom shop/inn and vegetation remain blocked; hidden ground is not inferred.",
-    "East path edge is soft and irregular; rectangle spans outgoing path and includes blocked edge pixels. Trigger activates only for a valid feet anchor.",
-    "Guild steps are treated as traversable exposed stone; threshold is at the top landing."
-  ],
+  "legacy_sources": {
+    "old_main_town_masks": "disabled",
+    "old_deck_objects": "disabled",
+    "old_trigger_coordinates": "not canonical"
+  },
   "qa": {
     "all_image_dimensions": [
-      1536,
-      1152
+      7680,
+      4320
     ],
-    "binary_masks": true,
-    "walkable_solid_overlap_pixels": 0,
+    "binary_walkable_mask": true,
+    "jpeg_edge_bridge_pixels": 21810,
+    "compiled_trigger_values": {
+      "weapon-shop": 1,
+      "guild": 2,
+      "hospital-clinic": 3,
+      "item-general-store": 4,
+      "inn": 5,
+      "east-exit": 6,
+      "deck-configuration": 7
+    },
     "six_destinations_reachable": true,
-    "manual_visual_review_required_for_pixel_exactness": true
+    "pink_interaction_present": true
   }
 }

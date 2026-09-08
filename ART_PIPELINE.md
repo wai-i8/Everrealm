@@ -21,11 +21,11 @@
 
 ## Main Town flattened navigation package
 
-主城使用 flattened master art；建築、道路、城牆、植被及其他環境視覺已經烘焙入背景，唔存在 foreground／occlusion navigation layer。導航 geometry 由 `assets/main-town/main-town-navigation.json`、walkable allowlist、supplemental collision mask 同 trigger mask 共同組成 authored package；review overlay 只供人工 QA，唔係 runtime collision source。
+主城使用一對同尺寸、同座標空間嘅 flattened scene 圖：`assets/main-town/maintown.jpg` 係唯一玩家可見 master art；`assets/main-town/maintown_walkable.jpg` 係唯一 navigation／interaction authoring source。兩張供應圖固定為 `7680 × 4320` 原圖 pixel space，唔存在另外一層 foreground／occlusion navigation art。
 
-PNG mask 係 development-time authoring input，由 `tools/generate-main-town-navigation.js` deterministic 轉成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔應載入主城 mask PNG、使用 Canvas／OffscreenCanvas pixel readback，亦唔應由 bitmap alpha 或視覺物件自動推導 collision。walkable mask 係完整 allowlist，collision mask 唔係其 inverse，trigger mask 亦唔會令普通移動位置自動變成 walkable。
+`maintown_walkable.jpg` 以白色定義 walkable ground、青色定義六個固定 transition、粉紅色定義城門 DECK configuration interaction；其他顏色全部 blocked。`tools/generate-main-town-navigation.js`（由 `tools/compile-main-town-navigation.py` 執行 JPG 分類）將 pair deterministic 編譯成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔載入 authoring JPG、唔使用 Canvas／OffscreenCanvas pixel readback，亦唔由 visible art alpha、舊 bitmap 或物件位置推導 collision。
 
-主城玩家定位採用 shared exploration feet pivot；`feet_radius_px` 由 authored package 提供，目前係 3 px。視覺 sprite 可以伸入建築上方，但 feet disk 必須由 shared navigation resolver 驗證。pathfinding、line-clear、實際 movement substeps 同正常 arrival validation 都使用同一 resolver；navigation 缺失／驗證失敗時 default blocked。
+主城玩家定位採用 shared exploration feet pivot；`feet_radius_px` 由 authored package 提供，目前係 3 px。視覺 sprite 可以伸入建築上方，但 feet disk 必須由 shared navigation resolver 驗證。pathfinding、line-clear、實際 movement substeps、六個 transition arrival 同粉紅 deck region interaction 都使用同一 resolver；navigation 缺失／驗證失敗時 default blocked。舊 Main Town masks、deck sign／bitmap 同舊 trigger coordinates 不再係 canonical source。
 
 ## Flattened interior scene contract
 

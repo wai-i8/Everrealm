@@ -38,7 +38,7 @@
 - 點擊左上角色狀態可開啟狀態欄，顯示職業、等級、XP／HP progress、攻擊、防禦、戰棋移動及 DECK；不顯示行動速度、探索移速或暴擊率。
 - 所有可互動 NPC 頭頂置中顯示名稱；任務問號／感嘆號若存在，必須以 NPC 身體中心線定位。不得把名稱燒進角色圖，避免縮放、換圖或四方向動畫後失去清晰度。角色圖點樣裁切、對齊及以 semantic anchor 維持中心線，統一依 `ART_PIPELINE.md`。flattened interior 嘅 NPC 視覺已烘焙入 master art，runtime 只顯示一個 semantic NPC entity，唔重畫角色。
 - NPC 的法杖、槌、寵物、托盤等外伸裝飾不得令人物世界座標、名稱或任務標記漂移；具體 atlas／anchor 實作規格見 `ART_PIPELINE.md`。正式 flattened interior 不顯示 talk／互動菱形或 transition marker。
-- 公會、裝備店、療癒所、雜貨舖及旅店嘅入口使用可見 master art 對應嘅 semantic physical door；門區只要在鏡頭內就可以直接點擊／按住行入，但唔常駐繪製 marker 或入口 label。建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體 flattened-scene contract 見 `ART_PIPELINE.md`，transition geometry 見 `docs/MAP_SYSTEM.md`。
+- 公會、裝備店、療癒所、雜貨舖及旅店嘅入口使用可見 master art 對應嘅 semantic physical door；門區只要在鏡頭內就可以直接點擊／按住行入，但唔常駐繪製 marker 或入口 label。Flattened scene 可以由「正式顯示圖 + 配對 authoring 圖」定義；authoring 圖擁有 walkability、transition 同 special interaction geometry，建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體 contract 見 `ART_PIPELINE.md`，transition geometry 見 `docs/MAP_SYSTEM.md`。
 - 玩家、普通怪物及 Familiar 正式移動時都要有四方向行走動畫；探索地圖唔接受靜止 sprite 純平移。普通怪物接近斜角時保留原軸向，改向需要短暫確認及冷卻，避免碰牆或微小路徑修正造成左右高速閃爍。具體 28-frame locomotion atlas、anchor、repack 及 animation QA 規格見 `ART_PIPELINE.md`。
 - 探索地圖不顯示怪物血條；只有戰鬥場景在角色腳下顯示血條。
 - 公會任務只可在公會開啟；商店只可在裝備店開啟。一般物品、狀態、裝備及技能可由左側選單隨時查看。
@@ -85,8 +85,8 @@
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
-- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城東門旁的「戰技面板台」編輯；管理流程保留喺該面板台。空槽顯示簡潔嘅「空」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
-- 城門「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
+- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽顯示簡潔嘅「空」。初始 `3` 格；解除北岸封印擴至 `4` 格、公會達銀燈階級擴至 `5` 格、擊敗吞燈獸擴至 `6` 格。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 城門粉紅色 authoring region 嘅「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。粉紅區唔係 NPC、對話點或出口；舊 deck sign／bitmap 不再係 canonical trigger。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
 - 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；已有且仍然需要的個人角色身份只保留在對話層，不另 invent 新名字。主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
 - 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。對話使用獨立 anchored gameplay overlay：深海軍藍、金色裝飾、角色肖像作輔助身份、說話者角色名／功能職稱清楚整合，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
 - 戰士與格鬥士使用獨立技能分支；轉職系統未實作前，不允許跨職業學習或裝設。

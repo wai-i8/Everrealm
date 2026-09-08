@@ -67,9 +67,9 @@
 
 五個主城服務 interior（公會、療癒所、旅店、裝備店、雜貨舖）先按房間用途，再按玩家動線 author：入口 → 主要服務點 → 對應功能區。櫃台／服務 NPC 必須形成可理解的工作組；牆邊優先放置書架、貨架、櫃與儲物，中央地面只保留有用途的候位、展示、治療或休憩家具。主要行走路線要保持清楚，不以無關 props 填滿空位；每張 interior 的功能區語意與 NPC 角色由對應 `docs/maps/*.md` 及 owning runtime map 保存。
 
-### 2.2 Flattened interior navigation package
+### 2.2 Flattened scene navigation package
 
-Hospital、Guild、Equipment Shop、Inn 同 Item／General Store 使用同一套 flattened-scene contract。每張圖有一對同尺寸 `master`／`walkable` PNG：master 係唯一玩家可見環境，walkable 只係 development authoring source，永遠唔喺 browser render。現行 pair 如下：
+Hospital、Guild、Equipment Shop、Inn、Item／General Store 同 Main Town 使用同一套 flattened-scene contract。每張圖至少有一對同尺寸 `master`／`authoring` 圖：master 係唯一玩家可見環境，authoring 只係 development navigation／interaction source，永遠唔喺 browser render。室內仍使用 PNG pair；Main Town 使用供應嘅 JPG pair，兩者都必須保留原圖 pixel coordinate space。
 
 | map | visible master | authoring navigation | generated runtime |
 | --- | --- | --- | --- |
@@ -78,10 +78,11 @@ Hospital、Guild、Equipment Shop、Inn 同 Item／General Store 使用同一套
 | `inn` | `assets/inn/inn.png` | `assets/inn/inn_walkable.png` | `map/inn-navigation.generated.js` |
 | `general-store` | `assets/item/item.png` | `assets/item/item_walkable.png` | `map/item-navigation.generated.js` |
 | `guild` | `assets/guild/guild.png` | `assets/guild/guild_walkable.png` | `map/guild-navigation.generated.js` |
+| `world` Main Town | `assets/main-town/maintown.jpg` | `assets/main-town/maintown_walkable.jpg` | `map/main-town-navigation.generated.js` |
 
-所有 pair 必須保持 `1672 × 941` 原圖 pixel coordinate space。`tools/generate-flattened-navigation.js` 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。generator 會輸出 hash、connected-component bbox／centroid／feet anchor，同 white／magenta／cyan RLE mask；generated file 明確標示不可手改。
+室內 pair 必須保持 `1672 × 941` 原圖 pixel coordinate space。Main Town pair 必須保持 `7680 × 4320`。室內 generator 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。Main Town JPG compiler 以 supplied authoring image 的近色分類：白色係 walkable、六個青色 component 係固定 transition、粉紅色 `[255,0,255]` component 係 deck configuration interaction，其他像素 blocked。兩者都輸出 hash、connected-component bbox／centroid／feet anchor 同 RLE runtime mask；generated file 明確標示不可手改。
 
-所有 flattened interior 共享 `feet_radius_px: 3`。feet disk 必須完全落喺 white 或 cyan，唔可以撞入 magenta；越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、NPC authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。每張 interior 只保留一個最重要嘅核心服務／接待 NPC；家具同裝飾只保留語意 zone metadata，若已烘焙入 master art 就 `render: false`、`solid: false`。
+所有 flattened scene 共享 `feet_radius_px: 3`。feet disk 必須完全落喺 compiled authored allowlist；室內係 white／cyan 並避開 magenta，Main Town 係 white／cyan／pink 及 compiler 只在 painted region 邊界做有限 JPEG seam normalization。越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。Main Town click-to-move 使用 1px line-clear sampling 同四向 waypoints，配合 runtime X→Y collision substeps，避免跨過 authoring mask 嘅單像素 blocked edge。每張 interior 只保留一個最重要嘅核心服務／接待 NPC；家具同裝飾只保留語意 zone metadata，若已烘焙入 master art 就 `render: false`、`solid: false`。
 
 門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。
 
@@ -119,9 +120,9 @@ Hospital、Guild、Equipment Shop、Inn 同 Item／General Store 使用同一套
 
 主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬核心 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口只保留 semantic physical-door contract，唔再畫 marker。
 
-主城入口與東側 passage 由 `assets/main-town/main-town-navigation.json` 及配套 mask authored；`maps/main-town.js` 將 exact trigger／threshold／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable mask 係完整 allowlist，collision mask 只作 supplemental solid objects；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 collision inversion 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
+主城入口、東側 passage 同粉紅 deck interaction 由 `assets/main-town/maintown_walkable.jpg` authored；`assets/main-town/maintown.jpg` 只係顯示圖。`maps/main-town.js` 將 exact colour-component rectangle／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable allowlist 係白色主路網加 authored cyan／pink interaction regions；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 visible art 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
 
-主城 navigation package 嘅 PNG 只係 authored inputs，由 development-time generator 編譯成 `map/main-town-navigation.generated.js`。零 build／`file://` browser runtime 直接同步使用 generated data，唔會以 Canvas、OffscreenCanvas、`fetch()` 或 XHR 讀取 PNG／JSON。`map/main-town-navigation.js` 擁有唯一主城 walkability resolver：walkable allowlist 係完整白色可行走來源，collision mask 只作 supplemental solid objects，trigger mask 只作 transition／interaction metadata；任何未明確 authored 嘅位置都 blocked。runtime data 缺失或初始化失敗時必須 fail closed，唔得 fallback 到舊 grass／tile／house collision。
+主城 navigation package 由 JPG authoring input 經 `tools/generate-main-town-navigation.js`／`tools/compile-main-town-navigation.py` 編譯成 `map/main-town-navigation.generated.js`。零 build／`file://` browser runtime 直接同步使用 generated data，唔會以 Canvas、OffscreenCanvas、`fetch()` 或 XHR 讀取 JPG／JSON。`map/main-town-navigation.js` 擁有唯一主城 walkability／region resolver：白色係完整可行走來源，六個 cyan region 係固定 transition，pink region 係 deck configuration；任何未明確 authored 嘅位置都 blocked。runtime data 缺失或初始化失敗時必須 fail closed，唔得 fallback 到舊 grass／tile／house collision。
 
 ### 3.2 山地野外
 

@@ -55,7 +55,10 @@ test("click-only exploration plans a collision-aware path and carries no mobile 
 
 test("flattened town art, exact east passage and DECK console are wired", () => {
   assert.match(mainTownSource, /harbour-gate-deck-console/);
-  assert.match(mainTownSource, /id:\s*"harbour-gate-deck-console"[\s\S]*?x:\s*1110,\s*y:\s*598/);
+  assert.match(mainTownSource, /navigationRegion:\s*deck\.region_id/);
+  assert.match(mainTownSource, /canonicalSource:\s*AUTHORING_IMAGE/);
+  assert.match(mainTownSource, /render:\s*false/);
+  assert.match(mainTownSource, /ART_BACKGROUND = "assets\/main-town\/maintown\.jpg"/);
   assert.match(mainTownSource, /authoredAnchor\("East exit"\)/);
   assert.match(mainTownSource, /rendering:\s*"flattened"/);
   assert.match(mainTownSource, /navigationPackageId/);

@@ -14,12 +14,16 @@ test("final main-town navigation package is complete and hash-locked", () => {
   const packagePath = path.join(root, "assets", "main-town", "main-town-navigation.json");
   const packageData = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   assert.deepEqual(packageData.source, MainTownNavigation.data.source);
-  for (const filename of ["main-town-final.png", "main-town-walkable-mask.png", "main-town-collision-mask.png", "main-town-trigger-mask.png", "main-town-navigation-review.png"]) {
+  for (const filename of ["maintown.jpg", "maintown_walkable.jpg"]) {
     const filePath = path.join(root, "assets", "main-town", filename);
     assert.equal(fs.existsSync(filePath), true, `${filename} should be present in the authored package`);
   }
-  const masterArt = fs.readFileSync(path.join(root, "assets", "main-town", "main-town-final.png"));
+  const masterArt = fs.readFileSync(path.join(root, "assets", "main-town", "maintown.jpg"));
+  const authoringArt = fs.readFileSync(path.join(root, "assets", "main-town", "maintown_walkable.jpg"));
   assert.equal(crypto.createHash("sha256").update(masterArt).digest("hex"), packageData.source.sha256);
+  assert.equal(crypto.createHash("sha256").update(authoringArt).digest("hex"), packageData.authoring.sha256);
+  assert.deepEqual([packageData.source.width, packageData.source.height], [7680, 4320]);
+  assert.deepEqual([packageData.authoring.width, packageData.authoring.height], [7680, 4320]);
   assert.deepEqual(packageData.qa.all_image_dimensions, [packageData.source.width, packageData.source.height]);
   assert.equal(packageData.qa.six_destinations_reachable, true);
 });
@@ -81,7 +85,7 @@ test("authored bitmap doorway triggers resolve to physical doors", () => {
     assert.deepEqual(house.doorway.trigger, expectedRect);
     assert.deepEqual(portal.entrance.trigger, expectedRect);
     assert.deepEqual(portal.entrance.threshold, expectedThreshold);
-    assert.deepEqual(portal.entrance.approachPoint, { x: authored.rectangle.x, y: MainTownNavigation.data.connectivity.results[triggerName].example_anchor[1] });
+    assert.deepEqual(portal.entrance.approachPoint, { x: MainTownNavigation.data.connectivity.results[triggerName].example_anchor[0], y: MainTownNavigation.data.connectivity.results[triggerName].example_anchor[1] });
     assert.deepEqual({ x: portal.x, y: portal.y }, { x: authored.doorway_center_x, y: authored.rectangle.y + authored.rectangle.height / 2 });
     const link = maps.world.transitionLinks.find((candidate) => candidate.portalId === portal.id);
     assert.ok(link?.returnSpawn, `${portal.id} should declare an exterior return spawn`);
@@ -94,6 +98,18 @@ test("authored bitmap doorway triggers resolve to physical doors", () => {
   assert.doesNotMatch(game, /syncHouseDoorAnchor|function townDoor|useTownDoor|overworld\.portals =|doorAction/);
   assert.doesNotMatch(game, /door\.y\s*\+\s*34/);
   assert.doesNotMatch(fs.readFileSync(path.resolve(__dirname, "..", "map", "map-transitions.js"), "utf8"), /door\.y\s*\+\s*34/);
+});
+
+test("the pink deck region is the only Main Town deck interaction source", () => {
+  const maps = Registry.createMapRegistry();
+  const deck = maps.world.boards.find((item) => item.id === "harbour-gate-deck-console");
+  assert.ok(deck);
+  assert.equal(deck.boardId, "deck-loadout");
+  assert.equal(deck.render, false);
+  assert.equal(deck.navigationRegion, "deck-configuration");
+  assert.equal(deck.canonicalSource, "assets/main-town/maintown_walkable.jpg");
+  assert.equal(maps.world.staticObjects.some((item) => item.id === deck.id), false, "the old renderable board object must not be added to flattened art");
+  assert.equal(MainTownNavigation.interactionAtWorldPoint({ x: deck.x, y: deck.y }), deck.id);
 });
 
 test("legacy portal objects have explicit physical or magical semantics", () => {

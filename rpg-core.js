@@ -207,7 +207,10 @@
     const customWalkable = typeof options.isWalkable === "function" ? options.isWalkable : null;
     const bounds = normalizePathBounds(options.bounds, start, goal, colliders, cellSize, radius, options.searchPadding);
     const maxVisited = Math.max(1, Math.floor(Number(options.maxVisited) || 20000));
-    const sampleStep = Math.max(2, cellSize / 3);
+    const requestedSampleStep = Number(options.sampleStep);
+    const sampleStep = Number.isFinite(requestedSampleStep)
+      ? Math.max(1, requestedSampleStep)
+      : Math.max(2, cellSize / 3);
     const nearestReachable = options.nearestReachable === true;
 
     function canStand(point) {
