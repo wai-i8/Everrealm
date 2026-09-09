@@ -1,4 +1,4 @@
-﻿const test = require("node:test");
+const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,33 +12,31 @@ const worldSource = fs.readFileSync(path.join(rpgRoot, "world.js"), "utf8");
 const mainTownSource = fs.readFileSync(path.join(rpgRoot, "maps", "main-town.js"), "utf8");
 const transitionsSource = fs.readFileSync(path.join(rpgRoot, "map", "map-transitions.js"), "utf8");
 
-test("exploration shell keeps character tools left and reserves the right for the minimap", () => {
+test("exploration shell keeps the compact function menu left and reserves the right for the minimap", () => {
   const sidebar = html.match(/<aside id="exploreSidebar"[\s\S]*?<\/aside>/)?.[0] || "";
-  assert.match(sidebar, /id="sidebarToggle"/);
-  assert.match(sidebar, /id="playerHud"/);
-  assert.match(sidebar, /id="inventoryButton"/);
-  assert.match(sidebar, /id="skillTreeButton"/);
-  assert.match(sidebar, /id="commissionHud"/);
+  for (const id of ["sidebarToggle", "statusButton", "inventoryButton", "deckButton", "skillTreeButton", "zoomControl", "soundButton"]) {
+    assert.match(sidebar, new RegExp(`id="${id}"`));
+  }
   assert.match(html, /<aside class="minimap-wrap/);
-  assert.match(css, /\.explore-sidebar\s*\{[\s\S]*?left:\s*\.8rem/);
-  assert.match(css, /\.minimap-wrap\s*\{[^}]*right:\s*\.8rem/);
-  assert.match(css, /\.explore-sidebar\.is-collapsed\s*\{[\s\S]*?overflow:\s*visible/);
+  assert.doesNotMatch(sidebar, /ui-sidebar-toggle-v1\.png/);
+  assert.doesNotMatch(sidebar, /explore-menu-icon/);
+  assert.doesNotMatch(sidebar, /<small>(STATUS|I · ITEMS|DECK|L · SKILLS)/);
+  assert.match(css, /#exploreSidebar \.sidebar-toggle\s*\{[\s\S]*?clip-path:\s*polygon\(0 0,100% 0,0 100%\)/);
+  assert.match(css, /#exploreSidebar\.is-collapsed[\s\S]*?overflow:\s*visible/);
   assert.match(game, /HUD_COLLAPSED_KEY = "everrealm-hud-collapsed"/);
   assert.match(game, /setHudCollapsed\(!hudCollapsed\)/);
+  assert.match(game, /soundButton"\)\.addEventListener\("click"/);
 });
 
-test("expanded exploration sidebar is structurally recomposed into hierarchy zones", () => {
+test("expanded exploration sidebar is summary-free and text-first", () => {
   const sidebar = html.match(/<aside id="exploreSidebar"[\s\S]*?<\/aside>/)?.[0] || "";
-  for (const zone of ["sidebar-character", "sidebar-quick-info", "sidebar-primary", "sidebar-secondary", "sidebar-quest"]) {
-    assert.match(sidebar, new RegExp(`class="[^"]*${zone}`));
-  }
-  assert.match(sidebar, /class="weapon-summary"/);
-  assert.match(sidebar, /class="sidebar-sound-button round-button"/);
-  assert.doesNotMatch(sidebar, /sidebar-utility-buttons/);
-  assert.doesNotMatch(sidebar, /resourceHud[^>]*hud-card/);
-  assert.match(css, /#exploreSidebar \.sidebar-primary\.explore-function-menu/);
-  assert.match(css, /#exploreSidebar \.sidebar-secondary/);
-  assert.match(css, /#exploreSidebar \.sidebar-quest\.quest-hud/);
+  assert.match(sidebar, /class="[^"]*sidebar-primary/);
+  assert.match(sidebar, /class="[^"]*sidebar-secondary/);
+  for (const label of ["狀態", "物品欄", "戰技面板", "技能樹"]) assert.match(sidebar, new RegExp(`>${label}<`));
+  assert.match(css, /#exploreSidebar :is\(\.sidebar-character,\.sidebar-quick-info,\.sidebar-quest\)[\s\S]*?display:\s*none/);
+  assert.match(css, /#exploreSidebar \.sidebar-primary :is\(\.explore-menu-icon,\.explore-menu-copy small,\.menu-badge\)[\s\S]*?display:\s*none/);
+  assert.match(css, /\.game-shell \{[\s\S]*?padding:\s*0;/);
+  assert.match(css, /\.game-stage \{[\s\S]*?margin:\s*0;[\s\S]*?border:\s*0;/);
   assert.match(css, /#exploreSidebar\.is-collapsed[\s\S]*?background:\s*transparent/);
 });
 

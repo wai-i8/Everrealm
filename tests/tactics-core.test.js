@@ -124,15 +124,15 @@ test("explicit movement commands preserve revisits and paid in-place footwork", 
   ];
   const schedule = Tactics.movementCommandEvents(start, commands, { turnCost: .5, initialFacing: "right" });
   assert.deepEqual(schedule.path, [start, { x: 2, y: 1 }, { x: 1, y: 1 }]);
-  assert.equal(schedule.totalCost, 3.5, "1 step + paid turn/back-step + two half-step footwork commands");
+  assert.equal(schedule.totalCost, 4, "1 step + one-point 180 turn/back-step + two half-step footwork commands");
   assert.deepEqual(schedule.events.map((event) => [event.type, event.duration]), [
     ["move", 1],
-    ["turn", .5],
+    ["turn", 1],
     ["move", 1],
     ["turn", .5],
     ["turn", .5],
   ]);
-  assert.equal(Tactics.movementCommandCost(start, commands, { turnCost: .5, initialFacing: "right" }), 3.5);
+  assert.equal(Tactics.movementCommandCost(start, commands, { turnCost: .5, initialFacing: "right" }), 4);
 });
 
 test("timed movement accepts explicit command schedules instead of collapsing revisits", () => {
@@ -151,7 +151,7 @@ test("timed movement accepts explicit command schedules instead of collapsing re
     turnCost: .5,
   });
   assert.deepEqual(result.unitResults.hero.completedPath, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }]);
-  assert.equal(result.unitResults.hero.elapsedCost, 2.5);
+  assert.equal(result.unitResults.hero.elapsedCost, 3);
   assert.equal(result.unitResults.hero.facing, "left");
 });
 
@@ -519,4 +519,11 @@ test("arc trajectory interpolates authored terrain elevation and remains determi
     Tactics.arcTrajectoryHeight(grid, { x: 0, y: 0 }, { x: 3, y: 0 }, 0, 3, 1.5),
     Tactics.arcTrajectoryHeight(grid, { x: 0, y: 0 }, { x: 3, y: 0 }, 0, 3, 1.5),
   );
+});
+
+
+test("180 degree turns cost two quarter-turns while same-facing footwork still costs one", () => {
+  assert.equal(Tactics.facingTurnCost("up", "down", .5), 1);
+  assert.equal(Tactics.facingTurnCost("up", "right", .5), .5);
+  assert.equal(Tactics.facingTurnCost("up", "up", .5, true), .5);
 });

@@ -15,6 +15,13 @@
     stylesheet.href = "ui-system.css";
     document.head.append(stylesheet);
   }
+  if (!document.getElementById("inventoryMinimalStyles")) {
+    const stylesheet = document.createElement("link");
+    stylesheet.id = "inventoryMinimalStyles";
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = "inventory-minimal.css";
+    document.head.append(stylesheet);
+  }
 
   const Core = window.LanternCore;
   const World = window.LanternWorld;
@@ -74,6 +81,7 @@
   const exploreSidebar = document.getElementById("exploreSidebar");
   const sidebarToggle = document.getElementById("sidebarToggle");
   const statusButton = document.getElementById("statusButton");
+  const missionButton = document.getElementById("missionButton");
   const inventoryButton = document.getElementById("inventoryButton");
   const deckButton = document.getElementById("deckButton");
   const skillTreeButton = document.getElementById("skillTreeButton");
@@ -103,13 +111,13 @@
     round: document.getElementById("battleRoundLabel"),
     turn: document.getElementById("battleTurnLabel"),
     phase: document.getElementById("battlePhaseLabel"),
-    unitRole: document.getElementById("selectedUnitRole"),
     unitLevel: document.getElementById("selectedUnitLevel"),
     unitName: document.getElementById("selectedUnitName"),
     hpFill: document.getElementById("selectedUnitHpFill"),
     hpText: document.getElementById("selectedUnitHpText"),
+    apFill: document.getElementById("selectedUnitApFill"),
+    apText: document.getElementById("selectedUnitApText"),
     statuses: document.getElementById("selectedUnitStatuses"),
-    order: document.getElementById("battleTurnOrderList"),
     potionCount: document.getElementById("battlePotionCount"),
     hint: document.getElementById("battleHint"),
   };
@@ -194,6 +202,7 @@
   const EXPLORE_HOLD_DELAY_MS = 500;
   const EXPLORE_RETARGET_INTERVAL_MS = 150;
   let explorePointerGesture = null;
+  let exploreHoverEntityId = null;
   let pendingClickInteractionId = null;
   let pendingManualSkillId = null;
   let pendingSkillDetailId = null;
@@ -202,7 +211,7 @@
   let inventoryCategory = "all";
   let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
-  const FACILITY_TABS = Object.freeze(["status", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
+  const FACILITY_TABS = Object.freeze(["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
   // Native-world zooms preserve the pre-migration wide-screen field of view:
   // 1.48 * { .78, 1, 1.22 } * .4 = the constants below. This is a completed
   // unit conversion, not a runtime map/migration scale.
@@ -276,6 +285,29 @@
     joint_bracers: 7,
     barefoot_guard: 6,
   });
+  const FIGHTER_GUILD_BOOK_RANKS = new Map(
+    (window.LanternFighterSkillData?.skills || []).map((sourceSkill) => {
+      const ranks = (sourceSkill.original_reference?.acquisition?.guild_reward_books || [])
+        .map((entry) => Number(entry?.star_value))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      return [sourceSkill.id, ranks];
+    })
+  );
+
+  function fighterGuildBookRanks(skillOrId) {
+    const id = typeof skillOrId === "string" ? skillOrId : skillOrId?.id;
+    return id ? (FIGHTER_GUILD_BOOK_RANKS.get(id) || []) : [];
+  }
+
+  function fighterGuildBookRankText(skillOrId) {
+    const ranks = fighterGuildBookRanks(skillOrId);
+    if (!ranks.length) {
+      const fallbackStar = typeof skillOrId === "object" ? skillOrId?.star : null;
+      return fallbackStar ? Skills.formatSkillBookRank(fallbackStar) : "";
+    }
+    return ranks.map((star) => Skills.formatSkillBookRank(star)).join("／");
+  }
+
   let facilityTab = "bag";
   let facilityContext = "portable";
   let pendingLevelUps = 0;
@@ -301,6 +333,42 @@
   let battleToken = 0;
   let soundEnabled = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY) !== "off";
   const bgm = Bgm.createBgmManager({ enabled: soundEnabled });
+  const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3") : null;
+  // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
+  // rendered with its native aspect ratio: resizing is allowed, stretching is
+  // not. Low cover deliberately has four visual variants and picks one stable
+  // variant per battle so repeated encounters do not always show the same prop.
+  const battleMountainTreeImage = typeof Image === "function" ? new Image() : null;
+  if (battleMountainTreeImage) battleMountainTreeImage.src = "assets/battle/mountain/battle-tree-v1.png";
+  const battleMountainLowCoverArt = [
+    { id: "rock-cluster", src: "assets/battle/mountain/battle-low-rock-cluster-v1.png", widthScale: 1.02, anchorY: .93 },
+    { id: "rock-single", src: "assets/battle/mountain/battle-low-rock-single-v1.png", widthScale: .94, anchorY: .93 },
+    { id: "grass-tall", src: "assets/battle/mountain/battle-low-grass-tall-v1.png", widthScale: 1.26, anchorY: .91 },
+    { id: "grass-round", src: "assets/battle/mountain/battle-low-grass-round-v1.png", widthScale: 1.18, anchorY: .91 },
+  ].map((entry) => {
+    const image = typeof Image === "function" ? new Image() : null;
+    if (image) image.src = entry.src;
+    return { ...entry, image };
+  });
+  if (battleBgmAudio) {
+    battleBgmAudio.loop = true;
+    battleBgmAudio.preload = "auto";
+    battleBgmAudio.volume = .66;
+  }
+  function startBattleBgm() {
+    bgm.setEnabled(false);
+    if (!battleBgmAudio || !soundEnabled) return;
+    try { battleBgmAudio.currentTime = 0; } catch (_) {}
+    battleBgmAudio.play().catch(() => {});
+  }
+  function stopBattleBgm() {
+    if (battleBgmAudio) {
+      battleBgmAudio.pause();
+      try { battleBgmAudio.currentTime = 0; } catch (_) {}
+    }
+    bgm.setEnabled(soundEnabled);
+    if (soundEnabled) bgm.setMap(currentMapId);
+  }
   let exploreZoomLevel = Object.hasOwn(EXPLORE_ZOOM_SCALES, readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY))
     ? readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY)
     : "mid";
@@ -1716,7 +1784,7 @@
     if (entity.kind === "portal") return entity.interactionMode === "door"
       ? (entity.prompt || `進入${entity.name}`)
       : (entity.prompt || `前往${entity.name}`);
-    if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "設定戰技面板" : "查看公會委託";
+    if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "戰技面板" : "查看公會委託";
     return "睇下寫咩";
   }
 
@@ -2176,6 +2244,54 @@
     if (gear) gear.textContent = `${weapon}／${upperBody}${lowerBody ? `／${lowerBody}` : ""}`;
   }
 
+  function guildCommissionObjectiveText(commission) {
+    if (!commission) return "";
+    return commission.type === "hunt"
+      ? `討伐${contractTargetName(commission.objective.monster_id)}`
+      : `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
+  }
+
+  function guildCommissionProgressText(commission, state = guildCommissionState) {
+    if (!commission) return "";
+    return commission.type === "hunt"
+      ? `${state.progress} / ${commission.objective.count}`
+      : state.deliveryCompleted ? "已送達" : "尚未送達";
+  }
+
+  function renderMissionFacility() {
+    const active = activeGuildCommission();
+    if (!active) {
+      facilityContent.innerHTML = `
+        <section class="mission-view is-empty" aria-label="目前任務">
+          <div class="mission-empty-mark" aria-hidden="true">◇</div>
+          <strong>目前沒有進行中的任務</strong>
+        </section>`;
+      setFacilityFooter("");
+      return;
+    }
+    const ready = guildCommissionState.status === "ready_to_report";
+    const progressText = guildCommissionProgressText(active);
+    const progressMax = active.type === "hunt" ? active.objective.count : 1;
+    const progressValue = active.type === "hunt"
+      ? Math.min(progressMax, guildCommissionState.progress)
+      : guildCommissionState.deliveryCompleted ? 1 : 0;
+    const progressPercent = Math.min(100, progressValue / Math.max(1, progressMax) * 100);
+    facilityContent.innerHTML = `
+      <section class="mission-view" aria-label="目前任務">
+        <article class="mission-card ${ready ? "is-ready" : ""}">
+          <div class="mission-card-heading">
+            <strong>${active.title}</strong>
+            <span>${ready ? "已完成" : "進行中"}</span>
+          </div>
+          <div class="mission-objective"><small>目標</small><strong>${guildCommissionObjectiveText(active)}</strong></div>
+          <div class="mission-progress-row"><small>進度</small><strong>${progressText}</strong></div>
+          <div class="mission-progress-bar" role="progressbar" aria-label="任務進度" aria-valuemin="0" aria-valuemax="${progressMax}" aria-valuenow="${progressValue}"><i style="width:${progressPercent}%"></i></div>
+          ${ready ? '<p class="mission-report-note">返回公會回報</p>' : ""}
+        </article>
+      </section>`;
+    setFacilityFooter("");
+  }
+
   function renderGuildFacility() {
     const atGuild = currentMapId === "guild";
     const active = activeGuildCommission();
@@ -2187,12 +2303,6 @@
     const abandonAction = active
       ? `<button class="facility-action-button is-quiet" type="button" data-facility-action="abandon" data-contract-id="${guildCommissionState.cycle}:${active.id}">放棄委託</button>`
       : "";
-    const objectiveText = (commission) => commission.type === "hunt"
-      ? `討伐${contractTargetName(commission.objective.monster_id)}`
-      : `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
-    const objectiveProgress = (commission, state) => commission.type === "hunt"
-      ? `${state.progress} / ${commission.objective.count}`
-      : state.deliveryCompleted ? "已送達" : "尚未送達";
     const activeHtml = active ? `
       <article class="facility-feature-card guild-commission-card ${guildCommissionState.status === "ready_to_report" ? "is-ready" : ""}">
         <div class="guild-commission-card-summary">
@@ -2200,9 +2310,9 @@
           <p>${active.description}</p>
         </div>
         <dl class="guild-commission-details">
-          <div data-field="objective"><dt>目標</dt><dd>${objectiveText(active)}</dd></div>
+          <div data-field="objective"><dt>目標</dt><dd>${guildCommissionObjectiveText(active)}</dd></div>
           <div data-field="recommendation"><dt>建議等級</dt><dd>Lv.${active.recommendedLevel}</dd></div>
-          <div data-field="progress"><dt>進度</dt><dd>${objectiveProgress(active, guildCommissionState)}</dd></div>
+          <div data-field="progress"><dt>進度</dt><dd>${guildCommissionProgressText(active, guildCommissionState)}</dd></div>
           <div data-field="reward"><dt>獎勵</dt><dd>${skillBookRewardText(active)}</dd></div>
         </dl>
         <div class="contract-progress" role="progressbar" aria-label="委託進度" aria-valuemin="0" aria-valuemax="${active.objective.count}" aria-valuenow="${Math.min(active.objective.count, guildCommissionState.progress)}"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
@@ -2214,7 +2324,7 @@
         <p>${offer.description}</p>
         <div class="facility-card-meta"><span>類型</span><b>${offer.type === "hunt" ? "討伐" : "送信"}</b></div>
         <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${offer.recommendedLevel}</b></div>
-        <div class="facility-card-meta"><span>${objectiveText(offer)}</span><b>${offer.type === "hunt" ? `0 / ${offer.objective.count}` : "尚未送達"}</b></div>
+        <div class="facility-card-meta"><span>${guildCommissionObjectiveText(offer)}</span><b>${offer.type === "hunt" ? `0 / ${offer.objective.count}` : "尚未送達"}</b></div>
         <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(offer)}</b></div>
         <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "接受委託" : "要返公會接受"}</button>
       </article>`).join("");
@@ -2266,6 +2376,10 @@
     const column = safeIndex % 4;
     const row = Math.floor(safeIndex / 4);
     return `<span class="atlas-icon ${atlas}-icon-atlas ${extraClass}" style="--atlas-x:${column * 33.333333}%;--atlas-y:${row * 33.333333}%" role="img" aria-label="${label}"></span>`;
+  }
+
+  function envelopeIconHtml(label = "公會委託獎勵信") {
+    return `<span class="inventory-envelope-icon" role="img" aria-label="${label}"><svg viewBox="0 0 64 52" aria-hidden="true" focusable="false"><rect x="6" y="9" width="52" height="34" rx="4"></rect><path d="M8 13 32 30 56 13"></path><path d="M8 40 25 25M56 40 39 25"></path><circle cx="32" cy="31" r="3.3"></circle></svg></span>`;
   }
 
   function materialDescription(id) {
@@ -2331,8 +2445,9 @@
       const pool = Skills.getFighterGuildBookPool(star);
       items.push({
         id: `skill_envelope_${star}`,
-        iconId: "skill_book_1",
-        name: `${Skills.formatSkillBookRank(star)} 技能書信封`,
+        iconType: "envelope",
+        name: "技能書信封",
+        rankLabel: Skills.formatSkillBookRank(star),
         category: "公會委託獎勵",
         categoryKey: "skillbook",
         quantity: count,
@@ -2349,6 +2464,7 @@
       items.push({
         id: `skill_book_${star}`,
         name: `${star === 1 ? "初階" : star === 2 ? "進階" : "奧義"}技能書`,
+        rankLabel: Skills.formatSkillBookRank(star),
         category: `${Skills.formatSkillBookRank(star)} 技能書`,
         categoryKey: "skillbook",
         quantity: count,
@@ -2367,7 +2483,8 @@
         id: `manual_${skill.id}`,
         iconId: "skill_book_1",
         name: `技能書：${skill.name}`,
-        category: `${skillStars(skill.star)} ${skill.classId === "fighter" ? "格鬥士" : "戰士"}技能書`,
+        rankLabel: skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star),
+        category: `${skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star)} 技能書`,
         categoryKey: "skillbook",
         quantity: count,
         description: skill.description,
@@ -2404,7 +2521,9 @@
     const selectedItem = visibleItems.find((item) => item.id === selectedInventoryItemId) || null;
     const iconMarkup = (item, extraClass = "") => item.equipment
       ? equipmentIconHtml(item.equipment, extraClass)
-      : atlasIconHtml("item", ITEM_ICON_INDEX[item.iconId || item.id] ?? 4, item.name, extraClass);
+      : item.iconType === "envelope"
+        ? envelopeIconHtml(item.name)
+        : atlasIconHtml("item", ITEM_ICON_INDEX[item.iconId || item.id] ?? 4, item.name, extraClass);
     const actionMarkup = (item) => {
       if (!item.action) return "";
       const attrs = [
@@ -2418,41 +2537,39 @@
     };
     const itemCards = visibleItems.map((item) => `<button class="inventory-grid-item ui-slot ${item.equipment ? "inventory-equipment-item" : ""} ${item.isEquipped ? "is-equipped" : ""} ${selectedItem?.id === item.id ? "is-selected" : ""}" type="button" data-item-id="${item.id}" data-facility-action="select-item" aria-pressed="${selectedItem?.id === item.id ? "true" : "false"}" aria-label="選取${item.name}，數量 ${item.quantity}">
       <div class="inventory-item-art">${iconMarkup(item)}<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b>${item.isEquipped ? '<span class="inventory-equipped-mark">已裝備</span>' : ""}</div>
-      <div class="inventory-item-copy"><small>${item.category}</small><strong>${item.name}</strong></div>
+      <div class="inventory-item-copy">${item.rankLabel ? `<small class="inventory-item-rank">${item.rankLabel}</small>` : ""}<strong>${item.name}</strong></div>
     </button>`).join("");
     const filters = Object.entries(categoryLabels).map(([key, label]) => `<button class="inventory-filter" type="button" data-facility-action="inventory-filter" data-inventory-category="${key}" aria-selected="${inventoryCategory === key ? "true" : "false"}">${label}</button>`).join("");
     const detail = selectedItem
       ? `<section class="inventory-selected-detail" aria-label="已選物品詳情" aria-live="polite">
           <div class="inventory-item-art">${iconMarkup(selectedItem)}<b class="inventory-quantity" aria-label="數量 ${selectedItem.quantity}">×${selectedItem.quantity}</b></div>
-          <div class="inventory-selected-copy"><small>${selectedItem.category}</small><strong>${selectedItem.name}</strong><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
+          <div class="inventory-selected-copy">${selectedItem.rankLabel ? `<small>${selectedItem.rankLabel}</small>` : ""}<strong>${selectedItem.name}</strong><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
         </section>`
-      : `<section class="inventory-selected-detail inventory-empty-selection" aria-label="已選物品詳情"><strong>選取一件物品查看詳情</strong><small>完整描述與可用動作會喺呢度顯示。</small></section>`;
+      : `<section class="inventory-selected-detail inventory-empty-selection" aria-label="已選物品詳情"><strong>選擇物品查看詳情</strong></section>`;
     const totalQuantity = visibleItems.reduce((total, item) => total + item.quantity, 0);
     facilityContent.innerHTML = `
       <section class="unified-inventory-layout" aria-label="角色裝備與隨身物品">
         <aside class="bag-loadout-panel" aria-label="角色目前裝備">
-          <div class="facility-section-heading bag-loadout-heading"><div><small>EQUIPPED</small><h3>阿巡目前裝備</h3></div><span>LV.${player.level}</span></div>
           <div class="paperdoll-board bag-paperdoll-board">
-            ${paperdollSlotHtml("head", "頭部", null, "♙")}
-            ${paperdollSlotHtml("weapon", playerClassId === "fighter" ? "拳套" : "武器", "weapon", "⚔")}
-            ${paperdollSlotHtml("upperBody", "上身", "upperBody", "♜")}
-            <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="220" aria-hidden="true"></canvas><strong>阿巡</strong><span>${playerClassId === "fighter" ? "格鬥士" : "戰士"} · LV.${player.level}</span></div>
-            ${paperdollSlotHtml("charm", "飾物", "charm", "✦")}
-            ${paperdollSlotHtml("lowerBody", "下身", "lowerBody", "♜")}
-            ${paperdollSlotHtml("hands", "手部", "hands", "◇")}
-            ${paperdollSlotHtml("feet", "腳部", "feet", "▽")}
+            ${paperdollSlotHtml("head", "頭部", "head")}
+            ${paperdollSlotHtml("upperBody", "上身", "upperBody")}
+            ${paperdollSlotHtml("lowerBody", "下身", "lowerBody")}
+            ${paperdollSlotHtml("feet", "腳部", "feet")}
+            <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="280" aria-hidden="true"></canvas><strong>時光之光</strong><span>LV.${player.level}</span></div>
+            ${paperdollSlotHtml("charm", "飾物", "charm")}
+            ${paperdollSlotHtml("hands", "手部", "hands")}
+            ${paperdollSlotHtml("weapon", "武器", "weapon")}
           </div>
           <dl class="bag-loadout-stats" aria-label="裝備後能力"><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>移動</dt><dd>${stats.moveRange} 格</dd></div></dl>
         </aside>
-          <section class="bag-items-panel" aria-label="隨身物品">
-          <div class="facility-section-heading inventory-heading"><div><small>ALL CARRIED ITEMS</small><h3>隨身物品</h3></div><span>${visibleItems.length} 種 · 合共 ${totalQuantity} 件</span></div>
+        <section class="bag-items-panel" aria-label="隨身物品">
           <div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div>
-          ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><span aria-hidden="true">◇</span><strong>呢類物品仲係空嘅</strong><small>切換分類或探索、討伐取得更多物品。</small></div>`}
+          ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><strong>呢類物品仲係空嘅</strong></div>`}
           ${detail}
         </section>
       </section>`;
     drawEquipmentPaperdoll();
-    setFacilityFooter(`<span aria-hidden="true">▣</span> 左邊係固定角色裝備區；右邊用緊湊格仔揀物品，再喺詳情區操作。`);
+    setFacilityFooter("");
   }
 
   function equipmentIconHtml(item, extraClass = "") {
@@ -2464,19 +2581,29 @@
     return atlasIconHtml("equipment", index, item?.name || "裝備", extraClass);
   }
 
-  function paperdollSlotHtml(visualSlot, label, equipmentSlot, placeholder) {
-    const item = equipmentSlot ? equipmentItem(equipped[equipmentSlot]) : null;
-    if (equipmentSlot === "lowerBody" && item && equipped.upperBody === item.id) return `<article class="paperdoll-slot is-occupied" data-paperdoll-slot="${visualSlot}">
-      <span class="paperdoll-placeholder" aria-hidden="true">↕</span><div><small>${label}</small><strong>由一件式裝備佔用</strong><span>${item.name}</span></div>
-    </article>`;
-    if (equipmentSlot && !item) return `<article class="paperdoll-slot is-empty" data-paperdoll-slot="${visualSlot}">
-      <span class="paperdoll-placeholder" aria-hidden="true">${placeholder}</span><div><small>${label}</small><strong>未裝備</strong><span>已開放，可以裝備對應物品</span></div>
-    </article>`;
-    if (!item) return `<article class="paperdoll-slot is-empty" data-paperdoll-slot="${visualSlot}">
-      <span class="paperdoll-placeholder" aria-hidden="true">${placeholder}</span><div><small>${label}</small><strong>未裝備</strong><span>目前未有呢類裝備</span></div>
-    </article>`;
-    return `<article class="paperdoll-slot is-filled" data-paperdoll-slot="${visualSlot}">
-      ${equipmentIconHtml(item, "paperdoll-slot-icon")}<div><small>${label}</small><strong>${item.name}</strong><span>${statText(item.stats)}</span></div>
+  function paperdollSlotIconHtml(visualSlot) {
+    const common = 'viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
+    const paths = {
+      head: '<circle cx="32" cy="24" r="11"></circle><path d="M17 53c2-10 8-16 15-16s13 6 15 16"></path><path d="M23 17c3-7 15-9 20 0"></path>',
+      upperBody: '<path d="M22 15 12 24l7 9 5-4v22h16V29l5 4 7-9-10-9-5 5H27z"></path><path d="M27 20h10"></path>',
+      lowerBody: '<path d="M21 14h22l-2 17-5 20h-8l-1-18-1 18h-8l-5-20z"></path><path d="M27 14v19M37 14v19"></path>',
+      feet: '<path d="M12 37c8 0 11-6 14-14l8 3-3 16H14c-3 0-4-2-2-5z"></path><path d="M34 39c7 1 11-4 15-11l7 5-6 15H35c-4 0-5-5-1-9z"></path>',
+      charm: '<path d="M20 13c3 8 7 13 12 17 5-4 9-9 12-17"></path><path d="m32 27 9 9-9 14-9-14z"></path><circle cx="32" cy="37" r="2"></circle>',
+      hands: '<path d="M10 25c0-5 4-9 9-9h3c5 0 9 4 9 9v5c0 4-3 7-7 7h-1v8H12V34c0-3 2-6 5-7-4 0-7-1-7-2z"></path><path d="M12 45h12M16 37v8"></path><path d="M54 25c0-5-4-9-9-9h-3c-5 0-9 4-9 9v5c0 4 3 7 7 7h1v8h11V34c0-3-2-6-5-7 4 0 7-1 7-2z"></path><path d="M40 45h12M48 37v8"></path>',
+      weapon: '<path d="m18 18 11 11-6 6-11-11z"></path><path d="m46 18-11 11 6 6 11-11z"></path><path d="M23 35 14 50M41 35l9 15"></path><path d="M10 50h10M44 50h10"></path>',
+    };
+    return `<span class="paperdoll-line-icon" aria-hidden="true"><svg ${common}>${paths[visualSlot] || paths.charm}</svg></span>`;
+  }
+
+  function paperdollSlotHtml(visualSlot, label, equipmentSlot) {
+    let item = equipmentSlot ? equipmentItem(equipped[equipmentSlot]) : null;
+    if (equipmentSlot === "lowerBody" && !item && equipped.upperBody) {
+      const upper = equipmentItem(equipped.upperBody);
+      if (upper?.occupiesSlots?.includes?.("lowerBody")) item = upper;
+    }
+    if (!item) return `<article class="paperdoll-slot is-empty" data-paperdoll-slot="${visualSlot}" aria-label="${label}：未裝備">${paperdollSlotIconHtml(visualSlot)}</article>`;
+    return `<article class="paperdoll-slot is-filled" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
+      ${equipmentIconHtml(item, "paperdoll-slot-icon")}<div class="paperdoll-item-name"><strong>${item.name}</strong></div>
     </article>`;
   }
 
@@ -2485,7 +2612,7 @@
     if (!doll) return;
     const dollCtx = doll.getContext("2d");
     dollCtx.clearRect(0, 0, doll.width, doll.height);
-    Art.drawCharacter(dollCtx, { actor: "player", classId: playerClassId, x: doll.width / 2, y: doll.height - 10, scale: 2.45, state: "idle", facing: "down", phase: elapsed, bitmap: true });
+    Art.drawCharacter(dollCtx, { actor: "player", classId: playerClassId, x: doll.width / 2, y: doll.height - 8, scale: 1.8, state: "idle", facing: "down", phase: elapsed, bitmap: true });
   }
 
   function renderEquipmentFacility() {
@@ -2507,17 +2634,17 @@
         </article>`;
       }).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading equipment-overview-heading"><div><small>PAPER DOLL</small><h3>目前裝備</h3></div><span>LV.${player.level} 阿巡</span></div>
+      <div class="facility-section-heading equipment-overview-heading"><div><small>PAPER DOLL</small><h3>目前裝備</h3></div><span>LV.${player.level} 時光之光</span></div>
       <section class="paperdoll-layout" aria-label="角色裝備槽位">
         <div class="paperdoll-board">
-          ${paperdollSlotHtml("head", "頭部", null, "♙")}
-          ${paperdollSlotHtml("weapon", "武器", "weapon", "⚔")}
-          ${paperdollSlotHtml("upperBody", "上身", "upperBody", "♜")}
-          <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="220" aria-hidden="true"></canvas><strong>阿巡</strong><span>巡燈人 · LV.${player.level}</span></div>
-          ${paperdollSlotHtml("charm", "飾物", "charm", "✦")}
-          ${paperdollSlotHtml("lowerBody", "下身", "lowerBody", "♜")}
-          ${paperdollSlotHtml("hands", "手部", "hands", "◇")}
-          ${paperdollSlotHtml("feet", "腳部", "feet", "▽")}
+          ${paperdollSlotHtml("head", "頭部", "head")}
+          ${paperdollSlotHtml("upperBody", "上身", "upperBody")}
+          ${paperdollSlotHtml("lowerBody", "下身", "lowerBody")}
+          ${paperdollSlotHtml("feet", "腳部", "feet")}
+          <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="280" aria-hidden="true"></canvas><strong>時光之光</strong><span>LV.${player.level}</span></div>
+          ${paperdollSlotHtml("charm", "飾物", "charm")}
+          ${paperdollSlotHtml("hands", "手部", "hands")}
+          ${paperdollSlotHtml("weapon", "武器", "weapon")}
         </div>
         <aside class="paperdoll-stats"><small>CURRENT STATS</small><strong>目前能力</strong><dl><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>速度</dt><dd>${Math.round(stats.speed)}</dd></div><div><dt>移動</dt><dd>${stats.moveRange}</dd></div></dl></aside>
       </section>
@@ -2640,9 +2767,9 @@
     const xpNeeded = Core.xpRequired(player.level);
     const xpPercent = Core.clamp((player.xp / xpNeeded) * 100, 0, 100);
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><small>STATUS</small><h3>阿巡 · ${className}</h3></div><span>LV.${player.level}</span></div>
+      <div class="facility-section-heading"><div><small>STATUS</small><h3>時光之光 · ${className}</h3></div><span>LV.${player.level}</span></div>
       <section class="status-layout">
-        <div class="status-character-card"><canvas id="statusCharacterCanvas" width="240" height="300" aria-hidden="true"></canvas><strong>阿巡</strong><span>${className} · ${equippedWeaponName()}</span><div class="status-level-line"><b>LV.${player.level}</b><span>${player.xp} / ${xpNeeded} XP</span></div><div class="status-progress xp-progress" aria-label="經驗值 ${player.xp} / ${xpNeeded}"><i style="width:${xpPercent}%"></i></div></div>
+        <div class="status-character-card"><canvas id="statusCharacterCanvas" width="240" height="300" aria-hidden="true"></canvas><strong>時光之光</strong><span>${className} · ${equippedWeaponName()}</span><div class="status-level-line"><b>LV.${player.level}</b><span>${player.xp} / ${xpNeeded} XP</span></div><div class="status-progress xp-progress" aria-label="經驗值 ${player.xp} / ${xpNeeded}"><i style="width:${xpPercent}%"></i></div></div>
         <dl class="status-stat-grid">
           <div class="is-hp"><dt>生命 HP</dt><dd>${Math.ceil(player.hp)} / ${stats.maxHp}</dd><span class="status-progress"><i style="width:${hpPercent}%"></i></span></div>
           <div><dt>攻擊</dt><dd>${stats.attack}</dd></div>
@@ -2752,57 +2879,51 @@
     return { tiers, positions, edges, maxDepth, maxColumn, authoredColumns };
   }
 
-  function skillTreeStateLabel(status, active, manualCount) {
-    if (active) return "DECK 使用中";
-    if (status === "learned") return manualCount ? `已學會 · 重複書 ×${manualCount}` : "已學會";
-    if (status === "canLearn") return manualCount ? "可立即學習" : "可學習 · 欠技能書";
-    if (status === "conditionLocked") return "條件不足";
-    return "前置未解鎖";
+  function skillTreeStateLabel(status) {
+    if (status === "learned") return "已學會";
+    if (status === "canLearn") return "可學習";
+    if (status === "conditionLocked") return "尚未解鎖";
+    return "尚未解鎖";
   }
 
   function renderSkillsFacility() {
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
-    const equipped = new Set(skillState.equippedSkillIds.map((id) => Skills.canonicalSkillId(id)));
     const classSkills = Skills.getSkillsByClass(playerClassId);
     const layout = buildSkillTreeLayout(classSkills);
-    const treeNodeTop = (depth) => 28 + depth * 78;
-    const treeNodeHeight = 42;
-    const treeHeight = treeNodeTop(layout.maxDepth) + treeNodeHeight + 28;
-    const treeMinWidth = layout.authoredColumns ? Math.max(58, (layout.maxColumn + 1) * 6) : 50;
+    const treeTopPercent = 1.5;
+    const treeBottomPercent = 89.5;
+    const treeNodeYPercent = (depth) => layout.maxDepth > 0
+      ? treeTopPercent + (treeBottomPercent - treeTopPercent) * (depth / layout.maxDepth)
+      : 45;
+    const treeNodeYCoord = (depth) => treeNodeYPercent(depth) * 10;
+    const treeNodeHeightCoord = 38;
+    const treeHeight = 1000;
     const states = new Map(classSkills.map((skill) => [skill.id, Skills.skillLearnability(skillState, skill.id)]));
-    const tierGuides = layout.authoredColumns ? "" : layout.tiers.map((tier, depth) => `<div class="skill-tree-column" data-depth="${depth}" style="--tree-tier-y:${treeNodeTop(depth) + treeNodeHeight / 2}px" aria-hidden="true"><span>${depth === 0 ? "起點" : `第 ${depth} 階`}</span></div>`).join("");
+    const tierGuides = "";
     const links = layout.edges.map(({ from, to }) => {
       const parent = layout.positions.get(from);
       const child = layout.positions.get(to);
-      const childState = states.get(to)?.status || "missingPrereq";
-      const linkState = childState === "learned" && states.get(from)?.status === "learned"
-        ? "learned"
-        : childState === "canLearn" && states.get(from)?.status === "learned" ? "canLearn" : "locked";
-      const startY = treeNodeTop(parent.depth) + treeNodeHeight;
-      const endY = treeNodeTop(child.depth);
-      const middleY = endY - 18;
-      return `<path class="skill-tree-link is-${linkState}" data-from="${from}" data-to="${to}" d="M ${parent.x.toFixed(2)} ${startY} V ${middleY} H ${child.x.toFixed(2)} V ${endY}" />`;
+      const startY = treeNodeYCoord(parent.depth) + treeNodeHeightCoord;
+      const endY = treeNodeYCoord(child.depth);
+      const middleY = Math.max(startY + 8, endY - 22);
+      return `<path class="skill-tree-link" data-from="${from}" data-to="${to}" d="M ${parent.x.toFixed(2)} ${startY.toFixed(2)} V ${middleY.toFixed(2)} H ${child.x.toFixed(2)} V ${endY.toFixed(2)}" />`;
     }).join("");
     const nodes = classSkills.map((skill) => {
       const learnability = states.get(skill.id);
-      const manualCount = skillState.manualCounts?.[skill.id] || 0;
-      const active = equipped.has(Skills.canonicalSkillId(skill.id));
-      const stateLabel = skillTreeStateLabel(learnability.status, active, manualCount);
+      const stateLabel = skillTreeStateLabel(learnability.status);
       const position = layout.positions.get(skill.id);
-      return `<article class="skill-tree-node is-${learnability.status} ${active ? "is-equipped" : ""} ${manualCount ? "has-manual" : ""}" role="treeitem" aria-level="${position.depth + 1}" data-tree-state="${learnability.status}" data-tree-depth="${position.depth}" data-tree-x="${position.x.toFixed(2)}" style="--tree-x:${(position.x / 10).toFixed(3)}%;--tree-y:${treeNodeTop(position.depth)}px">
-        <button class="skill-tree-node-trigger" type="button" data-facility-action="skill-detail" data-skill-id="${skill.id}" aria-label="${skill.name}，${stateLabel}" title="查看「${skill.name}」詳細資料"><strong>${skill.name}</strong></button>
+      return `<article class="skill-tree-node is-${learnability.status}" role="treeitem" aria-level="${position.depth + 1}" data-tree-state="${learnability.status}" data-tree-depth="${position.depth}" data-tree-x="${position.x.toFixed(2)}" style="--tree-x:${(position.x / 10).toFixed(3)}%;--tree-y:${treeNodeYPercent(position.depth).toFixed(3)}%">
+        <button class="skill-tree-node-trigger" type="button" data-facility-action="skill-detail" data-skill-id="${skill.id}" aria-label="${skill.name}，${stateLabel}" title="${skill.name}"><strong>${skill.name}</strong></button>
       </article>`;
     }).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading"><div><h3>學習狀態</h3></div><span>已學 ${skillState.unlockedSkillIds.length} 招 · 技能書 ${Object.values(skillState.manualCounts || {}).reduce((sum, count) => sum + count, 0)} 本</span></div>
-      <div class="skill-tree-legend"><span class="is-learned"><i>技</i> 已學會</span><span class="is-ready"><i>★</i> 可學習</span><span class="is-locked"><i>?</i> 尚未解鎖</span><span class="is-equipped"><i>裝</i> DECK 使用中</span><span><i>按</i> 撳招名睇資料</span></div>
-      <div class="skill-tree-scroll ui-scroll" tabindex="0" aria-label="技能樹，可橫向捲動查看所有分支">
-        <div class="skill-tree-board" role="tree" aria-label="${playerClassId === "fighter" ? "格鬥士" : "戰士"}向下發展技能樹" style="--tree-height:${treeHeight}px;--tree-min-width:${treeMinWidth}rem">
+      <div class="skill-tree-scroll" aria-label="技能樹">
+        <div class="skill-tree-board" role="tree" aria-label="技能發展路線">
           <svg class="skill-tree-links" viewBox="0 0 1000 ${treeHeight}" preserveAspectRatio="none" aria-hidden="true" focusable="false">${links}</svg>
           ${tierGuides}${nodes}
         </div>
       </div>`;
-    setFacilityFooter(`<span aria-hidden="true">✧</span> 技能樹只管理學習；要去城門「戰技面板台」先可以裝入 DECK。`);
+    setFacilityFooter("");
   }
 
   function skillEffectSummary(skill) {
@@ -2911,7 +3032,7 @@
     facilityContent.innerHTML = canEdit
       ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
       : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;
-    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板台可管理出戰技能；戰鬥只會使用目前配置。" : "唯讀查看目前配置；要更換配置先去舊港城門戰技面板台。"}`);
+    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板可管理出戰技能；戰鬥只會使用目前配置。" : "唯讀查看目前配置；要更換配置先去舊港城門戰技面板。"}`);
   }
 
   function openGuildSkillBook(star) {
@@ -2989,7 +3110,7 @@
 
   function changeSkillLoadout(skillId, equip, options = {}) {
     if (!options.force && !(facilityContext === "deck" && currentMapId === "world")) {
-      return showToast("而家只可查看；要去舊港城門戰技面板台先可以換技。", "danger");
+      return showToast("而家只可查看；要去舊港城門戰技面板先可以換技。", "danger");
     }
     const result = equip ? Skills.equipSkill(skillState, skillId) : Skills.unequipSkill(skillState, skillId);
     if (!result.ok) return showToast(result.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
@@ -3022,21 +3143,29 @@
     setFacilityFooter(`<span aria-hidden="true">◎</span> 每次討伐都會永久記錄；稀有素材可以留畀將來製作裝備。`);
   }
 
+  function facilityTabsForContext(context = facilityContext, mapId = currentMapId) {
+    const base = Expansion.facilityTabsForContext(context, mapId);
+    return context === "portable" ? [...new Set([...base, "missions"])] : base;
+  }
+
   function availableFacilityTabs() {
-    return Expansion.facilityTabsForContext(facilityContext, currentMapId);
+    return facilityTabsForContext(facilityContext, currentMapId);
   }
 
   function renderFacility() {
     const availableTabs = availableFacilityTabs();
-    facilityTab = Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
+    facilityTab = facilityTab === "missions" && availableTabs.includes("missions")
+      ? "missions"
+      : Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
     const copy = {
       status: ["", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
-      bag: ["", "冒險者物品欄", "左邊查看目前裝備，右邊統一管理裝備、補給、技能書同素材。"],
+      missions: ["", "任務", ""],
+      bag: ["", "物品欄", ""],
       equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
-      deck: ["", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板台。"],
+      deck: ["", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板。"],
       guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
       shop: ["", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
-      skills: ["", `${playerClassId === "fighter" ? "格鬥士" : "戰士"}技能樹`, "依照前置順序學習；技能書唔會自動習得。"],
+      skills: ["", "技能樹", ""],
       codex: ["", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
     }[facilityTab];
     stage.dataset.facilityTab = facilityTab;
@@ -3045,7 +3174,7 @@
     facilityPanel.dataset.facilityTab = facilityTab;
     facilityPanel.dataset.panelSize = facilityTab === "deck"
       ? facilityContext === "deck-view" ? "compact" : "wide"
-      : facilityTab === "status" ? "medium" : "wide";
+      : ["status", "missions"].includes(facilityTab) ? "medium" : "wide";
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
     const facilityKicker = document.getElementById("facilityKicker");
     if (facilityKicker) {
@@ -3066,6 +3195,7 @@
     }
     updateMenuBadges();
     if (facilityTab === "status") renderStatusFacility();
+    else if (facilityTab === "missions") renderMissionFacility();
     else if (facilityTab === "bag") renderBagFacility();
     else if (facilityTab === "equipment") renderEquipmentFacility();
     else if (facilityTab === "deck") renderDeckFacility();
@@ -3079,13 +3209,16 @@
     if (!["playing", "facility"].includes(mode)) return false;
     const nextContext = requestedContext || (tab === "guild" ? "guild" : tab === "shop" ? "shop" : tab === "deck" ? "deck-view" : "portable");
     const normalizedContext = ["portable", "guild", "shop", "deck", "deck-view"].includes(nextContext) ? nextContext : "portable";
-    const availableTabs = Expansion.facilityTabsForContext(normalizedContext, currentMapId);
+    const availableTabs = facilityTabsForContext(normalizedContext, currentMapId);
     if (!availableTabs.includes(tab) && ["guild", "shop", "deck"].includes(tab)) {
-      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "DECK 要去舊港城門嘅戰技面板台設定。", "danger");
+      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "DECK 要去舊港城門嘅戰技面板設定。", "danger");
       return false;
     }
     facilityContext = normalizedContext;
-    facilityTab = Expansion.normalizeFacilityTab(FACILITY_TABS.includes(tab) ? tab : "bag", facilityContext, currentMapId);
+    const requestedTab = FACILITY_TABS.includes(tab) ? tab : "bag";
+    facilityTab = requestedTab === "missions" && availableTabs.includes("missions")
+      ? "missions"
+      : Expansion.normalizeFacilityTab(requestedTab, facilityContext, currentMapId);
     mode = "facility";
     stage.dataset.gameState = mode;
     keys.clear();
@@ -3264,6 +3397,7 @@
   const BATTLE_AP_GAIN = Skills.ROUND_AP_GAIN;
   const BATTLE_AP_MAX = Skills.MAX_AP;
   const BATTLE_TURN_COST = .5;
+  const BATTLE_FINAL_FACING_RESERVE = 1;
   const BATTLE_MOVE_STEP_SECONDS = reducedMotion ? .08 : .24;
   const BATTLE_ACTION_WINDUP_SECONDS = reducedMotion ? .12 : .38;
   const BATTLE_ACTION_LINGER_SECONDS = reducedMotion ? .24 : .7;
@@ -3406,6 +3540,7 @@
   function startBattle(source, instant = false) {
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
     const stats = playerStats();
+    const battleMoveCapacity = playerClassId === "fighter" ? stats.moveRange + BATTLE_FINAL_FACING_RESERVE : stats.moveRange;
     const battlefield = battleFieldContextFor(currentMapId);
     const dimensions = battleDimensionsFor(battlefield);
     const heroSpawn = battleDeploymentCell(battlefield, "ally", 0);
@@ -3414,7 +3549,7 @@
       id: "battle-player",
       side: "ally",
       type: "player",
-      name: "阿巡",
+      name: "時光之光",
       level: player.level,
       cell: { ...heroSpawn },
       hp: Math.ceil(player.hp),
@@ -3425,8 +3560,9 @@
       evasion: stats.evasion,
       weight: stats.weight,
       actionSpeedBonus: stats.actionSpeedBonus,
-      baseMoveRange: stats.moveRange,
-      moveRange: stats.moveRange,
+      baseMoveRange: battleMoveCapacity,
+      moveRange: battleMoveCapacity,
+      facingReserve: BATTLE_FINAL_FACING_RESERVE,
       attackRange: 1,
       initiative: stats.initiative,
       alive: true,
@@ -3479,6 +3615,7 @@
     battleEncounterIntro.hidden = true;
     battleCommandPosition.manual = false;
     sound.boss();
+    startBattleBgm();
     announce(`遇上${source.name}。進入格仔回合戰。`);
     beginPlayerRound();
     return true;
@@ -3514,7 +3651,7 @@
     battle.awaitingFacing = true;
     battle.movementResolution = null;
     battle.actionResolution = null;
-    battle.message = "逐格排路；來回、轉向同原地踏步都會照扣移動力。";
+    battle.message = "揀下一個路點；來回、轉向同原地踏步都會照扣移動力。";
     battle.messageDanger = false;
     battle.actingUnitId = null;
     battle.actingUnitIds = [];
@@ -3674,6 +3811,18 @@
     return Number.isInteger(safe) ? String(safe) : safe.toFixed(1);
   }
 
+  function formatRemainingMove(value) {
+    return (Math.max(0, Math.round((Number(value) || 0) * 2) / 2)).toFixed(1);
+  }
+
+  function battleFacingReserve() {
+    return Math.min(BATTLE_FINAL_FACING_RESERVE, Math.max(0, Number(battle?.hero?.moveRange) || 0));
+  }
+
+  function battleRouteBudgetRemaining(commands = battle?.heroMoveCommands) {
+    return Math.max(0, (battle?.hero?.moveRange || 0) - battleFacingReserve() - battleMoveCost(commands));
+  }
+
   function battleMoveDraftState(commands = battle?.heroMoveCommands) {
     const schedule = battleMoveSchedule(commands);
     const endpoint = schedule.path?.at(-1) || battle?.hero?.cell;
@@ -3683,6 +3832,7 @@
       facing: schedule.finalTravelFacing || battle?.hero?.facing || "down",
       cost: schedule.totalCost,
       remaining: Math.max(0, (battle?.hero?.moveRange || 0) - schedule.totalCost),
+      routeRemaining: Math.max(0, (battle?.hero?.moveRange || 0) - battleFacingReserve() - schedule.totalCost),
     };
   }
 
@@ -3701,7 +3851,7 @@
       routeCell: true,
       nextStep: false,
     }));
-    const remaining = battle.hero.moveRange - draft.cost;
+    const remaining = battleRouteBudgetRemaining();
     if (remaining <= 1e-9) return result;
 
     const reachable = Tactics.reachableTiles(battle.grid, draft.endpoint, remaining, [], {
@@ -3717,7 +3867,7 @@
         ...segment.map((to) => ({ type: "move", to })),
       ];
       const schedule = battleMoveSchedule(commands);
-      if (schedule.totalCost > battle.hero.moveRange + 1e-9) continue;
+      if (schedule.totalCost > battle.hero.moveRange - battleFacingReserve() + 1e-9) continue;
       result.push({
         x: next.x,
         y: next.y,
@@ -3861,13 +4011,36 @@
     const projected = Boolean(layout.projected);
     battleFacingPicker.dataset.projected = projected ? "true" : "false";
     const labels = projected
-      ? { up: ["↖", "左上"], right: ["↗", "右上"], down: ["↘", "右下"], left: ["↙", "左下"] }
-      : { up: ["▲", "上"], right: ["▶", "右"], down: ["▼", "下"], left: ["◀", "左"] };
+      ? { up: "左上", right: "右上", down: "右下", left: "左下" }
+      : { up: "上", right: "右", down: "下", left: "左" };
+    const pickerRadius = Core.clamp(layout.cell * .48, width <= 530 ? 24 : 31, width <= 530 ? 34 : 45);
+    const currentCommands = battle.heroMoveCommands || [];
+    const currentCost = battleMoveCost(currentCommands);
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
       const facing = button.dataset.battleFacing;
-      const [glyph, label] = labels[facing] || ["•", facing];
-      button.textContent = glyph;
-      button.setAttribute("aria-label", `面向${label}；消耗 0.5 移動力`);
+      const label = labels[facing] || facing;
+      if (projected) {
+        const vector = battleFacingScreenVector(facing, layout);
+        const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
+        button.innerHTML = '<span aria-hidden="true">➤</span>';
+        button.style.left = `${vector.x * pickerRadius}px`;
+        button.style.top = `${vector.y * pickerRadius}px`;
+        button.style.setProperty("--battle-facing-angle", `${angle}deg`);
+      } else {
+        const glyph = ({ up: "▲", right: "▶", down: "▼", left: "◀" })[facing] || "•";
+        button.textContent = glyph;
+        button.style.left = "";
+        button.style.top = "";
+        button.style.removeProperty("--battle-facing-angle");
+      }
+      const candidateCommands = [...currentCommands, { type: "face", facing }];
+      const candidateCost = battleMoveCost(candidateCommands);
+      const actionCost = Math.max(0, candidateCost - currentCost);
+      const affordable = candidateCost <= battle.hero.moveRange + 1e-9;
+      button.disabled = !affordable;
+      button.classList.toggle("is-unaffordable", !affordable);
+      button.setAttribute("aria-label", `面向${label}；消耗 ${formatRemainingMove(actionCost)} 移動力`);
+      button.title = affordable ? `消耗 ${formatRemainingMove(actionCost)} 移動力` : "剩餘移動力不足";
     }
     const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
     const point = battleCellCentre(endpoint, layout);
@@ -4082,7 +4255,7 @@
     };
     battle.movementResolution = { ...movement, finalHeroFacing: finalFacing, elapsed: 0, stepDuration: BATTLE_MOVE_STEP_SECONDS };
     battle.actingUnitIds = movement.actors.filter((id) => movement.unitResults[id]?.elapsedCost > 0 || movement.unitResults[id]?.blocked);
-    battle.message = heroPath.length > 1 ? "路線確認——阿巡同霧獸同步移動！" : "阿巡留喺原位；霧獸開始行動。";
+    battle.message = heroPath.length > 1 ? "路線確認——時光之光同霧獸同步移動！" : "時光之光留喺原位；霧獸開始行動。";
     battle.messageDanger = false;
     updateBattleUi();
     sound.tone(360, .09, { to: 620, gain: .025 });
@@ -4436,13 +4609,13 @@
       const validation = pending ? revalidateBattlePendingAction(pending) : { ok: true };
       if (!validation.ok) {
         pending && (pending.status = "cancelled");
-        cancelledActions.push(action.kind === "hero" ? "阿巡" : action.hit?.enemy?.name || action.actorId);
+        cancelledActions.push(action.kind === "hero" ? "時光之光" : action.hit?.enemy?.name || action.actorId);
         continue;
       }
       pending && (pending.status = "executing");
       if (action.kind === "hero") {
         if (!battle.hero.alive || battle.hero.hp <= 0 || FighterEffects?.isDisabled(battle.hero, battle.round)) {
-          cancelledActions.push("阿巡");
+          cancelledActions.push("時光之光");
           continue;
         }
         heroExecuted = true;
@@ -4610,7 +4783,7 @@
     if (specialEffectsApplied) skillResults.push("技能效果生效");
     if (guardReduction) skillResults.push(`減傷 ${Math.round(guardReduction * 100)}%`);
     if (battle.moveBonusNext) skillResults.push(`下輪移動 +${battle.moveBonusNext}`);
-    const heroResult = !heroExecuted ? "阿巡未及出招，行動取消" : heroAction.type === "wait" ? "阿巡待機（不附帶減傷）" : heroAction.type === "potion" ? `阿巡回復 ${heroHeal} HP` : skill ? `阿巡施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}` : "阿巡完成行動";
+    const heroResult = !heroExecuted ? "時光之光未及出招，行動取消" : heroAction.type === "wait" ? "時光之光待機（不附帶減傷）" : heroAction.type === "potion" ? `時光之光回復 ${heroHeal} HP` : skill ? `時光之光施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}` : "時光之光完成行動";
     const usedSkills = [...new Set(executedEnemyHits.map((hit) => hit.skillName).filter(Boolean))];
     const enemyPosition = executedEnemyHits.some((hit) => hit.position === "rear") ? "（背擊 +35%）" : executedEnemyHits.some((hit) => hit.position === "side") ? "（側擊 +15%）" : "";
     const cancelledCopy = cancelledActions.length ? `；${cancelledActions.join("、")}因倒下或異常狀態取消行動` : "";
@@ -4655,7 +4828,7 @@
     if (!battle) return;
     const token = battle.token;
     battle.phase = "defeat";
-    battle.message = "阿巡盞燈熄咗……";
+    battle.message = "時光之光盞燈熄咗……";
     battle.messageDanger = true;
     updateBattleUi();
     scheduleBattle(() => {
@@ -4687,6 +4860,7 @@
   }
 
   function closeBattleHud() {
+    stopBattleBgm();
     battleToken += 1;
     battleHud.hidden = true;
     battleEncounterIntro.hidden = true;
@@ -4758,18 +4932,10 @@
     selectBattleAction("end-turn");
   }
 
-  function battleMovePipsMarkup(remaining, capacity) {
-    const safeRemaining = Math.max(0, Math.round((Number(remaining) || 0) * 2) / 2);
-    const total = Math.max(1, Math.ceil(Number(capacity) || 1));
-    const pips = [];
-    for (let index = 0; index < total; index += 1) {
-      const value = safeRemaining - index;
-      const state = value >= 1 ? "full" : value >= .5 ? "half" : "empty";
-      pips.push(`<span class="battle-move-pip is-${state}" aria-hidden="true"></span>`);
-    }
-    return `<div class="battle-move-meter" role="img" aria-label="剩餘移動 ${formatMoveCost(safeRemaining)} 步">
-      <span class="battle-move-meter-label">移動力</span>
-      <span class="battle-move-pips">${pips.join("")}</span>
+  function battleMoveRemainingMarkup(remaining) {
+    return `<div class="battle-move-meter" role="status" aria-live="polite" aria-label="剩餘移動力 ${formatRemainingMove(remaining)}">
+      <span class="battle-move-meter-label">剩餘移動力</span>
+      <strong class="battle-move-remaining-value">${formatRemainingMove(remaining)}</strong>
     </div>`;
   }
 
@@ -4795,7 +4961,7 @@
     if (planningMove) {
       const remaining = Math.max(0, battle.hero.moveRange - battleMoveCost());
       buttons.innerHTML = `
-        ${battleMovePipsMarkup(remaining, battle.hero.moveRange)}
+        ${battleMoveRemainingMarkup(remaining)}
         <div class="battle-command-utility-row battle-move-command-row">
           <button id="battleResetMoveButton" class="battle-command-secondary reset-move-skill" type="button" data-battle-action="reset-move" ${battleMoveCost() <= 0 ? "disabled" : ""}>
             <b>重新移動</b>
@@ -4861,13 +5027,14 @@
       victory: ["戰鬥勝利！", "霧散開咗"],
       defeat: ["燈火熄滅", "返回落腳燈位"],
     };
-    battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "阿巡嘅回合";
+    battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "戰鬥";
     battleUi.phase.textContent = phaseCopy[battle.phase]?.[1] || "";
-    battleUi.unitRole.textContent = "巡燈人 · 行動燈力";
-    battleUi.unitLevel.textContent = `LV. ${battle.hero.level}`;
-    battleUi.unitName.textContent = "阿巡";
+        battleUi.unitLevel.textContent = `LV. ${battle.hero.level}`;
+    battleUi.unitName.textContent = "時光之光";
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
     battleUi.hpText.textContent = `${Math.ceil(battle.hero.hp)} / ${battle.hero.maxHp}`;
+    battleUi.apFill.style.width = `${Core.clamp(battle.ap / BATTLE_AP_MAX, 0, 1) * 100}%`;
+    battleUi.apText.textContent = `${battle.ap} / ${BATTLE_AP_MAX}`;
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
     battlePortraitCtx.clearRect(0, 0, battlePortraitCanvas.width, battlePortraitCanvas.height);
     Art.drawPortrait(battlePortraitCtx, {
@@ -4883,8 +5050,6 @@
     });
     battleUi.statuses.innerHTML = "";
     const statuses = [
-      { text: `AP ${battle.ap}`, good: battle.ap >= Skills.AP_BANDS[1].min },
-      battle.phase === "planning_move" ? { text: `路線 ${formatMoveCost(battleMoveCost())} / ${battle.hero.moveRange}`, good: true } : { text: "移動已結算", good: true },
       { text: `面向 ${battleFacingDisplayLabel(battle.phase === "planning_move" ? battleMoveDraftState().facing : battle.hero.facing)}`, good: true },
       battle.guard ? { text: `技能減傷 -${Math.round((battle.guardReduction || 0) * 100)}%`, good: true } : null,
       battle.moveBonusNext ? { text: `下輪移動 +${battle.moveBonusNext}`, good: true } : null,
@@ -4894,25 +5059,6 @@
       chip.className = `unit-status ${status.good ? "is-good" : ""}`;
       chip.textContent = status.text;
       battleUi.statuses.appendChild(chip);
-    }
-    battleUi.order.innerHTML = "";
-    const order = [battle.hero, ...Tactics.buildTurnOrder(livingBattleEnemies())];
-    for (const unit of order) {
-      const item = document.createElement("li");
-      item.dataset.unitId = unit.id;
-      const current = battle.actingUnitIds?.length
-        ? battle.actingUnitIds.includes(unit.id)
-        : battle.actingUnitId
-          ? unit.id === battle.actingUnitId
-          : ["planning_move", "planning_action"].includes(battle.phase) && unit.side === "ally";
-      item.className = current ? "is-current" : "";
-      const avatar = document.createElement("span");
-      avatar.className = `turn-avatar ${unit.side === "ally" ? "ally-avatar" : "enemy-avatar"}`;
-      avatar.textContent = unit.side === "ally" ? "巡" : unit.boss ? "王" : "霧";
-      const label = document.createElement("b");
-      label.textContent = unit.name;
-      item.append(avatar, label);
-      battleUi.order.appendChild(item);
     }
     battleUi.hint.textContent = battle.message;
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
@@ -5252,9 +5398,14 @@
   function battleLayout() {
     const gridWidth = battle?.grid?.width || DEFAULT_BATTLE_WIDTH;
     const gridHeight = battle?.grid?.height || DEFAULT_BATTLE_HEIGHT;
-    const top = width <= 530 ? 150 : 72;
-    const reservedBottom = width <= 530 ? 300 : width <= 1120 ? 245 : 210;
+    const top = width <= 530 ? 148 : Math.round(Core.clamp(height * .115, 96, 132));
+    // V10 gives the board a little more breathing room per tile without
+    // scaling the actors. The command dock is an overlay, so desktop can use
+    // more of the lower viewport while remaining responsively clamped.
+    const reservedBottom = width <= 530 ? 270 : width <= 1120 ? 170 : 96;
+    const legacyReservedBottom = width <= 530 ? 285 : width <= 1120 ? 190 : 132;
     const availableHeight = Math.max(238, height - top - reservedBottom);
+    const legacyAvailableHeight = Math.max(238, height - top - legacyReservedBottom);
     const projection = battle?.battlefield?.projection || null;
     if (!projection) {
       const cell = Math.floor(Core.clamp(Math.min((width - 34) / gridWidth, availableHeight / gridHeight), 30, 72));
@@ -5274,6 +5425,7 @@
         stepY: { x: 0, y: cell },
         elevationStep: cell * .18,
         baseThickness: cell * .12,
+        actorCell: cell,
         projected: false,
       };
     }
@@ -5305,11 +5457,15 @@
     const spanX = Math.max(1, maxX - minX);
     const spanY = Math.max(1, maxY - minY);
     const verticalUnits = spanY + maxElevation * elevationRatio + baseThicknessRatio;
-    const cell = Math.floor(Core.clamp(Math.min((width - 34) / spanX, availableHeight / verticalUnits), 30, 78));
+    const cell = Math.floor(Core.clamp(Math.min((width - 24) / spanX, availableHeight / verticalUnits), 30, 92));
+    // Actor artwork keeps the previous V9 physical size even though the tile
+    // surface gets a few extra pixels. This avoids making hero/monsters bigger.
+    const actorCell = Math.floor(Core.clamp(Math.min((width - 34) / spanX, legacyAvailableHeight / verticalUnits), 30, 86));
     const boardWidth = spanX * cell;
     const boardHeight = verticalUnits * cell;
     const x = Math.round((width - boardWidth) / 2);
-    const y = Math.round(top + Math.max(0, (availableHeight - boardHeight) / 2));
+    const verticalSlack = Math.max(0, availableHeight - boardHeight);
+    const y = Math.round(top + verticalSlack * .66);
     const elevationStep = cell * elevationRatio;
     const originX = x - minX * cell;
     // Reserve room above the flat board for the tallest elevated top face.
@@ -5326,6 +5482,7 @@
       stepY: { x: yAxis.x * cell, y: yAxis.y * cell },
       elevationStep,
       baseThickness: cell * baseThicknessRatio,
+      actorCell,
       projected: true,
     };
   }
@@ -5568,7 +5725,8 @@
       ctx.fillRect(Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) - Math.min(...xs) + 2, Math.max(...ys) - Math.min(...ys) + 2);
     }
     ctx.restore();
-    battleDrawPolygon(corners, null, mountainBattle ? "rgba(54,39,24,.42)" : "rgba(245,233,202,.13)", Math.max(1, layout.cell * .015));
+    // Do not outline every logical cell. Movement/skill overlays supply the
+    // only visible grid information, keeping the idle terrain visually whole.
   }
 
   function drawBattleCellOverlay(cell, layout, fillStyle, strokeStyle = null, lineWidth = 1.5, inset = .82) {
@@ -5804,66 +5962,76 @@
     const size = layout.cell;
     const terrain = battleTerrainCell(cell);
     if (mountainBattle && terrain?.kind === "tree") {
-      const baselineY = point.y + size * .23;
-      ctx.save();
-      ctx.fillStyle = "rgba(16,17,12,.4)";
-      ctx.beginPath();
-      ctx.ellipse(point.x + size * .04, point.y + size * .3, size * .38, size * .11, 0, 0, Core.TAU);
-      ctx.fill();
-      ctx.restore();
-      const drawn = Art.drawEnvironmentSprite(ctx, {
-        sprite: "broadleafTree",
-        x: point.x,
-        y: baselineY,
-        width: size * .72,
-        height: size * .72,
-        alpha: .99,
-      });
+      const baselineY = point.y + size * .29;
+      // The supplied tree art already has its own contact detail. Do not add a
+      // separate painted floor shadow; it makes the prop look like it is
+      // hovering above the battlefield.
+      let drawn = false;
+      if (battleMountainTreeImage?.complete && battleMountainTreeImage.naturalWidth > 0) {
+        const drawWidth = size * 1.92;
+        const drawHeight = drawWidth * (battleMountainTreeImage.naturalHeight / battleMountainTreeImage.naturalWidth);
+        ctx.drawImage(
+          battleMountainTreeImage,
+          point.x - drawWidth * .5,
+          baselineY - drawHeight * .91,
+          drawWidth,
+          drawHeight,
+        );
+        drawn = true;
+      }
       if (!drawn) {
-        ctx.save();
-        ctx.strokeStyle = "#594126";
-        ctx.lineWidth = Math.max(5, size * .12);
-        ctx.beginPath(); ctx.moveTo(point.x, baselineY); ctx.lineTo(point.x, point.y - size * .45); ctx.stroke();
-        ctx.fillStyle = "#607345";
-        ctx.beginPath(); ctx.arc(point.x, point.y - size * .52, size * .38, 0, Core.TAU); ctx.fill();
-        ctx.restore();
+        drawn = Art.drawStandaloneSprite?.(ctx, {
+          sprite: "battleHighTree",
+          x: point.x,
+          y: baselineY,
+          width: size * 1.48,
+          height: size * 2.18,
+          anchorX: .5,
+          anchorY: .93,
+        });
+      }
+      if (!drawn) {
+        Art.drawEnvironmentSprite(ctx, { sprite: "broadleafTree", x: point.x, y: baselineY, width: size * 1.02, height: size * 1.42, alpha: .99 });
       }
       return;
     }
     if (mountainBattle && terrain?.kind === "scrub") {
-      const seed = battleVisualSeed(cell);
-      ctx.save();
-      ctx.fillStyle = "rgba(21,20,13,.3)";
-      ctx.beginPath();
-      ctx.ellipse(point.x, point.y + size * .25, size * .34, size * .08, 0, 0, Core.TAU);
-      ctx.fill();
-      // A readable waist-high green scrub mass: clearly an obstacle, but kept
-      // well below character height so its low-cover role reads at a glance.
-      const tufts = [
-        [-.22, .12, .2], [-.1, .06, .23], [.04, .08, .25], [.18, .12, .2], [.27, .16, .14],
-      ];
-      for (let index = 0; index < tufts.length; index += 1) {
-        const [ox, oy, radius] = tufts[index];
-        const jitter = (((seed >>> (index * 3)) & 7) - 3) * size * .004;
-        const gradient = ctx.createRadialGradient(
-          point.x + ox * size - radius * size * .25,
-          point.y + oy * size - radius * size * .35,
-          1,
-          point.x + ox * size,
-          point.y + oy * size,
-          radius * size,
+      const baselineY = point.y + size * .29;
+      // Low cover randomly alternates between the two supplied rocks and two
+      // supplied plants. The battle token changes the choice between encounters
+      // while keeping it stable for the lifetime of the current battle.
+      const seed = (battleVisualSeed(cell) ^ Math.imul((Number(battle?.token) || 0) + 1, 2654435761)) >>> 0;
+      const variant = battleMountainLowCoverArt[seed % battleMountainLowCoverArt.length];
+      const image = variant?.image;
+      let drawn = false;
+      if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        const drawWidth = size * variant.widthScale;
+        // Derive height from the source bitmap. Never set width/height
+        // independently, otherwise the artwork would be squashed or stretched.
+        const drawHeight = drawWidth * (image.naturalHeight / image.naturalWidth);
+        ctx.drawImage(
+          image,
+          point.x - drawWidth * .5,
+          baselineY - drawHeight * variant.anchorY,
+          drawWidth,
+          drawHeight,
         );
-        gradient.addColorStop(0, index % 2 ? "#84944c" : "#92a553");
-        gradient.addColorStop(.62, index % 2 ? "#596a38" : "#657743");
-        gradient.addColorStop(1, "rgba(45,55,29,.2)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(point.x + ox * size + jitter, point.y + oy * size, radius * size, 0, Core.TAU);
-        ctx.fill();
+        drawn = true;
       }
-      ctx.restore();
-      drawMountainDryScrub(point.x - size * .13, point.y + size * .2, size * .82, seed, .48);
-      drawMountainDryScrub(point.x + size * .14, point.y + size * .21, size * .72, seed >>> 4, .42);
+      // Keep the existing generated low-cover art only as a load-error fallback.
+      // No extra floor shadow is painted for either supplied rocks or plants.
+      if (!drawn) {
+        drawn = Art.drawStandaloneSprite?.(ctx, {
+          sprite: "battleLowScrub",
+          x: point.x,
+          y: baselineY,
+          width: size * 1.34,
+          height: size * .72,
+          anchorX: .5,
+          anchorY: .88,
+        });
+      }
+      if (!drawn) drawMountainDryScrub(point.x, point.y + size * .18, size * .88, seed, .55);
       return;
     }
     if (mountainBattle) {
@@ -5927,15 +6095,14 @@
   }
 
   function battleUnitRenderFacing(unit) {
-    if (battle?.phase === "planning_move" && unit?.id === battle?.hero?.id) {
-      return battleMoveDraftState().facing || unit.facing;
-    }
+    // Planning is a non-destructive preview.  The actor keeps its committed
+    // facing until movement resolution actually plays the queued turns/moves.
     return unit?.facing || "down";
   }
 
   function drawMountainUnitShadow(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
-    const size = layout.cell;
+    const size = layout.actorCell || layout.cell;
     const facing = battleFacingScreenVector(battleUnitRenderFacing(unit), layout);
     const shadowX = point.x - facing.x * size * .035 + size * .03;
     const shadowY = point.y + size * (layout.projected ? .22 : .31) - facing.y * size * .02;
@@ -5957,9 +6124,10 @@
 
   function drawBattleUnit(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
-    const heroScale = layout.cell / 107.5;
-    const monsterScale = layout.cell / 43;
-    const baseline = point.y + layout.cell * (layout.projected ? .2 : .29);
+    const actorCell = layout.actorCell || layout.cell;
+    const heroScale = actorCell / 118;
+    const monsterScale = actorCell / 47;
+    const baseline = point.y + actorCell * (layout.projected ? .2 : .29);
     const acting = battle.phase === "resolving_action"
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
       && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
@@ -5981,10 +6149,11 @@
       artBox = Art.drawCharacter(ctx, {
         x: point.x,
         y: baseline,
-        scale: ["attack", "hurt"].includes(visualState) ? layout.cell / 43 : heroScale,
+        scale: heroScale,
         actor: "player",
         classId: playerClassId,
         facing: renderFacing,
+        battleDiagonal: layout.projected,
         state: visualState,
         locomotion,
         phase: elapsed,
@@ -6009,29 +6178,35 @@
       });
     }
 
-    const facing = battleFacingScreenVector(renderFacing, layout);
-    const perpendicular = { x: -facing.y, y: facing.x };
-    const arrow = {
-      x: point.x + facing.x * layout.cell * .32,
-      y: point.y + facing.y * layout.cell * .32,
-    };
-    const arrowSize = Math.max(3.5, layout.cell * .075);
-    ctx.save();
-    ctx.fillStyle = unit.side === "ally" ? "#52dccb" : "#ff7199";
-    ctx.strokeStyle = "rgba(5,8,18,.9)";
-    ctx.lineWidth = Math.max(1.5, layout.cell * .025);
-    ctx.beginPath();
-    ctx.moveTo(arrow.x + facing.x * arrowSize, arrow.y + facing.y * arrowSize);
-    ctx.lineTo(arrow.x - facing.x * arrowSize * .7 + perpendicular.x * arrowSize * .8, arrow.y - facing.y * arrowSize * .7 + perpendicular.y * arrowSize * .8);
-    ctx.lineTo(arrow.x - facing.x * arrowSize * .7 - perpendicular.x * arrowSize * .8, arrow.y - facing.y * arrowSize * .7 - perpendicular.y * arrowSize * .8);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.restore();
+    // The four movement controls already communicate the player's intended
+    // direction, so the extra cyan facing triangle beside the hero is
+    // redundant. Keep the enemy facing marker because it still conveys useful
+    // tactical information.
+    if (unit.side !== "ally") {
+      const facing = battleFacingScreenVector(renderFacing, layout);
+      const perpendicular = { x: -facing.y, y: facing.x };
+      const arrow = {
+        x: point.x + facing.x * layout.cell * .32,
+        y: point.y + facing.y * layout.cell * .32,
+      };
+      const arrowSize = Math.max(3.5, layout.cell * .075);
+      ctx.save();
+      ctx.fillStyle = "#ff7199";
+      ctx.strokeStyle = "rgba(5,8,18,.9)";
+      ctx.lineWidth = Math.max(1.5, layout.cell * .025);
+      ctx.beginPath();
+      ctx.moveTo(arrow.x + facing.x * arrowSize, arrow.y + facing.y * arrowSize);
+      ctx.lineTo(arrow.x - facing.x * arrowSize * .7 + perpendicular.x * arrowSize * .8, arrow.y - facing.y * arrowSize * .7 + perpendicular.y * arrowSize * .8);
+      ctx.lineTo(arrow.x - facing.x * arrowSize * .7 - perpendicular.x * arrowSize * .8, arrow.y - facing.y * arrowSize * .7 - perpendicular.y * arrowSize * .8);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.restore();
+    }
 
-    const barWidth = layout.cell * (unit.boss ? .76 : .56);
-    const barY = point.y + layout.cell * (layout.projected ? .31 : .38);
-    const barHeight = Math.max(5, layout.cell * .085);
+    const barWidth = actorCell * (unit.boss ? .76 : .56);
+    const barY = point.y + actorCell * (layout.projected ? .31 : .38);
+    const barHeight = Math.max(5, actorCell * .085);
     ctx.fillStyle = "rgba(5,8,18,.86)";
     ctx.fillRect(point.x - barWidth / 2 - 1, barY - 1, barWidth + 2, barHeight + 2);
     ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
@@ -6041,13 +6216,13 @@
     // art supplies semantic anchors that remain correct across different body
     // proportions, attack frames and monster species.
     const nameX = Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
-    const fallbackNameY = point.y - layout.cell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
-    const nameY = (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY) - Math.max(2, layout.cell * .025);
-    ctx.font = `900 ${Math.max(14, layout.cell * .19)}px ui-sans-serif, sans-serif`;
+    const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
+    const nameY = (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY) - Math.max(2, actorCell * .025);
+    ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.strokeStyle = "rgba(3,6,14,.96)";
-    ctx.lineWidth = Math.max(3, layout.cell * .055);
+    ctx.lineWidth = Math.max(3, actorCell * .055);
     ctx.strokeText(unit.name, nameX, nameY);
     ctx.fillStyle = "#fff4d0";
     ctx.fillText(unit.name, nameX, nameY);
@@ -6245,6 +6420,25 @@
     } catch (_) {}
   }
 
+  function updateExploreHoverPointer(event) {
+    if (!canvas || mode !== "playing" || event?.pointerType === "touch") {
+      exploreHoverEntityId = null;
+      if (canvas) canvas.dataset.exploreCursor = "default";
+      return;
+    }
+    const target = screenToWorld(event.clientX, event.clientY);
+    const entity = clickedExploreEntity(target.screenX, target.screenY);
+    exploreHoverEntityId = entity?.id || null;
+    // Enemy targeting can gain its own cursor later. For now the hand is
+    // reserved for world interactions such as NPCs, chests and the skill panel.
+    canvas.dataset.exploreCursor = entity && !entity.type ? "interact" : "default";
+  }
+
+  function clearExploreHoverPointer() {
+    exploreHoverEntityId = null;
+    if (canvas) canvas.dataset.exploreCursor = "default";
+  }
+
   function handleCanvasPointer(event) {
     if (mode === "battle") return handleBattlePointer(event);
     if (mode !== "playing" || event.button > 0) return;
@@ -6280,6 +6474,7 @@
   }
 
   function handleCanvasPointerMove(event) {
+    if (mode !== "battle") updateExploreHoverPointer(event);
     if (mode === "battle" && ["planning_move", "planning_action"].includes(battle?.phase)) {
       const cell = battleCellFromPointer(event);
       if (cell) battle.cursor = cell;
@@ -6856,6 +7051,47 @@
     return entity.y + (entity.radius || 0);
   }
 
+  // Traced directly from the pink clickable-region mask in
+  // assets/main-town/maintown_walkable.jpg (the deck-configuration board's
+  // authored interaction shape), as offsets in world px from the region's
+  // centre (deck.x + width/2, deck.y + height/2). This is the board's real
+  // silhouette, not a guessed rectangle — see AGENTS notes on the
+  // authoring/walkable mask workflow if this board's art ever moves.
+  const NOTICE_BOARD_OUTLINE = [
+    [-113.5, -141], [-123.5, -98], [-110.5, -70], [-89.5, 106],
+    [48.5, 148], [111.5, 124], [123.5, 89], [119.5, -98],
+    [110.5, -120], [82.5, -133], [-12.5, -149], [-89.5, -149],
+  ];
+
+  function drawSkillPanelGlow(prop, shakeX, shakeY) {
+    if (!prop || prop.boardId !== "deck-loadout") return;
+    const near = nearestInteraction?.id === prop.id;
+    const hover = exploreHoverEntityId === prop.id;
+    if (!near && !hover) return;
+    const point = worldToScreen(prop, shakeX, shakeY);
+    const scale = camera.zoom;
+    const pulse = .5 + .5 * Math.sin(elapsed * Core.TAU / 1.8);
+    ctx.save();
+    ctx.strokeStyle = hover
+      ? `rgba(255,200,87,${.52 + pulse * .12})`
+      : `rgba(255,200,87,${.2 + pulse * .08})`;
+    ctx.lineWidth = Math.max(1.2, 1.7 * scale);
+    ctx.lineJoin = "round";
+    ctx.shadowColor = hover
+      ? `rgba(255,200,87,${.34 + pulse * .14})`
+      : `rgba(255,200,87,${.12 + pulse * .08})`;
+    ctx.shadowBlur = (hover ? 14 : 7 + pulse * 3) * scale;
+    ctx.beginPath();
+    NOTICE_BOARD_OUTLINE.forEach(([ox, oy], index) => {
+      const px = point.x + ox * scale;
+      const py = point.y + oy * scale;
+      if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawSortedWorld(shakeX, shakeY) {
     const renderables = [];
     const groundKinds = new Set(["rug", "crackedTile"]);
@@ -6872,6 +7108,14 @@
     renderables.push({ ...player, kind: "player" });
     renderables.sort((a, b) => depthFor(a) - depthFor(b));
     for (const entity of renderables) drawWorldEntity(entity, shakeX, shakeY);
+    // The newest Main Town can bake the panel artwork into the flattened map.
+    // Keep its invisible authored interaction region authoritative and paint
+    // only the subtle gold outline when the separate prop itself is hidden.
+    for (const board of world.boards || []) {
+      if (board.boardId === "deck-loadout" && board.render === false && inView(board, 120)) {
+        drawSkillPanelGlow(board, shakeX, shakeY);
+      }
+    }
   }
 
   function drawWorldEntity(entity, shakeX, shakeY) {
@@ -6913,6 +7157,8 @@
     if (prop.kind === "questBoard") {
       const indoor = ["guild", "shop", "clinic", "general-store", "inn", "dungeon"].includes(currentMapId);
       const boardDrawer = indoor ? Art.drawInteriorSprite : Art.drawEnvironmentSprite;
+      const isSkillPanel = prop.boardId === "deck-loadout";
+      if (isSkillPanel) drawSkillPanelGlow(prop, shakeX, shakeY);
       if (boardDrawer(ctx, {
         sprite: indoor ? "indoorQuestBoard" : "questBoard",
         x: point.x,
@@ -8156,6 +8402,7 @@
     openStatusFromHud();
   });
   inventoryButton.addEventListener("click", () => openFacility("bag"));
+  missionButton?.addEventListener("click", () => openFacility("missions"));
   deckButton.addEventListener("click", openDeckFromSidebar);
   skillTreeButton.addEventListener("click", () => openFacility("skills"));
   document.getElementById("skillBookLearnButton").addEventListener("click", confirmSkillManualLearning);
@@ -8238,6 +8485,7 @@
     if (mode === "battle") event.preventDefault();
   });
   canvas.addEventListener("pointermove", handleCanvasPointerMove);
+  canvas.addEventListener("pointerleave", clearExploreHoverPointer);
   canvas.addEventListener("pointerup", finishCanvasPointer);
   canvas.addEventListener("pointercancel", (event) => cancelExplorePointerTracking(event.pointerId));
   canvas.addEventListener("lostpointercapture", (event) => {
@@ -8250,7 +8498,15 @@
   });
   document.getElementById("soundButton").addEventListener("click", () => {
     soundEnabled = !soundEnabled;
-    bgm.setEnabled(soundEnabled);
+    if (mode === "battle") {
+      bgm.setEnabled(false);
+      if (battleBgmAudio) {
+        if (soundEnabled) battleBgmAudio.play().catch(() => {});
+        else battleBgmAudio.pause();
+      }
+    } else {
+      bgm.setEnabled(soundEnabled);
+    }
     try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
     const button = document.getElementById("soundButton");
     button.setAttribute("aria-pressed", String(soundEnabled));

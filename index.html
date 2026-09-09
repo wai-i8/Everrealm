@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-HK">
   <head>
     <meta charset="UTF-8" />
@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="styles.css" />
     <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
     <link id="everrealmUiStyles" rel="stylesheet" href="ui-system.css" />
+    <link id="inventoryMinimalStyles" rel="stylesheet" href="inventory-minimal.css" />
   </head>
   <body>
     <main id="gameShell" class="game-shell">
@@ -42,6 +43,10 @@
             <button id="statusButton" class="explore-menu-button" type="button" aria-label="打開角色狀態欄">
               <span class="explore-menu-icon" aria-hidden="true">◎</span>
               <span class="explore-menu-copy"><b>狀態</b><small>STATUS</small></span>
+            </button>
+            <button id="missionButton" class="explore-menu-button" type="button" aria-label="打開任務">
+              <span class="explore-menu-icon" aria-hidden="true">◇</span>
+              <span class="explore-menu-copy"><b>任務</b><small>QUESTS</small></span>
             </button>
             <button id="inventoryButton" class="explore-menu-button" type="button" aria-label="打開物品欄（I）">
               <span class="explore-menu-icon" aria-hidden="true">▣</span>
@@ -351,7 +356,7 @@
       <footer class="footer-hints">
         <span><b>滑鼠 / 觸控</b> 撳地面移動</span>
         <span><b>撳 NPC / 設施</b> 靠近或互動</span>
-        <span><b>左側選單</b> 狀態／物品／技能</span>
+        <span><b>左側選單</b> 狀態／任務／物品／技能</span>
         <span><b>戰鬥</b> 揀指令再揀格仔</span>
         <span><b>ESC</b> 戰鬥撤退</span>
       </footer>

@@ -2581,3 +2581,32 @@ Automated tests pass 後仍然必須實際 run game。
 
 > **戰場上單位、位置、朝向、路線與地形都係戰鬥規則，而唔只係畫面裝飾。**
 
+
+
+## Battle V7 visual / fighter phase 1
+
+- Opening mountain battlefield keeps the existing **8 × 3** logical grid. The redesign changes presentation, not tactical dimensions.
+- Projection is more top-down and the terrain island has a visibly thicker base; Level 0 remains flat and only authored height-map cells rise.
+- Player opens on the second longitudinal row from the bottom, middle lane (`1,1`). High tree cover is on the left flank, low scrub is on the right flank, keeping the centre lane readable.
+- Fighter uses a **battle-only four-diagonal atlas** (`↖ / ↗ / ↘ / ↙`) for Idle, Walk, Attack and Hurt. Exploration locomotion remains unchanged.
+- Movement planning never rotates the actor sprite. Planned facing stays preview data; the actor turns only when confirmed movement resolution plays.
+- Facing-picker geometry comes from the battlefield projection basis instead of hard-coded 45° HUD diagonals.
+- Skill names are centred in their command rows.
+
+
+## Battle V9 implementation notes
+- Opening mountain battlefield stays 8×3. The board uses a slightly larger presentation scale, thicker terrain-island side depth, a lower responsive viewport anchor, and no permanent per-cell grid lines outside move/skill planning.
+- Fighter battle movement displays remaining movement power numerically (starts at 6.0 in the current fighter tuning). Walking costs 1.0, a quarter-turn costs 0.5, and a 180° turn costs 1.0. One point is reserved from route extension for final facing; unused reserve expires when movement is committed.
+- Battle AP uses a yellow progress bar, starts at 10, gains 10 each round, and caps at 200.
+- The sequential turn-order panel is removed because Everrealm uses simultaneous planning/resolution. Timers remain unlimited for the single-player build.
+- The player-facing hero name is 時光之光.
+- Mountain high-tree and low-scrub obstacle art now use clean transparent-alpha battle assets with no white matte/halo; the tree is visually tall and the scrub visibly low.
+- Battle BGM loops from assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3 and temporarily replaces map BGM during battle.
+
+
+### V10 visual / interaction polish
+- Battle fighter idle/walk/attack/hurt use one physical render scale; attack no longer enlarges the actor.
+- The 8×3 projected board uses slightly larger tile faces while preserving V9 actor sizes via a separate actorCell reference.
+- Base tile outlines are not rendered; only movement/skill/selection overlays reveal the logical grid.
+- Mountain high-tree and low-scrub battle obstacles use the latest transparent user-supplied cutouts.
+- The world skill panel is named 「戰技面板」. Its authored interaction region stays invisible; proximity/hover adds only a subtle warm-gold breathing glow. Desktop exploration uses feather/default and hand/interactive custom cursors.

@@ -285,6 +285,7 @@
     heroRight: { src: "assets/hero-anim-right-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
     fighter: { src: "assets/fighter-atlas-v2.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     fighterWalk: { src: "assets/fighter-walk-atlas-v4.png", columns: 4, rows: 4, rowCuts: [0, 292 / 1199, 585 / 1199, 869 / 1199, 1], image: null, ready: false, failed: false },
+    fighterBattleDiagonal: { src: "assets/battle/fighter/fighter-battle-diagonal-v1.png", columns: 5, rows: 4, image: null, ready: false, failed: false },
     // Only the smith's left gutter contains the previous actor's pale cloak.
     // Scope the legacy crop to that frame so other NPCs retain their full art.
     npcMap: { src: "assets/npc-map-chibi-v4.png", columns: 4, rows: 3, cellInsets: { 1: { left: 24 } }, image: null, ready: false, failed: false },
@@ -299,6 +300,8 @@
     guildBackground: { src: "assets/guild/guild.png", background: true, image: null, ready: false, failed: false },
     battleMountainBackground: { src: "assets/battle/mountain/mountain-battle-background-v1.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v3.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
+    battleHighTree: { src: "assets/battle/mountain/battle-tree-high-v1.png", standalone: true, image: null, ready: false, failed: false },
+    battleLowScrub: { src: "assets/battle/mountain/battle-scrub-low-v1.png", standalone: true, image: null, ready: false, failed: false },
     interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
     monstersCore: { src: "assets/monster-facing-core-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     monstersDepths: { src: "assets/monster-facing-depths-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
@@ -536,6 +539,72 @@
     return { atlas: spriteAtlases.npcPortraits, index: npcArtIndices[actor] ?? npcArtIndices.villager };
   }
 
+  function battleDiagonalFighterFrame(settings) {
+    const atlas = spriteAtlases.fighterBattleDiagonal;
+    const facing = settings.facing || settings.locomotion?.facing || "right";
+    const row = ({ right: 0, down: 1, left: 2, up: 3 })[facing] ?? 0;
+    const state = settings.state || settings.locomotion?.state || "idle";
+    const phase = Number(settings.phase) || Number(settings.locomotion?.time) || 0;
+    let column = 0;
+    if (["walk", "run"].includes(state)) column = 1 + (Math.floor(phase * 8) % 2);
+    else if (state === "attack") column = 3;
+    else if (state === "hurt") column = 4;
+    return { atlas, index: row * atlas.columns + column, facing, state };
+  }
+
+  function drawBattleFighterDiagonal(ctx, settings) {
+    if (!(settings?.battleDiagonal || settings?.battleProjected) || settings.classId !== "fighter") return false;
+    if ((settings.actor || settings.kind) !== "player") return false;
+    const selected = battleDiagonalFighterFrame(settings);
+    const atlas = selected.atlas;
+    if (!atlas?.ready || !atlas.image) return false;
+    const opaque = opaqueAtlasFrame(atlas, selected.index);
+    const x = Number(settings.x) || 0;
+    const y = Number(settings.y) || 0;
+    const scale = Math.max(.08, Number(settings.scale) || 1);
+    const targetHeight = Math.max(1, 256 * scale);
+    const box = fitFrameToBaseline(opaque, { x, y, height: targetHeight, anchorXRatio: .5, anchorYRatio: 1 });
+    const progress = clamp(Number.isFinite(settings.progress) ? settings.progress : .5, 0, 1);
+    const vector = ({
+      right: { x: .86, y: -.5 },
+      down: { x: .86, y: .5 },
+      left: { x: -.86, y: .5 },
+      up: { x: -.86, y: -.5 },
+    })[selected.facing] || { x: .86, y: -.5 };
+    const attackOffset = selected.state === "attack" ? Math.sin(progress * Math.PI) * targetHeight * .06 : 0;
+    const hurtShake = selected.state === "hurt" ? Math.sin((Number(settings.phase) || 0) * 48) * targetHeight * .015 : 0;
+    const drawX = box.x + vector.x * attackOffset + hurtShake;
+    const drawY = box.y + vector.y * attackOffset;
+    ctx.save();
+    try {
+      drawGroundShadow(ctx, x, y, scale, 15, selected.state === "hurt" ? .24 : .34);
+      if (selected.state === "hurt") {
+        ctx.globalAlpha *= .84;
+        ctx.filter = "brightness(1.12) saturate(.88)";
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, opaque.sx, opaque.sy, opaque.sw, opaque.sh, drawX, drawY, box.width, box.height);
+    } finally { ctx.restore(); }
+    const nameAnchorX = x;
+    const nameAnchorY = box.y - 4 * scale;
+    return {
+      ...box,
+      left: drawX,
+      right: drawX + box.width,
+      top: drawY,
+      bottom: y,
+      nameAnchorX,
+      nameAnchorY,
+      markerAnchorX: nameAnchorX,
+      markerAnchorY: nameAnchorY - 20 * scale,
+      atlas: atlas.src,
+      frame: selected.index,
+      facing: selected.facing,
+      battleDiagonal: true,
+    };
+  }
+
   function drawLocomotion(ctx, settings, id) {
     if (![undefined, "idle", "walk"].includes(settings.state)) return false;
     const atlas = spriteAtlases[`locomotion_${id}`];
@@ -682,6 +751,8 @@
 
   function drawBitmapCharacter(ctx, settings) {
     if ((settings.actor || settings.kind) === "player") {
+      const battleDiagonal = drawBattleFighterDiagonal(ctx, settings);
+      if (battleDiagonal) return battleDiagonal;
       if (settings.state === "stop") {
         const reaction = drawLocomotionReaction(ctx, settings, settings.classId || "warrior");
         if (reaction) return reaction;

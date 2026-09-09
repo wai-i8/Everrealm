@@ -93,36 +93,35 @@
     dungeonExit.direction = "north"; dungeonExit.mapLabel = "坑道"; dungeonExit.alwaysVisible = true; dungeonExit.minLevel = 5;
     const start = point(3, 26);
     const openingBattlefield = {
-      id: "mountain-opening-v1",
+      id: "mountain-opening-v3",
       width: 8,
       height: 3,
       projection: {
-        // Equal-length screen axes keep every logical 1×1 cell visually
-        // square/rhombic instead of stretching one direction into a rectangle.
-        // The board is a flat oblique plane; elevation is applied only to the
-        // explicit raised plateau below.
-        xAxis: { x: .78, y: -.36 },
-        yAxis: { x: .78, y: .36 },
-        elevationStep: .18,
-        baseThickness: .075,
+        // Keep the original 8×3 tactical structure.  The visual change is a
+        // higher oblique camera plus a substantially thicker terrain island,
+        // not a different logical grid.
+        xAxis: { x: .78, y: -.50 },
+        yAxis: { x: .78, y: .50 },
+        elevationStep: .26,
+        baseThickness: .28,
       },
       deploymentZones: {
-        ally: [{ x: 0, y: 2 }, { x: 0, y: 1 }, { x: 1, y: 2 }],
-        enemy: [{ x: 7, y: 0 }, { x: 6, y: 0 }, { x: 7, y: 1 }],
+        // "Second row from the bottom, middle cell" in the 8×3 strip:
+        // x=1 is the second longitudinal row; y=1 is the middle lane.
+        ally: [{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 0 }],
+        enemy: [{ x: 6, y: 1 }, { x: 6, y: 0 }, { x: 6, y: 2 }],
       },
-      // The first field battle teaches height with one compact raised shelf
-      // behind the low-cover scrub.  The whole Level-0 board remains one flat
-      // plane; only this 2×2 corner rises by a single clear terrain tier.
+      // A compact raised shelf sits behind the right-side low cover.  Level 0
+      // remains one flat plane; only these authored cells rise.
       heightMap: {
-        "6,0": 1, "7,0": 1,
         "6,1": 1, "7,1": 1,
+        "6,2": 1, "7,2": 1,
       },
       terrainCells: {
-        // High obstacle: blocks movement, direct lines and ballistic arcs.
-        "2,1": { kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
-        // Low obstacle: blocks movement and direct lines, but a normal arc can
-        // clear it.  This is the player's first low-cover example.
-        "5,1": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
+        // Keep the centre lane readable: high cover on the left flank, low
+        // cover on the right flank, matching the simple opening-battle lesson.
+        "3,0": { kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
+        "5,2": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
       },
     };
     return withMapCollections({

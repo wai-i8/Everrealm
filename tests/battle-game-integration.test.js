@@ -5,6 +5,8 @@ const path = require("node:path");
 
 const game = fs.readFileSync(path.resolve(__dirname, "..", "game.js"), "utf8");
 const mountainField = fs.readFileSync(path.resolve(__dirname, "..", "maps", "mountain-field.js"), "utf8");
+const characterArt = fs.readFileSync(path.resolve(__dirname, "..", "character-art.js"), "utf8");
+const styles = fs.readFileSync(path.resolve(__dirname, "..", "styles.css"), "utf8");
 
 test("battle movement uses facing-aware timed simultaneous resolution", () => {
   assert.match(game, /Tactics\.movementCommandEvents\(start,[\s\S]{0,220}?turnCost:\s*BATTLE_TURN_COST,[\s\S]{0,100}?initialFacing:\s*battle\.hero\.facing/);
@@ -43,32 +45,31 @@ test("movement planning appends waypoint segments without rewriting route histor
   assert.doesNotMatch(game, /destination-first/);
 });
 
-test("planning facing is previewed on the hero sprite before movement resolves", () => {
+test("planning keeps the hero sprite on current facing until movement resolves", () => {
   assert.match(game, /function battleUnitRenderFacing\(unit\)/);
-  assert.match(game, /battleMoveDraftState\(\)\.facing \|\| unit\.facing/);
-  assert.match(game, /facing: renderFacing/);
+  assert.doesNotMatch(game, /battleMoveDraftState\(\)\.facing \|\| unit\.facing/);
+  assert.match(game, /Planning is a non-destructive preview/);
   assert.match(game, /battleFacingScreenVector\(renderFacing, layout\)/);
 });
 
-test("projected facing UI presents logical cardinal axes as screen diagonals", () => {
-  assert.match(game, /up: \["↖", "左上"\]/);
-  assert.match(game, /right: \["↗", "右上"\]/);
-  assert.match(game, /down: \["↘", "右下"\]/);
-  assert.match(game, /left: \["↙", "左下"\]/);
-  assert.match(game, /battleFacingDisplayLabel/);
+test("projected facing UI follows the actual battlefield projection basis", () => {
+  assert.match(game, /const vector = battleFacingScreenVector\(facing, layout\)/);
+  assert.match(game, /Math\.atan2\(vector\.y, vector\.x\)/);
+  assert.match(game, /--battle-facing-angle/);
+  assert.match(styles, /scaleY\(\.78\)/);
+  assert.match(styles, /rotate\(var\(--battle-facing-angle/);
 });
 
 
-test("opening mountain battle uses the compact oblique teaching battlefield", () => {
-  assert.match(mountainField, /width:\s*8,\s*\n\s*height:\s*3/);
-  assert.match(mountainField, /projection:\s*\{/);
-  assert.match(mountainField, /deploymentZones:[\s\S]*?ally:[\s\S]*?enemy:/);
-  assert.match(mountainField, /"2,1"[\s\S]*?kind:\s*"tree"[\s\S]*?blocksLinear:\s*true[\s\S]*?blocksArc:\s*true/);
-  assert.match(mountainField, /"5,1"[\s\S]*?kind:\s*"scrub"[\s\S]*?blocksLinear:\s*true[\s\S]*?blocksArc:\s*false/);
-  assert.match(mountainField, /"6,0":\s*1/);
-  assert.doesNotMatch(mountainField, /"6,0":\s*2/);
-  assert.match(mountainField, /xAxis:\s*\{\s*x:\s*\.78,\s*y:\s*-\.36\s*\}/);
-  assert.match(mountainField, /yAxis:\s*\{\s*x:\s*\.78,\s*y:\s*\.36\s*\}/);
+test("opening mountain battle keeps the 8x3 structure with thicker visual depth", () => {
+  assert.match(mountainField, /width:\s*8,[\s\S]*?height:\s*3/);
+  assert.match(mountainField, /ally:\s*\[\{ x: 1, y: 1 \}/);
+  assert.match(mountainField, /enemy:\s*\[\{ x: 6, y: 1 \}/);
+  assert.match(mountainField, /"3,0"[\s\S]*?kind:\s*"tree"[\s\S]*?blocksArc:\s*true/);
+  assert.match(mountainField, /"5,2"[\s\S]*?kind:\s*"scrub"[\s\S]*?blocksArc:\s*false/);
+  assert.match(mountainField, /xAxis:\s*\{\s*x:\s*\.78,\s*y:\s*-\.50\s*\}/);
+  assert.match(mountainField, /yAxis:\s*\{\s*x:\s*\.78,\s*y:\s*\.50\s*\}/);
+  assert.match(mountainField, /baseThickness:\s*\.28/);
 });
 
 test("battle renderer keeps logical cells separate from projected 2.5D presentation", () => {
@@ -113,15 +114,89 @@ test("battle command UI keeps choices simple and reveals detail only after skill
   assert.doesNotMatch(game, /返回探索/);
 });
 
-test("movement command UI renders full half and empty remaining-step pips", () => {
-  assert.match(game, /function battleMovePipsMarkup\(/);
-  assert.match(game, /is-\$\{state\}/);
-  assert.match(game, /value >= 1 \? "full" : value >= \.5 \? "half" : "empty"/);
-  assert.match(game, /剩餘移動 \$\{formatMoveCost\(safeRemaining\)\} 步/);
+test("movement command UI shows numeric remaining movement power", () => {
+  assert.match(game, /function battleMoveRemainingMarkup\(/);
+  assert.match(game, /剩餘移動力/);
+  assert.match(game, /formatRemainingMove\(remaining\)/);
+  assert.doesNotMatch(game, /battleMovePipsMarkup/);
 });
 
 test("projected battle layout normalizes both screen axes to equal length", () => {
   assert.match(game, /const projectedAxisLength = \(xLength \+ yLength\) \* \.5/);
   assert.match(game, /const xAxis = \{ x: .*?projectedAxisLength/);
   assert.match(game, /const yAxis = \{ x: .*?projectedAxisLength/);
+});
+
+
+test("fighter uses a true battle-only four-diagonal atlas", () => {
+  assert.doesNotMatch(game, /battleUnitArtFacing/);
+  assert.match(game, /battleDiagonal: layout\.projected/);
+  assert.match(characterArt, /fighterBattleDiagonal/);
+  assert.match(characterArt, /fighter-battle-diagonal-v1\.png/);
+  assert.match(characterArt, /\{ right: 0, down: 1, left: 2, up: 3 \}/);
+  assert.match(characterArt, /column = 1 \+ \(Math\.floor/);
+  assert.match(characterArt, /state === "attack"\) column = 3/);
+  assert.match(characterArt, /state === "hurt"\) column = 4/);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "fighter", "fighter-battle-diagonal-v1.png")), true);
+});
+
+test("battle skill rows are visually centred", () => {
+  assert.match(styles, /\.battle-command-skill \{[\s\S]*?text-align: center/);
+  assert.match(styles, /\.battle-command-skill b \{[\s\S]*?text-align: center/);
+  assert.doesNotMatch(styles, /\.battle-command-skill \{[\s\S]{0,260}?text-align: left/);
+});
+
+
+test("fighter route planning reserves one movement point for final facing", () => {
+  assert.match(game, /BATTLE_FINAL_FACING_RESERVE = 1/);
+  assert.match(game, /stats\.moveRange \+ BATTLE_FINAL_FACING_RESERVE/);
+  assert.match(game, /battleRouteBudgetRemaining/);
+  assert.match(game, /battle\.hero\.moveRange - battleFacingReserve\(\)/);
+});
+
+test("facing buttons dim when the planned turn is unaffordable", () => {
+  assert.match(game, /button\.disabled = !affordable/);
+  assert.match(game, /button\.classList\.toggle\("is-unaffordable", !affordable\)/);
+  assert.match(styles, /battle-facing-picker button:disabled/);
+});
+
+test("battle UI uses AP bar and omits sequential turn-order panel", () => {
+  assert.match(game, /selectedUnitApFill/);
+  assert.match(game, /battleUi\.apFill\.style\.width/);
+  assert.doesNotMatch(game, /battleTurnOrderList/);
+  assert.doesNotMatch(game, /buildTurnOrder\(livingBattleEnemies\(\)\)/);
+});
+
+test("battle BGM loops from the supplied seamless mp3", () => {
+  assert.match(game, /everrealm_battle_bgm_v2_seamless_loop\.mp3/);
+  assert.match(game, /battleBgmAudio\.loop = true/);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "audio", "everrealm_battle_bgm_v2_seamless_loop.mp3")), true);
+});
+
+test("battle base terrain has no permanent grid outlines and obstacle art uses alpha assets", () => {
+  assert.doesNotMatch(game, /showGridLines = \["planning_move", "planning_action"\]\.includes/);
+  assert.match(game, /Do not outline every logical cell/);
+  assert.match(characterArt, /battleHighTree/);
+  assert.match(characterArt, /battleLowScrub/);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "mountain", "battle-tree-high-v1.png")), true);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "mountain", "battle-scrub-low-v1.png")), true);
+});
+
+test("battle fighter keeps one physical scale for idle attack and hurt", () => {
+  assert.match(game, /const actorCell = layout\.actorCell \|\| layout\.cell/);
+  assert.match(game, /scale: heroScale/);
+  assert.doesNotMatch(game, /\["attack", "hurt"\]\.includes\(visualState\) \? layout\.cell \/ 43/);
+});
+
+test("skill panel uses subtle proximity glow and custom exploration cursors", () => {
+  assert.match(game, /prop\.boardId === "deck-loadout"/);
+  assert.match(game, /function drawSkillPanelGlow/);
+  assert.match(game, /nearestInteraction\?\.id === prop\.id/);
+  assert.match(game, /exploreHoverEntityId === prop\.id/);
+  assert.match(game, /board\.render === false/);
+  assert.match(game, /canvas\.dataset\.exploreCursor = entity && !entity\.type \? "interact" : "default"/);
+  assert.match(styles, /cursor-feather-v1\.png/);
+  assert.match(styles, /cursor-interact-v1\.png/);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "ui", "cursor-feather-v1.png")), true);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "ui", "cursor-interact-v1.png")), true);
 });

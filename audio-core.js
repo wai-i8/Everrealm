@@ -6,16 +6,17 @@
   "use strict";
 
   const BGM_TRACKS = Object.freeze({
-    mainTown: Object.freeze({ key: "mainTown", src: "assets/audio/bgm/maintown.wav", label: "主城夜燈" }),
-    mountainField: Object.freeze({ key: "mountainField", src: "assets/audio/bgm/mountainousareas.wav", label: "山地霧路" }),
+    mainTown: Object.freeze({ key: "mainTown", src: "assets/audio/bgm/maintown.mp3", label: "主城夜燈" }),
+    mountainField: Object.freeze({ key: "mountainField", src: "assets/audio/bgm/mountainousareas.mp3", label: "山地霧路" }),
+    building: Object.freeze({ key: "building", src: "assets/audio/bgm/building.mp3", label: "室內時光" }),
   });
   const BGM_ZONE_BY_MAP = Object.freeze({
     world: "mainTown",
-    guild: "mainTown",
-    shop: "mainTown",
-    clinic: "mainTown",
-    "general-store": "mainTown",
-    inn: "mainTown",
+    guild: "building",
+    shop: "building",
+    clinic: "building",
+    "general-store": "building",
+    inn: "building",
     field: "mountainField",
     dungeon: "mountainField",
   });

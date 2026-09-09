@@ -375,6 +375,22 @@
     return Object.prototype.hasOwnProperty.call(FACING_VECTORS, facing) ? facing : null;
   }
 
+  function facingQuarterTurns(fromFacing, toFacing) {
+    const order = ["up", "right", "down", "left"];
+    const from = order.indexOf(normalizeFacing(fromFacing));
+    const to = order.indexOf(normalizeFacing(toFacing));
+    if (from < 0 || to < 0) return 0;
+    const delta = Math.abs(from - to);
+    return Math.min(delta, 4 - delta);
+  }
+
+  function facingTurnCost(fromFacing, toFacing, quarterTurnCost = .5, footwork = false) {
+    const base = Math.max(0, finiteStat(quarterTurnCost, .5));
+    const quarters = facingQuarterTurns(fromFacing, toFacing);
+    if (footwork && quarters === 0) return base;
+    return quarters * base;
+  }
+
   function movementEvents(path, options = {}) {
     const route = Array.isArray(path) ? path.filter(validCell).map(copyCell) : [];
     const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
@@ -402,15 +418,16 @@
       }
       const direction = facingFromStep(from, to, facing || "down");
       if (facing && direction !== facing && turnCost > 0) {
+        const turnDuration = facingTurnCost(facing, direction, turnCost);
         events.push({
           type: "turn",
           cell: copyCell(from),
           fromFacing: facing,
           facing: direction,
-          duration: turnCost,
+          duration: turnDuration,
           routeIndex: index,
         });
-        totalCost += turnCost;
+        totalCost += turnDuration;
       }
       facing = direction;
       events.push({
@@ -457,16 +474,17 @@
           facing = requested;
           continue;
         }
+        const turnDuration = facingTurnCost(facing || requested, requested, turnCost, true);
         events.push({
           type: "turn",
           cell: copyCell(current),
           fromFacing: facing || requested,
           facing: requested,
-          duration: turnCost,
+          duration: turnDuration,
           commandIndex: index,
           footwork: true,
         });
-        totalCost += turnCost;
+        totalCost += turnDuration;
         facing = requested;
         continue;
       }
@@ -478,15 +496,16 @@
       }
       const direction = facingFromStep(current, to, facing || "down");
       if (facing && direction !== facing && turnCost > 0) {
+        const turnDuration = facingTurnCost(facing, direction, turnCost);
         events.push({
           type: "turn",
           cell: copyCell(current),
           fromFacing: facing,
           facing: direction,
-          duration: turnCost,
+          duration: turnDuration,
           commandIndex: index,
         });
-        totalCost += turnCost;
+        totalCost += turnDuration;
       }
       facing = direction;
       events.push({
@@ -546,7 +565,7 @@
         const key = cellKey(next);
         if (terrainIsBlocked(grid, next) || occupied.has(key)) continue;
         const direction = facingFromStep(current, next);
-        const nextCost = currentCost + 1 + (previousDirection && direction !== previousDirection ? turnCost : 0);
+        const nextCost = currentCost + 1 + (previousDirection && direction !== previousDirection ? facingTurnCost(previousDirection, direction, turnCost) : 0);
         if (nextCost > limit + 1e-9) continue;
         const nextState = `${key}|${direction}`;
         const known = costs.get(nextState);
@@ -1448,6 +1467,8 @@
     movementEvents,
     movementCommandEvents,
     movementCommandCost,
+    facingQuarterTurns,
+    facingTurnCost,
     resolveSimultaneousMovement,
     resolveTimedSimultaneousMovement,
     attackTiles,

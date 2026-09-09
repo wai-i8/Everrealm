@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "columns": 6,
+  "rows": 4,
+  "cellWidth": 256,
+  "cellHeight": 256,
+  "anchorX": 128,
+  "anchorY": 224,
+  "directions": { "up": 0, "right": 1, "down": 2, "left": 3 },
+  "screenDirections": { "up": "north-west", "right": "north-east", "down": "south-east", "left": "south-west" },
+  "columnsByState": { "idle": [0], "walk": [1, 2, 3], "attack": [4], "hurt": [5] },
+  "scope": "battle-only fighter phase 1"
+}

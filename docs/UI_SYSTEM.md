@@ -158,16 +158,22 @@ Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 f
 
 ### Exploration HUD
 
-探索左側 HUD 固定以 character summary、quick resources、main functions、secondary
-view/audio controls、公會委託 tracker 呢個優先次序組成。expanded state 必須係實際
-DOM／layout recomposition：角色摘要係 compact header，資源同武器係 quick-info
-strip，主要功能係視覺主層，視角／聲效係獨立 secondary row，任務係 compact
-independent section；唔可以只喺舊 card stack 上加裝飾。短資料唔應拆成多個同等
-重量嘅 nested card，music control 亦唔可孤立喺一個大空盒內。頂部使用
-`assets/ui/ui-sidebar-toggle-v1.png` bitmap pull-tab；expanded state 顯示完整 HUD，
-collapsed state 只保留呢個 bitmap tab，唔留 portrait、menu rail、commission card 或暗色
-strip。collapse 係 UI preference，儲存於 localStorage，跨 map/interior/refresh 保留，
-唔改變 movement、keyboard、combat、commission 或 progression。
+探索左側 HUD 係 compact mobile-game function menu，而唔係常駐角色資料表。expanded
+state 只保留四個 primary entry：`狀態`、`物品欄`、`戰技面板`、`技能樹`，以及底部
+`遠／中／近` 視角控制同 close control。角色頭像、名稱、Level、HP／XP、金錢、藥水、
+目前武器及公會委託摘要唔喺 expanded rail 常駐顯示；詳細資料由相應 Status、Inventory、
+Guild 等 feature panel 擁有。primary entries 使用純文字，唔加 icon、英文副標、右箭嘴或
+獨立 card frame；項目只用低對比分隔同 hover/focus highlight 表達可點擊性。
+
+左上 collapse control 係貼齊 panel top／left edge 嘅直角三角形 corner tab，以 CSS
+繪製並保留清楚 chevron affordance；唔使用 detached bitmap badge。collapsed state 只保留
+呢個 corner tab，唔留暗色 strip。collapse 係 UI preference，仍儲存於 localStorage，跨
+map/interior/refresh 保留，唔改變 movement、keyboard、combat、commission 或 progression。
+
+窄屏／touch runtime 要以 installed mobile-game shell 處理：game stage 貼 viewport edge，
+唔保留 desktop outer gutter、rounded frame 或額外深藍邊。sidebar 亦貼左上 safe edge，
+內容高度由四個 primary entries 加 secondary controls 自然決定，禁止用固定高 panel
+製造大面積留白。
 
 ### Dialogue action language
 
