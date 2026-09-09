@@ -63,6 +63,8 @@
 - Multi-hit 技能先計整招總傷害，再拆成每 Hit；除唔盡嘅整數 remainder 永遠優先分畀後面 Hits。原作標記「判定：毎回」嘅連擊類技能，每 Hit 都按更新後 battle state 重新掃同一 attack path，因此前一 Hit 擊倒／擊殺 blocker 後，下一 Hit 可以繼續打到路線後方單位。
 - 攻擊唔係「點中邊個就必定打中邊個」。Linear 攻擊使用共用 deterministic 正交 attack-path resolver：目標喺前半面時先向前再左右轉；同橫排直接左右；目標喺後半面時先左右、再向後。實際路線上第一個合法單位／地形可以攔截。Arc 攻擊按弧線高度判斷；Pathless 攻擊冇中途 interception。詳細規則見 `docs/BATTLE_SYSTEM.md`。
 - 戰鬥引擎由一開始預留 Line of Sight、Line of Effect 及地形高度接口；戰場嘅 biome、terrain、obstacle 及 height context 來源由 `docs/MAP_SYSTEM.md` 定義。
+- PC 初始山地戰場採用《幸福 Online／STRUGARDEN》式左下→右上 2.5D 斜視構圖；邏輯仍然係 2D grid + authored elevation。第一個 teaching battlefield 為 `8×3` 小場，普通地面有可見厚度，scrub 後方有兩級高地；一棵 high tree 阻 Linear + Arc，一叢 low scrub 只阻 Linear，讓玩家一開始就理解 cover 高度同 elevation。
+- 戰鬥角色／怪物 sprite 保持直立；名稱跟實際 sprite semantic head anchor，而唔跟 tile 上緣。Floating command menu 預設錨定玩家 tile 左下外側，避免遮住右上方主要戰場。
 
 完整 movement、collision、AI、targeting、attack trace、projectile blocking、AP、速度、高低差接口及戰鬥驗收規格：
 

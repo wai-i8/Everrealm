@@ -92,6 +92,34 @@
     const dungeonExit = makeExit("field-to-dungeon", 37, 1, MAP_IDS.DUNGEON, "entrance", "進入沉燈坑道", point(9, 26), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     dungeonExit.direction = "north"; dungeonExit.mapLabel = "坑道"; dungeonExit.alwaysVisible = true; dungeonExit.minLevel = 5;
     const start = point(3, 26);
+    const openingBattlefield = {
+      id: "mountain-opening-v1",
+      width: 8,
+      height: 3,
+      projection: {
+        xAxis: { x: .9, y: -.28 },
+        yAxis: { x: .22, y: .68 },
+        elevationStep: .22,
+        baseThickness: .16,
+      },
+      deploymentZones: {
+        ally: [{ x: 0, y: 2 }, { x: 0, y: 1 }, { x: 1, y: 2 }],
+        enemy: [{ x: 7, y: 0 }, { x: 6, y: 0 }, { x: 7, y: 1 }],
+      },
+      // The first field battle deliberately teaches elevation with one small
+      // ramp into a two-level plateau behind the low-cover scrub.
+      heightMap: {
+        "5,0": 2, "6,0": 2, "7,0": 2,
+        "5,1": 1, "6,1": 2, "7,1": 2,
+      },
+      terrainCells: {
+        // High obstacle: blocks movement, direct lines and ballistic arcs.
+        "2,1": { kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
+        // Low obstacle: blocks movement and direct lines, but a normal arc can
+        // clear it.  This is the player's first low-cover example.
+        "4,1": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
+      },
+    };
     return withMapCollections({
       id: MAP_IDS.FIELD, name: "霧梅爾山地東南部", shortName: "霧梅爾山地", kind: "field", type: "world", biome: "mountain", theme: "forest-road", ambient: "misty-woodland",
       tileSize: TILE, tileTypes: TILES, width, height, tiles, start,
@@ -99,6 +127,7 @@
       solidRects: [], furniture: [], decorations: [], boards: [], npcs, enemySpawns, chests, shrine: null, waypoint: null,
       worldPortalId: "world-to-field", dungeonPortalId: dungeonExit.id,
       objectives: { dungeon: point(37, 1), town: point(1, 26) },
+      battlefield: openingBattlefield,
       routeLayout: { style: "east-then-north", entrySide: "west", dungeonSide: "north", waypoints: [point(1, 26), point(29, 26), point(35, 22), point(37, 16), point(37, 1)], solidOutsideRoute: true },
       forestLayout: { style: "solid-tree-mass", treePattern: "two-tile-canopy-grid", collisionTile: TILES.WALL, visualGroundTile: TILES.GRASS, collisionRadius: 28, roadClearanceTiles: 2.15, clearings: [{ id: "far-field-clearing", ...point(deliveryClearing.x, deliveryClearing.y), radiusTiles: deliveryClearing.radius }] },
       staticObjects: [...trees, ...signs],

@@ -1075,6 +1075,42 @@
     return drawBattleBitmap(ctx, atlas, settings, true);
   }
 
+  // Affine-project the authored battle-ground bitmap onto an oblique 2.5D
+  // board.  Callers may clip to one elevated cell before invoking this so the
+  // source texture stays continuous while the cell itself is vertically lifted.
+  function drawBattleGroundProjected(ctx, options) {
+    const settings = options || {};
+    const atlas = settings.theme === "mountain" ? spriteAtlases.battleMountainGround : null;
+    if (!atlas?.ready || !atlas.image) return false;
+    const sourceWidth = atlas.image.naturalWidth || atlas.image.width;
+    const sourceHeight = atlas.image.naturalHeight || atlas.image.height;
+    if (!sourceWidth || !sourceHeight) return false;
+    const logicalWidth = Math.max(1, Number(settings.logicalWidth) || 1);
+    const logicalHeight = Math.max(1, Number(settings.logicalHeight) || 1);
+    const stepX = settings.stepX || { x: 1, y: 0 };
+    const stepY = settings.stepY || { x: 0, y: 1 };
+    const originX = Number(settings.originX) || 0;
+    const originY = Number(settings.originY) || 0;
+    ctx.save();
+    try {
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? settings.alpha : 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.transform(
+        Number(stepX.x) * logicalWidth / sourceWidth,
+        Number(stepX.y) * logicalWidth / sourceWidth,
+        Number(stepY.x) * logicalHeight / sourceHeight,
+        Number(stepY.y) * logicalHeight / sourceHeight,
+        originX,
+        originY,
+      );
+      ctx.drawImage(atlas.image, 0, 0);
+    } finally {
+      ctx.restore();
+    }
+    return true;
+  }
+
   function drawFlattenedBackground(ctx, scene, options) {
     const atlas = spriteAtlases[`${String(scene || "").trim()}Background`];
     if (!atlas?.ready || !atlas.image) return false;
@@ -1870,6 +1906,7 @@
     drawTerrainTile,
     drawBattleBackground,
     drawBattleGround,
+    drawBattleGroundProjected,
     drawFlattenedBackground,
     drawHospitalBackground,
     drawInteriorSprite,

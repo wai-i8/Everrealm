@@ -425,3 +425,56 @@ test("applying damage is immutable, clamps overkill, and reports defeat", () => 
   });
   assert.equal(Tactics.applyDamage(result.unit, 3).defeated, false);
 });
+
+
+test("low cover blocks Linear delivery but a normal ballistic arc clears it", () => {
+  const grid = Tactics.createGrid(5, 1, [{ x: 2, y: 0 }]);
+  grid.heightMap = {};
+  grid.terrainCells = {
+    "2,0": { movementBlocked: true, obstacleHeight: "low", blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
+  };
+  const target = { id: "target", cell: { x: 4, y: 0 }, hp: 10 };
+  const linear = Tactics.traceAttackPath({
+    origin: { x: 0, y: 0 }, target: target.cell, facing: "right", grid,
+    units: [target], actorId: "hero", deliveryMode: "linear",
+  });
+  assert.equal(linear.stoppedReason, "terrain");
+  assert.deepEqual(linear.firstImpactCell, { x: 2, y: 0 });
+  assert.equal(linear.actualTarget, null);
+
+  const arc = Tactics.traceAttackPath({
+    origin: { x: 0, y: 0 }, target: target.cell, facing: "right", grid,
+    units: [target], actorId: "hero", deliveryMode: "arc", arcHeight: 2,
+  });
+  assert.equal(arc.stoppedReason, "unit");
+  assert.equal(arc.actualTarget, target);
+  assert.deepEqual(arc.firstImpactCell, target.cell);
+});
+
+test("high cover blocks a ballistic arc when its occupied height intersects the trajectory", () => {
+  const grid = Tactics.createGrid(5, 1, [{ x: 2, y: 0 }]);
+  grid.heightMap = {};
+  grid.terrainCells = {
+    "2,0": { movementBlocked: true, obstacleHeight: "high", blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
+  };
+  const target = { id: "target", cell: { x: 4, y: 0 }, hp: 10 };
+  const arc = Tactics.traceAttackPath({
+    origin: { x: 0, y: 0 }, target: target.cell, facing: "right", grid,
+    units: [target], actorId: "hero", deliveryMode: "arc", arcHeight: 1.5,
+  });
+  assert.equal(arc.stoppedReason, "terrain");
+  assert.deepEqual(arc.firstImpactCell, { x: 2, y: 0 });
+  assert.equal(arc.actualTarget, null);
+});
+
+test("arc trajectory interpolates authored terrain elevation and remains deterministic", () => {
+  const grid = Tactics.createGrid(4, 1);
+  grid.heightMap = { "3,0": 2 };
+  assert.equal(Tactics.terrainHeightAt(grid, { x: 3, y: 0 }), 2);
+  const end = Tactics.arcTrajectoryHeight(grid, { x: 0, y: 0 }, { x: 3, y: 0 }, 2, 3, 1.5);
+  assert.equal(end, 2);
+  assert.equal(
+    Tactics.arcTrajectoryHeight(grid, { x: 0, y: 0 }, { x: 3, y: 0 }, 0, 3, 1.5),
+    Tactics.arcTrajectoryHeight(grid, { x: 0, y: 0 }, { x: 3, y: 0 }, 0, 3, 1.5),
+  );
+});

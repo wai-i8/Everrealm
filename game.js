@@ -3259,8 +3259,8 @@
     saveImportant(false);
   }
 
-  const BATTLE_WIDTH = 9;
-  const BATTLE_HEIGHT = 7;
+  const DEFAULT_BATTLE_WIDTH = 9;
+  const DEFAULT_BATTLE_HEIGHT = 7;
   const BATTLE_AP_GAIN = Skills.ROUND_AP_GAIN;
   const BATTLE_AP_MAX = Skills.MAX_AP;
   const BATTLE_TURN_COST = .5;
@@ -3289,7 +3289,16 @@
     window.setTimeout(run, delay);
   }
 
-  function battleTerrainFor(source) {
+  function battleTerrainFor(source, battlefield = null) {
+    if (battlefield?.terrainCells) {
+      return Object.entries(battlefield.terrainCells)
+        .filter(([, terrain]) => terrain?.movementBlocked !== false)
+        .map(([key]) => {
+          const [x, y] = key.split(",").map(Number);
+          return { x, y };
+        })
+        .filter((cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y));
+    }
     const layouts = {
       slime: [[4, 1], [4, 5], [5, 3]],
       wisp: [[3, 1], [3, 5], [5, 2], [5, 4]],
@@ -3307,14 +3316,36 @@
 
   function battleFieldContextFor(mapId) {
     if (mapId !== "field") return null;
+    const authored = world?.battlefield || {};
     return {
       ...MOUNTAIN_BATTLEFIELD,
-      heightMap: Object.create(null),
-      terrainCells: Object.create(null),
+      ...authored,
+      heightMap: { ...(authored.heightMap || {}) },
+      terrainCells: { ...(authored.terrainCells || {}) },
+      deploymentZones: {
+        ally: [...(authored.deploymentZones?.ally || [{ x: 1, y: 3 }])],
+        enemy: [...(authored.deploymentZones?.enemy || [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }])],
+      },
     };
   }
 
-  function createBattleEnemy(source, type, index, primary) {
+  function battleDimensionsFor(battlefield) {
+    return {
+      width: Math.max(1, Math.trunc(Number(battlefield?.width) || DEFAULT_BATTLE_WIDTH)),
+      height: Math.max(1, Math.trunc(Number(battlefield?.height) || DEFAULT_BATTLE_HEIGHT)),
+    };
+  }
+
+  function battleDeploymentCell(battlefield, side, index = 0) {
+    const fallback = side === "enemy"
+      ? [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }]
+      : [{ x: 1, y: 3 }];
+    const cells = battlefield?.deploymentZones?.[side]?.length ? battlefield.deploymentZones[side] : fallback;
+    const chosen = cells[Math.min(Math.max(0, index), cells.length - 1)] || fallback[0];
+    return { x: Math.trunc(Number(chosen.x) || 0), y: Math.trunc(Number(chosen.y) || 0) };
+  }
+
+  function createBattleEnemy(source, type, index, primary, battlefield = null) {
     const canonicalType = ExpansionWorld.normalizeMonsterId(type) || type;
     const base = enemyTypes[canonicalType] || enemyTypes[type];
     const blueprint = ExpansionWorld.monsterBlueprint(canonicalType);
@@ -3322,7 +3353,7 @@
     const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(canonicalType, level) : null;
     const rawHp = primary ? source.maxHp : Math.round((stats?.hp || base.hp) * .7);
     const maxHp = Math.max(12, Math.round(rawHp));
-    const spawnCells = [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }];
+    const spawnCell = battleDeploymentCell(battlefield, "enemy", index);
     const boss = Boolean(primary && source.boss);
     const skill = ExpansionWorld.selectMonsterSkill(canonicalType, { round: battle?.round || 1 });
     const attackRange = primary ? source.attackRange : skill?.range.max || 1;
@@ -3338,7 +3369,7 @@
       boss,
       name: primary ? source.name : `幼小${base.name}`,
       level,
-      cell: { ...spawnCells[index] },
+      cell: { ...spawnCell },
       hp: maxHp,
       maxHp,
       attack: Math.max(5, primary ? source.damage : stats?.attack || base.damage),
@@ -3365,16 +3396,19 @@
     };
   }
 
-  function battlePartyFor(source) {
+  function battlePartyFor(source, battlefield = null) {
     const blueprint = ExpansionWorld.monsterBlueprint(source.type);
     const types = [source.type, ...(blueprint?.encounterParty || [])];
     if (source.boss && types.length === 1) types.push("turtle", "snake");
-    return types.slice(0, 3).map((type, index) => createBattleEnemy(source, type, index, index === 0));
+    return types.slice(0, 3).map((type, index) => createBattleEnemy(source, type, index, index === 0, battlefield));
   }
 
   function startBattle(source, instant = false) {
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
     const stats = playerStats();
+    const battlefield = battleFieldContextFor(currentMapId);
+    const dimensions = battleDimensionsFor(battlefield);
+    const heroSpawn = battleDeploymentCell(battlefield, "ally", 0);
     battleToken += 1;
     const hero = {
       id: "battle-player",
@@ -3382,7 +3416,7 @@
       type: "player",
       name: "阿巡",
       level: player.level,
-      cell: { x: 1, y: 3 },
+      cell: { ...heroSpawn },
       hp: Math.ceil(player.hp),
       maxHp: stats.maxHp,
       attack: stats.attack,
@@ -3399,15 +3433,18 @@
       facing: "right",
       hitFlash: 0,
     };
-    const blocked = battleTerrainFor(source);
+    const blocked = battleTerrainFor(source, battlefield);
+    const battleGrid = Tactics.createGrid(dimensions.width, dimensions.height, blocked);
+    battleGrid.heightMap = battlefield?.heightMap || Object.create(null);
+    battleGrid.terrainCells = battlefield?.terrainCells || Object.create(null);
     battle = {
       token: battleToken,
       source,
-      battlefield: battleFieldContextFor(currentMapId),
-      grid: Tactics.createGrid(BATTLE_WIDTH, BATTLE_HEIGHT, blocked),
+      battlefield,
+      grid: battleGrid,
       blocked,
       hero,
-      enemies: battlePartyFor(source),
+      enemies: battlePartyFor(source, battlefield),
       rng: Tactics.createSeededRng(`battle:${battleToken}:${source.instanceId || source.id}`),
       phase: "intro",
       round: 1,
@@ -3761,8 +3798,8 @@
     const skill = battleSkillFromAction(action);
     if (!skill) return [];
     const targets = [];
-    for (let y = 0; y < BATTLE_HEIGHT; y += 1) {
-      for (let x = 0; x < BATTLE_WIDTH; x += 1) {
+    for (let y = 0; y < battle.grid.height; y += 1) {
+      for (let x = 0; x < battle.grid.width; x += 1) {
         const cell = { x, y };
         if (skillTargetValidation(skill, cell).ok) targets.push(cell);
       }
@@ -3806,8 +3843,8 @@
     if (!battle || !skill || battle.phase !== "planning_action") return [];
     const damaging = skill.effects.some((effect) => effect.type === "damage");
     const cells = [];
-    for (let y = 0; y < BATTLE_HEIGHT; y += 1) {
-      for (let x = 0; x < BATTLE_WIDTH; x += 1) {
+    for (let y = 0; y < battle.grid.height; y += 1) {
+      for (let x = 0; x < battle.grid.width; x += 1) {
         const cell = { x, y };
         if (battle.grid.blocked.has(Tactics.cellKey(cell))) continue;
         if (Skills.isTargetInRange(skill, battle.hero.cell, cell, { facing: battle.hero.facing })
@@ -4039,7 +4076,7 @@
     if (!skill || battle.ap < skill.apCost) return setBattleMessage("AP 唔夠。", true);
     battle.ap -= skill.apCost;
     const centre = targetCell || battle.hero.cell;
-    const attackPath = skill.deliveryMode === "linear"
+    const attackPath = ["linear", "arc"].includes(skill.deliveryMode)
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, centre, battle.hero.facing)
       : [];
     beginActionResolution({
@@ -4105,6 +4142,7 @@
       targetArc: heroSkill?.targetArc,
       blocksByTerrain: heroSkill?.blocksByTerrain,
       blocksByUnits: heroSkill?.blocksByUnits,
+      arcHeight: heroSkill?.arcHeight,
     });
     const enemyPending = battle.enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
@@ -4121,6 +4159,7 @@
         targetArc: enemy?.targetArc,
         blocksByTerrain: plan.skill?.blocksByTerrain,
         blocksByUnits: plan.skill?.blocksByUnits,
+        arcHeight: plan.skill?.arcHeight,
       });
     });
     const actionOrder = Skills.orderActionsBySpeed([
@@ -4186,7 +4225,7 @@
       const defenceDownEffect = skill?.effects.find((effect) => effect.type === "defense_down");
       const moveDownEffect = skill?.effects.find((effect) => effect.type === "move_down");
       let affectedEnemies = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
-      const linearTrace = skill?.deliveryMode === "linear"
+      const projectileTrace = ["linear", "arc"].includes(skill?.deliveryMode)
         ? Tactics.traceAttackPath({
           origin: battle.hero.cell,
           target: heroAction.targetCell,
@@ -4198,12 +4237,12 @@
           deliveryMode: skill.deliveryMode,
           blocksByTerrain: skill.blocksByTerrain,
           blocksByUnits: skill.blocksByUnits,
+          arcHeight: skill.arcHeight,
         })
         : null;
-      // A normal Linear attack resolves the first occupied cell, even when a
-      // farther cell was selected.  Area/pathless skills retain their full
-      // authored effect area.
-      if (linearTrace) affectedEnemies = linearTrace.actualTarget ? [linearTrace.actualTarget] : [];
+      // Linear and ballistic deliveries resolve the first terrain/unit impact;
+      // pathless/area skills retain their authored effect area.
+      if (projectileTrace) affectedEnemies = projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
       effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedEnemies;
       if (damageEffect) {
         const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
@@ -4235,8 +4274,16 @@
             hitCount,
           };
         };
-        if (linearTrace) {
-          heroHitResolvers.push({ hitCount, recheck, path: linearTrace.path, initialTarget: linearTrace.actualTarget, makeHeroHit });
+        if (projectileTrace) {
+          heroHitResolvers.push({
+            hitCount,
+            recheck,
+            path: projectileTrace.path,
+            initialTarget: projectileTrace.actualTarget,
+            deliveryMode: skill.deliveryMode,
+            arcHeight: skill.arcHeight,
+            makeHeroHit,
+          });
         } else {
           for (const target of affectedEnemies) {
             for (let hitIndex = 0; hitIndex < hitCount; hitIndex += 1) {
@@ -4326,9 +4373,10 @@
                 grid: battle.grid,
                 units: battleUnits(),
                 actorId: battle.hero.id,
-                deliveryMode: "linear",
+                deliveryMode: resolver.deliveryMode,
                 blocksByTerrain: skill.blocksByTerrain,
                 blocksByUnits: skill.blocksByUnits,
+                arcHeight: resolver.arcHeight,
               })
               : null;
             const target = resolver.recheck ? trace?.actualTarget : resolver.initialTarget;
@@ -4768,13 +4816,15 @@
     let next = clampBattleCommandPosition(battleCommandPosition.x, battleCommandPosition.y);
     if (!battleCommandPosition.manual) {
       const layout = battleLayout();
-      const heroPoint = battleCellCentre(battle.hero.renderCell || battle.hero.cell, layout);
-      const gap = Math.max(12, layout.cell * .56);
+      const heroCell = battle.hero.renderCell || battle.hero.cell;
+      const corners = battleCellCorners(heroCell, layout, battleRenderHeight(heroCell));
+      // Default command placement lives outside the player's attack lane.  The
+      // menu's top-right corner follows the hero tile's bottom-left corner,
+      // i.e. the top-right corner of the diagonally lower-left neighbour.
+      const anchor = corners[3];
       const menuWidth = Math.max(1, battleActionDock.offsetWidth);
-      const menuHeight = Math.max(1, battleActionDock.offsetHeight);
-      const roomOnRight = heroPoint.x + gap + menuWidth <= width - 8;
-      const preferredX = roomOnRight ? heroPoint.x + gap : heroPoint.x - gap - menuWidth;
-      next = clampBattleCommandPosition(preferredX, heroPoint.y - menuHeight * .45);
+      const gap = Math.max(2, layout.cell * .035);
+      next = clampBattleCommandPosition(anchor.x - menuWidth - gap, anchor.y + gap);
     }
     battleCommandPosition.x = next.x;
     battleCommandPosition.y = next.y;
@@ -5079,26 +5129,165 @@
   }
 
   function battleLayout() {
+    const gridWidth = battle?.grid?.width || DEFAULT_BATTLE_WIDTH;
+    const gridHeight = battle?.grid?.height || DEFAULT_BATTLE_HEIGHT;
     const top = width <= 530 ? 150 : 72;
     const reservedBottom = width <= 530 ? 300 : width <= 1120 ? 245 : 210;
     const availableHeight = Math.max(238, height - top - reservedBottom);
-    const cell = Math.floor(Core.clamp(Math.min((width - 34) / BATTLE_WIDTH, availableHeight / BATTLE_HEIGHT), 30, 72));
-    const gridWidth = cell * BATTLE_WIDTH;
-    const gridHeight = cell * BATTLE_HEIGHT;
+    const projection = battle?.battlefield?.projection || null;
+    if (!projection) {
+      const cell = Math.floor(Core.clamp(Math.min((width - 34) / gridWidth, availableHeight / gridHeight), 30, 72));
+      const boardWidth = cell * gridWidth;
+      const boardHeight = cell * gridHeight;
+      const x = Math.round((width - boardWidth) / 2);
+      const y = Math.round(top + Math.max(0, (availableHeight - boardHeight) / 2));
+      return {
+        cell,
+        x,
+        y,
+        width: boardWidth,
+        height: boardHeight,
+        originX: x,
+        originY: y,
+        stepX: { x: cell, y: 0 },
+        stepY: { x: 0, y: cell },
+        elevationStep: cell * .18,
+        baseThickness: cell * .12,
+        projected: false,
+      };
+    }
+
+    const xAxis = projection.xAxis || { x: .9, y: -.28 };
+    const yAxis = projection.yAxis || { x: .22, y: .68 };
+    const elevationRatio = Math.max(.08, Number(projection.elevationStep) || .22);
+    const baseThicknessRatio = Math.max(.06, Number(projection.baseThickness) || .16);
+    const unitCorners = [
+      { x: 0, y: 0 },
+      { x: gridWidth * xAxis.x, y: gridWidth * xAxis.y },
+      { x: gridHeight * yAxis.x, y: gridHeight * yAxis.y },
+      { x: gridWidth * xAxis.x + gridHeight * yAxis.x, y: gridWidth * xAxis.y + gridHeight * yAxis.y },
+    ];
+    const minX = Math.min(...unitCorners.map((point) => point.x));
+    const maxX = Math.max(...unitCorners.map((point) => point.x));
+    const minY = Math.min(...unitCorners.map((point) => point.y));
+    const maxY = Math.max(...unitCorners.map((point) => point.y));
+    const maxElevation = Math.max(0, ...Object.values(battle?.battlefield?.heightMap || {}).map((value) => Number(value) || 0));
+    const spanX = Math.max(1, maxX - minX);
+    const spanY = Math.max(1, maxY - minY);
+    const verticalUnits = spanY + maxElevation * elevationRatio + baseThicknessRatio;
+    const cell = Math.floor(Core.clamp(Math.min((width - 34) / spanX, availableHeight / verticalUnits), 30, 78));
+    const boardWidth = spanX * cell;
+    const boardHeight = verticalUnits * cell;
+    const x = Math.round((width - boardWidth) / 2);
+    const y = Math.round(top + Math.max(0, (availableHeight - boardHeight) / 2));
+    const elevationStep = cell * elevationRatio;
+    const originX = x - minX * cell;
+    // Reserve room above the flat board for the tallest elevated top face.
+    const originY = y + maxElevation * elevationStep - minY * cell;
     return {
       cell,
-      x: Math.round((width - gridWidth) / 2),
-      y: Math.round(top + Math.max(0, (availableHeight - gridHeight) / 2)),
-      width: gridWidth,
-      height: gridHeight,
+      x,
+      y,
+      width: boardWidth,
+      height: boardHeight,
+      originX,
+      originY,
+      stepX: { x: xAxis.x * cell, y: xAxis.y * cell },
+      stepY: { x: yAxis.x * cell, y: yAxis.y * cell },
+      elevationStep,
+      baseThickness: cell * baseThicknessRatio,
+      projected: true,
     };
   }
 
-  function battleCellCentre(cell, layout = battleLayout()) {
+  function battleProjectCorner(gridX, gridY, layout = battleLayout(), elevation = 0) {
     return {
-      x: layout.x + (cell.x + .5) * layout.cell,
-      y: layout.y + (cell.y + .5) * layout.cell,
+      x: layout.originX + gridX * layout.stepX.x + gridY * layout.stepY.x,
+      y: layout.originY + gridX * layout.stepX.y + gridY * layout.stepY.y - elevation * layout.elevationStep,
     };
+  }
+
+  function battleRenderHeight(cell) {
+    if (!cell) return 0;
+    const x = Number(cell.x) || 0;
+    const y = Number(cell.y) || 0;
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const x1 = Math.min((battle?.grid?.width ?? (x0 + 1)) - 1, Math.ceil(x));
+    const y1 = Math.min((battle?.grid?.height ?? (y0 + 1)) - 1, Math.ceil(y));
+    const tx = Core.clamp(x - x0, 0, 1);
+    const ty = Core.clamp(y - y0, 0, 1);
+    const h00 = battleCellHeight({ x: x0, y: y0 });
+    const h10 = battleCellHeight({ x: x1, y: y0 });
+    const h01 = battleCellHeight({ x: x0, y: y1 });
+    const h11 = battleCellHeight({ x: x1, y: y1 });
+    const upper = Core.lerp(h00, h10, tx);
+    const lower = Core.lerp(h01, h11, tx);
+    return Core.lerp(upper, lower, ty);
+  }
+
+  function battleCellCorners(cell, layout = battleLayout(), elevation = battleCellHeight(cell)) {
+    const x = Number(cell?.x) || 0;
+    const y = Number(cell?.y) || 0;
+    return [
+      battleProjectCorner(x, y, layout, elevation),
+      battleProjectCorner(x + 1, y, layout, elevation),
+      battleProjectCorner(x + 1, y + 1, layout, elevation),
+      battleProjectCorner(x, y + 1, layout, elevation),
+    ];
+  }
+
+  function battleCellCentre(cell, layout = battleLayout()) {
+    const elevation = battleRenderHeight(cell);
+    return battleProjectCorner((Number(cell?.x) || 0) + .5, (Number(cell?.y) || 0) + .5, layout, elevation);
+  }
+
+  function battleTracePolygon(points) {
+    if (!points?.length) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
+    ctx.closePath();
+  }
+
+  function battleInsetPolygon(points, amount = .84) {
+    const centre = points.reduce((result, point) => ({ x: result.x + point.x / points.length, y: result.y + point.y / points.length }), { x: 0, y: 0 });
+    return points.map((point) => ({
+      x: centre.x + (point.x - centre.x) * amount,
+      y: centre.y + (point.y - centre.y) * amount,
+    }));
+  }
+
+  function battlePointInPolygon(x, y, points) {
+    let inside = false;
+    for (let first = 0, second = points.length - 1; first < points.length; second = first++) {
+      const a = points[first];
+      const b = points[second];
+      const intersects = ((a.y > y) !== (b.y > y))
+        && x < (b.x - a.x) * (y - a.y) / ((b.y - a.y) || 1e-9) + a.x;
+      if (intersects) inside = !inside;
+    }
+    return inside;
+  }
+
+  function battleFacingScreenVector(facing, layout = battleLayout()) {
+    const vector = Tactics.facingVector(facing);
+    const x = vector.x * layout.stepX.x + vector.y * layout.stepY.x;
+    const y = vector.x * layout.stepX.y + vector.y * layout.stepY.y;
+    const length = Math.hypot(x, y) || 1;
+    return { x: x / length, y: y / length };
+  }
+
+  function battleCellPaintOrder(layout = battleLayout()) {
+    const cells = [];
+    for (let y = 0; y < battle.grid.height; y += 1) {
+      for (let x = 0; x < battle.grid.width; x += 1) cells.push({ x, y });
+    }
+    return cells.sort((a, b) => {
+      const first = battleCellCentre(a, layout);
+      const second = battleCellCentre(b, layout);
+      return first.y - second.y || first.x - second.x;
+    });
   }
 
   function battleVisualSeed(cell) {
@@ -5119,88 +5308,114 @@
     return Number.isFinite(Number(value)) ? Number(value) : 0;
   }
 
+  function battleTerrainCell(cell) {
+    if (!cell) return null;
+    const key = Tactics.cellKey({ x: Math.round(Number(cell.x) || 0), y: Math.round(Number(cell.y) || 0) });
+    return battle?.battlefield?.terrainCells?.[key] || battle?.grid?.terrainCells?.[key] || null;
+  }
+
+  function battleDrawPolygon(points, fillStyle = null, strokeStyle = null, lineWidth = 1) {
+    if (!points?.length) return;
+    ctx.save();
+    battleTracePolygon(points);
+    if (fillStyle) { ctx.fillStyle = fillStyle; ctx.fill(); }
+    if (strokeStyle) { ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth; ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function battleCellSideFaces(cell, layout) {
+    if (!layout.projected) return;
+    const heightValue = battleCellHeight(cell);
+    const top = battleCellCorners(cell, layout, heightValue);
+    const westNeighbour = cell.x > 0 ? battleCellHeight({ x: cell.x - 1, y: cell.y }) : null;
+    const southNeighbour = cell.y < battle.grid.height - 1 ? battleCellHeight({ x: cell.x, y: cell.y + 1 }) : null;
+    const faces = [];
+    const addFace = (a, b, neighbourHeight, outside, tone) => {
+      const exposedLevels = outside ? heightValue : Math.max(0, heightValue - neighbourHeight);
+      const depth = exposedLevels * layout.elevationStep + (outside ? layout.baseThickness : 0);
+      if (depth <= .5) return;
+      faces.push({ points: [a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }], tone });
+    };
+    // These are the two faces exposed to the lower-left camera side.
+    addFace(top[0], top[3], westNeighbour, cell.x === 0, "rgba(83,58,36,.96)");
+    addFace(top[3], top[2], southNeighbour, cell.y === battle.grid.height - 1, "rgba(66,46,30,.98)");
+    for (const face of faces) {
+      battleDrawPolygon(face.points, face.tone, "rgba(41,29,20,.46)", Math.max(1, layout.cell * .016));
+      const highlight = [face.points[0], face.points[1],
+        { x: face.points[1].x, y: face.points[1].y + Math.min(3, layout.cell * .035) },
+        { x: face.points[0].x, y: face.points[0].y + Math.min(3, layout.cell * .035) }];
+      battleDrawPolygon(highlight, "rgba(221,176,111,.12)");
+    }
+  }
+
   function drawMountainBoardFrame(layout) {
-    const pad = Math.max(6, layout.cell * .1);
+    const flat = [
+      battleProjectCorner(0, 0, layout, 0),
+      battleProjectCorner(battle.grid.width, 0, layout, 0),
+      battleProjectCorner(battle.grid.width, battle.grid.height, layout, 0),
+      battleProjectCorner(0, battle.grid.height, layout, 0),
+    ];
     ctx.save();
-    ctx.shadowColor = "rgba(20, 18, 13, .28)";
-    ctx.shadowBlur = Math.max(14, layout.cell * .22);
-    ctx.fillStyle = "rgba(72, 58, 39, .16)";
-    ctx.fillRect(layout.x - pad, layout.y - pad, layout.width + pad * 2, layout.height + pad * 2);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(237, 205, 148, .12)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(layout.x - .5, layout.y - .5, layout.width + 1, layout.height + 1);
+    ctx.shadowColor = "rgba(18,15,10,.42)";
+    ctx.shadowBlur = Math.max(14, layout.cell * .25);
+    ctx.shadowOffsetY = Math.max(5, layout.cell * .11);
+    battleTracePolygon(flat);
+    ctx.fillStyle = "rgba(55,43,29,.15)";
+    ctx.fill();
     ctx.restore();
   }
 
-  function drawMountainGroundBoard(layout) {
+  function drawBattleCellTop(cell, layout, mountainBattle, blocked) {
+    const heightValue = battleCellHeight(cell);
+    const corners = battleCellCorners(cell, layout, heightValue);
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(layout.x + 1, layout.y + 1, layout.width - 2, layout.height - 2);
+    battleTracePolygon(corners);
     ctx.clip();
-    ctx.fillStyle = "#86613b";
-    ctx.fillRect(layout.x, layout.y, layout.width, layout.height);
-    const drawn = Art.drawBattleGround(ctx, {
-      theme: "mountain",
-      x: layout.x,
-      y: layout.y,
-      width: layout.width,
-      height: layout.height,
-      alpha: .9,
-    });
-    if (!drawn) {
-      // Keep a real bitmap fallback for the first frame while the dedicated
-      // mountain ground image is loading; normal runtime uses the board bitmap.
-      for (let y = 0; y < BATTLE_HEIGHT; y += 1) {
-        for (let x = 0; x < BATTLE_WIDTH; x += 1) {
-          const seed = battleVisualSeed({ x, y });
-          Art.drawTerrainTile(ctx, {
-            sprite: "path",
-            x: layout.x + x * layout.cell,
-            y: layout.y + y * layout.cell,
-            width: layout.cell,
-            height: layout.cell,
-            alpha: .52,
-            flipX: Boolean(seed & 2),
-          });
-        }
+    if (mountainBattle) {
+      ctx.fillStyle = "#86613b";
+      const boundsX = corners.map((point) => point.x);
+      const boundsY = corners.map((point) => point.y);
+      ctx.fillRect(Math.min(...boundsX) - 2, Math.min(...boundsY) - 2, Math.max(...boundsX) - Math.min(...boundsX) + 4, Math.max(...boundsY) - Math.min(...boundsY) + 4);
+      const projected = Art.drawBattleGroundProjected?.(ctx, {
+        theme: "mountain",
+        originX: layout.originX,
+        originY: layout.originY - heightValue * layout.elevationStep,
+        stepX: layout.stepX,
+        stepY: layout.stepY,
+        logicalWidth: battle.grid.width,
+        logicalHeight: battle.grid.height,
+        alpha: .92,
+      });
+      if (!projected) {
+        const centre = battleCellCentre(cell, layout);
+        const radius = layout.cell * .75;
+        const ground = ctx.createRadialGradient(centre.x, centre.y, 1, centre.x, centre.y, radius);
+        ground.addColorStop(0, "#9a7447");
+        ground.addColorStop(1, "#735333");
+        ctx.fillStyle = ground;
+        ctx.fillRect(centre.x - radius, centre.y - radius, radius * 2, radius * 2);
       }
+    } else {
+      ctx.fillStyle = blocked
+        ? "rgba(10,15,29,.88)"
+        : (cell.x + cell.y) % 2 ? "rgba(69,91,94,.58)" : "rgba(56,78,84,.65)";
+      const xs = corners.map((point) => point.x);
+      const ys = corners.map((point) => point.y);
+      ctx.fillRect(Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) - Math.min(...xs) + 2, Math.max(...ys) - Math.min(...ys) + 2);
     }
-    const boardTone = ctx.createLinearGradient(layout.x, layout.y, layout.x + layout.width, layout.y + layout.height);
-    boardTone.addColorStop(0, "rgba(255, 219, 157, .05)");
-    boardTone.addColorStop(.48, "rgba(87, 61, 35, 0)");
-    boardTone.addColorStop(1, "rgba(30, 24, 18, .1)");
-    ctx.fillStyle = boardTone;
-    ctx.fillRect(layout.x, layout.y, layout.width, layout.height);
+    if (blocked) {
+      ctx.fillStyle = "rgba(27,20,14,.12)";
+      const xs = corners.map((point) => point.x);
+      const ys = corners.map((point) => point.y);
+      ctx.fillRect(Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) - Math.min(...xs) + 2, Math.max(...ys) - Math.min(...ys) + 2);
+    }
     ctx.restore();
+    battleDrawPolygon(corners, null, mountainBattle ? "rgba(54,39,24,.42)" : "rgba(245,233,202,.13)", Math.max(1, layout.cell * .015));
   }
 
-  function drawMountainGroundCell(cell, layout, blocked) {
-    const seed = battleVisualSeed(cell);
-    const px = layout.x + cell.x * layout.cell;
-    const py = layout.y + cell.y * layout.cell;
-
-    // Cell-local accents are sparse and deliberately smaller than a blocker.
-    // The primary ground bitmap is drawn once for the whole board, so these
-    // marks cannot form the old repeating vertical strips.
-    if (!blocked && seed % 7 === 0) drawMountainGroundStones(px, py, layout.cell, seed);
-    if (!blocked && seed % 11 === 0) drawMountainDryScrub(px + layout.cell * .52, py + layout.cell * .72, layout.cell, seed, .25);
-
-    if (blocked) {
-      ctx.fillStyle = "rgba(29, 23, 17, .13)";
-      ctx.fillRect(px + 1, py + 1, layout.cell - 2, layout.cell - 2);
-      ctx.fillStyle = "rgba(255, 220, 157, .08)";
-      ctx.fillRect(px + 3, py + 3, layout.cell - 6, Math.max(2, layout.cell * .045));
-    }
-
-    const height = battleCellHeight(cell);
-    if (height > 0) {
-      const lip = Math.min(layout.cell * .16, height * layout.cell * .06);
-      ctx.fillStyle = "rgba(255, 224, 159, .26)";
-      ctx.fillRect(px + 1, py + 1, layout.cell - 2, Math.max(2, lip));
-      ctx.fillStyle = "rgba(21, 17, 13, .26)";
-      ctx.fillRect(px + 1, py + layout.cell - lip - 1, layout.cell - 2, Math.max(2, lip));
-    }
+  function drawBattleCellOverlay(cell, layout, fillStyle, strokeStyle = null, lineWidth = 1.5, inset = .82) {
+    const corners = battleInsetPolygon(battleCellCorners(cell, layout, battleCellHeight(cell)), inset);
+    battleDrawPolygon(corners, fillStyle, strokeStyle, lineWidth);
   }
 
   function drawMountainGroundStones(px, py, size, seed) {
@@ -5254,20 +5469,11 @@
       ctx.fillRect(0, 0, width, height);
     }
     const atmosphere = ctx.createLinearGradient(0, 0, 0, height);
-    atmosphere.addColorStop(0, "rgba(15, 28, 31, .18)");
-    atmosphere.addColorStop(.48, "rgba(49, 44, 34, .06)");
-    atmosphere.addColorStop(1, "rgba(8, 13, 14, .54)");
+    atmosphere.addColorStop(0, "rgba(15,28,31,.18)");
+    atmosphere.addColorStop(.48, "rgba(49,44,34,.06)");
+    atmosphere.addColorStop(1, "rgba(8,13,14,.54)");
     ctx.fillStyle = atmosphere;
     ctx.fillRect(0, 0, width, height);
-
-    // Keep only a soft contact tone. The ground art itself owns the natural
-    // edge transition, so the battlefield never reads as a raised hard tray.
-    ctx.save();
-    ctx.shadowColor = "rgba(17, 15, 11, .32)";
-    ctx.shadowBlur = Math.max(18, layout.cell * .3);
-    ctx.fillStyle = "rgba(54, 45, 31, .13)";
-    ctx.fillRect(layout.x - 3, layout.y - 3, layout.width + 6, layout.height + 6);
-    ctx.restore();
     drawMountainBoardFrame(layout);
   }
 
@@ -5276,10 +5482,8 @@
     const layout = battleLayout();
     const bossFight = battle.source.boss;
     const mountainBattle = battle.battlefield?.theme === "mountain";
-    if (mountainBattle) {
-      drawMountainBattleBackdrop(layout);
-      drawMountainGroundBoard(layout);
-    } else {
+    if (mountainBattle) drawMountainBattleBackdrop(layout);
+    else {
       const background = ctx.createLinearGradient(0, 0, 0, height);
       background.addColorStop(0, bossFight ? "#241a37" : "#142c38");
       background.addColorStop(.58, bossFight ? "#16213a" : "#183d40");
@@ -5287,19 +5491,21 @@
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, width, height);
 
+      // Preserve the established dungeon / boss presentation.  The oblique
+      // height renderer is opt-in per battlefield and must not silently restyle
+      // legacy flat encounters.
       ctx.save();
       ctx.globalAlpha = .16;
       for (let index = 0; index < 8; index += 1) {
-        const x = ((index * 233 + elapsed * (8 + index)) % (width + 240)) - 120;
-        const y = 80 + ((index * 97) % Math.max(100, height - 170));
-        const fog = ctx.createRadialGradient(x, y, 0, x, y, 90 + index * 9);
+        const fogX = ((index * 233 + elapsed * (8 + index)) % (width + 240)) - 120;
+        const fogY = 80 + ((index * 97) % Math.max(100, height - 170));
+        const fog = ctx.createRadialGradient(fogX, fogY, 0, fogX, fogY, 90 + index * 9);
         fog.addColorStop(0, bossFight ? "rgba(174,145,255,.3)" : "rgba(82,220,203,.22)");
         fog.addColorStop(1, "rgba(20,30,50,0)");
         ctx.fillStyle = fog;
-        ctx.fillRect(x - 140, y - 110, 280, 220);
+        ctx.fillRect(fogX - 140, fogY - 110, 280, 220);
       }
       ctx.restore();
-
       ctx.fillStyle = "rgba(4,8,18,.42)";
       ctx.fillRect(layout.x - 9, layout.y - 9, layout.width + 18, layout.height + 18);
       ctx.strokeStyle = bossFight ? "rgba(255,107,145,.52)" : "rgba(245,233,202,.38)";
@@ -5317,61 +5523,40 @@
     if (selectedSkill && battle.phase === "planning_action" && skillTargetValidation(selectedSkill, battle.cursor).ok) {
       for (const cell of Skills.patternCells(selectedSkill, battle.hero.cell, battle.cursor, { grid: battle.grid, facing: battle.hero.facing })) areaPreview.add(Tactics.cellKey(cell));
     }
-    const attackPathPreview = selectedSkill?.deliveryMode === "linear"
+    const attackPathPreview = ["linear", "arc"].includes(selectedSkill?.deliveryMode)
       && battle.phase === "planning_action"
       && skillTargetValidation(selectedSkill, battle.cursor).ok
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, battle.cursor, battle.hero.facing)
       : [];
-    for (let y = 0; y < BATTLE_HEIGHT; y += 1) {
-      for (let x = 0; x < BATTLE_WIDTH; x += 1) {
-        const cell = { x, y };
-        const key = Tactics.cellKey(cell);
-        const px = layout.x + x * layout.cell;
-        const py = layout.y + y * layout.cell;
-        const blocked = battle.grid.blocked.has(key);
-        if (mountainBattle) {
-          drawMountainGroundCell(cell, layout, blocked);
-        } else {
-          ctx.fillStyle = blocked
-            ? "rgba(10,15,29,.88)"
-            : (x + y) % 2 ? "rgba(69,91,94,.58)" : "rgba(56,78,84,.65)";
-          ctx.fillRect(px + 1, py + 1, layout.cell - 2, layout.cell - 2);
-        }
-        if (!blocked && skillRange.has(key) && battle.phase === "planning_action") {
-          ctx.fillStyle = "rgba(255,218,117,.25)";
-          ctx.fillRect(px + 3, py + 3, layout.cell - 6, layout.cell - 6);
-          ctx.strokeStyle = "rgba(255,225,143,.88)";
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(px + 5, py + 5, layout.cell - 10, layout.cell - 10);
-        }
-        if (!blocked && areaPreview.has(key)) {
-          ctx.fillStyle = selectedSkill?.star === 3 ? "rgba(255,157,211,.24)" : selectedSkill?.star === 2 ? "rgba(169,201,255,.22)" : "rgba(255,200,87,.19)";
-          ctx.fillRect(px + 4, py + 4, layout.cell - 8, layout.cell - 8);
-        }
-        if (!blocked && selectable.has(key) && battle.phase === "planning_move") {
-          ctx.fillStyle = "rgba(82,220,203,.18)";
-          ctx.fillRect(px + 5, py + 5, layout.cell - 10, layout.cell - 10);
-          ctx.strokeStyle = "rgba(82,220,203,.78)";
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(px + 6, py + 6, layout.cell - 12, layout.cell - 12);
-        }
-        if (!blocked && attackableEnemies.has(key) && battle.phase === "planning_action") {
-          ctx.fillStyle = `rgba(255,91,91,${.35 + Math.sin(elapsed * 5) * .04})`;
-          ctx.fillRect(px + 3, py + 3, layout.cell - 6, layout.cell - 6);
-          ctx.strokeStyle = "rgba(255,118,118,.98)";
-          ctx.lineWidth = 2.5;
-          ctx.strokeRect(px + 4, py + 4, layout.cell - 8, layout.cell - 8);
-        }
-        ctx.strokeStyle = mountainBattle ? "rgba(53,39,25,.28)" : "rgba(245,233,202,.11)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px + .5, py + .5, layout.cell - 1, layout.cell - 1);
-        if (blocked) drawBattleObstacle(cell, layout, mountainBattle);
+
+    const cells = battleCellPaintOrder(layout);
+    // Terrain is a projected height field. Paint back-to-front so an elevated
+    // tile's exposed face and top keep the same depth relationship as actors.
+    // Gameplay coordinates stay pure 2D grid coordinates.
+    for (const cell of cells) {
+      const key = Tactics.cellKey(cell);
+      const blocked = battle.grid.blocked.has(key);
+      battleCellSideFaces(cell, layout);
+      drawBattleCellTop(cell, layout, mountainBattle, blocked);
+      if (!blocked && skillRange.has(key) && battle.phase === "planning_action") {
+        drawBattleCellOverlay(cell, layout, "rgba(255,218,117,.25)", "rgba(255,225,143,.88)", 1.5, .78);
+      }
+      if (!blocked && areaPreview.has(key)) {
+        drawBattleCellOverlay(cell, layout,
+          selectedSkill?.star === 3 ? "rgba(255,157,211,.24)" : selectedSkill?.star === 2 ? "rgba(169,201,255,.22)" : "rgba(255,200,87,.19)",
+          null, 1, .74);
+      }
+      if (!blocked && selectable.has(key) && battle.phase === "planning_move") {
+        drawBattleCellOverlay(cell, layout, "rgba(82,220,203,.18)", "rgba(82,220,203,.78)", 1.5, .76);
+      }
+      if (!blocked && attackableEnemies.has(key) && battle.phase === "planning_action") {
+        drawBattleCellOverlay(cell, layout, `rgba(255,91,91,${.35 + Math.sin(elapsed * 5) * .04})`, "rgba(255,118,118,.98)", 2.5, .79);
       }
     }
 
     if (attackPathPreview.length) {
       ctx.save();
-      ctx.strokeStyle = "rgba(255,157,211,.82)";
+      ctx.strokeStyle = selectedSkill?.deliveryMode === "arc" ? "rgba(169,201,255,.9)" : "rgba(255,157,211,.82)";
       ctx.lineWidth = Math.max(2, layout.cell * .045);
       ctx.setLineDash([Math.max(4, layout.cell * .12), Math.max(3, layout.cell * .08)]);
       ctx.lineCap = "round";
@@ -5412,24 +5597,44 @@
       }
     }
 
-    const units = battleUnits().filter((unit) => unit.alive).sort((a, b) => (a.renderCell || a.cell).y - (b.renderCell || b.cell).y || (a.renderCell || a.cell).x - (b.renderCell || b.cell).x);
-    for (const unit of units) {
-      if (mountainBattle) drawMountainUnitShadow(unit, layout);
-      drawBattleUnit(unit, layout);
+    // Obstacles and actors share one painter-sorted layer.  A tall tree can
+    // therefore occlude a unit standing behind it without turning sprites 3D.
+    const renderables = [];
+    for (const cell of cells) {
+      if (!battle.grid.blocked.has(Tactics.cellKey(cell))) continue;
+      const point = battleCellCentre(cell, layout);
+      renderables.push({ kind: "obstacle", cell, depth: point.y + layout.cell * .22 });
+    }
+    for (const unit of battleUnits().filter((actor) => actor.alive)) {
+      const renderCell = unit.renderCell || unit.cell;
+      const point = battleCellCentre(renderCell, layout);
+      renderables.push({ kind: "unit", unit, depth: point.y + layout.cell * .26 });
+    }
+    renderables.sort((a, b) => a.depth - b.depth || (a.kind === "obstacle" ? -1 : 1));
+    for (const item of renderables) {
+      if (item.kind === "obstacle") drawBattleObstacle(item.cell, layout, mountainBattle);
+      else {
+        if (mountainBattle) drawMountainUnitShadow(item.unit, layout);
+        drawBattleUnit(item.unit, layout);
+      }
     }
 
     if (battle.cursor && ["planning_move", "planning_action"].includes(battle.phase)) {
-      const x = layout.x + battle.cursor.x * layout.cell;
-      const y = layout.y + battle.cursor.y * layout.cell;
-      ctx.strokeStyle = "#f5e9ca";
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(x + 3, y + 3, layout.cell - 6, layout.cell - 6);
+      const cursorCorners = battleInsetPolygon(battleCellCorners(battle.cursor, layout, battleCellHeight(battle.cursor)), .82);
+      battleDrawPolygon(cursorCorners, null, "#f5e9ca", 2.5);
+      ctx.save();
       ctx.fillStyle = "#ffc857";
-      [[x+3,y+3],[x+layout.cell-3,y+3],[x+3,y+layout.cell-3],[x+layout.cell-3,y+layout.cell-3]].forEach(([cx, cy]) => ctx.fillRect(cx - 2, cy - 2, 4, 4));
+      for (const point of cursorCorners) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, Math.max(2, layout.cell * .028), 0, Core.TAU);
+        ctx.fill();
+      }
+      ctx.restore();
     }
     drawBattleEffects(layout);
 
-    const vignette = ctx.createRadialGradient(width / 2, layout.y + layout.height / 2, layout.width * .12, width / 2, layout.y + layout.height / 2, Math.max(width, height) * .7);
+    const boardCentre = battleProjectCorner(battle.grid.width / 2, battle.grid.height / 2, layout, 0);
+    const vignette = ctx.createRadialGradient(boardCentre.x, boardCentre.y, layout.cell * 1.2, boardCentre.x, boardCentre.y, Math.max(width, height) * .7);
     vignette.addColorStop(0, "rgba(5,8,17,0)");
     vignette.addColorStop(1, "rgba(3,6,14,.62)");
     ctx.fillStyle = vignette;
@@ -5439,42 +5644,66 @@
   function drawBattleObstacle(cell, layout, mountainBattle = false) {
     const point = battleCellCentre(cell, layout);
     const size = layout.cell;
+    const terrain = battleTerrainCell(cell);
+    if (mountainBattle && terrain?.kind === "tree") {
+      const baselineY = point.y + size * .23;
+      ctx.save();
+      ctx.fillStyle = "rgba(16,17,12,.4)";
+      ctx.beginPath();
+      ctx.ellipse(point.x + size * .04, point.y + size * .3, size * .38, size * .11, 0, 0, Core.TAU);
+      ctx.fill();
+      ctx.restore();
+      const drawn = Art.drawEnvironmentSprite(ctx, {
+        sprite: "broadleafTree",
+        x: point.x,
+        y: baselineY,
+        width: size * .72,
+        height: size * .72,
+        alpha: .99,
+      });
+      if (!drawn) {
+        ctx.save();
+        ctx.strokeStyle = "#594126";
+        ctx.lineWidth = Math.max(5, size * .12);
+        ctx.beginPath(); ctx.moveTo(point.x, baselineY); ctx.lineTo(point.x, point.y - size * .45); ctx.stroke();
+        ctx.fillStyle = "#607345";
+        ctx.beginPath(); ctx.arc(point.x, point.y - size * .52, size * .38, 0, Core.TAU); ctx.fill();
+        ctx.restore();
+      }
+      return;
+    }
+    if (mountainBattle && terrain?.kind === "scrub") {
+      ctx.save();
+      ctx.fillStyle = "rgba(21,20,13,.27)";
+      ctx.beginPath();
+      ctx.ellipse(point.x, point.y + size * .24, size * .31, size * .075, 0, 0, Core.TAU);
+      ctx.fill();
+      ctx.restore();
+      const seed = battleVisualSeed(cell);
+      drawMountainDryScrub(point.x - size * .16, point.y + size * .2, size * 1.18, seed, .88);
+      drawMountainDryScrub(point.x + size * .08, point.y + size * .18, size * 1.05, seed >>> 3, .82);
+      drawMountainDryScrub(point.x + size * .22, point.y + size * .22, size * .9, seed >>> 5, .72);
+      return;
+    }
     if (mountainBattle) {
       const seed = battleVisualSeed(cell);
       ctx.save();
-      ctx.fillStyle = "rgba(15, 16, 13, .52)";
+      ctx.fillStyle = "rgba(15,16,13,.52)";
       ctx.beginPath();
       ctx.ellipse(point.x + size * .035, point.y + size * .34, size * (.34 + (seed % 3) * .035), size * .105, 0, 0, Core.TAU);
       ctx.fill();
       ctx.restore();
-
       drawMountainLooseStones(point.x, point.y + size * .31, size, seed);
       const rockScale = [.9, 1.04, 1.16, .98][seed % 4];
-      const rockX = point.x + (((seed >>> 6) % 9) - 4) * size * .012;
-      const rockY = point.y + size * (.38 + ((seed >>> 11) % 5) * .012);
-      let drawn = false;
-      ctx.save();
-      if (seed % 4 === 1) ctx.filter = "saturate(.82) brightness(.9)";
-      if (seed % 4 === 2) ctx.filter = "saturate(1.08) brightness(1.04)";
-      drawn = Art.drawEnvironmentSprite(ctx, {
+      const drawn = Art.drawEnvironmentSprite(ctx, {
         sprite: "rock",
-        x: rockX,
-        y: rockY,
+        x: point.x,
+        y: point.y + size * .39,
         width: size * rockScale,
-        height: size * rockScale * ([.96, 1.04, 1, .9][seed % 4]),
+        height: size * rockScale,
         alpha: .98,
-        flipX: Boolean(seed & 4),
       });
-      ctx.restore();
-
-      if (drawn) {
-        if (seed % 3 !== 1) {
-          const scrubX = point.x + (seed % 2 ? size * .27 : -size * .27);
-          drawMountainDryScrub(scrubX, point.y + size * .27, size, seed >>> 2, .42);
-        }
-        if (seed % 4 === 0) drawMountainDryScrub(point.x - size * .08, point.y + size * .36, size * .72, seed >>> 4, .3);
-        return;
-      }
+      if (drawn) return;
     }
     ctx.save();
     ctx.translate(point.x, point.y + size * .18);
@@ -5490,8 +5719,6 @@
     ctx.lineTo(size * .23, -size * .08);
     ctx.lineTo(size * .18, size * .15);
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = battle.source.boss ? "rgba(174,145,255,.35)" : "rgba(82,220,203,.2)";
-    ctx.beginPath(); ctx.arc(-size * .06, -size * .13, size * .06, 0, Core.TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -5521,9 +5748,9 @@
   function drawMountainUnitShadow(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
     const size = layout.cell;
-    const facing = Tactics.facingVector(unit.facing);
+    const facing = battleFacingScreenVector(unit.facing, layout);
     const shadowX = point.x - facing.x * size * .035 + size * .03;
-    const shadowY = point.y + size * .31 - facing.y * size * .02;
+    const shadowY = point.y + size * (layout.projected ? .22 : .31) - facing.y * size * .02;
     ctx.save();
     const gradient = ctx.createRadialGradient(shadowX, shadowY, size * .02, shadowX, shadowY, size * .3);
     gradient.addColorStop(0, "rgba(22, 18, 14, .46)");
@@ -5535,19 +5762,16 @@
     ctx.fill();
     ctx.fillStyle = "rgba(29, 22, 16, .28)";
     ctx.beginPath();
-    ctx.ellipse(point.x, point.y + size * .285, size * .13, size * .04, 0, 0, Core.TAU);
+    ctx.ellipse(point.x, point.y + size * (layout.projected ? .205 : .285), size * .13, size * .04, 0, 0, Core.TAU);
     ctx.fill();
     ctx.restore();
   }
 
   function drawBattleUnit(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
-    // Tactical layout has its own fixed pixels-per-cell projection. The hero
-    // atlas is native 256px artwork, while monster sizing is already owned by
-    // the monster entity contract in character-art.js.
     const heroScale = layout.cell / 107.5;
     const monsterScale = layout.cell / 43;
-    const baseline = point.y + layout.cell * .29;
+    const baseline = point.y + layout.cell * (layout.projected ? .2 : .29);
     const acting = battle.phase === "resolving_action"
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
       && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
@@ -5560,8 +5784,9 @@
         ? 1 - Core.clamp((unit.stopFlash || 0) / .48, 0, 1)
         : 0;
     const visualState = hurt ? "hurt" : stopped ? "stop" : acting ? "attack" : locomotion.state;
+    let artBox = null;
     if (unit.side === "ally") {
-      Art.drawCharacter(ctx, {
+      artBox = Art.drawCharacter(ctx, {
         x: point.x,
         y: baseline,
         scale: ["attack", "hurt"].includes(visualState) ? layout.cell / 43 : heroScale,
@@ -5573,17 +5798,12 @@
         phase: elapsed,
         progress: actionProgress,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
-        selected: ["planning_move", "planning_action"].includes(battle.phase),
+        // The old selected ring and AP orbit were persistent visual noise; tile
+        // overlays/cursor already communicate tactical selection.
+        selected: false,
       });
-      for (let index = 0; index < Math.min(battle.ap, 10); index += 1) {
-        const angle = index / Math.max(1, Math.min(battle.ap, 10)) * Core.TAU + elapsed * .35;
-        ctx.fillStyle = index < 5 ? "#ffc857" : "#52dccb";
-        ctx.beginPath();
-        ctx.arc(point.x + Math.cos(angle) * layout.cell * .3, baseline - layout.cell * .35 + Math.sin(angle) * 5, Math.max(1.5, layout.cell * .026), 0, Core.TAU);
-        ctx.fill();
-      }
     } else {
-      Art.drawEnemy(ctx, {
+      artBox = Art.drawEnemy(ctx, {
         x: point.x,
         y: baseline,
         scale: monsterScale * (unit.boss ? .98 : .92),
@@ -5596,7 +5816,8 @@
         selected: false,
       });
     }
-    const facing = Tactics.facingVector(unit.facing);
+
+    const facing = battleFacingScreenVector(unit.facing, layout);
     const perpendicular = { x: -facing.y, y: facing.x };
     const arrow = {
       x: point.x + facing.x * layout.cell * .32,
@@ -5615,15 +5836,21 @@
     ctx.stroke();
     ctx.fill();
     ctx.restore();
+
     const barWidth = layout.cell * (unit.boss ? .76 : .56);
-    const barY = point.y + layout.cell * .38;
+    const barY = point.y + layout.cell * (layout.projected ? .31 : .38);
     const barHeight = Math.max(5, layout.cell * .085);
     ctx.fillStyle = "rgba(5,8,18,.86)";
     ctx.fillRect(point.x - barWidth / 2 - 1, barY - 1, barWidth + 2, barHeight + 2);
     ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
     ctx.fillRect(point.x - barWidth / 2, barY, barWidth * Core.clamp(unit.hp / unit.maxHp, 0, 1), barHeight);
-    const nameX = point.x;
-    const nameY = point.y - layout.cell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
+
+    // Names belong to the rendered sprite, not the logical tile.  Character
+    // art supplies semantic anchors that remain correct across different body
+    // proportions, attack frames and monster species.
+    const nameX = Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
+    const fallbackNameY = point.y - layout.cell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
+    const nameY = (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY) - Math.max(2, layout.cell * .025);
     ctx.font = `900 ${Math.max(14, layout.cell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -5632,7 +5859,6 @@
     ctx.strokeText(unit.name, nameX, nameY);
     ctx.fillStyle = "#fff4d0";
     ctx.fillText(unit.name, nameX, nameY);
-    ctx.textBaseline = "alphabetic";
   }
 
   function drawBattleEffects(layout) {
@@ -5667,10 +5893,16 @@
     if (!battle) return null;
     const rect = canvas.getBoundingClientRect();
     const layout = battleLayout();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const cell = { x: Math.floor((x - layout.x) / layout.cell), y: Math.floor((y - layout.y) / layout.cell) };
-    return Tactics.isInside(battle.grid, cell) ? cell : null;
+    const x = (event.clientX - rect.left) * (width / Math.max(1, rect.width));
+    const y = (event.clientY - rect.top) * (height / Math.max(1, rect.height));
+    // A projected/elevated board is not invertible with floor(x/cell).  There
+    // are only a few dozen battle cells, so exact polygon hit-testing is both
+    // cheap and robust.  Test front-most cells first when projected faces overlap.
+    const cells = battleCellPaintOrder(layout).reverse();
+    for (const cell of cells) {
+      if (battlePointInPolygon(x, y, battleCellCorners(cell, layout, battleCellHeight(cell)))) return cell;
+    }
+    return null;
   }
 
   function handleBattlePointer(event) {
@@ -7202,8 +7434,8 @@
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code)) {
         const direction = code === "ArrowUp" ? { x: 0, y: -1 } : code === "ArrowDown" ? { x: 0, y: 1 } : code === "ArrowLeft" ? { x: -1, y: 0 } : { x: 1, y: 0 };
-        battle.cursor.x = Core.clamp(battle.cursor.x + direction.x, 0, BATTLE_WIDTH - 1);
-        battle.cursor.y = Core.clamp(battle.cursor.y + direction.y, 0, BATTLE_HEIGHT - 1);
+        battle.cursor.x = Core.clamp(battle.cursor.x + direction.x, 0, battle.grid.width - 1);
+        battle.cursor.y = Core.clamp(battle.cursor.y + direction.y, 0, battle.grid.height - 1);
         return;
       }
       if (code === "Enter" || code === "Space") confirmBattleCell(battle.cursor);

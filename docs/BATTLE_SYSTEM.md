@@ -2023,11 +2023,13 @@ Preview 必須同實際 resolver 共用同一函數。
 
 ### 25.5 Floating command menu
 
-- 戰鬥指令使用 Canvas 上方嘅 compact DOM overlay，預設停喺主角格仔附近。
+- 戰鬥指令使用 Canvas 上方嘅 compact DOM overlay。
+- PC 預設位置固定喺主角**左下外側**：以主角所在 tile 為基準，menu 嘅右上角貼近主角 tile 嘅左下角（亦即左下對角相鄰格嘅右上角），避免遮住由左下向右上延伸嘅主要戰場。
 - 玩家可用 mouse／touch pointer events 拖動；手動拖動後停止自動跟隨。
-- 提供細型「跟隨／重置位置」控制，將 menu 重新吸回主角附近。
-- 每次定位都要 clamp 喺 game viewport 內；靠近邊緣時可改放主角另一側。
-- Skill action 使用短身 content-driven button；取消係較細 secondary action。AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複。
+- 提供細型「跟隨／重置位置」控制，將 menu 重新吸回上述主角左下 anchor。
+- 每次定位都要 clamp 喺 game viewport 內；如果主角太近 viewport 邊緣，只可因 clamp 而偏移，唔應預設跳返去右側遮住敵方戰場。
+- Skill action 使用短身 content-driven button；取消係較細 secondary action。AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複，亦唔喺角色身邊畫常駐 AP orbit dots。
+- 單位名稱必須跟 rendered sprite 嘅 semantic `nameAnchor`，唔可以用 logical tile 頂部做名稱 Y anchor；不同角色比例、攻擊 frame 或 monster species 都要保持名稱喺實際頭頂上方。
 
 ---
 
@@ -2174,28 +2176,47 @@ battle state + commands + seed
 
 ---
 
-## 32. Future Terrain Height
+## 32. Terrain Height 與 2.5D Battlefield Projection
 
-Height／terrain context 由 `docs/MAP_SYSTEM.md` 提供；本文件定義佢點影響戰鬥。
+Height／terrain context 由 `docs/MAP_SYSTEM.md` 提供；本文件定義佢點影響戰鬥。戰鬥邏輯仍然係純 grid coordinates；畫面 projection 同 gameplay coordinates 必須分開。
 
-建立 height-aware data contract，但未開啟高度玩法前：
+### 32.1 Opening mountain battlefield
+
+山地初始戰鬥場正式開啟第一個 authored height teaching map：
+
+- logical board：`8 × 3`
+- 玩家 deployment zone：左下側
+- 敵方 deployment zone：右上側
+- PC presentation：左下 → 右上嘅 oblique 2.5D projection
+- 普通平地本身有可見 base thickness，唔畫成一張零厚度紙片
+- `heightMap` 大於 `0` 嘅格按 elevation level 向上抬高，並繪製 exposed side faces
+- sprite 永遠保持直立／原比例，唔跟棋盤 skew
+
+Renderer 使用單一 projection contract：
 
 ```text
-所有現有格 height = 0
+(gridX, gridY, elevation)
+        ↓
+projectTile / battleProjectCorner
+        ↓
+(screenX, screenY)
 ```
 
-因此唔改變目前 balance。
+movement、occupancy、range、AI、attack path 同 save/state 全部仍然使用 logical grid cell；Canvas 只負責視覺投影同 pointer polygon hit-test。
 
-將來開啟高低差時：
+### 32.2 Opening terrain teaching set
 
-只更新：
+初始山地場只放兩個主要 blocker，令玩家第一次就可以分辨 cover 高度：
 
-- map height data
-- LOS/LOE
-- projectile arc
-- movement elevation cost（如需要）
+- **High tree**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=true`。高身障礙會攔截普通直線同與其 occupied height 相交嘅 ballistic arc。
+- **Low scrub**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=false`。低身障礙會阻擋移動同普通直線，但正常 Arc 可以越過。
+- scrub 後方接一段兩級高地／坡面，令第一批野外戰鬥已經有清楚 elevation 差。
 
-唔應該推倒現有 battle engine。
+Arc 是否真正撞到 terrain，仍然由 projectile trajectory height 同 `surfaceHeight + occupiedHeight` 比較；唔可以只因技能叫「Arc」就無條件穿過所有高障礙。
+
+### 32.3 Legacy battlefields
+
+未有 authored `heightMap / projection` 嘅其他現有 battlefield 仍然視為 `height = 0`，沿用舊平面 grid presentation 同原本 balance。之後新增高低差只需要更新 battlefield data、LOS／LOE、projectile arc 同必要嘅 movement elevation cost，唔應推倒現有 battle engine。
 
 ---
 
@@ -2498,14 +2519,15 @@ Automated tests pass 後仍然必須實際 run game。
 
 ## Phase 4 — 正式 Height-aware Terrain
 
-加入：
+已由山地初始 battlefield 開始落地：
 
 - cell height
-- LOS / LOE height-aware calculation
-- 低牆／高牆
+- 2.5D projected top faces + visible terrain thickness
+- Low／High blocker metadata
 - 高台／斜坡
+- Arc trajectory height intersection
 
-但所有現有 map 先保持 `height=0`。
+其他未 author height data 嘅 legacy battlefield 仍保持 `height=0`；完整 LOS / LOE height-aware calculation 可按實際技能內容再擴充。
 
 ## Phase 5 — 高低差戰鬥擴充
 

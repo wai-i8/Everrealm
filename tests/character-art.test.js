@@ -74,6 +74,13 @@ test("shared frame fitting keeps opaque art centred on one exact foot baseline",
   assert.equal(box.nameAnchorY, 14);
 });
 
+
+test("battle ground renderer exposes an affine projected 2.5D drawing path", () => {
+  assert.equal(typeof Art.drawBattleGroundProjected, "function");
+  assert.match(characterArtSource, /function drawBattleGroundProjected/);
+  assert.match(characterArtSource, /ctx\.transform\(/);
+});
+
 test("monster visual profiles provide semantic name anchors independent of atlas padding", () => {
   const profiles = Art.monsterVisualProfiles;
   for (const type of Object.keys(Art.monsterSpriteIndices)) {

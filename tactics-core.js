@@ -129,6 +129,70 @@
     return false;
   }
 
+  function terrainCellData(grid, cell) {
+    if (!grid || !validCell(cell)) return null;
+    const key = cellKey(copyCell(cell));
+    const source = grid.terrainCells || grid.terrain || null;
+    if (!source) return null;
+    if (source instanceof Map) return source.get(key) || source.get(copyCell(cell)) || null;
+    if (typeof source === "function") return source(copyCell(cell)) || null;
+    return source[key] || null;
+  }
+
+  function terrainHeightAt(grid, cell) {
+    if (!grid || !validCell(cell)) return 0;
+    const key = cellKey(copyCell(cell));
+    const source = grid.heightMap || null;
+    let value = 0;
+    if (source instanceof Map) value = source.get(key) ?? 0;
+    else if (typeof source === "function") value = source(copyCell(cell));
+    else if (source && typeof source === "object") value = source[key] ?? 0;
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function arcTrajectoryHeight(grid, origin, target, stepIndex, stepCount, arcHeight = 1.5) {
+    const count = Math.max(1, Math.trunc(Number(stepCount) || 1));
+    const progress = Math.max(0, Math.min(1, (Math.trunc(Number(stepIndex) || 0) + 1) / count));
+    const startHeight = terrainHeightAt(grid, origin);
+    const targetHeight = terrainHeightAt(grid, target);
+    const apex = Math.max(0, Number(arcHeight) || 0);
+    return startHeight + (targetHeight - startHeight) * progress + 4 * apex * progress * (1 - progress);
+  }
+
+  function terrainBlocksDelivery(grid, cell, deliveryMode = "linear", projectileHeight = null) {
+    if (!isInside(grid, cell)) return true;
+    const mode = String(deliveryMode || "linear");
+    const metadata = terrainCellData(grid, cell);
+    const blocked = terrainIsBlocked(grid, cell);
+    if (mode !== "arc") {
+      if (metadata && metadata.blocksLinear === false) return false;
+      return Boolean(metadata?.blocksLinear) || blocked;
+    }
+
+    const surfaceHeight = terrainHeightAt(grid, cell);
+    const flightHeight = Number(projectileHeight);
+    // Raised ground itself is solid volume.  Equal height at the destination
+    // remains legal so a projectile can arrive at a unit standing on it.
+    if (Number.isFinite(flightHeight) && flightHeight < surfaceHeight - 1e-7) return true;
+    if (metadata?.blocksArc === false) return false;
+    if (metadata?.blocksArc === true) {
+      if (!Number.isFinite(flightHeight)) return true;
+      const defaultObstacleHeight = metadata.obstacleHeight === "high" ? 2.4 : metadata.obstacleHeight === "low" ? .7 : 1;
+      const occupiedTop = surfaceHeight + Math.max(0, Number(metadata.occupiedHeight ?? defaultObstacleHeight) || 0);
+      return flightHeight <= occupiedTop + 1e-7;
+    }
+    // Legacy blocked grids predate height metadata; keep their old conservative
+    // behaviour for arc delivery until a map explicitly authors the blocker.
+    return blocked;
+  }
+
+  function arcIntersectsUnit(grid, cell, unit, projectileHeight) {
+    if (!unit || !Number.isFinite(Number(projectileHeight))) return true;
+    const footHeight = terrainHeightAt(grid, cell);
+    const bodyHeight = Math.max(.1, Number(unit.bodyHeight) || 1);
+    return Number(projectileHeight) <= footHeight + bodyHeight + 1e-7;
+  }
+
   function occupiedKeys(occupants, ignoreUnitId) {
     const keys = new Set();
     if (!occupants) return keys;
@@ -214,24 +278,34 @@
       blockedBy: null,
       stoppedReason: null,
       friendlyFire: options.friendlyFire === true,
+      deliveryMode,
+      impactHeight: null,
     };
     if (deliveryMode === "pathless") return result;
-    for (const cell of path) {
-      if (options.blocksByTerrain !== false && options.grid && terrainIsBlocked(options.grid, cell)) {
+    for (let index = 0; index < path.length; index += 1) {
+      const cell = path[index];
+      const projectileHeight = deliveryMode === "arc"
+        ? arcTrajectoryHeight(options.grid, origin, target, index, path.length, options.arcHeight)
+        : null;
+      if (options.blocksByTerrain !== false && options.grid
+        && terrainBlocksDelivery(options.grid, cell, deliveryMode, projectileHeight)) {
         result.firstImpactCell = copyCell(cell);
         result.blocked = true;
         result.stoppedReason = "terrain";
+        result.impactHeight = projectileHeight;
         break;
       }
       const unit = options.blocksByUnits === false ? null : units.find((candidate) => unitIsAlive(candidate)
         && (ignoreUnitId == null || String(candidate.id) !== String(ignoreUnitId))
-        && sameCell(cellOf(candidate), cell));
+        && sameCell(cellOf(candidate), cell)
+        && (deliveryMode !== "arc" || arcIntersectsUnit(options.grid, cell, candidate, projectileHeight)));
       if (unit) {
         result.firstImpactCell = copyCell(cell);
         result.actualTarget = unit;
         result.blocked = true;
         result.blockedBy = unit;
         result.stoppedReason = "unit";
+        result.impactHeight = projectileHeight;
         break;
       }
     }
@@ -1166,6 +1240,7 @@
       targetArc: Array.isArray(options.targetArc) ? [...options.targetArc] : null,
       blocksByTerrain: options.blocksByTerrain,
       blocksByUnits: options.blocksByUnits,
+      arcHeight: options.arcHeight == null ? null : Math.max(0, Number(options.arcHeight) || 0),
       skillDurability: durability,
       accumulatedInterrupt: 0,
       remainingSkillDurability: durability,
@@ -1219,7 +1294,7 @@
     if (typeof state.canAct === "function" && !state.canAct(actor, action)) return { ok: false, reason: "action-prevented", action, actor, target };
     if (typeof state.rangeResolver === "function" && !state.rangeResolver({ action, actor, target })) return { ok: false, reason: "out-of-range", action, actor, target };
     if (typeof state.pathResolver === "function" && !state.pathResolver({ action, actor, target })) return { ok: false, reason: "invalid-path", action, actor, target };
-    if (action.deliveryMode === "linear" && actor?.cell && target?.cell && state.grid) {
+    if (["linear", "arc"].includes(action.deliveryMode) && actor?.cell && target?.cell && state.grid) {
       const selectedCell = target?.cell || action.targetCell;
       const path = facingOrthogonalPriority(actor.cell, selectedCell, actor.facing);
       const trace = traceAttackPath({
@@ -1230,9 +1305,10 @@
         grid: state.grid,
         units: state.units || [],
         actorId: actor.id,
-        deliveryMode: "linear",
+        deliveryMode: action.deliveryMode,
         blocksByTerrain: action.blocksByTerrain,
         blocksByUnits: action.blocksByUnits,
+        arcHeight: action.arcHeight,
       });
       const hitIntendedTarget = action.targetId == null || trace.actualTarget?.id === action.targetId;
       const invalidated = trace.stoppedReason === "terrain" || !hitIntendedTarget;
@@ -1279,6 +1355,10 @@
     createGrid,
     isInside,
     isWalkable,
+    terrainCellData,
+    terrainHeightAt,
+    terrainBlocksDelivery,
+    arcTrajectoryHeight,
     manhattan,
     neighbours,
     reachableTiles,
