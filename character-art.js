@@ -298,7 +298,7 @@
     itemBackground: { src: "assets/item/item.png", background: true, image: null, ready: false, failed: false },
     guildBackground: { src: "assets/guild/guild.png", background: true, image: null, ready: false, failed: false },
     battleMountainBackground: { src: "assets/battle/mountain/mountain-battle-background-v1.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
-    battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v2.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
+    battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v3.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
     monstersCore: { src: "assets/monster-facing-core-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     monstersDepths: { src: "assets/monster-facing-depths-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
@@ -537,16 +537,11 @@
   }
 
   function drawLocomotion(ctx, settings, id) {
-    if (![undefined, "idle", "walk", "hurt", "attack"].includes(settings.state)) return false;
+    if (![undefined, "idle", "walk"].includes(settings.state)) return false;
     const atlas = spriteAtlases[`locomotion_${id}`];
     if (!atlas?.ready || !atlas.image) return false;
     const animation = settings.locomotion || { state: settings.state, facing: settings.facing, time: settings.phase || 0 };
-    // Standard Mobile Unit atlases currently provide Idle+Walk only.  During
-    // an action, keep the same species atlas and use its current idle-facing
-    // frame rather than falling through to an unrelated legacy monster.
-    const selected = Locomotion.frame(["hurt", "attack"].includes(settings.state)
-      ? Locomotion.create(settings.facing || animation.facing)
-      : animation);
+    const selected = Locomotion.frame(animation);
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
@@ -564,7 +559,6 @@
         ctx.lineWidth = 1.4 * visualScale;
         ctx.beginPath(); ctx.ellipse(x, y, 20 * visualScale, 6 * visualScale, 0, 0, TAU); ctx.stroke();
       }
-      if (settings.state === "hurt") ctx.globalAlpha *= .64;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(atlas.image, selected.sx, selected.sy, selected.sw, selected.sh, box.x, box.y, box.width, box.height);
@@ -576,6 +570,65 @@
       markerAnchorX: nameAnchorX,
       markerAnchorY: nameAnchorY - 20 * visualScale,
       atlas: atlas.src, frame: selected.index, facing: selected.facing };
+  }
+
+  // Attack, hurt and collision feedback are action states, not locomotion.
+  // Standard atlases still provide the unit identity, but this renderer owns
+  // a visible lunge/recoil animation instead of silently substituting Idle.
+  function drawLocomotionReaction(ctx, settings, id) {
+    if (!["attack", "hurt", "stop"].includes(settings.state)) return false;
+    const atlas = spriteAtlases[`locomotion_${id}`];
+    if (!atlas?.ready || !atlas.image) return false;
+    const facing = settings.facing || settings.locomotion?.facing || "down";
+    const selected = Locomotion.frame(Locomotion.create(facing));
+    const x = Number(settings.x) || 0;
+    const y = Number(settings.y) || 0;
+    const scale = Math.max(.08, Number(settings.scale) || 1);
+    const authoredFrame = locomotionWorldFrame(id);
+    const visualScale = scale * authoredFrame.height / selected.sh;
+    const baseBox = Locomotion.layout(x, y, visualScale);
+    const vector = ({ down: { x: 0, y: 1 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, left: { x: -1, y: 0 } })[facing];
+    const progress = clamp(Number.isFinite(settings.progress) ? settings.progress : .5, 0, 1);
+    const strike = progress < .32
+      ? -Math.sin(progress / .32 * Math.PI / 2) * .035
+      : progress < .62
+        ? -.035 + Math.sin((progress - .32) / .3 * Math.PI / 2) * .15
+        : .115 * (1 - (progress - .62) / .38);
+    const actionDistance = settings.state === "attack" ? authoredFrame.height * visualScale * strike : 0;
+    const hurtShake = settings.state === "hurt" ? Math.sin((Number(settings.phase) || 0) * 48) * 5 * visualScale : 0;
+    const stopKick = settings.state === "stop" ? Math.sin(progress * Math.PI) * authoredFrame.height * visualScale * .055 : 0;
+    const drawX = x + vector.x * (actionDistance - stopKick) + (vector.y ? hurtShake : 0);
+    const drawY = y + vector.y * (actionDistance - stopKick) + (vector.x ? hurtShake * .45 : 0);
+    const squash = settings.state === "hurt" ? .9 : settings.state === "stop" ? .94 + Math.sin(progress * Math.PI) * .04 : 1 - Math.sin(progress * Math.PI) * .055;
+
+    ctx.save();
+    try {
+      drawGroundShadow(ctx, x, y, visualScale, 15, settings.state === "hurt" ? .24 : .34);
+      ctx.translate(drawX, drawY);
+      ctx.scale(2 - squash, squash);
+      ctx.translate(-x, -y);
+      if (settings.state === "hurt") {
+        ctx.globalAlpha *= .72;
+        ctx.filter = "brightness(1.55) saturate(.72)";
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(atlas.image, selected.sx, selected.sy, selected.sw, selected.sh, baseBox.x, baseBox.y, baseBox.width, baseBox.height);
+    } finally { ctx.restore(); }
+
+    return {
+      ...baseBox,
+      left: baseBox.x,
+      right: baseBox.x + baseBox.width,
+      top: baseBox.y,
+      bottom: y,
+      centerX: x,
+      baselineY: y,
+      atlas: atlas.src,
+      frame: selected.index,
+      facing: selected.facing,
+      actionState: settings.state,
+    };
   }
 
   // The mountain courier is a standalone cutout so the recipient never
@@ -629,6 +682,10 @@
 
   function drawBitmapCharacter(ctx, settings) {
     if ((settings.actor || settings.kind) === "player") {
+      if (settings.state === "stop") {
+        const reaction = drawLocomotionReaction(ctx, settings, settings.classId || "warrior");
+        if (reaction) return reaction;
+      }
       const standard = drawLocomotion(ctx, settings, settings.classId || "warrior");
       if (standard) return standard;
     }
@@ -1107,6 +1164,8 @@
   }
 
   function drawBitmapEnemy(ctx, settings) {
+    const reaction = drawLocomotionReaction(ctx, settings, settings.type);
+    if (reaction) return reaction;
     const standard = drawLocomotion(ctx, settings, settings.type);
     if (standard) return standard;
     const type = settings.type || (settings.boss ? "boss" : "slime");

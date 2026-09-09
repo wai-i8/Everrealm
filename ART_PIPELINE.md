@@ -250,9 +250,11 @@ anchorY = 固定腳底／接地 baseline Y
 
 角色頭髮、尾巴、翼、拳套、法杖、腳步伸展，都唔可以令 anchor 跟 alpha bounding box 移動。
 
-### Visual Bounds for Runtime Labels
+### Stable Battle Labels / HP Bars
 
-標準 locomotion atlas 嘅 actor name 必須貼近每格實際可見內容嘅頂部，而唔係固定貼住 256px cell 邊界。資產稽核產生嘅每 frame visual bounds（`left`、`top`、`width`，腳底固定對齊 `anchorY`）由 `locomotion.js` 保存並由 renderer 使用；瀏覽器 file-hosted canvas 若因 cross-origin taint 無法即時讀 alpha，runtime 必須使用同一份 audited bounds metadata，唔可以退回物種 magic name lift 或每 frame 手工 offset。
+戰鬥中 actor name 同 HP bar 必須由單位所在格仔嘅穩定 anchor 推算。X 永遠使用格仔水平正中心；name Y 使用固定、略高於該單位標準頭頂嘅 cell-relative offset，HP bar 亦使用固定 cell-relative offset。兩者都唔可以讀取 locomotion 每 frame visual bounds、alpha bounds、`artBox` 或 bob／attack／hurt pose 嘅外框，因此行路、攻擊、受傷同 collision reaction 期間只會跟隨單位嘅實際格仔 movement interpolation，唔會隨圖像內容飄移。
+
+資產稽核產生嘅 visual bounds 仍可用於資產 QA、crop inspection 或非戰鬥場景需要，但唔係 battle label／HP anchor。
 
 ### Walk Cycle
 
@@ -620,12 +622,12 @@ snow
 
 ```text
 assets/battle/mountain/mountain-battle-background-v1.png  遠景 bitmap
-assets/battle/mountain/mountain-battle-ground-v2.png       battle board ground bitmap
+assets/battle/mountain/mountain-battle-ground-v3.png       battle board ground bitmap
 assets/terrain-atlas-v1.png                               dirt／grass ground tile
 assets/environment-atlas-v5.png                           rock obstacle frame
 ```
 
-Renderer 只喺 `BattleContext.theme === "mountain"` 時啟用呢套 presentation；遠景以低對比 cover 方式鋪滿 viewport，board 內先以 `mountain-battle-ground-v2.png` 作為整塊地表 bitmap，再加低權重碎石／乾草 decal、raised board rim、正式 rock prop 同單位 contact shadow。地表 bitmap 應該以整塊 board 為單位處理，避免逐格重複造成規律條紋；仍可保留正式 terrain atlas 作為 asset 未載入時嘅 fallback。Grid、移動／攻擊範圍、target、名稱、HP 同 skill effect 仍然係獨立 gameplay overlay，唔會燒入任何背景或地面素材。
+Renderer 只喺 `BattleContext.theme === "mountain"` 時啟用呢套 presentation；遠景以低對比 cover 方式鋪滿 viewport，board 內先以 `mountain-battle-ground-v3.png` 作為整塊地表 bitmap，再加低權重碎石／乾草 decal、正式 rock prop 同單位 contact shadow。地表 bitmap 應該以整塊 board 為單位處理，中央保持低噪音，邊緣以少量山石／乾草同低對比色調自然融入外圍風景；避免 raised hard-board frame、逐格重複或規律條紋。正式 terrain atlas 只作 asset 未載入時 fallback。Grid、移動／攻擊範圍、target、名稱、HP 同 skill effect 仍然係獨立 gameplay overlay，唔會燒入任何背景或地面素材。
 
 Height-aware visual contract：目前山地遭遇戰嘅 `heightMap` 仍然全部係 `0`，所以唔以純視覺假造高低差；如果日後 map context 提供非零高度，tile renderer 會喺該 cell 加 top highlight／lower shadow lip，並由 battle rules 使用同一份 height data，保持畫面同實際 tile logic 一致。
 

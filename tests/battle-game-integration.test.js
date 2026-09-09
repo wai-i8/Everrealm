@@ -19,6 +19,15 @@ test("resolved facing and STOP feedback come from actual collision results", () 
   assert.match(game, /if \(result\?\.facing\) unit\.facing = result\.facing/);
   assert.match(game, /text:\s*"STOP!"/);
   assert.match(game, /stoppedUnits\.some\(\(unit\) => unit\.id === battle\.hero\.id\)/);
+  assert.match(game, /unit\.stopFlash = \.48/);
+  assert.match(game, /const visualState = hurt \? "hurt" : stopped \? "stop" : acting \? "attack"/);
+});
+
+test("battle action artwork advances over the existing resolution timeline", () => {
+  assert.match(game, /const actionProgress = battle\.phase === "resolving_action"/);
+  assert.match(game, /battle\.actionResolution\?\.elapsed/);
+  assert.match(game, /progress: actionProgress/);
+  assert.doesNotMatch(game, /progress: \.55/);
 });
 
 test("clicking an old route cell appends or confirms and only reset clears the draft", () => {

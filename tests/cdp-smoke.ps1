@@ -696,7 +696,7 @@ try {
         @{ name = 'up'; dx = 0; dy = -64; gridX = 0; gridY = -1 },
         @{ name = 'left'; dx = -64; dy = 0; gridX = -1; gridY = 0 }
       )
-      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter');window.__RPG_DEBUG__.setEncounterGrace(30);true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter');window.__RPG_DEBUG__.enterMap('field');window.__RPG_DEBUG__.setEncounterGrace(30);true" | Out-Null
       $enemyWalkVerified = $false
       foreach ($direction in $directions) {
         Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__,steps=[[0,0],[0,16],[0,32],[0,48],[0,64],[16,0],[32,0],[48,0],[64,0],[0,-16],[0,-32],[0,-48],[0,-64],[-16,0],[-32,0],[-48,0],[-64,0]];let base=null;outer:for(let y=160;y<=1320;y+=48)for(let x=160;x<=2100;x+=48){if(steps.every(([dx,dy])=>!api.collisionAt(x+dx,y+dy))){base={x,y};break outer}}if(!base)throw Error('No four-way exploration QA clearing');api.teleport(base.x,base.y);if(!api.clickMoveTo(base.x+$($direction.dx),base.y+$($direction.dy)))throw Error('No exploration path for $($direction.name)');return base})()" | Out-Null
@@ -775,6 +775,7 @@ try {
       if (-not $stoppedEnemy -or $stoppedEnemy.locomotion.state -ne 'idle' -or $stoppedEnemy.locomotion.facing -ne $stoppedEnemy.facing) {
         throw 'STOP did not immediately return the enemy to its resolved facing Idle.'
       }
+      Invoke-GameExpression -Expression '(()=>{const menu=document.getElementById("battleActionDock"),handle=menu.querySelector("[data-battle-command-drag-handle]"),stage=document.getElementById("gameStage"),m=menu.getBoundingClientRect(),s=stage.getBoundingClientRect(),id=93;handle.dispatchEvent(new PointerEvent("pointerdown",{pointerId:id,pointerType:"mouse",button:0,clientX:m.left+12,clientY:m.top+8,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent("pointermove",{pointerId:id,pointerType:"mouse",button:0,clientX:s.right-20,clientY:s.bottom-20,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent("pointerup",{pointerId:id,pointerType:"mouse",button:0,clientX:s.right-20,clientY:s.bottom-20,bubbles:true,cancelable:true}));return true})()' | Out-Null
       $path = Join-Path $runtimeOutputPath 'locomotion-battle-stop.png'
       $capture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($capture.result.data))
@@ -965,8 +966,12 @@ try {
       Start-Sleep -Milliseconds 120
       $skillWindup = Get-GameSnapshot
       if ($skillWindup.battle.phase -ne 'resolving_action' -or $skillWindup.battle.action.type -ne 'skill' -or $skillWindup.battle.action.skillId -ne $attackSetup.skillId -or $skillWindup.battle.action.applied) { throw 'Learned skill did not enter the simultaneous action wind-up.' }
-      Start-Sleep -Milliseconds 1130
-      $battleMidSnapshot = Get-GameSnapshot
+      $battleMidSnapshot = $null
+      for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
+        Start-Sleep -Milliseconds 50
+        $battleMidSnapshot = Get-GameSnapshot
+        if ($battleMidSnapshot.battle.phase -eq 'victory') { break }
+      }
       if ($battleMidSnapshot.battle.phase -ne 'victory') { throw "Canvas target click did not win the battle: $($battleMidSnapshot.battle.phase)." }
       Start-Sleep -Milliseconds 820
     }
@@ -977,11 +982,26 @@ try {
       if ($mountainRound.mode -ne 'battle' -or $mountainRound.battle.phase -ne 'planning_move' -or $mountainRound.battle.battlefield.theme -ne 'mountain') {
         throw "Mountain battlefield did not initialize (mode=$($mountainRound.mode), phase=$($mountainRound.battle.phase), theme=$($mountainRound.battle.battlefield.theme))."
       }
+      $mountainUi = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const menu=document.getElementById("battleActionDock"),stage=document.getElementById("gameStage"),m=menu.getBoundingClientRect(),s=stage.getBoundingClientRect(),art=window.LanternArt.spriteStatus();return {following:menu.dataset.following,width:m.width,height:m.height,inside:m.left>=s.left&&m.top>=s.top&&m.right<=s.right&&m.bottom<=s.bottom,ground:art.battleMountainGround.src,groundReady:art.battleMountainGround.ready};})())') | ConvertFrom-Json
+      if ($mountainUi.following -ne 'true' -or -not $mountainUi.inside -or $mountainUi.width -gt 360 -or -not $mountainUi.groundReady -or $mountainUi.ground -ne 'assets/battle/mountain/mountain-battle-ground-v3.png') {
+        throw "Mountain command menu or ground asset did not initialize correctly (following=$($mountainUi.following), inside=$($mountainUi.inside), width=$($mountainUi.width), ground=$($mountainUi.ground), ready=$($mountainUi.groundReady))."
+      }
+      $dragResult = (Invoke-GameExpression -Expression 'JSON.stringify((()=>{const menu=document.getElementById("battleActionDock"),handle=menu.querySelector("[data-battle-command-drag-handle]"),stage=document.getElementById("gameStage"),before=menu.getBoundingClientRect(),s=stage.getBoundingClientRect(),id=91;handle.dispatchEvent(new PointerEvent("pointerdown",{pointerId:id,pointerType:"touch",button:0,clientX:before.left+12,clientY:before.top+8,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent("pointermove",{pointerId:id,pointerType:"touch",button:0,clientX:s.right+300,clientY:s.bottom+300,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent("pointerup",{pointerId:id,pointerType:"touch",button:0,clientX:s.right+300,clientY:s.bottom+300,bubbles:true,cancelable:true}));const after=menu.getBoundingClientRect();return {following:menu.dataset.following,moved:Math.abs(after.left-before.left)>20||Math.abs(after.top-before.top)>20,inside:after.left>=s.left&&after.top>=s.top&&after.right<=s.right+1&&after.bottom<=s.bottom+1};})())') | ConvertFrom-Json
+      if ($dragResult.following -ne 'false' -or -not $dragResult.moved -or -not $dragResult.inside) { throw 'Pointer dragging did not detach and clamp the battle command menu inside the viewport.' }
+      Invoke-GameExpression -Expression 'document.getElementById("battleCommandFollowButton").click();true' | Out-Null
+      $followed = (Invoke-GameExpression -Expression 'document.getElementById("battleActionDock").dataset.following')
+      if ($followed -ne 'true') { throw 'Battle command follow/reset control did not reattach the menu to the hero.' }
       $mountainScreenshotPath = Join-Path $runtimeOutputPath "mountain-battle-normal-$ViewportWidth.png"
       $mountainCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($mountainScreenshotPath, [Convert]::FromBase64String($mountainCapture.result.data))
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleCommitMove(); true" | Out-Null
-      Start-Sleep -Milliseconds 1160
+      $mountainMove = $null
+      for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
+        Start-Sleep -Milliseconds 50
+        $mountainMove = Get-GameSnapshot
+        if ($mountainMove.battle.phase -eq 'planning_action') { break }
+      }
+      if ($mountainMove.battle.phase -ne 'planning_action') { throw "Mountain movement did not reach action planning (phase=$($mountainMove.battle.phase))." }
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleAction('skill:straight_punch'); true" | Out-Null
       Start-Sleep -Milliseconds 120
       $mountainAttack = Get-GameSnapshot
@@ -991,6 +1011,44 @@ try {
       $mountainAttackScreenshotPath = Join-Path $runtimeOutputPath "mountain-battle-attack-preview-$ViewportWidth.png"
       $mountainAttackCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
       [IO.File]::WriteAllBytes($mountainAttackScreenshotPath, [Convert]::FromBase64String($mountainAttackCapture.result.data))
+      foreach ($visualCase in @(
+        @{ id = 'wisp-1'; label = 'chick' },
+        @{ id = 'hound-1'; label = 'wild-boar' }
+      )) {
+        $visualSetup = (Invoke-GameExpression -Expression "JSON.stringify((()=>{const api=window.__RPG_DEBUG__;api.newGame('fighter');api.enterMap('field');if(!api.startBattle('$($visualCase.id)'))return {error:'battle start failed'};const fixture=api.prepareBattleVisualActions();if(!fixture)return {error:'visual action fixture failed'};const menu=document.getElementById('battleActionDock'),handle=menu.querySelector('[data-battle-command-drag-handle]'),stage=document.getElementById('gameStage'),m=menu.getBoundingClientRect(),s=stage.getBoundingClientRect(),id=92;handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:id,pointerType:'mouse',button:0,clientX:m.left+12,clientY:m.top+8,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent('pointermove',{pointerId:id,pointerType:'mouse',button:0,clientX:s.right-20,clientY:s.bottom-20,bubbles:true,cancelable:true}));menu.dispatchEvent(new PointerEvent('pointerup',{pointerId:id,pointerType:'mouse',button:0,clientX:s.right-20,clientY:s.bottom-20,bubbles:true,cancelable:true}));const snap=api.snapshot();return {...fixture,heroHp:snap.battle.hero.hp,enemyHp:snap.battle.enemies.find(unit=>unit.id===fixture.enemyId).hp,heroAnchor:api.battleUnitAnchor('hero'),enemyAnchor:api.battleUnitAnchor(fixture.enemyId)};})())") | ConvertFrom-Json
+        if ($visualSetup.error) { throw "Could not initialize $($visualCase.label) visual action QA: $($visualSetup.error)." }
+        if ($visualSetup.heroAnchor.nameX -ne $visualSetup.heroAnchor.cellCentreX -or $visualSetup.heroAnchor.hpCentreX -ne $visualSetup.heroAnchor.cellCentreX -or $visualSetup.enemyAnchor.nameX -ne $visualSetup.enemyAnchor.cellCentreX -or $visualSetup.enemyAnchor.hpCentreX -ne $visualSetup.enemyAnchor.cellCentreX) {
+          throw "$($visualCase.label) name or HP anchor was not centered on its battle cell."
+        }
+        Invoke-GameExpression -Expression "window.__RPG_DEBUG__.battleAction('skill:straight_punch');window.__RPG_DEBUG__.battleConfirm($($visualSetup.enemyCell.x),$($visualSetup.enemyCell.y));true" | Out-Null
+        Start-Sleep -Milliseconds 140
+        $visualWindup = Get-GameSnapshot
+        $windupAnchors = (Invoke-GameExpression -Expression "JSON.stringify({hero:window.__RPG_DEBUG__.battleUnitAnchor('hero'),enemy:window.__RPG_DEBUG__.battleUnitAnchor('$($visualSetup.enemyId)')})") | ConvertFrom-Json
+        if ($visualWindup.battle.phase -ne 'resolving_action' -or $visualWindup.battle.action.applied -or $visualWindup.battle.action.actionOrder.actorId -notcontains $visualSetup.enemyId) {
+          throw "$($visualCase.label) did not visibly enter simultaneous hero/monster attack wind-up."
+        }
+        if ($windupAnchors.hero.nameX -ne $visualSetup.heroAnchor.nameX -or $windupAnchors.hero.nameY -ne $visualSetup.heroAnchor.nameY -or $windupAnchors.hero.hpY -ne $visualSetup.heroAnchor.hpY -or $windupAnchors.enemy.nameX -ne $visualSetup.enemyAnchor.nameX -or $windupAnchors.enemy.nameY -ne $visualSetup.enemyAnchor.nameY -or $windupAnchors.enemy.hpY -ne $visualSetup.enemyAnchor.hpY) {
+          throw "$($visualCase.label) battle labels drifted during attack wind-up."
+        }
+        $visualAttackPath = Join-Path $runtimeOutputPath "mountain-battle-$($visualCase.label)-attack-$ViewportWidth.png"
+        $visualAttackCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+        [IO.File]::WriteAllBytes($visualAttackPath, [Convert]::FromBase64String($visualAttackCapture.result.data))
+        Start-Sleep -Milliseconds 1180
+        $visualImpact = Get-GameSnapshot
+        $impactEnemy = @($visualImpact.battle.enemies | Where-Object { $_.id -eq $visualSetup.enemyId })[0]
+        if ($visualImpact.battle.hero.hp -ge $visualSetup.heroHp -or $impactEnemy.hp -ge $visualSetup.enemyHp) {
+          throw "$($visualCase.label) simultaneous action did not apply both hero and monster damage (hero=$($visualSetup.heroHp)->$($visualImpact.battle.hero.hp), enemy=$($visualSetup.enemyHp)->$($impactEnemy.hp))."
+        }
+        $reactionReady = Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setBattleVisualReaction('hero','hurt')&&window.__RPG_DEBUG__.setBattleVisualReaction('$($visualSetup.enemyId)','hurt')"
+        if (-not $reactionReady) { throw "$($visualCase.label) hurt reaction could not be replayed for visual QA." }
+        $impactAnchors = (Invoke-GameExpression -Expression "JSON.stringify({hero:window.__RPG_DEBUG__.battleUnitAnchor('hero'),enemy:window.__RPG_DEBUG__.battleUnitAnchor('$($visualSetup.enemyId)')})") | ConvertFrom-Json
+        if ($impactAnchors.hero.nameX -ne $impactAnchors.hero.cellCentreX -or $impactAnchors.hero.hpCentreX -ne $impactAnchors.hero.cellCentreX -or ($impactAnchors.hero.nameY - $impactAnchors.hero.cellCentreY) -ne ($visualSetup.heroAnchor.nameY - $visualSetup.heroAnchor.cellCentreY) -or ($impactAnchors.hero.hpY - $impactAnchors.hero.cellCentreY) -ne ($visualSetup.heroAnchor.hpY - $visualSetup.heroAnchor.cellCentreY) -or $impactAnchors.enemy.nameX -ne $impactAnchors.enemy.cellCentreX -or $impactAnchors.enemy.hpCentreX -ne $impactAnchors.enemy.cellCentreX -or ($impactAnchors.enemy.nameY - $impactAnchors.enemy.cellCentreY) -ne ($visualSetup.enemyAnchor.nameY - $visualSetup.enemyAnchor.cellCentreY) -or ($impactAnchors.enemy.hpY - $impactAnchors.enemy.cellCentreY) -ne ($visualSetup.enemyAnchor.hpY - $visualSetup.enemyAnchor.cellCentreY)) {
+          throw "$($visualCase.label) name or HP anchors did not stay cell-relative during hurt reactions."
+        }
+        $visualHurtPath = Join-Path $runtimeOutputPath "mountain-battle-$($visualCase.label)-hurt-$ViewportWidth.png"
+        $visualHurtCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+        [IO.File]::WriteAllBytes($visualHurtPath, [Convert]::FromBase64String($visualHurtCapture.result.data))
+      }
     }
     'mountain-recipient' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); window.__RPG_DEBUG__.acceptOffer('guild_delivery_mountain_2star'); window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.setEncounterGrace(30); const target=window.__RPG_DEBUG__.entityPosition('mountain_delivery_recipient'); window.__RPG_DEBUG__.teleport(target.x-42,target.y); window.__RPG_DEBUG__.interactWith('mountain_delivery_recipient'); true" | Out-Null

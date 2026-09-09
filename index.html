@@ -145,10 +145,12 @@
             </ol>
           </nav>
 
-          <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="戰鬥指令">
-            <div class="battle-action-heading">
-              <span>選擇招式</span>
-              <small id="battleActionPoints">AP 10 / 200</small>
+          <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
+            <div class="battle-action-heading" data-battle-command-drag-handle>
+              <span>戰鬥指令 <small>拖動</small></span>
+              <button id="battleCommandFollowButton" class="battle-command-follow" type="button" data-battle-command-follow aria-label="讓戰鬥指令選單重新跟隨主角" title="跟隨主角">
+                <span aria-hidden="true">⌖</span> 跟隨
+              </button>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
               <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="move" aria-keyshortcuts="M">

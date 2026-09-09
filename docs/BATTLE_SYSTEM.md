@@ -1985,6 +1985,8 @@ UI 喺確認目標前可以預覽：
 ### 25.1 單位名稱
 
 - 名稱放角色上方。
+- X 永遠使用單位所在格仔嘅水平正中心；Y 使用該單位體型固定、略高於頭頂嘅 cell-relative offset。
+- 行路 interpolation 可以帶名稱跟隨單位移動，但 sprite bob、attack、hurt 同每幀 visual／alpha bounds 不得改變名稱位置。
 - 字體必須正常可讀。
 - 使用深色描邊／清晰對比。
 - 唔燒入 sprite。
@@ -1993,7 +1995,7 @@ UI 喺確認目標前可以預覽：
 
 - 放角色腳下。
 - 不可遮角色本體。
-- 跟 semantic foot anchor。
+- 使用格仔中心推算嘅固定 cell-relative anchor；不得跟 sprite frame bounds、bob 或 action pose 移動。
 
 ### 25.3 攻擊格
 
@@ -2018,6 +2020,14 @@ UI 可顯示：
 - 原 intended target 唔再標成「必定命中」。
 
 Preview 必須同實際 resolver 共用同一函數。
+
+### 25.5 Floating command menu
+
+- 戰鬥指令使用 Canvas 上方嘅 compact DOM overlay，預設停喺主角格仔附近。
+- 玩家可用 mouse／touch pointer events 拖動；手動拖動後停止自動跟隨。
+- 提供細型「跟隨／重置位置」控制，將 menu 重新吸回主角附近。
+- 每次定位都要 clamp 喺 game viewport 內；靠近邊緣時可改放主角另一側。
+- Skill action 使用短身 content-driven button；取消係較細 secondary action。AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複。
 
 ---
 

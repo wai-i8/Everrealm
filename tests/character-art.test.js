@@ -85,40 +85,30 @@ test("monster visual profiles provide semantic name anchors independent of atlas
   assert.ok(profiles.snake.nameLift > profiles.wild_boar.nameLift, "tall source art needs a higher label anchor");
 });
 
-test("standard battle labels use audited visible tops for small and large units", () => {
-  const ids = ["fighter", "raccoon", "turtle", "wild_boar"];
-  const layout = Locomotion.layout(320, 500, 1);
-  const frame = (id) => {
-    const selected = Locomotion.frame({ state: "idle", facing: "down" });
-    const bounds = Locomotion.frameVisualBounds(id, selected.index);
-    return {
-      visualTop: layout.y + (bounds.sy - selected.sy),
-      nameY: layout.y + (bounds.sy - selected.sy) - 4,
-      bounds,
-    };
-  };
-  for (const id of ids) {
+test("standard locomotion visual bounds remain audit metadata rather than action routing", () => {
+  for (const id of ["fighter", "raccoon", "turtle", "wild_boar"]) {
     assert.equal(Locomotion.STANDARD_MOBILE_UNIT_VISUAL_BOUNDS[id].length, 28, `${id} frame audit`);
-    const result = frame(id);
-    assert.ok(result.bounds && result.bounds.sw > 0 && result.bounds.sh > 0, `${id} should have an opaque frame bound`);
-    assert.equal(result.nameY, result.visualTop - 4, `${id} label gap`);
+    assert.ok(Locomotion.frameVisualBounds(id, 0).sh > 0, `${id} should retain audited bounds`);
   }
-  assert.ok(frame("raccoon").visualTop > frame("turtle").visualTop, "small raccoon label follows its shorter visible body");
-  assert.ok(frame("wild_boar").visualTop < frame("raccoon").visualTop, "boar label follows its taller visible body");
-  assert.match(characterArtSource, /const opaque = opaqueAtlasFrame\(atlas, selected\.index\);[\s\S]*const visualTop = box\.y \+ \(opaque\.sy - selected\.sy\)/);
-  assert.match(characterArtSource, /const nameAnchorY = visualTop - 4 \* visualScale/);
   const locomotionBlock = characterArtSource.match(/function drawLocomotion\([\s\S]*?\n  \}/)?.[0] || "";
-  assert.doesNotMatch(locomotionBlock, /nameLift/);
+  assert.match(locomotionBlock, /\[undefined, "idle", "walk"\]/);
+  assert.doesNotMatch(locomotionBlock, /"hurt"|"attack"|nameLift/);
 });
 
-test("turtle and boar keep their species locomotion atlas through actions", () => {
+test("player artwork and monster reactions preserve visible attack and hurt states", () => {
   assert.equal(Locomotion.assets.turtle, "assets/locomotion/turtle-v1.png");
   assert.equal(Locomotion.assets.wild_boar, "assets/locomotion/wild-boar-v1.png");
   assert.notEqual(Locomotion.assets.turtle, Locomotion.assets.slime);
   assert.notEqual(Locomotion.assets.wild_boar, Locomotion.assets.slime);
+  const bitmapCharacterBlock = characterArtSource.match(/function drawBitmapCharacter\([\s\S]*?\n  \}/)?.[0] || "";
   const bitmapEnemyBlock = characterArtSource.match(/function drawBitmapEnemy\([\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(bitmapEnemyBlock, /drawLocomotion\(ctx, settings, settings\.type\)/);
-  assert.match(characterArtSource, /\["hurt", "attack"\]\.includes\(settings\.state\)/);
+  const reactionBlock = characterArtSource.match(/function drawLocomotionReaction\([\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(bitmapCharacterBlock, /drawLocomotion\(ctx, settings, settings\.classId \|\| "warrior"\)/);
+  assert.match(bitmapEnemyBlock, /drawLocomotionReaction\(ctx, settings, settings\.type\)/);
+  assert.match(reactionBlock, /\["attack", "hurt", "stop"\]/);
+  assert.match(reactionBlock, /actionDistance/);
+  assert.match(reactionBlock, /hurtShake/);
+  assert.match(reactionBlock, /stopKick/);
   assert.doesNotMatch(bitmapEnemyBlock, /type === "turtle"[\s\S]{0,160}slime|type === "wild_boar"[\s\S]{0,160}slime/);
   for (const source of [Locomotion.assets.turtle, Locomotion.assets.wild_boar]) {
     assert.equal(fs.existsSync(path.join(__dirname, "..", source)), true, source);
@@ -169,7 +159,7 @@ test("generated art atlases expose stable manifests and all active assets exist"
   assert.equal(status.fighter.src, "assets/fighter-atlas-v2.png");
   assert.equal(status.fighterWalk.src, "assets/fighter-walk-atlas-v4.png");
   assert.equal(status.battleMountainBackground.src, "assets/battle/mountain/mountain-battle-background-v1.png");
-  assert.equal(status.battleMountainGround.src, "assets/battle/mountain/mountain-battle-ground-v2.png");
+  assert.equal(status.battleMountainGround.src, "assets/battle/mountain/mountain-battle-ground-v3.png");
   assert.equal(status.monstersCore.src, "assets/monster-facing-core-v1.png");
   assert.equal(status.monstersDepths.src, "assets/monster-facing-depths-v1.png");
   for (const file of [
@@ -178,7 +168,7 @@ test("generated art atlases expose stable manifests and all active assets exist"
     "environment-atlas-v5.png",
     "terrain-atlas-v1.png",
     "battle/mountain/mountain-battle-background-v1.png",
-    "battle/mountain/mountain-battle-ground-v2.png",
+    "battle/mountain/mountain-battle-ground-v3.png",
     "interior-props-v2.png",
     "fighter-atlas-v2.png",
     "fighter-walk-atlas-v4.png",

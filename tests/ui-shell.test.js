@@ -280,8 +280,11 @@ test("battle starts immediately and hides every enemy route or danger-cell previ
   assert.doesNotMatch(game, /ctx\.setLineDash\(\[4, 5\]\)/);
   assert.match(game, /const skillRange = new Set/);
   assert.match(game, /const attackableEnemies = new Set/);
-  assert.match(game, /const nameY = artBox\?\.nameAnchorY/);
-  assert.match(game, /const barY = \(artBox\?\.bottom/);
+  assert.match(game, /const nameX = point\.x/);
+  assert.match(game, /const nameY = point\.y - layout\.cell \*/);
+  assert.match(game, /const barY = point\.y \+ layout\.cell \* \.38/);
+  const battleUnit = game.match(/function drawBattleUnit\([\s\S]*?\n  \}/)?.[0] || "";
+  assert.doesNotMatch(battleUnit, /artBox|nameAnchor|visualBounds/);
 });
 
 test("battle commands are compact action-select controls with a separate target-select context", () => {
@@ -298,8 +301,17 @@ test("battle commands are compact action-select controls with a separate target-
   assert.match(game, /battle\.phase === "planning_action" && code === "Escape"/);
   assert.match(game, /const selectable = new Set\(battleTargetTiles\(\)/);
   assert.match(game, /const skillRange = new Set\(\(selectedSkill \? battleSkillRangeTiles\(selectedSkill\) : \[\]\)/);
-  assert.match(css, /\.battle-action-dock \{[\s\S]*padding: \.42rem \.58rem \.36rem/);
-  assert.match(css, /\.battle-skill-button \{[\s\S]*min-height: 2\.35rem/);
-  assert.match(css, /\.battle-utility-button \{ opacity: \.72/);
+  assert.match(html, /id="battleActionDock"[^>]*aria-label="可拖動戰鬥指令選單"/);
+  assert.match(html, /data-battle-command-drag-handle/);
+  assert.match(html, /data-battle-command-follow/);
+  assert.doesNotMatch(html, /id="battleActionPoints"/);
+  assert.match(css, /\.battle-action-dock \{[\s\S]*width: max-content;[\s\S]*transform: none/);
+  assert.match(css, /\.battle-skill-button \{[\s\S]*min-height: 1\.85rem/);
+  assert.match(css, /\.battle-utility-button \{ min-width: 7rem; min-height: 1\.55rem; opacity: \.72/);
+  assert.match(game, /addEventListener\("pointerdown", beginBattleCommandDrag\)/);
+  assert.match(game, /addEventListener\("pointermove", moveBattleCommandDrag\)/);
+  assert.match(game, /addEventListener\("pointerup", finishBattleCommandDrag\)/);
+  assert.match(game, /battleCommandPosition\.manual = true/);
+  assert.match(game, /function followBattleCommandMenu\(\)/);
 });
 

@@ -89,6 +89,8 @@
   const battleHud = document.getElementById("battleHud");
   const battleEncounterIntro = document.getElementById("battleEncounterIntro");
   const battleFacingPicker = document.getElementById("battleFacingPicker");
+  const battleActionDock = document.getElementById("battleActionDock");
+  const battleCommandFollowButton = document.getElementById("battleCommandFollowButton");
   const classSelectPanel = document.getElementById("classSelectPanel");
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
@@ -108,7 +110,6 @@
     hpText: document.getElementById("selectedUnitHpText"),
     statuses: document.getElementById("selectedUnitStatuses"),
     order: document.getElementById("battleTurnOrderList"),
-    actionPoints: document.getElementById("battleActionPoints"),
     potionCount: document.getElementById("battlePotionCount"),
     hint: document.getElementById("battleHint"),
   };
@@ -294,6 +295,7 @@
   let enemySerial = 100;
   let autoTarget = null;
   let battle = null;
+  const battleCommandPosition = { manual: false, x: 0, y: 0, pointerId: null, offsetX: 0, offsetY: 0 };
   let encounterGrace = 1;
   let automaticPortalReady = false;
   let battleToken = 0;
@@ -927,6 +929,7 @@
       atmosphereVignetteCacheKey = "";
       camera.zoom = targetZoom();
       syncBattleFacingPicker();
+      syncBattleCommandMenu();
     }
   }
 
@@ -3410,6 +3413,7 @@
     interactionPrompt.hidden = true;
     battleHud.hidden = false;
     battleEncounterIntro.hidden = true;
+    battleCommandPosition.manual = false;
     sound.boss();
     announce(`遇上${source.name}。進入格仔回合戰。`);
     beginPlayerRound();
@@ -3990,6 +3994,7 @@
     battle.cursor = { ...battle.hero.cell };
     battle.actingUnitIds = [];
     for (const unit of stoppedUnits) {
+      unit.stopFlash = .48;
       battle.effects.push({ cell: { ...unit.cell }, text: "STOP!", color: "#ff6b6b", life: .95, maxLife: .95, burst: true });
     }
     if (!stoppedUnits.some((unit) => unit.id === battle.hero.id)) {
@@ -4531,7 +4536,11 @@
     screenShake = Math.max(0, screenShake - dt * 28);
     screenFlash = Math.max(0, screenFlash - dt * 3.2);
     battle.hero.hitFlash = Math.max(0, battle.hero.hitFlash - dt);
-    for (const enemy of battle.enemies) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
+    battle.hero.stopFlash = Math.max(0, (battle.hero.stopFlash || 0) - dt);
+    for (const enemy of battle.enemies) {
+      enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
+      enemy.stopFlash = Math.max(0, (enemy.stopFlash || 0) - dt);
+    }
     for (const effect of battle.effects) effect.life -= dt;
     battle.effects = battle.effects.filter((effect) => effect.life > 0);
     if (battle.phase === "resolving_move") updateMovementResolution(dt);
@@ -4540,6 +4549,7 @@
       battle.autoTimer -= dt;
       if (battle.autoTimer <= 0) autoPlayBattleTurn();
     }
+    if (!battleCommandPosition.manual) syncBattleCommandMenu();
   }
 
   function autoPlayBattleTurn() {
@@ -4664,7 +4674,6 @@
     battleUi.unitName.textContent = "阿巡";
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
     battleUi.hpText.textContent = `${Math.ceil(battle.hero.hp)} / ${battle.hero.maxHp}`;
-    battleUi.actionPoints.textContent = `AP ${battle.ap} / ${BATTLE_AP_MAX}`;
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
     battlePortraitCtx.clearRect(0, 0, battlePortraitCanvas.width, battlePortraitCanvas.height);
     Art.drawPortrait(battlePortraitCtx, {
@@ -4715,6 +4724,75 @@
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
     renderBattleActionButtons();
     syncBattleFacingPicker();
+    syncBattleCommandMenu();
+  }
+
+  function clampBattleCommandPosition(x, y) {
+    const margin = 8;
+    const menuWidth = Math.max(1, battleActionDock?.offsetWidth || 1);
+    const menuHeight = Math.max(1, battleActionDock?.offsetHeight || 1);
+    return {
+      x: Core.clamp(Number(x) || 0, margin, Math.max(margin, width - menuWidth - margin)),
+      y: Core.clamp(Number(y) || 0, margin, Math.max(margin, height - menuHeight - margin)),
+    };
+  }
+
+  function syncBattleCommandMenu() {
+    if (!battleActionDock || battleActionDock.hidden || !battle || mode !== "battle") return;
+    let next = clampBattleCommandPosition(battleCommandPosition.x, battleCommandPosition.y);
+    if (!battleCommandPosition.manual) {
+      const layout = battleLayout();
+      const heroPoint = battleCellCentre(battle.hero.renderCell || battle.hero.cell, layout);
+      const gap = Math.max(12, layout.cell * .56);
+      const menuWidth = Math.max(1, battleActionDock.offsetWidth);
+      const menuHeight = Math.max(1, battleActionDock.offsetHeight);
+      const roomOnRight = heroPoint.x + gap + menuWidth <= width - 8;
+      const preferredX = roomOnRight ? heroPoint.x + gap : heroPoint.x - gap - menuWidth;
+      next = clampBattleCommandPosition(preferredX, heroPoint.y - menuHeight * .45);
+    }
+    battleCommandPosition.x = next.x;
+    battleCommandPosition.y = next.y;
+    battleActionDock.style.left = `${Math.round(next.x)}px`;
+    battleActionDock.style.top = `${Math.round(next.y)}px`;
+    battleActionDock.dataset.following = String(!battleCommandPosition.manual);
+    battleCommandFollowButton?.setAttribute("aria-pressed", String(!battleCommandPosition.manual));
+  }
+
+  function beginBattleCommandDrag(event) {
+    if (!battle || mode !== "battle" || event.button !== 0 || event.target.closest("button")) return;
+    const rect = battleActionDock.getBoundingClientRect();
+    battleCommandPosition.pointerId = event.pointerId;
+    battleCommandPosition.offsetX = event.clientX - rect.left;
+    battleCommandPosition.offsetY = event.clientY - rect.top;
+    battleActionDock.classList.add("is-dragging");
+    try { battleActionDock.setPointerCapture?.(event.pointerId); } catch (_) {}
+    event.preventDefault();
+  }
+
+  function moveBattleCommandDrag(event) {
+    if (battleCommandPosition.pointerId !== event.pointerId) return;
+    const stageRect = stage.getBoundingClientRect();
+    const next = clampBattleCommandPosition(
+      event.clientX - stageRect.left - battleCommandPosition.offsetX,
+      event.clientY - stageRect.top - battleCommandPosition.offsetY,
+    );
+    battleCommandPosition.manual = true;
+    battleCommandPosition.x = next.x;
+    battleCommandPosition.y = next.y;
+    syncBattleCommandMenu();
+    event.preventDefault();
+  }
+
+  function finishBattleCommandDrag(event) {
+    if (battleCommandPosition.pointerId !== event.pointerId) return;
+    try { battleActionDock.releasePointerCapture?.(event.pointerId); } catch (_) {}
+    battleCommandPosition.pointerId = null;
+    battleActionDock.classList.remove("is-dragging");
+  }
+
+  function followBattleCommandMenu() {
+    battleCommandPosition.manual = false;
+    syncBattleCommandMenu();
   }
 
   function updateGame(dt) {
@@ -5016,36 +5094,16 @@
   }
 
   function drawMountainBoardFrame(layout) {
-    const pad = Math.max(9, layout.cell * .16);
+    const pad = Math.max(6, layout.cell * .1);
     ctx.save();
-    ctx.shadowColor = "rgba(4, 8, 10, .72)";
-    ctx.shadowBlur = Math.max(16, layout.cell * .28);
-    ctx.fillStyle = "rgba(24, 27, 24, .9)";
+    ctx.shadowColor = "rgba(20, 18, 13, .28)";
+    ctx.shadowBlur = Math.max(14, layout.cell * .22);
+    ctx.fillStyle = "rgba(72, 58, 39, .16)";
     ctx.fillRect(layout.x - pad, layout.y - pad, layout.width + pad * 2, layout.height + pad * 2);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "rgba(98, 77, 48, .9)";
-    ctx.fillRect(layout.x - pad, layout.y - pad, layout.width + pad * 2, pad);
-    ctx.fillRect(layout.x - pad, layout.y + layout.height, layout.width + pad * 2, pad);
-    ctx.fillStyle = "rgba(43, 35, 27, .92)";
-    ctx.fillRect(layout.x - pad, layout.y, pad, layout.height);
-    ctx.fillRect(layout.x + layout.width, layout.y, pad, layout.height);
-    ctx.strokeStyle = "rgba(239, 204, 137, .48)";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(layout.x - pad + .75, layout.y - pad + .75, layout.width + pad * 2 - 1.5, layout.height + pad * 2 - 1.5);
-    ctx.strokeStyle = "rgba(31, 28, 24, .9)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(layout.x - 2, layout.y - 2, layout.width + 4, layout.height + 4);
-    ctx.strokeStyle = "rgba(255, 225, 161, .16)";
+    ctx.strokeStyle = "rgba(237, 205, 148, .12)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(layout.x + 3, layout.y + 3, layout.width - 6, layout.height - 6);
-    // Small corner studs make the board read as a planted, raised battle deck
-    // without competing with the actual cell grid.
-    ctx.fillStyle = "rgba(255, 214, 132, .72)";
-    for (const [x, y] of [[layout.x - pad * .52, layout.y - pad * .52], [layout.x + layout.width + pad * .52, layout.y - pad * .52], [layout.x - pad * .52, layout.y + layout.height + pad * .52], [layout.x + layout.width + pad * .52, layout.y + layout.height + pad * .52]]) {
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(1.8, layout.cell * .035), 0, Core.TAU);
-      ctx.fill();
-    }
+    ctx.strokeRect(layout.x - .5, layout.y - .5, layout.width + 1, layout.height + 1);
     ctx.restore();
   }
 
@@ -5176,13 +5234,13 @@
     ctx.fillStyle = atmosphere;
     ctx.fillRect(0, 0, width, height);
 
-    // A quiet grounding shadow separates the tactical board from the scenic
-    // panorama while keeping the mountain silhouette visible around it.
+    // Keep only a soft contact tone. The ground art itself owns the natural
+    // edge transition, so the battlefield never reads as a raised hard tray.
     ctx.save();
-    ctx.shadowColor = "rgba(5, 9, 10, .78)";
-    ctx.shadowBlur = Math.max(22, layout.cell * .42);
-    ctx.fillStyle = "rgba(24, 26, 22, .36)";
-    ctx.fillRect(layout.x - 6, layout.y - 6, layout.width + 12, layout.height + 12);
+    ctx.shadowColor = "rgba(17, 15, 11, .32)";
+    ctx.shadowBlur = Math.max(18, layout.cell * .3);
+    ctx.fillStyle = "rgba(54, 45, 31, .13)";
+    ctx.fillRect(layout.x - 3, layout.y - 3, layout.width + 6, layout.height + 6);
     ctx.restore();
     drawMountainBoardFrame(layout);
   }
@@ -5464,22 +5522,30 @@
     const heroScale = layout.cell / 107.5;
     const monsterScale = layout.cell / 43;
     const baseline = point.y + layout.cell * .29;
-    const acting = battle.phase === "resolving_action" && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id));
+    const acting = battle.phase === "resolving_action"
+      && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
+      && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
     const locomotion = unit.locomotion || Locomotion.create(unit.facing);
     const hurt = unit.hitFlash > 0;
-    let artBox = null;
+    const stopped = !hurt && (unit.stopFlash || 0) > 0;
+    const actionProgress = battle.phase === "resolving_action"
+      ? Core.clamp((battle.actionResolution?.elapsed || 0) / Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS), 0, 1)
+      : stopped
+        ? 1 - Core.clamp((unit.stopFlash || 0) / .48, 0, 1)
+        : 0;
+    const visualState = hurt ? "hurt" : stopped ? "stop" : acting ? "attack" : locomotion.state;
     if (unit.side === "ally") {
-      artBox = Art.drawCharacter(ctx, {
+      Art.drawCharacter(ctx, {
         x: point.x,
         y: baseline,
-        scale: heroScale,
+        scale: ["attack", "hurt"].includes(visualState) ? layout.cell / 43 : heroScale,
         actor: "player",
         classId: playerClassId,
         facing: unit.facing,
-        state: hurt ? "hurt" : acting ? "attack" : locomotion.state,
+        state: visualState,
         locomotion,
         phase: elapsed,
-        progress: .55,
+        progress: actionProgress,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         selected: ["planning_move", "planning_action"].includes(battle.phase),
       });
@@ -5491,15 +5557,16 @@
         ctx.fill();
       }
     } else {
-      artBox = Art.drawEnemy(ctx, {
+      Art.drawEnemy(ctx, {
         x: point.x,
         y: baseline,
         scale: monsterScale * (unit.boss ? .98 : .92),
         type: unit.type,
         facing: unit.facing,
         phase: elapsed,
-        state: hurt ? "hurt" : acting ? "attack" : locomotion.state,
+        state: visualState,
         locomotion,
+        progress: actionProgress,
         selected: false,
       });
     }
@@ -5523,14 +5590,14 @@
     ctx.fill();
     ctx.restore();
     const barWidth = layout.cell * (unit.boss ? .76 : .56);
-    const barY = (artBox?.bottom ?? point.y + layout.cell * .31) + Math.max(3, layout.cell * .04);
+    const barY = point.y + layout.cell * .38;
     const barHeight = Math.max(5, layout.cell * .085);
     ctx.fillStyle = "rgba(5,8,18,.86)";
     ctx.fillRect(point.x - barWidth / 2 - 1, barY - 1, barWidth + 2, barHeight + 2);
     ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
     ctx.fillRect(point.x - barWidth / 2, barY, barWidth * Core.clamp(unit.hp / unit.maxHp, 0, 1), barHeight);
-    const nameX = artBox?.nameAnchorX ?? point.x;
-    const nameY = artBox?.nameAnchorY ?? point.y - layout.cell * .53;
+    const nameX = point.x;
+    const nameY = point.y - layout.cell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
     ctx.font = `900 ${Math.max(14, layout.cell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -7176,7 +7243,7 @@
       selectedAction: battle.selectedAction,
       awaitingFacing: battle.awaitingFacing,
       cursor: { ...battle.cursor },
-      hero: { cell: { ...battle.hero.cell }, renderCell: battle.hero.renderCell ? { ...battle.hero.renderCell } : null, hp: battle.hero.hp, maxHp: battle.hero.maxHp, attack: battle.hero.attack, defence: battle.hero.defence, accuracy: battle.hero.accuracy, evasion: battle.hero.evasion, weight: battle.hero.weight, moveRange: battle.hero.moveRange, facing: battle.hero.facing, locomotion: battle.hero.locomotion ? { ...battle.hero.locomotion } : null },
+      hero: { cell: { ...battle.hero.cell }, renderCell: battle.hero.renderCell ? { ...battle.hero.renderCell } : null, hp: battle.hero.hp, maxHp: battle.hero.maxHp, attack: battle.hero.attack, defence: battle.hero.defence, accuracy: battle.hero.accuracy, evasion: battle.hero.evasion, weight: battle.hero.weight, moveRange: battle.hero.moveRange, facing: battle.hero.facing, hitFlash: battle.hero.hitFlash || 0, stopFlash: battle.hero.stopFlash || 0, locomotion: battle.hero.locomotion ? { ...battle.hero.locomotion } : null },
       enemies: battle.enemies.map((unit) => ({
         id: unit.id,
         primary: unit.primary,
@@ -7196,6 +7263,8 @@
         targetArc: [...(unit.targetArc || [])],
         alive: unit.alive,
         facing: unit.facing,
+        hitFlash: unit.hitFlash || 0,
+        stopFlash: unit.stopFlash || 0,
         locomotion: unit.locomotion ? { ...unit.locomotion } : null,
       })),
       plans: battle.enemyPlans.map((plan) => ({
@@ -7364,17 +7433,19 @@
         if (!battle || battle.phase !== "planning_move") return false;
         const enemy = livingBattleEnemies()[0];
         if (!enemy) return false;
-        let lane = null;
-        for (let y = 0; y < battle.grid.height && !lane; y += 1) {
+        const lanes = [];
+        for (let y = 0; y < battle.grid.height; y += 1) {
           for (let x = 0; x + 2 < battle.grid.width; x += 1) {
             const cells = [{ x, y }, { x: x + 1, y }, { x: x + 2, y }];
             const occupiedByOther = battle.enemies.some((unit) => unit.alive && unit.id !== enemy.id && cells.some((cell) => sameBattleCell(cell, unit.cell)));
-            if (!occupiedByOther && cells.every((cell) => Tactics.isWalkable(battle.grid, cell))) {
-              lane = cells;
-              break;
-            }
+            if (!occupiedByOther && cells.every((cell) => Tactics.isWalkable(battle.grid, cell))) lanes.push(cells);
           }
         }
+        lanes.sort((a, b) => {
+          const score = (cells) => Math.abs(cells[1].x + .5 - battle.grid.width / 2) + Math.abs(cells[1].y + .5 - battle.grid.height / 2);
+          return score(a) - score(b);
+        });
+        const lane = lanes[0] || null;
         if (!lane) return false;
         battle.hero.cell = copyBattleCell(lane[0]);
         battle.hero.facing = "right";
@@ -7403,6 +7474,84 @@
         battle.awaitingFacing = false;
         updateBattleUi();
         return { target: copyBattleCell(lane[1]), requestedFacing: "down", expectedFacing: "right", enemyId: enemy.id };
+      },
+      prepareBattleVisualActions: () => {
+        if (!battle || battle.phase !== "planning_move") return false;
+        const enemy = livingBattleEnemies()[0];
+        if (!enemy) return false;
+        const pairs = [];
+        for (let y = 0; y < battle.grid.height; y += 1) {
+          for (let x = 0; x + 1 < battle.grid.width; x += 1) {
+            const cells = [{ x, y }, { x: x + 1, y }];
+            const occupiedByOther = battle.enemies.some((unit) => unit.alive && unit.id !== enemy.id && cells.some((cell) => sameBattleCell(cell, unit.cell)));
+            if (!occupiedByOther && cells.every((cell) => Tactics.isWalkable(battle.grid, cell))) pairs.push(cells);
+          }
+        }
+        pairs.sort((a, b) => {
+          const score = (cells) => Math.abs((cells[0].x + cells[1].x + 1) / 2 - battle.grid.width / 2) + Math.abs(cells[0].y + .5 - battle.grid.height / 2);
+          return score(a) - score(b);
+        });
+        const pair = pairs[0] || null;
+        if (!pair) return false;
+        battle.hero.cell = copyBattleCell(pair[0]);
+        battle.hero.renderCell = copyBattleCell(pair[0]);
+        battle.hero.facing = "right";
+        battle.hero.locomotion = Locomotion.create("right");
+        battle.hero.accuracy = 999;
+        battle.hero.evasion = 0;
+        battle.hero.hp = battle.hero.maxHp;
+        enemy.cell = copyBattleCell(pair[1]);
+        enemy.renderCell = copyBattleCell(pair[1]);
+        enemy.facing = "left";
+        enemy.locomotion = Locomotion.create("left");
+        enemy.accuracy = 999;
+        enemy.evasion = 0;
+        enemy.hp = enemy.maxHp;
+        battle.enemyPlans = battle.enemyPlans.map((plan) => plan.enemyId === enemy.id ? {
+          ...plan,
+          move: copyBattleCell(pair[1]),
+          path: [copyBattleCell(pair[1])],
+          targetCells: [copyBattleCell(pair[0])],
+          willAttack: true,
+          facing: "left",
+        } : {
+          ...plan,
+          move: copyBattleCell(battle.enemies.find((unit) => unit.id === plan.enemyId)?.cell || plan.move),
+          path: [copyBattleCell(battle.enemies.find((unit) => unit.id === plan.enemyId)?.cell || plan.move)],
+          targetCells: [],
+          willAttack: false,
+        });
+        battle.phase = "planning_action";
+        battle.moved = true;
+        battle.heroMoveDraft = [copyBattleCell(pair[0])];
+        battle.heroMovePlan = null;
+        battle.cursor = copyBattleCell(pair[1]);
+        battle.awaitingFacing = false;
+        updateBattleUi();
+        return { heroCell: copyBattleCell(pair[0]), enemyCell: copyBattleCell(pair[1]), enemyId: enemy.id, enemyType: enemy.type };
+      },
+      battleUnitAnchor: (id = "hero") => {
+        if (!battle) return null;
+        const unit = id === "hero" || id === battle.hero.id ? battle.hero : battle.enemies.find((entry) => entry.id === id);
+        if (!unit) return null;
+        const layout = battleLayout();
+        const point = battleCellCentre(unit.renderCell || unit.cell, layout);
+        return {
+          cellCentreX: point.x,
+          cellCentreY: point.y,
+          nameX: point.x,
+          nameY: point.y - layout.cell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6),
+          hpCentreX: point.x,
+          hpY: point.y + layout.cell * .38,
+        };
+      },
+      setBattleVisualReaction: (id = "hero", state = "hurt") => {
+        if (!battle || !["hurt", "stop"].includes(state)) return false;
+        const unit = id === "hero" || id === battle.hero.id ? battle.hero : battle.enemies.find((entry) => entry.id === id);
+        if (!unit) return false;
+        if (state === "hurt") unit.hitFlash = .35;
+        else unit.stopFlash = .48;
+        return true;
       },
       battleReachable: () => battleReachableTiles().map((tile) => ({
         x: tile.x,
@@ -7620,6 +7769,10 @@
     else if (action === "master-skill") masterSkill(button.dataset.skillId);
   });
   battleHud.addEventListener("click", (event) => {
+    if (event.target.closest("[data-battle-command-follow]")) {
+      followBattleCommandMenu();
+      return;
+    }
     const facingButton = event.target.closest("[data-battle-facing]");
     if (facingButton && !facingButton.disabled) {
       chooseBattleFacing(facingButton.dataset.battleFacing);
@@ -7629,6 +7782,10 @@
     if (!button || button.disabled) return;
     selectBattleAction(button.dataset.battleAction);
   });
+  battleActionDock?.querySelector("[data-battle-command-drag-handle]")?.addEventListener("pointerdown", beginBattleCommandDrag);
+  battleActionDock?.addEventListener("pointermove", moveBattleCommandDrag);
+  battleActionDock?.addEventListener("pointerup", finishBattleCommandDrag);
+  battleActionDock?.addEventListener("pointercancel", finishBattleCommandDrag);
   canvas.addEventListener("pointerdown", handleCanvasPointer);
   canvas.addEventListener("contextmenu", (event) => {
     if (mode === "battle") event.preventDefault();
