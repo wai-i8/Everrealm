@@ -829,7 +829,7 @@
     return Uint8Array.from(bytes);
   }
 
-  function decodeRle(value) {
+  function decodeRle(value, maximum, label) {
     const encoded = decodeBase64(value);
     const result = new Uint8Array(WIDTH * HEIGHT);
     let source = 0;
@@ -845,7 +845,9 @@
         if (!(byte & 128)) break;
       } while (true);
       if (!count || source >= encoded.length || target + count > result.length) throw new Error("Invalid Main Town navigation RLE span");
-      result.fill(encoded[source++], target, target + count);
+      const maskValue = encoded[source++];
+      if (maskValue > maximum) throw new Error("Invalid Main Town " + label + " mask value");
+      result.fill(maskValue, target, target + count);
       target += count;
     }
     if (target !== result.length) throw new Error("Incomplete Main Town navigation RLE");
@@ -856,6 +858,11 @@
     package: PACKAGE,
     width: WIDTH,
     height: HEIGHT,
-    masks: Object.freeze({ walkable: decodeRle(MASK_RLE.walkable), collision: decodeRle(MASK_RLE.collision), triggers: decodeRle(MASK_RLE.triggers) }),
+    maskValuesValidated: true,
+    masks: Object.freeze({
+      walkable: decodeRle(MASK_RLE.walkable, 1, "walkable"),
+      collision: decodeRle(MASK_RLE.collision, 1, "collision"),
+      triggers: decodeRle(MASK_RLE.triggers, 7, "triggers"),
+    }),
   });
 });

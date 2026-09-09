@@ -1,0 +1,27 @@
+Everrealm navigation performance fix
+
+Changed:
+- game.js: two-stage authoritative path planning (40px coarse -> 12px exact fallback), preserving 1px edge validation and 4-way routes.
+- rpg-core.js: binary min-heap open set, numeric grid keys, deferred terminal connection checks, redundant checks removed.
+- map/main-town-navigation.js: exact feet-disk semantics with one combined mask scan; avoids duplicate full-mask validation when generated data was already decode-validated.
+- map/main-town-navigation.generated.js + generator: validate mask values during RLE decode and mark generated masks validated.
+- tests/docs updated for the new production path contract.
+
+Locked behavior preserved:
+- Main Town remains 7680x4320 native world/navigation space.
+- 1 image px = 1 world unit.
+- feet radius remains 3px.
+- authoritative collision remains exact; accepted route segments are still sampled every 1 world px.
+- movement speed, camera presets, entity size and battle behavior are unchanged.
+
+Measured warm Main Town path-planning examples in the supplied review package:
+- Weapon Shop: about 3-5 ms (previously about 500+ ms)
+- Item / General Store: about 10-15 ms (previously about 1.2 s)
+- Inn: about 7-11 ms (previously about 600 ms)
+
+Validation performed:
+- JavaScript syntax checks passed for modified JS/tests.
+- Main Town navigation generator --check passed.
+- 100,000 randomized old-vs-new feet-disk walkability queries: 0 semantic mismatches.
+- 300 randomized old-vs-new generic pathfinder cases with default options: 0 path/reachability differences.
+- Targeted rpg-core tests passed.

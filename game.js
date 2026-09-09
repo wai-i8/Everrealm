@@ -1029,14 +1029,8 @@
     const navigationRadius = authoritativeNavigation
       ? Number(world.navigation?.feetRadiusPx) || (currentMapId === "world" ? MainTownNavigation?.feetRadiusPx : 3) || 3
       : player.radius;
-    const path = Core.findOverworldPath(player, goal, {
+    const baseOptions = {
       bounds: { x: 0, y: 0, w: world.pixelWidth, h: world.pixelHeight },
-      // The authored Main Town allowlist has narrow but valid approaches
-      // (notably the Inn). Sample the shared pathfinder from the same feet
-      // contract instead of skipping over those corridors at tile scale.
-      cellSize: authoritativeNavigation
-        ? Math.max(12, navigationRadius * 4)
-        : Math.max(20, world.tileSize * .6),
       sampleStep: authoritativeNavigation ? 1 : undefined,
       radius: navigationRadius,
       // Authoritative bitmap movement resolves each frame with X then Y
@@ -1045,9 +1039,41 @@
       // two axis collision checks.
       directions: authoritativeNavigation ? 4 : 8,
       maxVisited: 14000,
-      nearestReachable: true,
       isWalkable: (point) => !isBlocked({ x: point.x, y: point.y, radius: navigationRadius }),
-    });
+    };
+
+    let path;
+    if (authoritativeNavigation) {
+      // First search a wider planning grid, but keep exact 1px line-clear
+      // validation on every accepted segment. If a narrow authored approach
+      // cannot be represented on that grid, retry with the legacy 12px grid.
+      // This keeps the same collision contract while avoiding millions of
+      // redundant feet-disk checks on ordinary clicks.
+      const coarseCellSize = Math.max(40, navigationRadius * 12);
+      path = Core.findOverworldPath(player, goal, {
+        ...baseOptions,
+        cellSize: coarseCellSize,
+        terminalConnectDistance: coarseCellSize * 4,
+        nearestReachable: false,
+      });
+      if (!path.length) {
+        const fineCellSize = Math.max(12, navigationRadius * 4);
+        path = Core.findOverworldPath(player, goal, {
+          ...baseOptions,
+          cellSize: fineCellSize,
+          terminalConnectDistance: fineCellSize * 4,
+          nearestReachable: true,
+        });
+      }
+    } else {
+      const cellSize = Math.max(20, world.tileSize * .6);
+      path = Core.findOverworldPath(player, goal, {
+        ...baseOptions,
+        cellSize,
+        nearestReachable: true,
+      });
+    }
+
     if (!path.length) return false;
     exploreMovePath = path.map((point) => ({ x: point.x, y: point.y }));
     exploreMoveTarget = exploreMovePath.shift() || null;

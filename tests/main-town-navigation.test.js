@@ -21,6 +21,7 @@ function pathOptions(nearestReachable = false) {
     bounds: { x: 0, y: 0, w: Navigation.data.source.width, h: Navigation.data.source.height },
     cellSize: 12,
     sampleStep: 1,
+    terminalConnectDistance: 48,
     radius: feet.radius,
     directions: 4,
     maxVisited: 30000,
@@ -31,6 +32,34 @@ function pathOptions(nearestReachable = false) {
 
 function centre(rect) {
   return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+
+function productionPath(goal) {
+  const base = {
+    bounds: { x: 0, y: 0, w: Navigation.data.source.width, h: Navigation.data.source.height },
+    sampleStep: 1,
+    radius: feet.radius,
+    directions: 4,
+    maxVisited: 14000,
+    isWalkable: (point) => walkable(point),
+  };
+  const coarseCellSize = 40;
+  let route = Core.findOverworldPath(world.start, goal, {
+    ...base,
+    cellSize: coarseCellSize,
+    terminalConnectDistance: coarseCellSize * 4,
+    nearestReachable: false,
+  });
+  if (!route.length) {
+    const fineCellSize = 12;
+    route = Core.findOverworldPath(world.start, goal, {
+      ...base,
+      cellSize: fineCellSize,
+      terminalConnectDistance: fineCellSize * 4,
+      nearestReachable: true,
+    });
+  }
+  return route;
 }
 
 test("canonical JPG package generates a deterministic synchronous runtime artifact", () => {
@@ -55,6 +84,7 @@ test("Main Town uses the supplied 7680x4320 display and authoring coordinate spa
   assert.equal(Navigation.runtime.masks.walkable.length, 7680 * 4320);
   assert.equal(Navigation.runtime.masks.collision.length, 7680 * 4320);
   assert.equal(Navigation.runtime.masks.triggers.length, 7680 * 4320);
+  assert.equal(Navigation.runtime.maskValuesValidated, true);
   assert.equal(Navigation.status().failure, null);
 });
 
@@ -118,6 +148,19 @@ test("shared pathfinder reaches all five doors, East Exit, and the deck region",
   assert.ok(deckRoute.every((candidate) => walkable(candidate)), "deck route left the compiled allowlist");
   assert.ok(Navigation.isInRegion("deck-configuration", deck), "deck entity must be backed by the pink region");
   assert.equal(Navigation.interactionAtWorldPoint({ x: deck.x, y: deck.y }), deck.id, "deck interaction must resolve from the pink region");
+});
+
+test("production two-stage Main Town planner reaches every authored destination with exact 1px clearance", () => {
+  for (const [name, point] of Object.entries(world.spawnPoints)) {
+    if (name === "start") continue;
+    const route = productionPath(point);
+    assert.ok(route.length > 0, `${name} should be reachable by the production planner`);
+    assert.deepEqual(route.at(-1), point);
+    assert.ok(route.every((candidate) => walkable(candidate)), `${name} production route left the compiled allowlist`);
+  }
+  const deckRoute = productionPath(world.boards[0].approachPoint);
+  assert.ok(deckRoute.length > 0);
+  assert.deepEqual(deckRoute.at(-1), world.boards[0].approachPoint);
 });
 
 test("door and East Exit trigger centres are walkable and distinct from the deck interaction", () => {

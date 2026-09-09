@@ -218,6 +218,10 @@
     const sampleStep = Number.isFinite(requestedSampleStep)
       ? Math.max(1, requestedSampleStep)
       : Math.max(2, cellSize / 3);
+    const requestedTerminalConnectDistance = Number(options.terminalConnectDistance);
+    const terminalConnectDistance = Number.isFinite(requestedTerminalConnectDistance)
+      ? Math.max(0, requestedTerminalConnectDistance)
+      : Infinity;
     const nearestReachable = options.nearestReachable === true;
 
     function canStand(point) {
@@ -262,7 +266,7 @@
       if (directions === 8) return lineIsClear(point, goal) ? [goal] : null;
       const corners = [{ x: goal.x, y: point.y }, { x: point.x, y: goal.y }];
       for (const corner of corners) {
-        if (distance(point, corner) > 1e-7 && (!canStand(corner) || !lineIsClear(point, corner))) continue;
+        if (distance(point, corner) > 1e-7 && !lineIsClear(point, corner)) continue;
         if (!lineIsClear(corner, goal)) continue;
         return distance(point, corner) < 1e-7 || distance(corner, goal) < 1e-7 ? [goal] : [corner, goal];
       }
@@ -278,6 +282,15 @@
     const heuristic = directions === 8
       ? (point) => distance(point, goal)
       : (point) => Math.abs(point.x - goal.x) + Math.abs(point.y - goal.y);
+
+    const minIx = Math.ceil((bounds.minX + radius - start.x) / cellSize);
+    const maxIx = Math.floor((bounds.maxX - radius - start.x) / cellSize);
+    const minIy = Math.ceil((bounds.minY + radius - start.y) / cellSize);
+    const maxIy = Math.floor((bounds.maxY - radius - start.y) / cellSize);
+    if (minIx > maxIx || minIy > maxIy || 0 < minIx || 0 > maxIx || 0 < minIy || 0 > maxIy) return [];
+    const gridHeight = maxIy - minIy + 1;
+    const keyFor = (ix, iy) => (ix - minIx) * gridHeight + (iy - minIy);
+
     let sequence = 0;
     const startNode = {
       ix: 0,
@@ -290,7 +303,7 @@
       sequence: sequence++,
     };
     const open = [startNode];
-    const openByKey = new Map([["0,0", startNode]]);
+    const openByKey = new Map([[keyFor(0, 0), startNode]]);
     const closed = new Set();
     let visited = 0;
     let nearestNode = nearestReachable ? startNode : null;
@@ -330,19 +343,48 @@
       return a.sequence - b.sequence;
     }
 
-    while (open.length && visited < maxVisited) {
-      let bestIndex = 0;
-      for (let index = 1; index < open.length; index += 1) {
-        if (compareNodes(open[index], open[bestIndex]) < 0) bestIndex = index;
+    function heapPush(node) {
+      let index = open.length;
+      open.push(node);
+      while (index > 0) {
+        const parent = (index - 1) >> 1;
+        if (compareNodes(open[parent], node) <= 0) break;
+        open[index] = open[parent];
+        index = parent;
       }
-      const current = open.splice(bestIndex, 1)[0];
-      const currentKey = `${current.ix},${current.iy}`;
+      open[index] = node;
+    }
+
+    function heapPop() {
+      const first = open[0];
+      const last = open.pop();
+      if (open.length && last) {
+        let index = 0;
+        while (true) {
+          const left = index * 2 + 1;
+          if (left >= open.length) break;
+          const right = left + 1;
+          let child = left;
+          if (right < open.length && compareNodes(open[right], open[left]) < 0) child = right;
+          if (compareNodes(last, open[child]) <= 0) break;
+          open[index] = open[child];
+          index = child;
+        }
+        open[index] = last;
+      }
+      return first;
+    }
+
+    while (open.length && visited < maxVisited) {
+      const current = heapPop();
+      const currentKey = keyFor(current.ix, current.iy);
+      if (openByKey.get(currentKey) !== current) continue;
       openByKey.delete(currentKey);
       if (closed.has(currentKey)) continue;
       closed.add(currentKey);
       visited += 1;
 
-      const finish = terminalRoute(current);
+      const finish = current.h <= terminalConnectDistance ? terminalRoute(current) : null;
       if (finish) {
         const route = [{ x: start.x, y: start.y }, ...routeToNode(current)];
         route.push(...finish);
@@ -352,19 +394,19 @@
       for (const [stepX, stepY] of steps) {
         const ix = current.ix + stepX;
         const iy = current.iy + stepY;
-        const key = `${ix},${iy}`;
+        if (ix < minIx || ix > maxIx || iy < minIy || iy > maxIy) continue;
+        const key = keyFor(ix, iy);
         if (closed.has(key)) continue;
         const nextPoint = { x: start.x + ix * cellSize, y: start.y + iy * cellSize };
-        if (!canStand(nextPoint) || !lineIsClear(current, nextPoint)) continue;
+        if (!lineIsClear(current, nextPoint)) continue;
         if (stepX && stepY) {
           const horizontal = { x: current.x + stepX * cellSize, y: current.y };
           const vertical = { x: current.x, y: current.y + stepY * cellSize };
           if (!canStand(horizontal) || !canStand(vertical)) continue;
         }
-        const nextG = current.g + Math.hypot(stepX * cellSize, stepY * cellSize);
+        const nextG = current.g + (stepX && stepY ? cellSize * Math.SQRT2 : cellSize);
         const existing = openByKey.get(key);
         if (existing && existing.g <= nextG + 1e-7) continue;
-        if (existing) open.splice(open.indexOf(existing), 1);
         const nextNode = {
           ix,
           iy,
@@ -375,11 +417,12 @@
           parent: current,
           sequence: sequence++,
         };
-        open.push(nextNode);
+        heapPush(nextNode);
         openByKey.set(key, nextNode);
         considerNearestCandidate(nextNode);
       }
     }
+
     if (!nearestNode || distance(nearestNode, start) < 1e-7) return [];
     return routeToNode(nearestNode);
   }

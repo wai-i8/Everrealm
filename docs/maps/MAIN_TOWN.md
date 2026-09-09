@@ -35,7 +35,7 @@ The compiler tolerates the supplied JPG compression colours and normalizes only 
 
 The runtime uses the same feet-disk resolver for click-to-move pathfinding, movement substeps, transition arrival and the pink interaction region. The visible JPG is never used as a collision source.
 
-Main Town click-to-move uses 1px line-clear sampling and four-way waypoints. This matches the runtime's axis-by-axis collision substeps and preserves narrow authored corridors without stepping across a one-pixel blocked edge.
+Main Town click-to-move uses 1px line-clear sampling and four-way waypoints. This matches the runtime's axis-by-axis collision substeps and preserves narrow authored corridors without stepping across a one-pixel blocked edge. Runtime path planning first tries a 40px planning grid while every accepted segment is still validated at 1px clearance; if that grid cannot reach the exact requested goal, it retries with the 12px fine grid and the existing nearest-reachable fallback. The 40px/12px values are path-search node spacing only: they do not rescale the 7680 × 4320 world, navigation mask, collision footprint, input coordinates or movement speed.
 
 ## 3. Fixed cyan mapping
 

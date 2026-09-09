@@ -18,21 +18,24 @@
   }
 
   function validRuntime(candidate) {
+    const validShape = (mask) => mask instanceof Uint8Array && mask.length === EXPECTED_WIDTH * EXPECTED_HEIGHT;
+    if (!(
+      candidate && candidate.width === EXPECTED_WIDTH && candidate.height === EXPECTED_HEIGHT && candidate.masks &&
+      validShape(candidate.masks.walkable) && validShape(candidate.masks.collision) && validShape(candidate.masks.triggers)
+    )) return false;
+    if (candidate.maskValuesValidated === true) return true;
     const validValues = (mask, maximum) => {
-      if (!(mask instanceof Uint8Array) || mask.length !== EXPECTED_WIDTH * EXPECTED_HEIGHT) return false;
       for (const value of mask) if (value > maximum) return false;
       return true;
     };
-    return Boolean(
-      candidate && candidate.width === EXPECTED_WIDTH && candidate.height === EXPECTED_HEIGHT &&
-      candidate.masks && validValues(candidate.masks.walkable, 1) &&
-      validValues(candidate.masks.collision, 1) && validValues(candidate.masks.triggers, DECK_REGION_VALUE),
-    );
+    return validValues(candidate.masks.walkable, 1) && validValues(candidate.masks.collision, 1) &&
+      validValues(candidate.masks.triggers, DECK_REGION_VALUE);
   }
 
   function createResolver(source = generated) {
     const data = source?.package || null;
-    const runtime = source && validRuntime(source) ? source : null;
+    const runtimeValid = Boolean(source && validRuntime(source));
+    const runtime = runtimeValid ? source : null;
     const sourceDimensionsValid = data?.source?.width === EXPECTED_WIDTH && data?.source?.height === EXPECTED_HEIGHT &&
       data?.authoring?.image === "assets/main-town/maintown_walkable.jpg" &&
       data?.authoring?.width === EXPECTED_WIDTH && data?.authoring?.height === EXPECTED_HEIGHT;
@@ -47,7 +50,7 @@
       ? null
       : !source
         ? "generated Main Town navigation data is unavailable"
-        : !validRuntime(source)
+        : !runtimeValid
           ? "generated Main Town navigation data is malformed"
           : !sourceContractValid
             ? "Main Town navigation source contract is invalid"
@@ -78,10 +81,31 @@
       if (mapId !== MAIN_TOWN_ID || !ready) return false;
       const x = Number(position?.x);
       const y = Number(position?.y);
-      const radius = Number.isFinite(Number(footprint?.radius)) ? Number(footprint.radius) : feetRadius;
+      const requestedRadius = Number(footprint?.radius);
+      const radius = Number.isFinite(requestedRadius) ? requestedRadius : feetRadius;
       if (!Number.isFinite(x) || !Number.isFinite(y) || radius < 0) return false;
-      return insideDisk(runtime.masks.walkable, x, y, radius, "all") &&
-        !insideDisk(runtime.masks.collision, x, y, radius, "any");
+
+      // Hot path: pathfinding and movement need the same exact feet-disk
+      // semantics, so combine the allowlist and collision checks into one
+      // scan instead of walking the disk twice.
+      const minX = Math.floor(x - radius);
+      const maxX = Math.ceil(x + radius);
+      const minY = Math.floor(y - radius);
+      const maxY = Math.ceil(y + radius);
+      const radiusSquared = radius * radius;
+      const walkable = runtime.masks.walkable;
+      const collision = runtime.masks.collision;
+      for (let py = minY; py <= maxY; py += 1) {
+        const dy = py - y;
+        for (let px = minX; px <= maxX; px += 1) {
+          const dx = px - x;
+          if (dx * dx + dy * dy > radiusSquared) continue;
+          if (px < 0 || py < 0 || px >= EXPECTED_WIDTH || py >= EXPECTED_HEIGHT) return false;
+          const index = py * EXPECTED_WIDTH + px;
+          if (walkable[index] === 0 || collision[index] !== 0) return false;
+        }
+      }
+      return true;
     }
 
     function triggerValueAt(x, y) {

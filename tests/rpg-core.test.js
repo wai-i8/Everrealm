@@ -72,6 +72,22 @@ test("four-way overworld paths keep every segment cardinal", () => {
   assert.deepEqual(path.at(-1), { x: 130, y: 90 });
 });
 
+test("overworld path can defer long terminal line checks until it is near the goal", () => {
+  const start = { x: 10, y: 50 };
+  const goal = { x: 130, y: 50 };
+  const path = Core.findOverworldPath(start, goal, {
+    bounds: { x: 0, y: 0, w: 160, h: 120 },
+    cellSize: 10,
+    directions: 4,
+    terminalConnectDistance: 20,
+    isWalkable(point) {
+      return !(point.x >= 60 && point.x <= 80 && point.y >= 20 && point.y <= 90);
+    },
+  });
+  assert.deepEqual(path.at(-1), goal);
+  assert.ok(path.some((point) => point.y < 20 || point.y > 90), JSON.stringify(path));
+});
+
 test("overworld path supports a callback-backed walkability grid", () => {
   const visited = [];
   const path = Core.findOverworldPath({ x: 10, y: 50 }, { x: 130, y: 50 }, {
