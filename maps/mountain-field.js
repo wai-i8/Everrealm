@@ -97,27 +97,32 @@
       width: 8,
       height: 3,
       projection: {
-        xAxis: { x: .9, y: -.28 },
-        yAxis: { x: .22, y: .68 },
-        elevationStep: .22,
-        baseThickness: .16,
+        // Equal-length screen axes keep every logical 1×1 cell visually
+        // square/rhombic instead of stretching one direction into a rectangle.
+        // The board is a flat oblique plane; elevation is applied only to the
+        // explicit raised plateau below.
+        xAxis: { x: .78, y: -.36 },
+        yAxis: { x: .78, y: .36 },
+        elevationStep: .18,
+        baseThickness: .075,
       },
       deploymentZones: {
         ally: [{ x: 0, y: 2 }, { x: 0, y: 1 }, { x: 1, y: 2 }],
         enemy: [{ x: 7, y: 0 }, { x: 6, y: 0 }, { x: 7, y: 1 }],
       },
-      // The first field battle deliberately teaches elevation with one small
-      // ramp into a two-level plateau behind the low-cover scrub.
+      // The first field battle teaches height with one compact raised shelf
+      // behind the low-cover scrub.  The whole Level-0 board remains one flat
+      // plane; only this 2×2 corner rises by a single clear terrain tier.
       heightMap: {
-        "5,0": 2, "6,0": 2, "7,0": 2,
-        "5,1": 1, "6,1": 2, "7,1": 2,
+        "6,0": 1, "7,0": 1,
+        "6,1": 1, "7,1": 1,
       },
       terrainCells: {
         // High obstacle: blocks movement, direct lines and ballistic arcs.
         "2,1": { kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
         // Low obstacle: blocks movement and direct lines, but a normal arc can
         // clear it.  This is the player's first low-cover example.
-        "4,1": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
+        "5,1": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
       },
     };
     return withMapCollections({

@@ -147,20 +147,15 @@
 
           <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
             <div class="battle-action-heading" data-battle-command-drag-handle>
-              <span>戰鬥指令 <small>拖動</small></span>
+              <span>戰鬥指令 <small>移動</small></span>
               <button id="battleCommandFollowButton" class="battle-command-follow" type="button" data-battle-command-follow aria-label="讓戰鬥指令選單重新跟隨主角" title="跟隨主角">
                 <span aria-hidden="true">⌖</span> 跟隨
               </button>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
-              <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="move" aria-keyshortcuts="M">
-                <i aria-hidden="true">✣</i><span><b>確認移動</b><small>睇路線 · 揀藍色格</small></span><kbd>M</kbd>
-              </button>
-              <span class="battle-actions-loading">技能卡準備中……</span>
+              <span class="battle-actions-loading">戰鬥指令準備中</span>
             </div>
-            <p id="battleHint" class="battle-hint" data-battle-hint aria-live="polite">
-              <span aria-hidden="true">☝</span> 揀招後，棋盤會顯示合法目標。
-            </p>
+            <p id="battleHint" class="battle-hint" data-battle-hint aria-live="polite" hidden></p>
           </section>
 
           <div id="battleFacingPicker" class="battle-facing-picker" aria-label="選擇移動後朝向" hidden>

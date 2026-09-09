@@ -63,8 +63,9 @@
 - Multi-hit 技能先計整招總傷害，再拆成每 Hit；除唔盡嘅整數 remainder 永遠優先分畀後面 Hits。原作標記「判定：毎回」嘅連擊類技能，每 Hit 都按更新後 battle state 重新掃同一 attack path，因此前一 Hit 擊倒／擊殺 blocker 後，下一 Hit 可以繼續打到路線後方單位。
 - 攻擊唔係「點中邊個就必定打中邊個」。Linear 攻擊使用共用 deterministic 正交 attack-path resolver：目標喺前半面時先向前再左右轉；同橫排直接左右；目標喺後半面時先左右、再向後。實際路線上第一個合法單位／地形可以攔截。Arc 攻擊按弧線高度判斷；Pathless 攻擊冇中途 interception。詳細規則見 `docs/BATTLE_SYSTEM.md`。
 - 戰鬥引擎由一開始預留 Line of Sight、Line of Effect 及地形高度接口；戰場嘅 biome、terrain、obstacle 及 height context 來源由 `docs/MAP_SYSTEM.md` 定義。
-- PC 初始山地戰場採用《幸福 Online／STRUGARDEN》式左下→右上 2.5D 斜視構圖；邏輯仍然係 2D grid + authored elevation。第一個 teaching battlefield 為 `8×3` 小場，普通地面有可見厚度，scrub 後方有兩級高地；一棵 high tree 阻 Linear + Arc，一叢 low scrub 只阻 Linear，讓玩家一開始就理解 cover 高度同 elevation。
+- PC 初始山地戰場採用《幸福 Online／STRUGARDEN》式左下→右上 2.5D 斜視構圖；邏輯仍然係 2D grid + authored elevation。第一個 teaching battlefield 為 `8×3` 小場；projected X/Y grid axis 必須等長，logical 1×1 tile 要保持等邊菱形／正方格感。Level-0 主棋盤係同一平面並只有薄地台厚度；scrub 後方只升起一個約 2×2 格嘅單級高台，唔可以整塊場變成逐級上斜嘅樓梯。一棵 high tree 阻 Linear + Arc，一叢 low scrub 只阻 Linear。 Projected 畫面四向固定讀作左上／右上／右下／左下；內部 resolver 可以繼續使用 up/right/down/left，但 UI 同 directional art 必須按斜視座標呈現。
 - 戰鬥角色／怪物 sprite 保持直立；名稱跟實際 sprite semantic head anchor，而唔跟 tile 上緣。Floating command menu 預設錨定玩家 tile 左下外側，避免遮住右上方主要戰場。
+- 戰鬥 command UI 採用「資訊簡潔、美術精緻」：技能主列表只顯示技能名，唔長駐顯示技能 AP、快捷鍵、圓點或說明；AP 不足直接灰化，選中技能後先顯示 AP／射程／delivery 詳情。`待機`、`撤退` 固定放底部左右兩格；暫時取消獨立飲藥按鈕。移動 phase 用 full／half／empty pips 顯示剩餘步數，提供 `重新移動`／`結束移動`；玩家以路點逐段排 movement sequence，直線多格可以一次點終點，之後再點舊格會新增真實回程而照扣成本。系統只由「目前路線終點」規劃新一段，絕不重算／縮短／退款已排歷史；朝向箭嘴可原地消耗 0.5 footwork。
 
 完整 movement、collision、AI、targeting、attack trace、projectile blocking、AP、速度、高低差接口及戰鬥驗收規格：
 

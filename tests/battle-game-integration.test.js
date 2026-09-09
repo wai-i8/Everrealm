@@ -7,7 +7,7 @@ const game = fs.readFileSync(path.resolve(__dirname, "..", "game.js"), "utf8");
 const mountainField = fs.readFileSync(path.resolve(__dirname, "..", "maps", "mountain-field.js"), "utf8");
 
 test("battle movement uses facing-aware timed simultaneous resolution", () => {
-  assert.match(game, /Tactics\.movementPathCost\(path\?\.length[\s\S]{0,320}?turnCost:\s*BATTLE_TURN_COST,[\s\S]{0,100}?initialFacing:\s*battle\?\.hero\?\.facing/);
+  assert.match(game, /Tactics\.movementCommandEvents\(start,[\s\S]{0,220}?turnCost:\s*BATTLE_TURN_COST,[\s\S]{0,100}?initialFacing:\s*battle\.hero\.facing/);
   assert.match(game, /resolveSimultaneousMovement\(\{[\s\S]*?timed:\s*true,[\s\S]*?turnCost:\s*BATTLE_TURN_COST/);
   assert.match(game, /movement\.timeline/);
   assert.match(game, /movement\.frameTimes/);
@@ -31,11 +31,31 @@ test("battle action artwork advances over the existing resolution timeline", () 
   assert.doesNotMatch(game, /progress: \.55/);
 });
 
-test("clicking an old route cell appends or confirms and only reset clears the draft", () => {
-  assert.doesNotMatch(game, /path\.slice\(0,\s*existingIndex \+ 1\)/);
-  assert.match(game, /sameBattleCell\(endpoint, cell\)/);
-  assert.match(game, /只有下面「重畫路線」先會清除已排路線/);
-  assert.match(game, /function resetBattleMoveDraft\(\)[\s\S]*?heroMoveDraft = \[copyBattleCell\(battle\.hero\.cell\)\]/);
+test("movement planning appends waypoint segments without rewriting route history", () => {
+  assert.match(game, /A click may target ANY tile reachable from the CURRENT endpoint/);
+  assert.match(game, /Tactics\.reachableTiles\(battle\.grid, draft\.endpoint, remaining/);
+  assert.match(game, /segment\.map\(\(to\) => \(\{ type: "move", to \}\)\)/);
+  assert.match(game, /route = battleReachableTiles\(\)\.find\(\(tile\) => tile\.nextStep/);
+  assert.match(game, /Only 「重新移動」 clears prior history/);
+  assert.match(game, /data-battle-action="reset-move"/);
+  assert.match(game, /data-battle-action="end-move"/);
+  assert.doesNotMatch(game, /請逐格排移動路線/);
+  assert.doesNotMatch(game, /destination-first/);
+});
+
+test("planning facing is previewed on the hero sprite before movement resolves", () => {
+  assert.match(game, /function battleUnitRenderFacing\(unit\)/);
+  assert.match(game, /battleMoveDraftState\(\)\.facing \|\| unit\.facing/);
+  assert.match(game, /facing: renderFacing/);
+  assert.match(game, /battleFacingScreenVector\(renderFacing, layout\)/);
+});
+
+test("projected facing UI presents logical cardinal axes as screen diagonals", () => {
+  assert.match(game, /up: \["↖", "左上"\]/);
+  assert.match(game, /right: \["↗", "右上"\]/);
+  assert.match(game, /down: \["↘", "右下"\]/);
+  assert.match(game, /left: \["↙", "左下"\]/);
+  assert.match(game, /battleFacingDisplayLabel/);
 });
 
 
@@ -44,8 +64,11 @@ test("opening mountain battle uses the compact oblique teaching battlefield", ()
   assert.match(mountainField, /projection:\s*\{/);
   assert.match(mountainField, /deploymentZones:[\s\S]*?ally:[\s\S]*?enemy:/);
   assert.match(mountainField, /"2,1"[\s\S]*?kind:\s*"tree"[\s\S]*?blocksLinear:\s*true[\s\S]*?blocksArc:\s*true/);
-  assert.match(mountainField, /"4,1"[\s\S]*?kind:\s*"scrub"[\s\S]*?blocksLinear:\s*true[\s\S]*?blocksArc:\s*false/);
-  assert.match(mountainField, /"6,0":\s*2/);
+  assert.match(mountainField, /"5,1"[\s\S]*?kind:\s*"scrub"[\s\S]*?blocksLinear:\s*true[\s\S]*?blocksArc:\s*false/);
+  assert.match(mountainField, /"6,0":\s*1/);
+  assert.doesNotMatch(mountainField, /"6,0":\s*2/);
+  assert.match(mountainField, /xAxis:\s*\{\s*x:\s*\.78,\s*y:\s*-\.36\s*\}/);
+  assert.match(mountainField, /yAxis:\s*\{\s*x:\s*\.78,\s*y:\s*\.36\s*\}/);
 });
 
 test("battle renderer keeps logical cells separate from projected 2.5D presentation", () => {
@@ -77,4 +100,28 @@ test("hero projectile integration sends Linear and Arc skills through the shared
   assert.match(game, /\["linear", "arc"\]\.includes\(skill\?\.deliveryMode\)/);
   assert.match(game, /arcHeight:\s*skill\.arcHeight/);
   assert.match(game, /deliveryMode:\s*resolver\.deliveryMode/);
+});
+
+
+test("battle command UI keeps choices simple and reveals detail only after skill selection", () => {
+  assert.match(game, /class="battle-command-skill/);
+  assert.match(game, /selectedBattleSkillDetail/);
+  assert.match(game, /class="battle-command-utility-row"/);
+  assert.doesNotMatch(game, /keyLabels\[index\]/);
+  assert.doesNotMatch(game, /id="battlePotionButton"/);
+  assert.doesNotMatch(game, /保留 AP · 無減傷/);
+  assert.doesNotMatch(game, /返回探索/);
+});
+
+test("movement command UI renders full half and empty remaining-step pips", () => {
+  assert.match(game, /function battleMovePipsMarkup\(/);
+  assert.match(game, /is-\$\{state\}/);
+  assert.match(game, /value >= 1 \? "full" : value >= \.5 \? "half" : "empty"/);
+  assert.match(game, /剩餘移動 \$\{formatMoveCost\(safeRemaining\)\} 步/);
+});
+
+test("projected battle layout normalizes both screen axes to equal length", () => {
+  assert.match(game, /const projectedAxisLength = \(xLength \+ yLength\) \* \.5/);
+  assert.match(game, /const xAxis = \{ x: .*?projectedAxisLength/);
+  assert.match(game, /const yAxis = \{ x: .*?projectedAxisLength/);
 });

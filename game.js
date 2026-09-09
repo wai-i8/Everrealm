@@ -3464,8 +3464,9 @@
       actingUnitId: null,
       actingUnitIds: [],
       heroMoveDraft: [{ ...hero.cell }],
+      heroMoveCommands: [],
       heroMovePlan: null,
-      awaitingFacing: false,
+      awaitingFacing: true,
       movementResolution: null,
       actionResolution: null,
       autoTimer: .35,
@@ -3505,11 +3506,15 @@
     battle.cursor = { ...battle.hero.cell };
     battle.enemyPlans = planEnemyRound();
     battle.heroMoveDraft = [{ ...battle.hero.cell }];
+    battle.heroMoveCommands = [];
     battle.heroMovePlan = null;
-    battle.awaitingFacing = false;
+    // Facing controls stay available throughout movement planning. On an
+    // oblique battlefield they represent the four diagonal screen directions
+    // and each press is real 0.5-step footwork, not a free final-facing picker.
+    battle.awaitingFacing = true;
     battle.movementResolution = null;
     battle.actionResolution = null;
-    battle.message = "撳藍格逐段排路；每次轉方向會多用 0.5 步，最後揀箭嘴決定朝向。";
+    battle.message = "逐格排路；來回、轉向同原地踏步都會照扣移動力。";
     battle.messageDanger = false;
     battle.actingUnitId = null;
     battle.actingUnitIds = [];
@@ -3644,11 +3649,17 @@
     return battle ? battle.enemies.filter((unit) => unit.alive && unit.hp > 0) : [];
   }
 
-  function battleMoveCost(path = battle?.heroMoveDraft) {
-    return Tactics.movementPathCost(path?.length ? path : [battle?.hero?.cell].filter(Boolean), {
+  function battleMoveSchedule(commands = battle?.heroMoveCommands) {
+    const start = battle?.hero?.cell;
+    if (!start) return { path: [], finalTravelFacing: null, events: [], totalCost: Infinity };
+    return Tactics.movementCommandEvents(start, Array.isArray(commands) ? commands : [], {
       turnCost: BATTLE_TURN_COST,
-      initialFacing: battle?.hero?.facing,
+      initialFacing: battle.hero.facing,
     });
+  }
+
+  function battleMoveCost(commands = battle?.heroMoveCommands) {
+    return battleMoveSchedule(commands).totalCost;
   }
 
   function battlePathFacing(path, initialFacing = battle?.hero?.facing) {
@@ -3663,32 +3674,57 @@
     return Number.isInteger(safe) ? String(safe) : safe.toFixed(1);
   }
 
+  function battleMoveDraftState(commands = battle?.heroMoveCommands) {
+    const schedule = battleMoveSchedule(commands);
+    const endpoint = schedule.path?.at(-1) || battle?.hero?.cell;
+    return {
+      schedule,
+      endpoint: endpoint ? copyBattleCell(endpoint) : null,
+      facing: schedule.finalTravelFacing || battle?.hero?.facing || "down",
+      cost: schedule.totalCost,
+      remaining: Math.max(0, (battle?.hero?.moveRange || 0) - schedule.totalCost),
+    };
+  }
+
   function battleReachableTiles() {
     if (!battle || battle.phase !== "planning_move" || battle.moved) return [];
-    const path = battle.heroMoveDraft?.length ? battle.heroMoveDraft : [copyBattleCell(battle.hero.cell)];
-    const result = path.map((cell, index) => {
-      const prefix = path.slice(0, index + 1).map(copyBattleCell);
-      return { ...copyBattleCell(cell), cost: battleMoveCost(prefix), path: prefix, routeCell: true };
-    });
-    const usedCost = battleMoveCost(path);
-    const remaining = battle.hero.moveRange - usedCost;
-    if (remaining <= 0) return result;
-    const endpoint = path[path.length - 1];
-    const endpointFacing = battlePathFacing(path);
-    const reachable = Tactics.reachableTiles(battle.grid, endpoint, remaining, [], {
+    const draft = battleMoveDraftState();
+    if (!draft.endpoint || !Number.isFinite(draft.cost)) return [];
+
+    // Preserve the already-authored route as history.  A new click chooses the
+    // next waypoint/segment from the CURRENT endpoint; it never re-plans from
+    // the round origin and never truncates/refunds a previous visit.
+    const result = draft.schedule.path.map((cell) => ({
+      ...copyBattleCell(cell),
+      cost: draft.cost,
+      path: draft.schedule.path.map(copyBattleCell),
+      routeCell: true,
+      nextStep: false,
+    }));
+    const remaining = battle.hero.moveRange - draft.cost;
+    if (remaining <= 1e-9) return result;
+
+    const reachable = Tactics.reachableTiles(battle.grid, draft.endpoint, remaining, [], {
       includeStart: false,
       turnCost: BATTLE_TURN_COST,
-      initialFacing: endpointFacing,
+      initialFacing: draft.facing,
     });
     for (const next of reachable) {
-      const combined = [...path.map(copyBattleCell), ...next.path.slice(1).map(copyBattleCell)];
-      const totalCost = battleMoveCost(combined);
-      if (totalCost > battle.hero.moveRange + 1e-9) continue;
+      const segment = (next.path?.length ? next.path : [draft.endpoint]).slice(1).map(copyBattleCell);
+      if (!segment.length) continue;
+      const commands = [
+        ...(battle.heroMoveCommands || []).map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined })),
+        ...segment.map((to) => ({ type: "move", to })),
+      ];
+      const schedule = battleMoveSchedule(commands);
+      if (schedule.totalCost > battle.hero.moveRange + 1e-9) continue;
       result.push({
         x: next.x,
         y: next.y,
-        cost: totalCost,
-        path: combined,
+        cost: schedule.totalCost,
+        path: schedule.path.map(copyBattleCell),
+        commands,
+        routeCell: false,
         nextStep: true,
       });
     }
@@ -3727,27 +3763,35 @@
 
   function appendBattleMoveWaypoint(cell) {
     if (!battle || battle.phase !== "planning_move" || !Tactics.isInside(battle.grid, cell)) return false;
-    const path = battle.heroMoveDraft?.length ? battle.heroMoveDraft : [copyBattleCell(battle.hero.cell)];
-    const endpoint = path[path.length - 1];
-    if (sameBattleCell(endpoint, cell)) {
-      battle.cursor = copyBattleCell(cell);
+    const draft = battleMoveDraftState();
+    const endpoint = draft.endpoint || battle.hero.cell;
+
+    // Clicking the current endpoint merely keeps the authored route selected.
+    // Deliberate 0.5-step footwork belongs to the facing arrows, so an ordinary
+    // map click never burns movement by accident.
+    if (sameBattleCell(cell, endpoint)) {
+      battle.cursor = copyBattleCell(endpoint);
       battle.awaitingFacing = true;
-      battle.message = path.length > 1
-        ? `路線保持 ${formatMoveCost(battleMoveCost(path))} / ${battle.hero.moveRange} 步；揀箭嘴決定朝向，或者繼續加路點。`
-        : "原地待命；揀一個箭嘴決定朝向，就會立即開始同步移動。";
+      battle.message = "";
       battle.messageDanger = false;
       updateBattleUi();
       return true;
     }
+
+    // A click may target ANY tile reachable from the CURRENT endpoint.  The
+    // chosen segment is expanded into its individual movement commands, so a
+    // straight four-cell move needs one click, while A → B → A still keeps and
+    // charges the return segment.  Only 「重新移動」 clears prior history.
     const route = battleReachableTiles().find((tile) => tile.nextStep && sameBattleCell(tile, cell));
-    if (!route) {
-      setBattleMessage("嗰格超出剩餘步數或者被石障封住；只有下面「重畫路線」先會清除已排路線。", true);
+    if (!route?.commands) {
+      setBattleMessage("嗰格超出剩餘移動力，或者路線被障礙封住。", true);
       return false;
     }
+    battle.heroMoveCommands = route.commands.map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined }));
     battle.heroMoveDraft = route.path.map(copyBattleCell);
     battle.cursor = copyBattleCell(cell);
     battle.awaitingFacing = true;
-    battle.message = `已排 ${formatMoveCost(battleMoveCost(battle.heroMoveDraft))} / ${battle.hero.moveRange} 步（轉向 +0.5）；可再加路點，最後揀箭嘴決定朝向。`;
+    battle.message = "";
     battle.messageDanger = false;
     updateBattleUi();
     return true;
@@ -3755,28 +3799,57 @@
 
   function resetBattleMoveDraft() {
     if (!battle || battle.phase !== "planning_move") return false;
+    battle.heroMoveCommands = [];
     battle.heroMoveDraft = [copyBattleCell(battle.hero.cell)];
     battle.cursor = copyBattleCell(battle.hero.cell);
-    battle.awaitingFacing = false;
-    battle.message = "路線已清除。撳格仔逐段排路；揀終點旁邊箭嘴就會確認移動。";
+    battle.awaitingFacing = true;
+    battle.message = "";
     battle.messageDanger = false;
     updateBattleUi();
     return true;
   }
 
-  function confirmPlannedMovement(finalFacing = battle?.hero?.facing) {
+  function finishBattleMoveDraft() {
     if (!battle || battle.phase !== "planning_move") return false;
-    if (!["up", "down", "left", "right"].includes(finalFacing)) return false;
-    const path = battle.heroMoveDraft?.length ? battle.heroMoveDraft.map(copyBattleCell) : [copyBattleCell(battle.hero.cell)];
+    return confirmPlannedMovement();
+  }
+
+  function confirmPlannedMovement(finalFacing = null) {
+    if (!battle || battle.phase !== "planning_move") return false;
+    let commands = [...(battle.heroMoveCommands || [])];
+    let schedule = battleMoveSchedule(commands);
+    if (finalFacing != null && ["up", "down", "left", "right"].includes(finalFacing)
+      && finalFacing !== (schedule.finalTravelFacing || battle.hero.facing)) {
+      const candidate = [...commands, { type: "face", facing: finalFacing }];
+      const candidateSchedule = battleMoveSchedule(candidate);
+      if (candidateSchedule.totalCost <= battle.hero.moveRange + 1e-9) {
+        commands = candidate;
+        schedule = candidateSchedule;
+      }
+    }
+    battle.heroMoveCommands = commands;
+    battle.heroMoveDraft = schedule.path.map(copyBattleCell);
     battle.awaitingFacing = false;
-    startMovementResolution(path, finalFacing);
+    startMovementResolution(schedule.path, schedule.finalTravelFacing || battle.hero.facing, commands);
     return true;
   }
 
   function chooseBattleFacing(facing) {
-    if (!battle || battle.phase !== "planning_move" || !battle.awaitingFacing) return false;
-    if (!["up", "down", "left", "right"].includes(facing)) return false;
-    return confirmPlannedMovement(facing);
+    if (!battle || battle.phase !== "planning_move" || !["up", "down", "left", "right"].includes(facing)) return false;
+    const commands = [...(battle.heroMoveCommands || []), { type: "face", facing }];
+    const schedule = battleMoveSchedule(commands);
+    if (schedule.totalCost > battle.hero.moveRange + 1e-9) {
+      setBattleMessage("移動力唔夠再轉向／踏步。", true);
+      return false;
+    }
+    battle.heroMoveCommands = commands;
+    battle.heroMoveDraft = schedule.path.map(copyBattleCell);
+    battle.cursor = copyBattleCell(schedule.path.at(-1) || battle.hero.cell);
+    battle.awaitingFacing = true;
+    battle.message = "";
+    battle.messageDanger = false;
+    updateBattleUi();
+    return true;
   }
 
   function syncBattleFacingPicker() {
@@ -3784,8 +3857,20 @@
     const visible = Boolean(battle && mode === "battle" && battle.phase === "planning_move" && battle.awaitingFacing);
     battleFacingPicker.hidden = !visible;
     if (!visible) return;
-    const endpoint = battle.heroMoveDraft?.[battle.heroMoveDraft.length - 1] || battle.hero.cell;
-    const point = battleCellCentre(endpoint);
+    const layout = battleLayout();
+    const projected = Boolean(layout.projected);
+    battleFacingPicker.dataset.projected = projected ? "true" : "false";
+    const labels = projected
+      ? { up: ["↖", "左上"], right: ["↗", "右上"], down: ["↘", "右下"], left: ["↙", "左下"] }
+      : { up: ["▲", "上"], right: ["▶", "右"], down: ["▼", "下"], left: ["◀", "左"] };
+    for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
+      const facing = button.dataset.battleFacing;
+      const [glyph, label] = labels[facing] || ["•", facing];
+      button.textContent = glyph;
+      button.setAttribute("aria-label", `面向${label}；消耗 0.5 移動力`);
+    }
+    const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
+    const point = battleCellCentre(endpoint, layout);
     const edge = width <= 530 ? 54 : 66;
     battleFacingPicker.style.left = `${Core.clamp(point.x, edge, width - edge)}px`;
     battleFacingPicker.style.top = `${Core.clamp(point.y, edge, height - edge)}px`;
@@ -3887,11 +3972,12 @@
     if (action === "cancel-target") return cancelBattleTargetSelection();
     if (action === "flee") return fleeBattle();
     if (battle.phase === "planning_move") {
+      if (action === "end-move") return finishBattleMoveDraft();
       if (action === "reset-move" || action === "move") return resetBattleMoveDraft();
-      return setBattleMessage("先揀移動終點；撳自己腳下可以原地不動。", true);
+      return setBattleMessage("先完成移動。", true);
     }
     if (action === "move") {
-      return setBattleMessage("今輪移動已經完成；請揀攻擊、技能、飲藥或者待機。", true);
+      return setBattleMessage("今輪移動已經完成。", true);
     } else if (action.startsWith("skill:")) {
       const skill = battleSkillFromAction(action);
       if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id)) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id))) return setBattleMessage("呢招未裝備喺技能欄。", true);
@@ -3958,11 +4044,12 @@
     return Boolean(a && b && a.x === b.x && a.y === b.y);
   }
 
-  function buildSimultaneousMovementFrames(heroPath, finalFacing) {
+  function buildSimultaneousMovementFrames(heroPath, finalFacing, heroCommands = battle?.heroMoveCommands || []) {
     const actors = battleUnits().filter((unit) => unit.alive);
     const routes = new Map();
     routes.set(battle.hero.id, {
       path: heroPath.map(copyBattleCell),
+      commands: heroCommands.map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined })),
       finalFacing,
     });
     for (const plan of battle.enemyPlans) {
@@ -3981,13 +4068,18 @@
     });
   }
 
-  function startMovementResolution(heroPath, finalFacing) {
+  function startMovementResolution(heroPath, finalFacing, heroCommands = battle?.heroMoveCommands || []) {
     if (!battle || battle.phase !== "planning_move") return;
-    const movement = buildSimultaneousMovementFrames(heroPath, finalFacing);
+    const movement = buildSimultaneousMovementFrames(heroPath, finalFacing, heroCommands);
     battle.phase = "resolving_move";
     battle.moved = true;
     battle.selectedAction = null;
-    battle.heroMovePlan = { path: heroPath.map(copyBattleCell), move: copyBattleCell(heroPath[heroPath.length - 1]), facing: finalFacing };
+    battle.heroMovePlan = {
+      path: heroPath.map(copyBattleCell),
+      commands: heroCommands.map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined })),
+      move: copyBattleCell(heroPath[heroPath.length - 1]),
+      facing: finalFacing,
+    };
     battle.movementResolution = { ...movement, finalHeroFacing: finalFacing, elapsed: 0, stepDuration: BATTLE_MOVE_STEP_SECONDS };
     battle.actingUnitIds = movement.actors.filter((id) => movement.unitResults[id]?.elapsedCost > 0 || movement.unitResults[id]?.blocked);
     battle.message = heroPath.length > 1 ? "路線確認——阿巡同霧獸同步移動！" : "阿巡留喺原位；霧獸開始行動。";
@@ -4638,6 +4730,7 @@
       });
       moves.sort((a, b) => Math.min(...enemiesAlive.map((unit) => Tactics.manhattan(a, unit.cell))) - Math.min(...enemiesAlive.map((unit) => Tactics.manhattan(b, unit.cell))) || b.cost - a.cost);
       battle.heroMoveDraft = (moves[0]?.path || [battle.hero.cell]).map(copyBattleCell);
+      battle.heroMoveCommands = battle.heroMoveDraft.slice(1).map((cell) => ({ type: "move", to: copyBattleCell(cell) }));
       const endpoint = battle.heroMoveDraft[battle.heroMoveDraft.length - 1];
       const nearest = [...enemiesAlive].sort((a, b) => Tactics.manhattan(endpoint, a.cell) - Tactics.manhattan(endpoint, b.cell))[0];
       const facing = nearest ? Tactics.facingFromStep(endpoint, nearest.cell, battle.hero.facing) : battle.hero.facing;
@@ -4665,64 +4758,91 @@
     selectBattleAction("end-turn");
   }
 
+  function battleMovePipsMarkup(remaining, capacity) {
+    const safeRemaining = Math.max(0, Math.round((Number(remaining) || 0) * 2) / 2);
+    const total = Math.max(1, Math.ceil(Number(capacity) || 1));
+    const pips = [];
+    for (let index = 0; index < total; index += 1) {
+      const value = safeRemaining - index;
+      const state = value >= 1 ? "full" : value >= .5 ? "half" : "empty";
+      pips.push(`<span class="battle-move-pip is-${state}" aria-hidden="true"></span>`);
+    }
+    return `<div class="battle-move-meter" role="img" aria-label="剩餘移動 ${formatMoveCost(safeRemaining)} 步">
+      <span class="battle-move-meter-label">移動力</span>
+      <span class="battle-move-pips">${pips.join("")}</span>
+    </div>`;
+  }
+
+  function selectedBattleSkillDetail(skill) {
+    if (!skill) return "";
+    const delivery = skill.deliveryMode === "arc" ? "拋物線" : skill.deliveryMode === "linear" ? "直線" : "";
+    const details = [skillRangeText(skill), delivery].filter(Boolean).join(" · ");
+    return `<div class="battle-target-context" role="status" aria-live="polite">
+      <div><strong>${skill.name}</strong><small>${details}</small></div>
+      <span>選擇目標</span>
+    </div>`;
+  }
+
   function renderBattleActionButtons() {
     const planningMove = battle.phase === "planning_move";
     const planningAction = battle.phase === "planning_action";
     const buttons = document.getElementById("battleSkillButtons");
+    const commandModeLabel = battleActionDock?.querySelector(".battle-action-heading small");
+    if (commandModeLabel) commandModeLabel.textContent = planningMove ? "移動" : planningAction ? "行動" : "";
     buttons.classList.toggle("is-move-phase", planningMove);
     buttons.classList.toggle("is-action-phase", planningAction);
+    buttons.classList.toggle("is-target-phase", false);
     if (planningMove) {
-      const routeSteps = formatMoveCost(battleMoveCost());
+      const remaining = Math.max(0, battle.hero.moveRange - battleMoveCost());
       buttons.innerHTML = `
-        <button id="battleMoveButton" class="battle-skill-button move-skill" type="button" data-battle-action="reset-move" aria-keyshortcuts="M">
-          <i aria-hidden="true">↺</i><span><b>重畫路線</b><small>而家 ${routeSteps} / ${battle.hero.moveRange} 步 · 轉向 +0.5</small></span><kbd>1</kbd>
-        </button>
-        <button id="battleFleeButton" class="battle-skill-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
-          <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
-        </button>`;
+        ${battleMovePipsMarkup(remaining, battle.hero.moveRange)}
+        <div class="battle-command-utility-row battle-move-command-row">
+          <button id="battleResetMoveButton" class="battle-command-secondary reset-move-skill" type="button" data-battle-action="reset-move" ${battleMoveCost() <= 0 ? "disabled" : ""}>
+            <b>重新移動</b>
+          </button>
+          <button id="battleMoveButton" class="battle-command-primary move-skill" type="button" data-battle-action="end-move">
+            <b>結束移動</b>
+          </button>
+          <button id="battleFleeButton" class="battle-command-secondary flee-skill" type="button" data-battle-action="flee">
+            <b>撤退</b>
+          </button>
+        </div>`;
       battleUi.potionCount = null;
       return;
     }
     if (!planningAction) {
-      buttons.innerHTML = `<span class="battle-actions-loading">${battle.phase === "resolving_move" ? "雙方沿路線移動中……" : "雙方同步出招中……"}</span>`;
+      buttons.innerHTML = `<span class="battle-actions-loading">${battle.phase === "resolving_move" ? "移動中" : "行動中"}</span>`;
       battleUi.potionCount = null;
       return;
     }
     const selectedSkill = battleSkillFromAction(battle.selectedAction);
     if (selectedSkill) {
+      buttons.classList.add("is-target-phase");
       buttons.innerHTML = `
-        <div class="battle-target-context" role="status" aria-live="polite">
-          <strong>${selectedSkill.name}</strong><span>${selectedSkill.apCost} AP</span><small>選擇目標</small>
-        </div>
-        <button class="battle-skill-button cancel-target-button" type="button" data-battle-action="cancel-target" aria-keyshortcuts="Escape">
-          <i aria-hidden="true">×</i><span><b>取消</b><small>返回揀招式</small></span><kbd>ESC</kbd>
+        ${selectedBattleSkillDetail(selectedSkill)}
+        <button class="battle-command-secondary cancel-target-button" type="button" data-battle-action="cancel-target">
+          <b>取消</b>
         </button>`;
       battleUi.potionCount = null;
       return;
     }
-    const keyLabels = ["2", "3", "4", "5", "6", "7"];
-    const skillButtons = equippedBattleSkills().map((skill, index) => {
+    const skillButtons = equippedBattleSkills().map((skill) => {
       const id = skill.id === "quick_slash" ? ' id="battleAttackButton"' : skill.id === "lantern_shot" ? ' id="battleLanternButton"' : "";
       const className = skill.tags.includes("magic") ? "lantern-skill" : "attack-skill";
       const action = `skill:${skill.id}`;
-      const selected = battle.selectedAction === action;
       const disabled = battle.ap < skill.apCost;
-      return `<button${id} class="battle-skill-button ${className}${selected ? " is-selected" : ""}" type="button" data-battle-action="${action}" aria-keyshortcuts="${keyLabels[index]}" ${disabled ? "disabled" : ""}>
-        <i aria-hidden="true">${skillIcon(skill)}</i><span><b>${skill.name}</b><small>${skill.apCost} AP</small></span><kbd>${keyLabels[index]}</kbd>
+      const apLabel = disabled ? `AP不足，需要 ${skill.apCost} AP` : `消耗 ${skill.apCost} AP`;
+      return `<button${id} class="battle-command-skill ${className}" type="button" data-battle-action="${action}" ${disabled ? "disabled" : ""} title="${apLabel}" aria-label="${skill.name}，${apLabel}">
+        <b>${skill.name}</b>
       </button>`;
     }).join("");
     buttons.innerHTML = `
-      ${skillButtons}
-      <button id="battlePotionButton" class="battle-skill-button battle-utility-button potion-skill" type="button" data-battle-action="potion" aria-keyshortcuts="Q" ${player.potions > 0 && battle.hero.hp < battle.hero.maxHp ? "" : "disabled"}>
-        <i aria-hidden="true">♥</i><span><b>飲藥</b><small><em id="battlePotionCount">${player.potions}</em> 支剩低</small></span><kbd>8</kbd>
-      </button>
-      <button id="battleEndTurnButton" class="battle-skill-button battle-utility-button end-turn-skill" type="button" data-battle-action="end-turn" aria-keyshortcuts="E">
-        <i aria-hidden="true">✓</i><span><b>待機</b><small>保留 AP · 無減傷</small></span><kbd>9</kbd>
-      </button>
-      <button id="battleFleeButton" class="battle-skill-button battle-utility-button flee-skill" type="button" data-battle-action="flee" aria-keyshortcuts="Escape">
-        <i aria-hidden="true">↩</i><span><b>撤退</b><small>返回探索</small></span><kbd>ESC</kbd>
-      </button>`;
-    battleUi.potionCount = document.getElementById("battlePotionCount");
+      <div class="battle-command-skill-list">${skillButtons}</div>
+      <div class="battle-command-utility-row">
+        <button id="battleEndTurnButton" class="battle-command-secondary end-turn-skill" type="button" data-battle-action="end-turn"><b>待機</b></button>
+        <button id="battleFleeButton" class="battle-command-secondary flee-skill" type="button" data-battle-action="flee"><b>撤退</b></button>
+      </div>`;
+    battleUi.potionCount = null;
   }
 
   function updateBattleUi() {
@@ -4734,10 +4854,10 @@
     stage.dataset.battlePhase = battle.phase;
     battleUi.round.textContent = `ROUND ${battle.round}`;
     const phaseCopy = {
-      planning_move: ["同步移動部署", "撳格仔加路點；揀箭嘴定朝向並確認"],
-      resolving_move: ["雙方移動中", "所有單位沿路線同步逐格前進"],
-      planning_action: ["選擇招式", "揀技能後選擇發光目標"],
-      resolving_action: ["雙方同步出招", "傷害會喺同一時點結算"],
+      planning_move: ["移動", "選擇位置"],
+      resolving_move: ["移動中", ""],
+      planning_action: ["戰鬥指令", "選擇招式"],
+      resolving_action: ["行動中", ""],
       victory: ["戰鬥勝利！", "霧散開咗"],
       defeat: ["燈火熄滅", "返回落腳燈位"],
     };
@@ -4765,7 +4885,7 @@
     const statuses = [
       { text: `AP ${battle.ap}`, good: battle.ap >= Skills.AP_BANDS[1].min },
       battle.phase === "planning_move" ? { text: `路線 ${formatMoveCost(battleMoveCost())} / ${battle.hero.moveRange}`, good: true } : { text: "移動已結算", good: true },
-      { text: `面向 ${({ up: "上", down: "下", left: "左", right: "右" })[battle.hero.facing] || "下"}`, good: true },
+      { text: `面向 ${battleFacingDisplayLabel(battle.phase === "planning_move" ? battleMoveDraftState().facing : battle.hero.facing)}`, good: true },
       battle.guard ? { text: `技能減傷 -${Math.round((battle.guardReduction || 0) * 100)}%`, good: true } : null,
       battle.moveBonusNext ? { text: `下輪移動 +${battle.moveBonusNext}`, good: true } : null,
     ].filter(Boolean);
@@ -4796,6 +4916,7 @@
     }
     battleUi.hint.textContent = battle.message;
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
+    battleUi.hint.hidden = !battle.messageDanger;
     renderBattleActionButtons();
     syncBattleFacingPicker();
     syncBattleCommandMenu();
@@ -5157,10 +5278,19 @@
       };
     }
 
-    const xAxis = projection.xAxis || { x: .9, y: -.28 };
-    const yAxis = projection.yAxis || { x: .22, y: .68 };
-    const elevationRatio = Math.max(.08, Number(projection.elevationStep) || .22);
-    const baseThicknessRatio = Math.max(.06, Number(projection.baseThickness) || .16);
+    const rawXAxis = projection.xAxis || { x: .78, y: -.36 };
+    const rawYAxis = projection.yAxis || { x: .78, y: .36 };
+    // A logical battle tile is always 1×1.  Preserve the authored view angles
+    // but normalize both projected axes to the same screen-space length so an
+    // oblique board reads as equal-sided tactical cells rather than stretched
+    // rectangles.
+    const xLength = Math.hypot(Number(rawXAxis.x) || 0, Number(rawXAxis.y) || 0) || 1;
+    const yLength = Math.hypot(Number(rawYAxis.x) || 0, Number(rawYAxis.y) || 0) || 1;
+    const projectedAxisLength = (xLength + yLength) * .5;
+    const xAxis = { x: (Number(rawXAxis.x) || 0) / xLength * projectedAxisLength, y: (Number(rawXAxis.y) || 0) / xLength * projectedAxisLength };
+    const yAxis = { x: (Number(rawYAxis.x) || 0) / yLength * projectedAxisLength, y: (Number(rawYAxis.y) || 0) / yLength * projectedAxisLength };
+    const elevationRatio = Math.max(.06, Number(projection.elevationStep) || .18);
+    const baseThicknessRatio = Math.max(.035, Number(projection.baseThickness) || .075);
     const unitCorners = [
       { x: 0, y: 0 },
       { x: gridWidth * xAxis.x, y: gridWidth * xAxis.y },
@@ -5270,6 +5400,11 @@
     return inside;
   }
 
+  function battleFacingDisplayLabel(facing, layout = battleLayout()) {
+    if (layout.projected) return ({ up: "左上", right: "右上", down: "右下", left: "左下" })[facing] || "右下";
+    return ({ up: "上", right: "右", down: "下", left: "左" })[facing] || "下";
+  }
+
   function battleFacingScreenVector(facing, layout = battleLayout()) {
     const vector = Tactics.facingVector(facing);
     const x = vector.x * layout.stepX.x + vector.y * layout.stepY.x;
@@ -5330,21 +5465,44 @@
     const westNeighbour = cell.x > 0 ? battleCellHeight({ x: cell.x - 1, y: cell.y }) : null;
     const southNeighbour = cell.y < battle.grid.height - 1 ? battleCellHeight({ x: cell.x, y: cell.y + 1 }) : null;
     const faces = [];
-    const addFace = (a, b, neighbourHeight, outside, tone) => {
+    const addFace = (a, b, neighbourHeight, outside, shade) => {
       const exposedLevels = outside ? heightValue : Math.max(0, heightValue - neighbourHeight);
       const depth = exposedLevels * layout.elevationStep + (outside ? layout.baseThickness : 0);
       if (depth <= .5) return;
-      faces.push({ points: [a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }], tone });
+      faces.push({ points: [a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }], depth, shade, outside });
     };
-    // These are the two faces exposed to the lower-left camera side.
-    addFace(top[0], top[3], westNeighbour, cell.x === 0, "rgba(83,58,36,.96)");
-    addFace(top[3], top[2], southNeighbour, cell.y === battle.grid.height - 1, "rgba(66,46,30,.98)");
+    // Only faces visible from the lower-left camera side are drawn.  Flat
+    // Level-0 cells share one continuous top plane; side walls appear solely
+    // around the board perimeter and genuine elevation changes.
+    addFace(top[0], top[3], westNeighbour, cell.x === 0, "west");
+    addFace(top[3], top[2], southNeighbour, cell.y === battle.grid.height - 1, "south");
     for (const face of faces) {
-      battleDrawPolygon(face.points, face.tone, "rgba(41,29,20,.46)", Math.max(1, layout.cell * .016));
+      const minY = Math.min(...face.points.map((point) => point.y));
+      const maxY = Math.max(...face.points.map((point) => point.y));
+      const earth = ctx.createLinearGradient(0, minY, 0, maxY || minY + 1);
+      earth.addColorStop(0, face.outside ? "#806241" : "#765235");
+      earth.addColorStop(.5, face.shade === "west" ? "#62462f" : "#59402b");
+      earth.addColorStop(1, "#3d2c20");
+      battleDrawPolygon(face.points, earth, "rgba(38,27,19,.58)", Math.max(1, layout.cell * .012));
+
+      ctx.save();
+      battleTracePolygon(face.points);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(221,183,126,.11)";
+      ctx.lineWidth = Math.max(1, layout.cell * .009);
+      for (const ratio of [.34, .68]) {
+        const y = minY + (maxY - minY) * ratio;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(...face.points.map((point) => point.x)) - layout.cell, y);
+        ctx.lineTo(Math.max(...face.points.map((point) => point.x)) + layout.cell, y + layout.cell * .025);
+        ctx.stroke();
+      }
+      ctx.restore();
+
       const highlight = [face.points[0], face.points[1],
-        { x: face.points[1].x, y: face.points[1].y + Math.min(3, layout.cell * .035) },
-        { x: face.points[0].x, y: face.points[0].y + Math.min(3, layout.cell * .035) }];
-      battleDrawPolygon(highlight, "rgba(221,176,111,.12)");
+        { x: face.points[1].x, y: face.points[1].y + Math.min(2.5, layout.cell * .025) },
+        { x: face.points[0].x, y: face.points[0].y + Math.min(2.5, layout.cell * .025) }];
+      battleDrawPolygon(highlight, "rgba(236,203,151,.16)");
     }
   }
 
@@ -5673,16 +5831,39 @@
       return;
     }
     if (mountainBattle && terrain?.kind === "scrub") {
-      ctx.save();
-      ctx.fillStyle = "rgba(21,20,13,.27)";
-      ctx.beginPath();
-      ctx.ellipse(point.x, point.y + size * .24, size * .31, size * .075, 0, 0, Core.TAU);
-      ctx.fill();
-      ctx.restore();
       const seed = battleVisualSeed(cell);
-      drawMountainDryScrub(point.x - size * .16, point.y + size * .2, size * 1.18, seed, .88);
-      drawMountainDryScrub(point.x + size * .08, point.y + size * .18, size * 1.05, seed >>> 3, .82);
-      drawMountainDryScrub(point.x + size * .22, point.y + size * .22, size * .9, seed >>> 5, .72);
+      ctx.save();
+      ctx.fillStyle = "rgba(21,20,13,.3)";
+      ctx.beginPath();
+      ctx.ellipse(point.x, point.y + size * .25, size * .34, size * .08, 0, 0, Core.TAU);
+      ctx.fill();
+      // A readable waist-high green scrub mass: clearly an obstacle, but kept
+      // well below character height so its low-cover role reads at a glance.
+      const tufts = [
+        [-.22, .12, .2], [-.1, .06, .23], [.04, .08, .25], [.18, .12, .2], [.27, .16, .14],
+      ];
+      for (let index = 0; index < tufts.length; index += 1) {
+        const [ox, oy, radius] = tufts[index];
+        const jitter = (((seed >>> (index * 3)) & 7) - 3) * size * .004;
+        const gradient = ctx.createRadialGradient(
+          point.x + ox * size - radius * size * .25,
+          point.y + oy * size - radius * size * .35,
+          1,
+          point.x + ox * size,
+          point.y + oy * size,
+          radius * size,
+        );
+        gradient.addColorStop(0, index % 2 ? "#84944c" : "#92a553");
+        gradient.addColorStop(.62, index % 2 ? "#596a38" : "#657743");
+        gradient.addColorStop(1, "rgba(45,55,29,.2)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(point.x + ox * size + jitter, point.y + oy * size, radius * size, 0, Core.TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+      drawMountainDryScrub(point.x - size * .13, point.y + size * .2, size * .82, seed, .48);
+      drawMountainDryScrub(point.x + size * .14, point.y + size * .21, size * .72, seed >>> 4, .42);
       return;
     }
     if (mountainBattle) {
@@ -5745,10 +5926,17 @@
     ctx.restore();
   }
 
+  function battleUnitRenderFacing(unit) {
+    if (battle?.phase === "planning_move" && unit?.id === battle?.hero?.id) {
+      return battleMoveDraftState().facing || unit.facing;
+    }
+    return unit?.facing || "down";
+  }
+
   function drawMountainUnitShadow(unit, layout) {
     const point = battleCellCentre(unit.renderCell || unit.cell, layout);
     const size = layout.cell;
-    const facing = battleFacingScreenVector(unit.facing, layout);
+    const facing = battleFacingScreenVector(battleUnitRenderFacing(unit), layout);
     const shadowX = point.x - facing.x * size * .035 + size * .03;
     const shadowY = point.y + size * (layout.projected ? .22 : .31) - facing.y * size * .02;
     ctx.save();
@@ -5775,7 +5963,11 @@
     const acting = battle.phase === "resolving_action"
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
       && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
-    const locomotion = unit.locomotion || Locomotion.create(unit.facing);
+    const renderFacing = battleUnitRenderFacing(unit);
+    const baseLocomotion = unit.locomotion || Locomotion.create(renderFacing);
+    const locomotion = baseLocomotion.facing === renderFacing
+      ? baseLocomotion
+      : { ...baseLocomotion, state: "idle", facing: renderFacing, time: 0 };
     const hurt = unit.hitFlash > 0;
     const stopped = !hurt && (unit.stopFlash || 0) > 0;
     const actionProgress = battle.phase === "resolving_action"
@@ -5792,7 +5984,7 @@
         scale: ["attack", "hurt"].includes(visualState) ? layout.cell / 43 : heroScale,
         actor: "player",
         classId: playerClassId,
-        facing: unit.facing,
+        facing: renderFacing,
         state: visualState,
         locomotion,
         phase: elapsed,
@@ -5808,7 +6000,7 @@
         y: baseline,
         scale: monsterScale * (unit.boss ? .98 : .92),
         type: unit.type,
-        facing: unit.facing,
+        facing: renderFacing,
         phase: elapsed,
         state: visualState,
         locomotion,
@@ -5817,7 +6009,7 @@
       });
     }
 
-    const facing = battleFacingScreenVector(unit.facing, layout);
+    const facing = battleFacingScreenVector(renderFacing, layout);
     const perpendicular = { x: -facing.y, y: facing.x };
     const arrow = {
       x: point.x + facing.x * layout.cell * .32,
@@ -7422,12 +7614,6 @@
         chooseBattleFacing(facing);
         return;
       }
-      if (battle.phase === "planning_move" && battle.awaitingFacing && code === "Escape") {
-        battle.awaitingFacing = false;
-        battle.message = "未確認朝向；可繼續加路點，或者再撳終點叫返方向箭嘴。";
-        updateBattleUi();
-        return;
-      }
       if (battle.phase === "planning_action" && code === "Escape" && battleSkillFromAction(battle.selectedAction)) {
         cancelBattleTargetSelection();
         return;
@@ -7439,7 +7625,8 @@
         return;
       }
       if (code === "Enter" || code === "Space") confirmBattleCell(battle.cursor);
-      else if (code === "KeyM" || code === "Digit1") selectBattleAction("reset-move");
+      else if (code === "KeyR") selectBattleAction("reset-move");
+      else if (code === "KeyM" || code === "Digit1") selectBattleAction("end-move");
       else if (/^Digit[2-7]$/.test(code)) {
         const skill = equippedBattleSkills()[Number(code.slice(-1)) - 2];
         if (skill) selectBattleAction(`skill:${skill.id}`);
@@ -7449,8 +7636,7 @@
       } else if (code === "KeyS") {
         const skill = equippedBattleSkills()[1];
         if (skill) selectBattleAction(`skill:${skill.id}`);
-      } else if (code === "KeyQ" || code === "Digit8") selectBattleAction("potion");
-      else if (code === "KeyE" || code === "Digit9") selectBattleAction("end-turn");
+      } else if (code === "KeyE" || code === "Digit9") selectBattleAction("end-turn");
       else if (code === "Escape" || code === "Digit0") selectBattleAction("flee");
       return;
     }
@@ -7542,6 +7728,7 @@
         facing: battle.heroMovePlan.facing || null,
       } : null,
       heroMoveDraft: (battle.heroMoveDraft || []).map((cell) => ({ ...cell })),
+      heroMoveCommands: (battle.heroMoveCommands || []).map((command) => ({ ...command, to: command.to ? { ...command.to } : undefined })),
       movement: battle.movementResolution ? {
         elapsed: battle.movementResolution.elapsed,
         movementTime: battle.movementResolution.elapsed / battle.movementResolution.stepDuration,
@@ -7727,6 +7914,7 @@
           speedGrade: unit.speedGrade || "C", facing: unit.facing,
         });
         battle.heroMoveDraft = [copyBattleCell(lane[0])];
+        battle.heroMoveCommands = [];
         battle.heroMovePlan = null;
         battle.cursor = copyBattleCell(lane[0]);
         battle.awaitingFacing = false;
@@ -7782,6 +7970,7 @@
         battle.phase = "planning_action";
         battle.moved = true;
         battle.heroMoveDraft = [copyBattleCell(pair[0])];
+        battle.heroMoveCommands = [];
         battle.heroMovePlan = null;
         battle.cursor = copyBattleCell(pair[1]);
         battle.awaitingFacing = false;

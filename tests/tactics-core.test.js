@@ -113,6 +113,48 @@ test("the opening turn costs half a step when an initial facing is supplied", ()
   assert.equal(tiles.some((tile) => tile.x === 2 && tile.y === 1), true);
 });
 
+
+test("explicit movement commands preserve revisits and paid in-place footwork", () => {
+  const start = { x: 1, y: 1 };
+  const commands = [
+    { type: "move", to: { x: 2, y: 1 } },
+    { type: "move", to: { x: 1, y: 1 } },
+    { type: "face", facing: "left" },
+    { type: "face", facing: "left" },
+  ];
+  const schedule = Tactics.movementCommandEvents(start, commands, { turnCost: .5, initialFacing: "right" });
+  assert.deepEqual(schedule.path, [start, { x: 2, y: 1 }, { x: 1, y: 1 }]);
+  assert.equal(schedule.totalCost, 3.5, "1 step + paid turn/back-step + two half-step footwork commands");
+  assert.deepEqual(schedule.events.map((event) => [event.type, event.duration]), [
+    ["move", 1],
+    ["turn", .5],
+    ["move", 1],
+    ["turn", .5],
+    ["turn", .5],
+  ]);
+  assert.equal(Tactics.movementCommandCost(start, commands, { turnCost: .5, initialFacing: "right" }), 3.5);
+});
+
+test("timed movement accepts explicit command schedules instead of collapsing revisits", () => {
+  const grid = Tactics.createGrid(4, 2);
+  const result = Tactics.resolveSimultaneousMovement({
+    timed: true,
+    grid,
+    units: [{ id: "hero", cell: { x: 1, y: 0 }, facing: "right", hp: 10 }],
+    routes: new Map([["hero", {
+      path: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }],
+      commands: [
+        { type: "move", to: { x: 2, y: 0 } },
+        { type: "move", to: { x: 1, y: 0 } },
+      ],
+    }]]),
+    turnCost: .5,
+  });
+  assert.deepEqual(result.unitResults.hero.completedPath, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }]);
+  assert.equal(result.unitResults.hero.elapsedCost, 2.5);
+  assert.equal(result.unitResults.hero.facing, "left");
+});
+
 test("equal-cost routes finish their straight segment before turning", () => {
   const grid = Tactics.createGrid(6, 4);
   assert.deepEqual(

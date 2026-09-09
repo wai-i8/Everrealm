@@ -139,19 +139,21 @@
 
 ### 5.3 路線編輯
 
-- 點擊新格 → 追加合法路線。
-- 點擊現有／舊路線格，不會自動刪除整條路。
-- 可以形成回程／回環，只要 movement cost 合法。
-- 只有「重畫路線」可以清除草稿。
+- 玩家每次點一個「下一個路點」；路點可以係目前終點剩餘移動力內嘅較遠格，系統會由**目前路線終點**展開該段合法格路徑，所以直線行幾格只需點一次，唔需要逐格 click。
+- 已排嘅路線永遠保留為時間軸歷史：之後點返舊格代表由目前終點再行返去嗰格，照新增並扣實際成本；系統唔會由本輪起點重新 shortest-path、唔會 truncate、唔會退款。
+- 地圖上點目前路線終點本身唔消耗移動力；四個朝向控制先係原地 `0.5` footwork／等待命令，同一方向重複輸入亦照扣 `0.5`。
+- 只有 `重新移動` 會清除本輪未確認嘅完整移動序列、回復本輪起點草稿同完整 movement budget。
+- `結束移動` 可以喺零步、部分移動或完整移動後隨時確認。
 - 同成本 path choice 時，auto pathfinding 優先保持直線，延後轉彎。
 
 ### 5.4 終點朝向
 
 玩家揀終點後：
 
-- 終點格四邊顯示細型朝向箭嘴。
-- 選擇朝向後確認移動。
-- 完整走完路線先套用所選終點朝向。
+- 終點格四邊仍可顯示細型朝向箭嘴，作為可選嘅戰術朝向 override。
+- 玩家直接撳 `結束移動` 時，使用已排命令序列最後實際 facing；零步且未輸入 footwork 時保留目前朝向。
+- 如果玩家明確揀朝向箭嘴，就按既有 movement cost 規則處理額外轉向成本。
+- 完整走完路線先套用合法終點朝向。
 - 中途被 block → 保留最後實際完成移動後嘅朝向。
 
 ---
@@ -2028,7 +2030,10 @@ Preview 必須同實際 resolver 共用同一函數。
 - 玩家可用 mouse／touch pointer events 拖動；手動拖動後停止自動跟隨。
 - 提供細型「跟隨／重置位置」控制，將 menu 重新吸回上述主角左下 anchor。
 - 每次定位都要 clamp 喺 game viewport 內；如果主角太近 viewport 邊緣，只可因 clamp 而偏移，唔應預設跳返去右側遮住敵方戰場。
-- Skill action 使用短身 content-driven button；取消係較細 secondary action。AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複，亦唔喺角色身邊畫常駐 AP orbit dots。
+- 戰鬥主選單採用「資訊簡潔、美術精緻」原則：技能主列表只顯示技能名；唔長駐顯示技能 AP、快捷鍵、前置圓點或說明句。AP 不足時直接灰化技能，詳細 AP／射程／delivery 只喺選中技能後嘅 target context 顯示。
+- `待機` 同 `撤退` 屬於 utility action，固定放喺技能清單底部左右兩格；戰鬥中暫時唔提供獨立飲藥按鈕。
+- 移動 phase 只顯示剩餘移動力 pips（full／half／empty）同 `重新移動`／`結束移動`／`撤退`；唔顯示 `0/5`、轉向成本公式、快捷鍵或「返回探索」等說明。玩家以「路點」逐段排路：直線多格可一次點終點，舊格重訪係新增回程而照扣成本；只有 `重新移動` 先會清除草稿。
+- AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複，亦唔喺角色身邊畫常駐 AP orbit dots。
 - 單位名稱必須跟 rendered sprite 嘅 semantic `nameAnchor`，唔可以用 logical tile 頂部做名稱 Y anchor；不同角色比例、攻擊 frame 或 monster species 都要保持名稱喺實際頭頂上方。
 
 ---
@@ -2187,8 +2192,10 @@ Height／terrain context 由 `docs/MAP_SYSTEM.md` 提供；本文件定義佢點
 - logical board：`8 × 3`
 - 玩家 deployment zone：左下側
 - 敵方 deployment zone：右上側
-- PC presentation：左下 → 右上嘅 oblique 2.5D projection
-- 普通平地本身有可見 base thickness，唔畫成一張零厚度紙片
+- PC presentation：左下 → 右上嘅 oblique 2.5D projection；兩條 projected grid axis 必須等長，令 logical 1×1 tile 視覺上保持等邊菱形／正方格感，唔可以拉成長方形
+- Projected battlefield 嘅四個 logical facing 仍然保留 `up/right/down/left` 供 resolver 使用，但畫面語意固定映射成 `左上/右上/右下/左下`；facing picker、HUD label 同方向箭嘴必須用呢四個斜向呈現。
+- 真正角色／怪物 bitmap 若要視覺上準確朝向四個斜角，需要專門嘅 NW/NE/SE/SW facing art；唔可以只靠旋轉整張 cardinal sprite 代替。
+- 普通平地本身有薄而可見嘅 base thickness，唔畫成零厚度紙片；外圍厚度只作地台邊緣，唔可以似厚木板／樓梯
 - `heightMap` 大於 `0` 嘅格按 elevation level 向上抬高，並繪製 exposed side faces
 - sprite 永遠保持直立／原比例，唔跟棋盤 skew
 
@@ -2210,7 +2217,7 @@ movement、occupancy、range、AI、attack path 同 save/state 全部仍然使�
 
 - **High tree**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=true`。高身障礙會攔截普通直線同與其 occupied height 相交嘅 ballistic arc。
 - **Low scrub**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=false`。低身障礙會阻擋移動同普通直線，但正常 Arc 可以越過。
-- scrub 後方接一段兩級高地／坡面，令第一批野外戰鬥已經有清楚 elevation 差。
+- scrub 後方接一個細型單級高台，橫跨約 2×2 格；Level-0 主棋盤保持同一平面，唔可以整塊場由左下逐級升成樓梯。
 
 Arc 是否真正撞到 terrain，仍然由 projectile trajectory height 同 `surfaceHeight + occupiedHeight` 比較；唔可以只因技能叫「Arc」就無條件穿過所有高障礙。
 

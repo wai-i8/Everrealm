@@ -432,6 +432,83 @@
     };
   }
 
+  /**
+   * Builds a deterministic movement schedule from explicit player commands.
+   * Unlike destination pathfinding, commands preserve every tactical step:
+   * revisiting a cell still costs a full step and a facing command always
+   * spends the authored half-step turn/footwork cost, even when the unit stays
+   * on the same cell.
+   */
+  function movementCommandEvents(start, commands, options = {}) {
+    if (!validCell(start)) return { path: [], initialFacing: null, finalTravelFacing: null, events: [], totalCost: Infinity };
+    const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
+    let facing = normalizeFacing(options.initialFacing);
+    const initialFacing = facing;
+    let current = copyCell(start);
+    const path = [copyCell(current)];
+    const events = [];
+    let totalCost = 0;
+
+    for (let index = 0; index < (Array.isArray(commands) ? commands.length : 0); index += 1) {
+      const command = commands[index] || {};
+      if (command.type === "face" || command.type === "turn" || command.type === "wait") {
+        const requested = normalizeFacing(command.facing) || facing || "down";
+        if (turnCost <= 0) {
+          facing = requested;
+          continue;
+        }
+        events.push({
+          type: "turn",
+          cell: copyCell(current),
+          fromFacing: facing || requested,
+          facing: requested,
+          duration: turnCost,
+          commandIndex: index,
+          footwork: true,
+        });
+        totalCost += turnCost;
+        facing = requested;
+        continue;
+      }
+      if (command.type !== "move" || !validCell(command.to)) continue;
+      const to = copyCell(command.to);
+      if (manhattan(current, to) !== 1) {
+        events.push({ type: "invalid", from: copyCell(current), to, duration: 0, commandIndex: index });
+        break;
+      }
+      const direction = facingFromStep(current, to, facing || "down");
+      if (facing && direction !== facing && turnCost > 0) {
+        events.push({
+          type: "turn",
+          cell: copyCell(current),
+          fromFacing: facing,
+          facing: direction,
+          duration: turnCost,
+          commandIndex: index,
+        });
+        totalCost += turnCost;
+      }
+      facing = direction;
+      events.push({
+        type: "move",
+        from: copyCell(current),
+        to: copyCell(to),
+        facing: direction,
+        duration: 1,
+        commandIndex: index,
+      });
+      totalCost += 1;
+      current = copyCell(to);
+      path.push(copyCell(current));
+    }
+
+    return { path, initialFacing, finalTravelFacing: facing, events, totalCost };
+  }
+
+  function movementCommandCost(start, commands, options = {}) {
+    return movementCommandEvents(start, commands, options).totalCost;
+  }
+
   function reachableTilesWithTurns(grid, start, moveRange, occupants, options) {
     const origin = copyCell(start);
     const limit = Math.max(0, finiteStat(moveRange, 0));
@@ -759,7 +836,10 @@
       const route = Array.isArray(suppliedPath) ? suppliedPath.filter(validCell).map(copyCell) : [];
       if (!route.length || !sameCell(route[0], start)) route.unshift(copyCell(start));
       const actorTurnCost = Math.max(0, finiteStat(routeValue?.turnCost, finiteStat(actor.turnCost, turnCost)));
-      const schedule = movementEvents(route, { initialFacing: actor.facing, turnCost: actorTurnCost });
+      const explicitCommands = Array.isArray(routeValue?.commands) ? routeValue.commands : null;
+      const schedule = explicitCommands
+        ? movementCommandEvents(start, explicitCommands, { initialFacing: actor.facing, turnCost: actorTurnCost })
+        : movementEvents(route, { initialFacing: actor.facing, turnCost: actorTurnCost });
       const requestedFinalFacing = normalizeFacing(routeValue?.finalFacing || valueFor(finalFacings, actor.id));
       states.set(actor.id, {
         id: actor.id,
@@ -1366,6 +1446,8 @@
     movementPathCost,
     truncatePathByCost,
     movementEvents,
+    movementCommandEvents,
+    movementCommandCost,
     resolveSimultaneousMovement,
     resolveTimedSimultaneousMovement,
     attackTiles,
