@@ -5,11 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1020" />
     <meta name="description" content="永恆國度 — 有探索、戰棋回合戰鬥、任務同角色育成嘅短篇 browser RPG。" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Everrealm" />
+    <meta name="application-name" content="Everrealm" />
+    <link rel="manifest" href="/Everrealm/everrealm.webmanifest?v=20260910-02" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/Everrealm/assets/pwa/everrealm-icon-180-v2.png?v=20260910-02" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/Everrealm/assets/pwa/everrealm-icon-32-v2.png?v=20260910-02" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/Everrealm/assets/pwa/everrealm-icon-16-v2.png?v=20260910-02" />
+    <link rel="shortcut icon" href="/Everrealm/assets/pwa/everrealm-favicon-v2.ico?v=20260910-02" />
     <title>永恆國度 · Everrealm</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260910-04" />
     <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
     <link id="everrealmUiStyles" rel="stylesheet" href="ui-system.css" />
     <link id="inventoryMinimalStyles" rel="stylesheet" href="inventory-minimal.css" />
+    <link id="everrealmResponsiveUiStyles" rel="stylesheet" href="responsive-ui-redesign.css?v=20260910-07" />
   </head>
   <body>
     <main id="gameShell" class="game-shell">
@@ -41,25 +52,27 @@
 
           <nav class="sidebar-zone sidebar-primary explore-function-menu" aria-label="主要功能">
             <button id="statusButton" class="explore-menu-button" type="button" aria-label="打開角色狀態欄">
-              <span class="explore-menu-icon" aria-hidden="true">◎</span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/status-v2.png" alt="" /></span>
               <span class="explore-menu-copy"><b>狀態</b><small>STATUS</small></span>
             </button>
-            <button id="missionButton" class="explore-menu-button" type="button" aria-label="打開任務">
-              <span class="explore-menu-icon" aria-hidden="true">◇</span>
-              <span class="explore-menu-copy"><b>任務</b><small>QUESTS</small></span>
-            </button>
             <button id="inventoryButton" class="explore-menu-button" type="button" aria-label="打開物品欄（I）">
-              <span class="explore-menu-icon" aria-hidden="true">▣</span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/inventory-v2.png" alt="" /></span>
               <span class="explore-menu-copy"><b>物品欄</b><small>I · ITEMS</small></span>
               <b id="inventoryBookBadge" class="menu-badge" hidden>0</b>
             </button>
             <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開戰技面板">
-              <span class="explore-menu-icon" aria-hidden="true">▤</span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/panel-v2.png" alt="" /></span>
               <span class="explore-menu-copy"><b>戰技面板</b><small>DECK · 唯讀查看</small></span>
             </button>
             <button id="skillTreeButton" class="explore-menu-button" type="button" aria-label="打開技能樹（L）">
-              <span class="explore-menu-icon" aria-hidden="true">✧</span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/skills-v2.png" alt="" /></span>
               <span class="explore-menu-copy"><b>技能樹</b><small>L · SKILLS</small></span>
+              <b id="skillMenuBadge" class="menu-badge" hidden aria-label="有可學習技能"></b>
+            </button>
+            <button id="missionButton" class="explore-menu-button" type="button" aria-label="打開任務">
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/missions-v2.png" alt="" /></span>
+              <span class="explore-menu-copy"><b>任務</b><small>QUESTS</small></span>
+              <b id="missionMenuBadge" class="menu-badge" hidden aria-label="有可回報任務"></b>
             </button>
           </nav>
 
@@ -127,7 +140,6 @@
             </div>
             <div class="selected-unit-copy">
               <div class="selected-unit-heading">
-                <span id="selectedUnitRole">巡燈人</span>
                 <b id="selectedUnitLevel">LV. 1</b>
               </div>
               <strong id="selectedUnitName">阿巡</strong>
@@ -136,26 +148,21 @@
                 <div class="battle-stat-bar"><i id="selectedUnitHpFill" style="width: 100%"></i></div>
                 <b id="selectedUnitHpText">88 / 88</b>
               </div>
+              <div class="battle-stat-row battle-ap-row">
+                <span>AP</span>
+                <div class="battle-stat-bar battle-ap-bar"><i id="selectedUnitApFill" style="width: 100%"></i></div>
+                <b id="selectedUnitApText">0 / 0</b>
+              </div>
               <div id="selectedUnitStatuses" class="unit-status-list" data-battle-status-list aria-label="角色狀態">
                 <span class="unit-status is-good" data-status="lantern">燈護</span>
               </div>
             </div>
           </aside>
 
-          <nav id="battleTurnOrder" class="battle-turn-order battle-card" data-battle-panel="turn-order" aria-label="行動次序">
-            <span class="turn-order-title">今輪行動</span>
-            <ol id="battleTurnOrderList" data-battle-turn-list>
-              <li class="is-current" data-unit-id="player"><span class="turn-avatar ally-avatar" aria-hidden="true">巡</span><b>阿巡</b></li>
-              <li data-unit-id="enemy-preview"><span class="turn-avatar enemy-avatar" aria-hidden="true">霧</span><b>霧獸</b></li>
-            </ol>
-          </nav>
 
           <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
             <div class="battle-action-heading" data-battle-command-drag-handle>
-              <span>戰鬥指令 <small>移動</small></span>
-              <button id="battleCommandFollowButton" class="battle-command-follow" type="button" data-battle-command-follow aria-label="讓戰鬥指令選單重新跟隨主角" title="跟隨主角">
-                <span aria-hidden="true">⌖</span> 跟隨
-              </button>
+              <span>戰鬥指令</span>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
               <span class="battle-actions-loading">戰鬥指令準備中</span>
@@ -353,13 +360,6 @@
         <div id="ariaLive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
       </section>
 
-      <footer class="footer-hints">
-        <span><b>滑鼠 / 觸控</b> 撳地面移動</span>
-        <span><b>撳 NPC / 設施</b> 靠近或互動</span>
-        <span><b>左側選單</b> 狀態／任務／物品／技能</span>
-        <span><b>戰鬥</b> 揀指令再揀格仔</span>
-        <span><b>ESC</b> 戰鬥撤退</span>
-      </footer>
     </main>
 
     <script src="rpg-core.js"></script>
@@ -397,12 +397,53 @@
     <script src="tactics-core.js"></script>
     <script src="fighter-skill-data.js"></script>
     <script src="skill-core.js"></script>
-    <script src="audio-core.js"></script>
+    <script src="audio-core.js?v=20260910-03"></script>
+    <script src="main-town-bgm-loop.js?v=20260910-03"></script>
     <script src="save-system.js"></script>
     <script src="fighter-effects.js"></script>
     <script src="locomotion.js"></script>
     <script src="character-art.js"></script>
-    <script src="game.js"></script>
+    <script src="game.js?v=20260910-06"></script>
+
+    <script>
+      (() => {
+        if (!("serviceWorker" in navigator)) return;
+        const hadController = Boolean(navigator.serviceWorker.controller);
+        let refreshing = false;
+
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (!hadController || refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+
+        window.addEventListener("load", async () => {
+          try {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-07", {
+              scope: "/Everrealm/",
+              updateViaCache: "none",
+            });
+
+            const activateWaitingWorker = (worker) => {
+              if (!worker) return;
+              worker.addEventListener("statechange", () => {
+                if (worker.state === "installed" && navigator.serviceWorker.controller) {
+                  worker.postMessage({ type: "SKIP_WAITING" });
+                }
+              });
+            };
+
+            if (registration.waiting && navigator.serviceWorker.controller) {
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+            activateWaitingWorker(registration.installing);
+            registration.addEventListener("updatefound", () => activateWaitingWorker(registration.installing));
+            registration.update().catch(() => {});
+          } catch (error) {
+            console.warn("[Everrealm PWA] Service worker registration failed:", error);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
-
