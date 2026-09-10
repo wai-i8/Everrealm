@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260910-07";
+const CACHE_VERSION = "everrealm-pwa-v2-20260910-08";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -82,6 +82,10 @@ async function putIfUsable(cache, request, response) {
   }
   return response;
 }
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

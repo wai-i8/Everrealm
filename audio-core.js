@@ -28,6 +28,7 @@
     let enabled = options.enabled !== false;
     let currentKey = null;
     let audio = null;
+    let suspended = false;
 
     function track() { return currentKey ? BGM_TRACKS[currentKey] || null : null; }
 
@@ -52,11 +53,24 @@
     }
 
     function play() {
+      if (suspended) return;
       const element = ensureAudio();
       if (!element) return;
       element.muted = false;
       const promise = element.play?.();
       if (promise && typeof promise.catch === "function") promise.catch(() => {});
+    }
+
+    function suspend() {
+      suspended = true;
+      if (audio) audio.pause?.();
+      return snapshot();
+    }
+
+    function resume() {
+      suspended = false;
+      if (enabled && currentKey) play();
+      return snapshot();
     }
 
     function setMap(mapId) {
@@ -92,11 +106,12 @@
         paused: audio ? audio.paused !== false : true,
         muted: audio ? audio.muted !== false : true,
         loop: audio ? audio.loop === true : false,
-        activeInstances: audio && currentKey && enabled && audio.paused === false && audio.muted !== true ? 1 : 0,
+        suspended,
+        activeInstances: audio && currentKey && enabled && !suspended && audio.paused === false && audio.muted !== true ? 1 : 0,
       };
     }
 
-    return { setMap, setEnabled, snapshot };
+    return { setMap, setEnabled, suspend, resume, snapshot };
   }
 
   return { BGM_TRACKS, BGM_ZONE_BY_MAP, createBgmManager };

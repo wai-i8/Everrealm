@@ -373,9 +373,34 @@
     battleBgmAudio.preload = "auto";
     battleBgmAudio.volume = .66;
   }
+  let pageAudioSuspended = document.visibilityState !== "visible";
+
+  function suspendGameAudio() {
+    pageAudioSuspended = true;
+    sound.suspend();
+    bgm.suspend?.();
+    battleBgmAudio?.pause();
+  }
+
+  function resumeGameAudio() {
+    if (document.visibilityState !== "visible") return;
+    pageAudioSuspended = false;
+    sound.resume();
+    bgm.resume?.();
+    if (!soundEnabled) return;
+    if (mode === "battle" && battle) {
+      bgm.suspend?.();
+      battleBgmAudio?.play().catch(() => {});
+      return;
+    }
+    battleBgmAudio?.pause();
+    bgm.resume?.();
+    bgm.setMap(currentMapId);
+  }
+
   function startBattleBgm() {
     bgm.setEnabled(false);
-    if (!battleBgmAudio || !soundEnabled) return;
+    if (!battleBgmAudio || !soundEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { battleBgmAudio.currentTime = 0; } catch (_) {}
     battleBgmAudio.play().catch(() => {});
   }
@@ -386,6 +411,11 @@
     }
     bgm.setEnabled(soundEnabled);
     if (soundEnabled) bgm.setMap(currentMapId);
+    if (pageAudioSuspended) bgm.suspend?.();
+  }
+  if (pageAudioSuspended) {
+    sound.suspend();
+    bgm.suspend?.();
   }
   let exploreZoomLevel = Object.hasOwn(EXPLORE_ZOOM_SCALES, readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY))
     ? readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY)
@@ -461,14 +491,27 @@
   }
 
   class SoundEngine {
-    constructor() { this.context = null; }
+    constructor() {
+      this.context = null;
+      this.suspended = document.visibilityState !== "visible";
+    }
     ensure() {
-      if (!soundEnabled) return null;
+      if (!soundEnabled || this.suspended || document.visibilityState !== "visible") return null;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
       if (!this.context) this.context = new AudioContext();
-      if (this.context.state === "suspended") this.context.resume();
+      if (this.context.state === "suspended") this.context.resume().catch(() => {});
       return this.context;
+    }
+    suspend() {
+      this.suspended = true;
+      if (this.context?.state === "running") this.context.suspend().catch(() => {});
+    }
+    resume() {
+      this.suspended = false;
+      if (soundEnabled && document.visibilityState === "visible" && this.context?.state === "suspended") {
+        this.context.resume().catch(() => {});
+      }
     }
     tone(frequency, duration, options = {}) {
       const audio = this.ensure();
@@ -2850,24 +2893,32 @@
     const xpNeeded = Core.xpRequired(player.level);
     const xpPercent = Core.clamp((player.xp / xpNeeded) * 100, 0, 100);
     facilityContent.innerHTML = `
-      <section class="status-layout" aria-label="角色能力總覽">
-        <div class="status-character-card">
-          <canvas id="statusCharacterCanvas" width="240" height="300" aria-hidden="true"></canvas>
-          <strong>時光之光</strong>
-          <span>${className} · ${equippedWeaponName()}</span>
-          <div class="status-level-line"><b>LV.${player.level}</b><span>${player.xp} / ${xpNeeded} XP</span></div>
-          <div class="status-progress xp-progress" aria-label="經驗值 ${player.xp} / ${xpNeeded}"><i style="width:${xpPercent}%"></i></div>
+      <section class="status-compact" aria-label="角色狀態">
+        <div class="status-compact-identity">
+          <div>
+            <strong class="status-compact-name">時光之光</strong>
+            <span class="status-compact-class">${className}</span>
+          </div>
+          <b class="status-compact-level">Lv.${player.level}</b>
         </div>
-        <dl class="status-stat-grid">
-          <div class="is-hp"><dt>生命 HP</dt><dd>${Math.ceil(player.hp)} / ${stats.maxHp}</dd><span class="status-progress"><i style="width:${hpPercent}%"></i></span></div>
+
+        <div class="status-compact-meters">
+          <div class="status-compact-meter">
+            <div class="status-compact-meter-heading"><span>HP</span><b>${Math.ceil(player.hp)} / ${stats.maxHp}</b></div>
+            <span class="status-compact-progress is-hp" role="progressbar" aria-label="生命 ${Math.ceil(player.hp)} / ${stats.maxHp}" aria-valuemin="0" aria-valuemax="${stats.maxHp}" aria-valuenow="${Math.ceil(player.hp)}"><i style="width:${hpPercent}%"></i></span>
+          </div>
+          <div class="status-compact-meter">
+            <div class="status-compact-meter-heading"><span>EXP</span><b>${player.xp} / ${xpNeeded}</b></div>
+            <span class="status-compact-progress is-exp" role="progressbar" aria-label="經驗值 ${player.xp} / ${xpNeeded}" aria-valuemin="0" aria-valuemax="${xpNeeded}" aria-valuenow="${player.xp}"><i style="width:${xpPercent}%"></i></span>
+          </div>
+        </div>
+
+        <dl class="status-compact-stats">
           <div><dt>攻擊</dt><dd>${stats.attack}</dd></div>
           <div><dt>防禦</dt><dd>${stats.defence}</dd></div>
-          <div><dt>戰棋移動</dt><dd>${stats.moveRange} 格</dd></div>
-          <div><dt>DECK</dt><dd>${skillState.equippedSkillIds.length} / ${skillState.deckCapacity}</dd></div>
+          <div><dt>移動</dt><dd>${stats.moveRange}</dd></div>
         </dl>
       </section>`;
-    const statusCanvas = document.getElementById("statusCharacterCanvas");
-    if (statusCanvas) Art.drawCharacter(statusCanvas.getContext("2d"), { actor: "player", classId: playerClassId, x: statusCanvas.width / 2, y: statusCanvas.height - 12, scale: 3.15, state: "idle", facing: "down", phase: elapsed });
     setFacilityFooter("");
   }
 
@@ -3246,7 +3297,7 @@
       ? "missions"
       : Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
     const copy = {
-      status: ["", "角色狀態", "生命、攻防、戰棋移動同出戰面板一眼睇清；戰鬥開場 10 AP、每輪增加 10 AP，技能按速度級別排序。"],
+      status: ["", "角色狀態", ""],
       missions: ["", "任務", ""],
       bag: ["", "物品欄", ""],
       equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
@@ -3262,7 +3313,9 @@
     facilityPanel.dataset.facilityTab = facilityTab;
     facilityPanel.dataset.panelSize = facilityTab === "deck"
       ? facilityContext === "deck-view" ? "compact" : "wide"
-      : ["status", "missions"].includes(facilityTab) ? "medium" : "wide";
+      : facilityTab === "status" ? "compact"
+      : facilityTab === "missions" ? "medium"
+      : "wide";
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
     const facilityKicker = document.getElementById("facilityKicker");
     if (facilityKicker) {
@@ -8683,6 +8736,12 @@
     keys.clear();
     cancelExplorePointerTracking();
     previousTime = performance.now();
+    if (document.visibilityState === "visible") resumeGameAudio();
+    else suspendGameAudio();
+  });
+  window.addEventListener("pagehide", suspendGameAudio);
+  window.addEventListener("pageshow", () => {
+    if (document.visibilityState === "visible") resumeGameAudio();
   });
   window.addEventListener("beforeunload", () => { if (mode !== "title") persistence?.flush(); });
   window.addEventListener("resize", resize, { passive: true });

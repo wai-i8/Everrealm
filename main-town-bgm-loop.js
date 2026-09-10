@@ -168,6 +168,7 @@
     let enabled = options.enabled !== false;
     let currentMapId = null;
     let fallbackToBaseMainTown = false;
+    let suspended = false;
 
     function useBaseForCurrentMap() {
       base.setEnabled?.(enabled);
@@ -180,7 +181,13 @@
         mainTown.suspend();
         return;
       }
+      if (suspended) {
+        base.suspend?.();
+        mainTown.suspend();
+        return;
+      }
       if (fallbackToBaseMainTown) {
+        base.resume?.();
         useBaseForCurrentMap();
         return;
       }
@@ -206,7 +213,9 @@
             }
             if (previousMapId === MAIN_TOWN_MAP_ID) mainTown.stop();
             base.setEnabled?.(enabled);
-            return target.setMap?.call(target, mapId);
+            const result = target.setMap?.call(target, mapId);
+            if (suspended) target.suspend?.call(target);
+            return result;
           };
         }
 
@@ -217,7 +226,30 @@
               activateMainTown();
               return;
             }
-            return target.setEnabled?.call(target, enabled);
+            const result = target.setEnabled?.call(target, enabled);
+            if (suspended) target.suspend?.call(target);
+            return result;
+          };
+        }
+
+        if (property === "suspend") {
+          return () => {
+            suspended = true;
+            mainTown.suspend();
+            target.suspend?.call(target);
+          };
+        }
+
+        if (property === "resume") {
+          return () => {
+            suspended = false;
+            if (!enabled) return;
+            if (currentMapId === MAIN_TOWN_MAP_ID) {
+              activateMainTown();
+              return;
+            }
+            target.resume?.call(target);
+            if (currentMapId != null) target.setMap?.call(target, currentMapId);
           };
         }
 
@@ -227,6 +259,7 @@
             return {
               ...baseSnapshot,
               enabled,
+              suspended,
               currentMapId,
               mainTownLoop: mainTown.snapshot(),
             };

@@ -16,11 +16,49 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/Everrealm/assets/pwa/everrealm-icon-16-v2.png?v=20260910-02" />
     <link rel="shortcut icon" href="/Everrealm/assets/pwa/everrealm-favicon-v2.ico?v=20260910-02" />
     <title>永恆國度 · Everrealm</title>
-    <link rel="stylesheet" href="styles.css?v=20260910-04" />
-    <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
-    <link id="everrealmUiStyles" rel="stylesheet" href="ui-system.css" />
-    <link id="inventoryMinimalStyles" rel="stylesheet" href="inventory-minimal.css" />
-    <link id="everrealmResponsiveUiStyles" rel="stylesheet" href="responsive-ui-redesign.css?v=20260910-07" />
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const enabled = params.get("dev") === "1";
+        const token = enabled ? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` : "";
+        const asset = (url) => {
+          if (!enabled) return url;
+          return `${url}${url.includes("?") ? "&" : "?"}dev=${encodeURIComponent(token)}`;
+        };
+        window.EverrealmDev = Object.freeze({ enabled, token, asset });
+        if (!enabled) return;
+        document.documentElement.dataset.dev = "1";
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations()
+            .then((registrations) => Promise.all(registrations
+              .filter((registration) => registration.scope.includes("/Everrealm/"))
+              .map((registration) => registration.unregister())))
+            .catch(() => {});
+        }
+        if ("caches" in window) {
+          caches.keys()
+            .then((keys) => Promise.all(keys
+              .filter((key) => key.startsWith("everrealm-pwa-"))
+              .map((key) => caches.delete(key))))
+            .catch(() => {});
+        }
+      })();
+    </script>
+    <script>
+      (() => {
+        const asset = window.EverrealmDev?.asset || ((url) => url);
+        const stylesheets = [
+          ["", "styles.css?v=20260910-05"],
+          ["inventoryOverhaulStyles", "inventory-overhaul.css"],
+          ["everrealmUiStyles", "ui-system.css?v=20260910-08"],
+          ["inventoryMinimalStyles", "inventory-minimal.css"],
+          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-08"],
+        ];
+        for (const [id, href] of stylesheets) {
+          document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
+        }
+      })();
+    </script>
   </head>
   <body>
     <main id="gameShell" class="game-shell">
@@ -362,51 +400,65 @@
 
     </main>
 
-    <script src="rpg-core.js"></script>
-    <script src="map/map-constants.js"></script>
-    <script src="map/map-helpers.js"></script>
-    <script src="map/monster-blueprints.js"></script>
-    <script src="map/interior-helpers.js"></script>
-    <script src="map/main-town-navigation.generated.js"></script>
-    <script src="map/main-town-navigation.js"></script>
-    <script src="map/flattened-navigation.js"></script>
-    <script src="map/hospital-navigation.generated.js"></script>
-    <script src="map/hospital-navigation.js"></script>
-    <script src="map/weapon-navigation.generated.js"></script>
-    <script src="map/weapon-navigation.js"></script>
-    <script src="map/inn-navigation.generated.js"></script>
-    <script src="map/inn-navigation.js"></script>
-    <script src="map/item-navigation.generated.js"></script>
-    <script src="map/item-navigation.js"></script>
-    <script src="map/guild-navigation.generated.js"></script>
-    <script src="map/guild-navigation.js"></script>
-    <script src="maps/main-town.js"></script>
-    <script src="maps/mountain-field.js"></script>
-    <script src="maps/mine.js"></script>
-    <script src="maps/interiors/guild.js"></script>
-    <script src="maps/interiors/equipment-shop.js"></script>
-    <script src="maps/interiors/clinic.js"></script>
-    <script src="maps/interiors/general-store.js"></script>
-    <script src="maps/interiors/inn.js"></script>
-    <script src="map/map-transitions.js"></script>
-    <script src="map/map-registry.js"></script>
-    <script src="world.js"></script>
-    <script src="expansion-core.js"></script>
-    <script src="expansion-world.js"></script>
-    <script src="guild-commission-core.js"></script>
-    <script src="tactics-core.js"></script>
-    <script src="fighter-skill-data.js"></script>
-    <script src="skill-core.js"></script>
-    <script src="audio-core.js?v=20260910-03"></script>
-    <script src="main-town-bgm-loop.js?v=20260910-03"></script>
-    <script src="save-system.js"></script>
-    <script src="fighter-effects.js"></script>
-    <script src="locomotion.js"></script>
-    <script src="character-art.js"></script>
-    <script src="game.js?v=20260910-06"></script>
+    <script>
+      (() => {
+        const asset = window.EverrealmDev?.asset || ((url) => url);
+        const scripts = [
+          "rpg-core.js",
+          "map/map-constants.js",
+          "map/map-helpers.js",
+          "map/monster-blueprints.js",
+          "map/interior-helpers.js",
+          "map/main-town-navigation.generated.js",
+          "map/main-town-navigation.js",
+          "map/flattened-navigation.js",
+          "map/hospital-navigation.generated.js",
+          "map/hospital-navigation.js",
+          "map/weapon-navigation.generated.js",
+          "map/weapon-navigation.js",
+          "map/inn-navigation.generated.js",
+          "map/inn-navigation.js",
+          "map/item-navigation.generated.js",
+          "map/item-navigation.js",
+          "map/guild-navigation.generated.js",
+          "map/guild-navigation.js",
+          "maps/main-town.js",
+          "maps/mountain-field.js",
+          "maps/mine.js",
+          "maps/interiors/guild.js",
+          "maps/interiors/equipment-shop.js",
+          "maps/interiors/clinic.js",
+          "maps/interiors/general-store.js",
+          "maps/interiors/inn.js",
+          "map/map-transitions.js",
+          "map/map-registry.js",
+          "world.js",
+          "expansion-core.js",
+          "expansion-world.js",
+          "guild-commission-core.js",
+          "tactics-core.js",
+          "fighter-skill-data.js",
+          "skill-core.js",
+          "audio-core.js?v=20260910-04",
+          "main-town-bgm-loop.js?v=20260910-04",
+          "save-system.js",
+          "fighter-effects.js",
+          "locomotion.js",
+          "character-art.js",
+          "game.js?v=20260910-08",
+        ];
+        for (const src of scripts) {
+          document.write(`<script src="${asset(src)}"><\/script>`);
+        }
+      })();
+    </script>
 
     <script>
       (() => {
+        if (window.EverrealmDev?.enabled) {
+          console.info("[Everrealm DEV] Service Worker disabled; code assets are cache-busted for this page.");
+          return;
+        }
         if (!("serviceWorker" in navigator)) return;
         const hadController = Boolean(navigator.serviceWorker.controller);
         let refreshing = false;
@@ -419,7 +471,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-07", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-08", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

@@ -55,7 +55,7 @@
   #exploreSidebar .sidebar-primary .explore-menu-button,
   #exploreSidebar.is-collapsed .sidebar-primary .explore-menu-button,
   #gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu > .explore-menu-button {
-    --mobile-menu-size: clamp(2.62rem, 10.3vh, 3.35rem);
+    --mobile-menu-size: clamp(3rem, 13vh, 3.7rem);
     position: relative !important;
     opacity: 1 !important;
     visibility: visible !important;
@@ -120,7 +120,7 @@
     object-fit: contain !important;
     opacity: 1 !important;
     visibility: visible !important;
-    transform: scale(1) !important;
+    transform: scale(1.06) !important;
     filter: drop-shadow(0 .12rem .18rem rgba(0,0,0,.55)) !important;
     transition: transform .12s ease, filter .12s ease;
     pointer-events: none;
@@ -210,7 +210,7 @@
   min-height: 0 !important;
   max-height: calc(100vh - clamp(.9rem, 3.4vw, 2.3rem)) !important;
 }
-.facility-overlay[data-facility-tab="status"] .facility-window { width: min(55rem, 100%) !important; }
+.facility-overlay[data-facility-tab="status"] .facility-window { width: min(32rem, calc(100vw - 2rem)) !important; }
 .facility-overlay[data-facility-tab="missions"] .facility-window { width: min(44rem, 100%) !important; }
 .facility-overlay[data-facility-tab="bag"] .facility-window { width: min(62rem, 100%) !important; }
 
@@ -232,52 +232,135 @@
 }
 
 /* ---------------------------------------------------------------------
-   Status: compact identity card + a real dashboard instead of giant tiles.
+   Status: deliberately small read-only modal. Only identity, HP/EXP and
+   core combat stats live here; equipment/deck/skills stay in their own pages.
    --------------------------------------------------------------------- */
-.status-layout {
-  width: 100% !important;
-  display: grid !important;
-  grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr) !important;
-  gap: .7rem !important;
-  align-items: stretch !important;
+.facility-overlay[data-facility-tab="status"] #facilityHelpButton {
+  display: none !important;
 }
-.status-character-card {
-  min-height: 0 !important;
-  display: grid !important;
-  grid-template-rows: minmax(8.8rem, 1fr) auto auto auto auto !important;
-  justify-items: center !important;
-  align-content: stretch !important;
-  padding: .58rem !important;
-  overflow: hidden !important;
+.facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
+  min-height: 2.75rem !important;
+  padding: .28rem .46rem .28rem .72rem !important;
+  border-bottom: 1px solid rgba(255,200,87,.18);
 }
-.status-character-card canvas {
-  width: min(100%, 9.5rem) !important;
-  height: 11.25rem !important;
-  max-height: 32vh !important;
-  object-fit: contain !important;
+.facility-overlay[data-facility-tab="status"] .facility-header h2 {
+  font-size: 1.02rem !important;
 }
-.status-character-card strong { font-size: .82rem !important; }
-.status-character-card > span { font-size: .61rem !important; }
-.status-level-line,
-.xp-progress { width: min(100%, 10.5rem) !important; }
-.status-level-line { margin-top: .24rem !important; }
+.facility-overlay[data-facility-tab="status"] .facility-content {
+  padding: .72rem .82rem .78rem !important;
+  overflow: visible !important;
+}
 
-.status-stat-grid {
-  min-width: 0 !important;
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
-  grid-auto-rows: minmax(4.2rem, 1fr) !important;
-  gap: .48rem !important;
-  margin: 0 !important;
+.status-compact {
+  width: 100%;
+  display: grid;
+  gap: .68rem;
 }
-.status-stat-grid > div {
-  min-height: 0 !important;
-  padding: .58rem .68rem !important;
-  gap: .28rem !important;
+.status-compact-identity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
-.status-stat-grid > div.is-hp { grid-column: 1 / -1 !important; }
-.status-stat-grid dt { font-size: .67rem !important; }
-.status-stat-grid dd { font-size: .82rem !important; }
+.status-compact-identity > div {
+  min-width: 0;
+  display: grid;
+  gap: .16rem;
+}
+.status-compact-name {
+  overflow: hidden;
+  color: var(--cream);
+  font-size: 1.05rem;
+  line-height: 1.1;
+  letter-spacing: .035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-compact-class {
+  color: var(--teal);
+  font-size: .66rem;
+  font-weight: 800;
+}
+.status-compact-level {
+  flex: 0 0 auto;
+  padding-top: .04rem;
+  color: var(--gold);
+  font: 850 .86rem/1 ui-monospace, monospace;
+  letter-spacing: .04em;
+}
+.status-compact-meters {
+  display: grid;
+  gap: .52rem;
+}
+.status-compact-meter {
+  min-width: 0;
+}
+.status-compact-meter-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .7rem;
+  color: var(--muted);
+}
+.status-compact-meter-heading span {
+  font-size: .65rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.status-compact-meter-heading b {
+  color: var(--cream);
+  font: 800 .68rem/1 ui-monospace, monospace;
+  letter-spacing: .045em;
+}
+.status-compact-progress {
+  display: block;
+  width: 100%;
+  height: .38rem;
+  overflow: hidden;
+  margin-top: .26rem;
+  border: 1px solid rgba(245,233,202,.22);
+  border-radius: 999px;
+  background: rgba(4,8,18,.68);
+  box-shadow: inset 0 1px rgba(0,0,0,.34);
+}
+.status-compact-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.status-compact-progress.is-hp i {
+  background: linear-gradient(90deg, var(--red), #ffbf68);
+}
+.status-compact-progress.is-exp i {
+  background: linear-gradient(90deg, var(--teal), #a9f1d9);
+}
+.status-compact-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  margin: 0;
+  padding: .6rem 0 0;
+  border-top: 1px solid rgba(255,200,87,.2);
+}
+.status-compact-stats > div {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: .22rem;
+  padding: 0 .45rem;
+}
+.status-compact-stats > div + div {
+  border-left: 1px solid rgba(245,233,202,.14);
+}
+.status-compact-stats dt {
+  color: var(--muted);
+  font-size: .61rem;
+}
+.status-compact-stats dd {
+  margin: 0;
+  color: var(--teal);
+  font: 850 .84rem/1 ui-monospace, monospace;
+}
 
 /* ---------------------------------------------------------------------
    Missions: content-sized window and a denser readable card.
@@ -445,15 +528,31 @@
     padding: .48rem !important;
   }
 
-  .status-layout {
-    grid-template-columns: minmax(10rem, 12rem) minmax(0,1fr) !important;
-    gap: .48rem !important;
+  .facility-overlay[data-facility-tab="status"] .facility-window {
+    width: min(29rem, calc(100vw - max(.8rem, env(safe-area-inset-left) + env(safe-area-inset-right)))) !important;
+    max-height: calc(100vh - max(.7rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
   }
-  .status-character-card { padding: .4rem !important; }
-  .status-character-card canvas { width: 7.6rem !important; height: 8.7rem !important; max-height: 31vh !important; }
-  .status-character-card strong { font-size: .72rem !important; }
-  .status-stat-grid { gap: .34rem !important; grid-auto-rows: minmax(3.5rem,1fr) !important; }
-  .status-stat-grid > div { padding: .42rem .5rem !important; }
+  .facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
+    min-height: 2.35rem !important;
+    padding: .2rem .34rem .2rem .56rem !important;
+  }
+  .facility-overlay[data-facility-tab="status"] .facility-header h2 {
+    font-size: .88rem !important;
+  }
+  .facility-overlay[data-facility-tab="status"] .facility-content {
+    padding: .5rem .6rem .56rem !important;
+  }
+  .status-compact { gap: .46rem; }
+  .status-compact-name { font-size: .88rem; }
+  .status-compact-class { font-size: .56rem; }
+  .status-compact-level { font-size: .72rem; }
+  .status-compact-meters { gap: .38rem; }
+  .status-compact-meter-heading span { font-size: .56rem; }
+  .status-compact-meter-heading b { font-size: .59rem; }
+  .status-compact-progress { height: .3rem; margin-top: .19rem; }
+  .status-compact-stats { padding-top: .42rem; }
+  .status-compact-stats dt { font-size: .53rem; }
+  .status-compact-stats dd { font-size: .72rem; }
 
   .mission-card {
     gap: .42rem .5rem !important;
@@ -503,15 +602,10 @@
 
 /* Narrow portrait fallback. */
 @media (max-width: 700px) and (orientation: portrait) {
-  .status-layout,
   .unified-inventory-layout { grid-template-columns: 1fr !important; }
-  .status-character-card {
-    grid-template-columns: 7.5rem minmax(0,1fr) !important;
-    grid-template-rows: auto auto auto auto !important;
-    justify-items: start !important;
-    align-items: center !important;
+  .facility-overlay[data-facility-tab="status"] .facility-window {
+    width: min(28rem, calc(100vw - 1rem)) !important;
   }
-  .status-character-card canvas { grid-row: 1 / -1; width: 7rem !important; height: 8.3rem !important; justify-self: center !important; }
   .mission-card {
     grid-template-columns: 1fr !important;
     grid-template-areas: "heading" "objective" "progress" "meta" "bar" "note" !important;

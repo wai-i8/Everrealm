@@ -1,0 +1,32 @@
+Everrealm mobile dev/audio/status/UI patch
+Base: everrealm-mobile-ui-audio-status-latest.zip uploaded in this thread.
+
+Changes:
+1. ?dev=1 development mode
+   - Disables/unregisters Everrealm Service Worker for that page.
+   - Clears Everrealm Cache Storage entries.
+   - Adds a unique cache-busting query to CSS/JS assets on every dev-mode load.
+   - Does NOT clear localStorage/save data.
+   - Test URL: https://wai-i8.github.io/Everrealm/?dev=1
+
+2. Background audio lifecycle
+   - Exploration/main-town/battle BGM pauses when the page/app becomes hidden or the phone locks.
+   - Audio resumes when the game becomes visible again, if sound is enabled.
+   - Pause/resume preserves playback position where applicable.
+
+3. Character status redesign
+   - Small centered non-full-screen modal.
+   - Removed character sprite, equipment/weapon text, Deck and unrelated information.
+   - Keeps only: name, class, level, HP bar, EXP bar, attack, defence, movement.
+   - Status help/info button hidden because the page is self-explanatory.
+
+4. Mobile function icons
+   - Enlarged the five circular function icons to visually match the music control more closely.
+
+5. PWA cache version bumped to 20260910-08.
+   - index.html registers everrealm-sw.js.
+   - Both service-worker.js and everrealm-sw.js are included with identical updated content to avoid drift.
+
+Validation:
+- node --check passed: game.js, audio-core.js, main-town-bgm-loop.js, service-worker.js
+- Inline index.html scripts syntax checked successfully.
