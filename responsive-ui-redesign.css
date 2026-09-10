@@ -5,7 +5,7 @@
 /* ---------------------------------------------------------------------
    Exploration HUD: phone/tablet uses a clean vertical icon rail.
    --------------------------------------------------------------------- */
-@media (hover: none), (pointer: coarse) {
+@media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
   #exploreSidebar,
   #exploreSidebar.is-collapsed {
     z-index: 24 !important;
@@ -96,7 +96,10 @@
     opacity: 1;
   }
 
-  #exploreSidebar .sidebar-primary .explore-menu-icon {
+  /* The desktop stylesheet hides this span through :is(... small), whose
+     type-selector specificity otherwise wins even when this touch block is
+     active. Keep the override deliberately more specific. */
+  #exploreSidebar .sidebar-primary span.explore-menu-icon {
     position: relative !important;
     z-index: 1 !important;
     width: 100% !important;
@@ -411,7 +414,7 @@
 
 /* Phone / landscape: keep the same information architecture, just compress
    it enough to fit one game viewport. Internal lists scroll when needed. */
-@media (hover: none), (pointer: coarse) {
+@media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
   .facility-overlay[data-facility-tab="status"],
   .facility-overlay[data-facility-tab="missions"],
   .facility-overlay[data-facility-tab="bag"] {

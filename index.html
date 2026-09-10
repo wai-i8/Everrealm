@@ -20,7 +20,7 @@
     <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
     <link id="everrealmUiStyles" rel="stylesheet" href="ui-system.css" />
     <link id="inventoryMinimalStyles" rel="stylesheet" href="inventory-minimal.css" />
-    <link id="everrealmResponsiveUiStyles" rel="stylesheet" href="responsive-ui-redesign.css?v=20260910-06" />
+    <link id="everrealmResponsiveUiStyles" rel="stylesheet" href="responsive-ui-redesign.css?v=20260910-07" />
   </head>
   <body>
     <main id="gameShell" class="game-shell">
@@ -419,7 +419,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-06", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-07", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
@@ -447,4 +447,3 @@
     </script>
   </body>
 </html>
-
