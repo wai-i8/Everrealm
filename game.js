@@ -223,6 +223,8 @@
   let pendingSkillDetailId = null;
   let skillDetailReturnTarget = null;
   let deckDragGesture = null;
+  let skillTreePanGesture = null;
+  let suppressSkillTreeClickUntil = 0;
   let selectedInventoryItemId = null;
   let inventoryCategory = "all";
   let inventoryFixtureCount = 0;
@@ -2761,6 +2763,7 @@
     if (options.iconOnly) {
       return `<article class="paperdoll-slot is-filled is-icon-only" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
         ${equipmentIconHtml(item, "paperdoll-slot-icon")}
+        <strong class="paperdoll-compact-name" title="${item.name}">${item.name}</strong>
       </article>`;
     }
     return `<article class="paperdoll-slot is-filled" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
@@ -3301,6 +3304,57 @@
     renderFacility();
     saveImportant(false);
     return true;
+  }
+
+  function beginSkillTreePan(event) {
+    if (facilityTab !== "skills" || event.button !== 0) return;
+    const viewport = event.target.closest?.(".skill-tree-scroll");
+    if (!viewport || !facilityContent.contains(viewport)) return;
+    skillTreePanGesture = {
+      pointerId: event.pointerId,
+      viewport,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: viewport.scrollLeft,
+      startTop: viewport.scrollTop,
+      dragging: false,
+    };
+    try { viewport.setPointerCapture?.(event.pointerId); } catch (_) {}
+  }
+
+  function moveSkillTreePan(event) {
+    const gesture = skillTreePanGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.dragging && Math.hypot(dx, dy) < 5) return;
+    if (!gesture.dragging) {
+      gesture.dragging = true;
+      gesture.viewport.classList.add("is-panning");
+    }
+    gesture.viewport.scrollLeft = gesture.startLeft - dx;
+    gesture.viewport.scrollTop = gesture.startTop - dy;
+    event.preventDefault();
+  }
+
+  function finishSkillTreePan(event) {
+    const gesture = skillTreePanGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    skillTreePanGesture = null;
+    gesture.viewport.classList.remove("is-panning");
+    try { gesture.viewport.releasePointerCapture?.(event.pointerId); } catch (_) {}
+    if (gesture.dragging) {
+      suppressSkillTreeClickUntil = performance.now() + 450;
+      event.preventDefault();
+    }
+  }
+
+  function cancelSkillTreePan(event) {
+    const gesture = skillTreePanGesture;
+    if (!gesture || (event?.pointerId != null && gesture.pointerId !== event.pointerId)) return;
+    skillTreePanGesture = null;
+    gesture.viewport.classList.remove("is-panning");
+    try { gesture.viewport.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
   }
 
   function clearDeckDropTarget() {
@@ -5127,7 +5181,9 @@
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
     const chance = ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (battleRandom() >= chance) {
-      setBattleMessage(`撤退失敗（成功率 ${Math.round(chance * 100)}%），霧獸逼近咗！`, true);
+      const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
+      setBattleMessage(`${retreatMessage}，霧獸逼近咗！`, true);
+      showToast(retreatMessage, "danger");
       battle.phase = "planning_action";
       return updateBattleUi();
     }
@@ -7053,7 +7109,7 @@
     const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
     // A minimap is a local navigation tool, not a thumbnail of the whole map.
     // Keep the player centred, but show enough nearby roads/buildings to orient the player.
-    const visibleTiles = ["world", "field"].includes(currentMapId) ? 16 : 12.5;
+    const visibleTiles = ["world", "field"].includes(currentMapId) ? 24 : 18;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
     const originX = centreX - player.x * scale;
     const originY = centreY - player.y * scale;
@@ -8915,6 +8971,10 @@
     renderFacility();
   });
   facilityContent.addEventListener("click", (event) => {
+    if (performance.now() < suppressSkillTreeClickUntil && event.target.closest?.(".skill-tree-scroll")) {
+      event.preventDefault();
+      return;
+    }
     if (event.target.matches("[data-inventory-detail-dismiss]")) {
       selectedInventoryItemId = null;
       renderBagFacility();
@@ -8945,6 +9005,10 @@
     else if (action === "unequip-skill") changeSkillLoadout(button.dataset.skillId, false);
     else if (action === "master-skill") masterSkill(button.dataset.skillId);
   });
+  facilityContent.addEventListener("pointerdown", beginSkillTreePan);
+  facilityContent.addEventListener("pointermove", moveSkillTreePan);
+  facilityContent.addEventListener("pointerup", finishSkillTreePan);
+  facilityContent.addEventListener("pointercancel", cancelSkillTreePan);
   facilityContent.addEventListener("pointerdown", beginDeckDrag);
   facilityContent.addEventListener("pointermove", moveDeckDrag);
   facilityContent.addEventListener("pointerup", finishDeckDrag);

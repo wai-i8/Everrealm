@@ -1,0 +1,16 @@
+Everrealm usability pass — 2026-09-10
+
+Changes
+- Skill tree scrollbars hidden; drag the tree with mouse, pen, or touch to pan both axes.
+- Normal skill-node click/tap remains available; drag gestures suppress accidental clicks.
+- Inventory loadout no longer stretches into a tall empty outer panel.
+- Equipped items in the left loadout now show their item names.
+- Deck / panel configuration uses the same compact layout on desktop and mobile:
+  narrow modal, compact rows, minimal vertical/horizontal padding, two-line support for long names.
+- Retreat failure now shows a visible danger toast in addition to the battle message.
+- Minimap zoomed out substantially (world/field: 24 visible tiles; interiors: 18).
+- Desktop sidebar icon artwork now uses the same visual scale as mobile.
+- Mobile sidebar retains dynamic iPhone safe-area handling and a slightly larger minimum inset.
+
+Notes
+- Retreat probability is still provided by ExpansionWorld.retreatChance(), which delegates to map/monster-blueprints.js. This patch does not change the probability formula; it fixes failure feedback visibility.

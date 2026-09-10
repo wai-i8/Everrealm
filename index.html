@@ -52,7 +52,7 @@
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
           ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
-          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-11"],
+          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-12"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -450,7 +450,7 @@
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260910-11",
+          "game.js?v=20260910-12",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);
