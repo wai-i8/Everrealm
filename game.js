@@ -86,8 +86,6 @@
   const deckButton = document.getElementById("deckButton");
   const skillTreeButton = document.getElementById("skillTreeButton");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
-  const missionMenuBadge = document.getElementById("missionMenuBadge");
-  const skillMenuBadge = document.getElementById("skillMenuBadge");
   const continueButton = document.getElementById("continueButton");
   const interactionPrompt = document.getElementById("interactionPrompt");
   const interactionText = document.getElementById("interactionText");
@@ -204,9 +202,6 @@
   const EXPLORE_HOLD_DELAY_MS = 500;
   const EXPLORE_RETARGET_INTERVAL_MS = 150;
   let explorePointerGesture = null;
-  const activeExploreTouches = new Map();
-  let explorePinchGesture = null;
-  let suppressExploreTouchTap = false;
   let exploreHoverEntityId = null;
   let pendingClickInteractionId = null;
   let pendingManualSkillId = null;
@@ -222,19 +217,6 @@
   // unit conversion, not a runtime map/migration scale.
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
   const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
-  const MOBILE_EXPLORE_ZOOM_MIN = .26;
-  const MOBILE_EXPLORE_ZOOM_MAX = 1.08;
-  const MOBILE_EXPLORE_ZOOM_DEFAULTS = Object.freeze({
-    world: .34,
-    field: .38,
-    dungeon: .42,
-    guild: .60,
-    shop: .60,
-    clinic: .60,
-    "general-store": .60,
-    inn: .60,
-  });
-  const mobileExploreZoomByMap = new Map();
   const ITEM_ICON_INDEX = Object.freeze({
     healing_potion: 0,
     skill_book_1: 1,
@@ -941,52 +923,11 @@
     battleEncounterIntro.hidden = true;
   }
 
-  function usesMobileExploreControls() {
-    return window.matchMedia("(hover: none), (pointer: coarse)").matches;
-  }
-
-  function mobileZoomStorageKey(mapId = currentMapId) {
-    return `everrealm-mobile-zoom:${mapId}`;
-  }
-
-  function mobileZoomBounds() {
-    const mapWidth = Math.max(1, Number(world?.pixelWidth) || 1);
-    const mapHeight = Math.max(1, Number(world?.pixelHeight) || 1);
-    const coverZoom = width > 0 && height > 0
-      ? Math.max(width / mapWidth, height / mapHeight)
-      : MOBILE_EXPLORE_ZOOM_MIN;
-    const min = Math.max(MOBILE_EXPLORE_ZOOM_MIN, coverZoom);
-    return { min, max: Math.max(min, MOBILE_EXPLORE_ZOOM_MAX) };
-  }
-
-  function mobileExploreZoom(mapId = currentMapId) {
-    if (!mobileExploreZoomByMap.has(mapId)) {
-      let saved = NaN;
-      try { saved = Number(localStorage.getItem(mobileZoomStorageKey(mapId))); } catch (_) {}
-      const fallback = MOBILE_EXPLORE_ZOOM_DEFAULTS[mapId] ?? .40;
-      mobileExploreZoomByMap.set(mapId, Number.isFinite(saved) && saved > 0 ? saved : fallback);
-    }
-    const bounds = mobileZoomBounds();
-    return Core.clamp(mobileExploreZoomByMap.get(mapId), bounds.min, bounds.max);
-  }
-
-  function setMobileExploreZoom(value, options = {}) {
-    const bounds = mobileZoomBounds();
-    const next = Core.clamp(Number(value) || mobileExploreZoom(), bounds.min, bounds.max);
-    mobileExploreZoomByMap.set(currentMapId, next);
-    try { localStorage.setItem(mobileZoomStorageKey(), String(next)); } catch (_) {}
-    stage.dataset.mobileZoom = next.toFixed(3);
-    if (options.immediate !== false) {
-      camera.zoom = next;
-      renderPreviousCamera.zoom = next;
-    }
-    return next;
-  }
-
   function targetZoom() {
-    // Touch / coarse-pointer layouts use pinch zoom with a wider phone default.
-    // Desktop keeps the authored Near / Mid / Far presets unchanged.
-    return usesMobileExploreControls() ? mobileExploreZoom() : EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+    // Near / mid / far are one global exploration camera. Mid is the authored
+    // 1:1 world view; the map only owns its world bounds and cannot change a
+    // preset based on its dimensions or artwork resolution.
+    return EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
   function syncExploreZoomControls() {
@@ -2428,16 +2369,6 @@
       ? `打開物品欄（I），有 ${bookCount} 本未開技能書`
       : "打開物品欄（I）";
     if (inventoryButton.getAttribute("aria-label") !== label) inventoryButton.setAttribute("aria-label", label);
-
-    const missionReady = Boolean(activeGuildCommission() && guildCommissionState.status === "ready_to_report");
-    if (missionMenuBadge && missionMenuBadge.hidden === missionReady) missionMenuBadge.hidden = !missionReady;
-
-    let skillReady = false;
-    try {
-      const normalized = Skills.normalizeSkillState(skillState, { classId: playerClassId });
-      skillReady = Skills.getSkillsByClass(playerClassId).some((skill) => Skills.skillLearnability(normalized, skill.id) === "canLearn");
-    } catch (_) {}
-    if (skillMenuBadge && skillMenuBadge.hidden === skillReady) skillMenuBadge.hidden = !skillReady;
   }
 
   function atlasIconHtml(atlas, index, label, extraClass = "") {
@@ -6512,58 +6443,15 @@
     if (canvas) canvas.dataset.exploreCursor = "default";
   }
 
-  function beginExplorePinch() {
-    if (!usesMobileExploreControls() || activeExploreTouches.size < 2 || mode !== "playing") return false;
-    const touches = [...activeExploreTouches.values()].slice(0, 2);
-    const distance = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-    if (distance < 2) return false;
-    clearExplorePointerGesture();
-    pendingClickInteractionId = null;
-    suppressExploreTouchTap = true;
-    explorePinchGesture = {
-      pointerIds: [touches[0].pointerId, touches[1].pointerId],
-      startDistance: distance,
-      startZoom: targetZoom(),
-    };
-    return true;
-  }
-
-  function updateExplorePinch() {
-    const pinch = explorePinchGesture;
-    if (!pinch || mode !== "playing") return false;
-    const first = activeExploreTouches.get(pinch.pointerIds[0]);
-    const second = activeExploreTouches.get(pinch.pointerIds[1]);
-    if (!first || !second) return false;
-    const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
-    if (distance < 2 || pinch.startDistance < 2) return false;
-    setMobileExploreZoom(pinch.startZoom * (distance / pinch.startDistance));
-    return true;
-  }
-
   function handleCanvasPointer(event) {
     if (mode === "battle") return handleBattlePointer(event);
     if (mode !== "playing" || event.button > 0) return;
-
-    const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
-    if (mobileTouch) {
-      event.preventDefault();
-      activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
-      try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
-      if (activeExploreTouches.size >= 2) {
-        beginExplorePinch();
-        return;
-      }
-      // Defer a one-finger tap until release so a second finger can turn the
-      // gesture into pinch zoom without accidentally sending the hero walking.
-      suppressExploreTouchTap = false;
-    }
-
     // A new press exits latched mouse-follow before issuing its single target.
     clearExplorePointerGesture();
     const target = screenToWorld(event.clientX, event.clientY);
     const entity = clickedExploreEntity(target.screenX, target.screenY);
     event.preventDefault();
-    if (!mobileTouch) setExploreClickTarget(entity || target, entity);
+    setExploreClickTarget(entity || target, entity);
     if (mode !== "playing") return;
     const gesture = {
       pointerId: event.pointerId,
@@ -6583,21 +6471,13 @@
     explorePointerGesture = gesture;
     try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
     gesture.holdTimer = window.setTimeout(() => {
-      if (explorePointerGesture !== gesture || mode !== "playing" || explorePinchGesture) return;
+      if (explorePointerGesture !== gesture || mode !== "playing") return;
       gesture.holdActive = true;
       retargetExploreHoldGesture(gesture, true);
     }, EXPLORE_HOLD_DELAY_MS);
   }
 
   function handleCanvasPointerMove(event) {
-    if (event.pointerType === "touch" && activeExploreTouches.has(event.pointerId)) {
-      activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
-      if (explorePinchGesture) {
-        event.preventDefault();
-        updateExplorePinch();
-        return;
-      }
-    }
     if (mode !== "battle") updateExploreHoverPointer(event);
     if (mode === "battle" && ["planning_move", "planning_action"].includes(battle?.phase)) {
       const cell = battleCellFromPointer(event);
@@ -6615,33 +6495,10 @@
   }
 
   function finishCanvasPointer(event) {
-    const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
-    if (mobileTouch) {
-      activeExploreTouches.delete(event.pointerId);
-      if (explorePinchGesture || suppressExploreTouchTap) {
-        event.preventDefault();
-        clearExplorePointerGesture(event.pointerId);
-        if (activeExploreTouches.size < 2) explorePinchGesture = null;
-        if (activeExploreTouches.size === 0) suppressExploreTouchTap = false;
-        return;
-      }
-    }
-
     const gesture = explorePointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     gesture.clientX = event.clientX;
     gesture.clientY = event.clientY;
-
-    // A quick touch is a normal move / interaction tap. It is intentionally
-    // committed here (rather than pointerdown) so pinch recognition wins.
-    if (mobileTouch && !gesture.holdActive) {
-      const target = screenToWorld(event.clientX, event.clientY);
-      const entity = clickedExploreEntity(target.screenX, target.screenY);
-      setExploreClickTarget(entity || target, entity);
-      clearExplorePointerGesture(event.pointerId);
-      return;
-    }
-
     if (!gesture.holdActive && performance.now() - gesture.startedAt >= EXPLORE_HOLD_DELAY_MS) {
       gesture.holdActive = true;
     }
@@ -6659,16 +6516,6 @@
     try {
       if (canvas.hasPointerCapture?.(gesture.pointerId)) canvas.releasePointerCapture(gesture.pointerId);
     } catch (_) {}
-  }
-
-  function cancelExploreTouchPointer(event) {
-    if (event?.pointerType === "touch") {
-      activeExploreTouches.delete(event.pointerId);
-      if (activeExploreTouches.size < 2) explorePinchGesture = null;
-      if (activeExploreTouches.size === 0) suppressExploreTouchTap = false;
-    }
-    if (!suppressExploreTouchTap) cancelExplorePointerTracking(event?.pointerId);
-    else clearExplorePointerGesture(event?.pointerId);
   }
 
   function cancelExplorePointerTracking(pointerId = null, releaseCapture = true) {
@@ -8644,7 +8491,7 @@
   canvas.addEventListener("pointermove", handleCanvasPointerMove);
   canvas.addEventListener("pointerleave", clearExploreHoverPointer);
   canvas.addEventListener("pointerup", finishCanvasPointer);
-  canvas.addEventListener("pointercancel", cancelExploreTouchPointer);
+  canvas.addEventListener("pointercancel", (event) => cancelExplorePointerTracking(event.pointerId));
   canvas.addEventListener("lostpointercapture", (event) => {
     if (explorePointerGesture?.pressed) cancelExplorePointerTracking(event.pointerId, false);
   });
@@ -8673,13 +8520,7 @@
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("blur", () => {
-    keys.clear();
-    activeExploreTouches.clear();
-    explorePinchGesture = null;
-    suppressExploreTouchTap = false;
-    cancelExplorePointerTracking();
-  });
+  window.addEventListener("blur", () => { keys.clear(); cancelExplorePointerTracking(); });
   document.addEventListener("visibilitychange", () => {
     keys.clear();
     cancelExplorePointerTracking();
