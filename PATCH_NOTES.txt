@@ -1,32 +1,35 @@
-Everrealm mobile dev/audio/status/UI patch
-Base: everrealm-mobile-ui-audio-status-latest.zip uploaded in this thread.
+Everrealm follow-up UI patch — 2026-09-10
+Base: the user's current-thread latest package plus the previously delivered dev/audio/status patch. No files from other threads were used.
 
-Changes:
-1. ?dev=1 development mode
-   - Disables/unregisters Everrealm Service Worker for that page.
-   - Clears Everrealm Cache Storage entries.
-   - Adds a unique cache-busting query to CSS/JS assets on every dev-mode load.
-   - Does NOT clear localStorage/save data.
-   - Test URL: https://wai-i8.github.io/Everrealm/?dev=1
+Changes in this patch:
+1. Mobile exploration rail
+   - Enlarges the five illustrated function icons visually to match the music control more closely.
+   - Keeps the same tap targets/order and increases spacing to avoid overlap.
 
-2. Background audio lifecycle
-   - Exploration/main-town/battle BGM pauses when the page/app becomes hidden or the phone locks.
-   - Audio resumes when the game becomes visible again, if sound is enabled.
-   - Pause/resume preserves playback position where applicable.
+2. Skill tree responsive behavior
+   - Adds a readable minimum skill-tree canvas size.
+   - Large screens stretch naturally.
+   - Small screens keep node size/spacing and expose horizontal/vertical scrollbars instead of squeezing the tree.
 
-3. Character status redesign
-   - Small centered non-full-screen modal.
-   - Removed character sprite, equipment/weapon text, Deck and unrelated information.
-   - Keeps only: name, class, level, HP bar, EXP bar, attack, defence, movement.
-   - Status help/info button hidden because the page is self-explanatory.
+3. Inventory/equipment redesign
+   - Removes the character sprite/paper-doll from the portable inventory loadout.
+   - Removes the charm slot from this view.
+   - Six slots use a fixed 2x3 arrangement:
+       head | weapon
+       upper | hands
+       lower | feet
+   - Empty slots use muted slot-type line icons.
+   - Filled slots are icon-only in the overview.
+   - Inventory item cards are icon-first with quantity only when >1; equipped state uses a checkmark.
+   - Removes the permanent "select an item" detail strip.
+   - Selecting an item opens a compact detail popup with no X; tap the dimmed background (or Escape) to dismiss.
 
-4. Mobile function icons
-   - Enlarged the five circular function icons to visually match the music control more closely.
+4. Cache/version
+   - Bumps code/PWA version tokens from 20260910-08 to 20260910-09.
 
-5. PWA cache version bumped to 20260910-08.
-   - index.html registers everrealm-sw.js.
-   - Both service-worker.js and everrealm-sw.js are included with identical updated content to avoid drift.
-
-Validation:
-- node --check passed: game.js, audio-core.js, main-town-bgm-loop.js, service-worker.js
-- Inline index.html scripts syntax checked successfully.
+Modified files:
+- game.js
+- responsive-ui-redesign.css
+- index.html
+- everrealm-sw.js
+- service-worker.js

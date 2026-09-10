@@ -1,0 +1,24 @@
+Everrealm combined UI + panel configuration patch — 2026-09-10
+
+This ZIP merges the previous city-gate panel configuration drag/drop patch into
+the later UI/System/inventory/battle patch instead of overwriting either branch.
+
+Included / preserved:
+- Desktop + mobile unified circular function icon rail.
+- System gear icon and compact music on/off popup.
+- iPhone safe-area handling while the world/background remains edge-to-edge.
+- Inventory height/responsive/name/placeholder fixes from the later patch.
+- Mobile battle pinch zoom/pan and larger facing-picker touch targets.
+- Removed retired battle turn-status border remnant.
+- Main-town board uses the "面板配置" label without restoring the old yellow board glow.
+- Previous city-gate panel configuration two-column drag/drop UI and pointer logic.
+- Previous skill-core behavior that preserves an explicitly empty deck.
+- Previous deck-config UI test.
+
+Additional fix in this combined build:
+- Fixed the icon-vs-yellow-focus-ring size regression. A later identical selector
+  had `transform: none !important`, which cancelled the intended mobile
+  `transform: scale(1.68)`. The reset is removed so the artwork once again fills
+  the existing circular clickable target.
+
+Cache-bust revision: 20260910-11

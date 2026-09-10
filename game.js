@@ -85,6 +85,10 @@
   const inventoryButton = document.getElementById("inventoryButton");
   const deckButton = document.getElementById("deckButton");
   const skillTreeButton = document.getElementById("skillTreeButton");
+  const systemButton = document.getElementById("systemButton");
+  const systemSettingsPopover = document.getElementById("systemSettingsPopover");
+  const systemSettingsCloseButton = document.getElementById("systemSettingsCloseButton");
+  const soundButton = document.getElementById("soundButton");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
@@ -207,11 +211,18 @@
   const activeExploreTouches = new Map();
   let explorePinchGesture = null;
   let suppressExploreTouchTap = false;
+  const activeBattleTouches = new Map();
+  let battlePinchGesture = null;
+  let suppressBattleTouchTap = false;
+  const BATTLE_VIEW_ZOOM_MIN = .86;
+  const BATTLE_VIEW_ZOOM_MAX = 2.25;
+  let battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
   let exploreHoverEntityId = null;
   let pendingClickInteractionId = null;
   let pendingManualSkillId = null;
   let pendingSkillDetailId = null;
   let skillDetailReturnTarget = null;
+  let deckDragGesture = null;
   let selectedInventoryItemId = null;
   let inventoryCategory = "all";
   let inventoryFixtureCount = 0;
@@ -981,6 +992,7 @@
   }
 
   function hideAllOverlays() {
+    setSystemSettingsOpen(false);
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
     deathPanel.hidden = true;
@@ -1049,6 +1061,21 @@
       button.setAttribute("aria-pressed", String(active));
       button.classList.toggle("is-active", active);
     }
+  }
+
+  function syncSystemSoundControl() {
+    if (!soundButton) return;
+    soundButton.setAttribute("aria-pressed", String(soundEnabled));
+    soundButton.setAttribute("aria-label", soundEnabled ? "關閉音樂" : "開啟音樂");
+    soundButton.dataset.enabled = soundEnabled ? "true" : "false";
+  }
+
+  function setSystemSettingsOpen(open) {
+    if (!systemSettingsPopover || !systemButton) return;
+    const next = Boolean(open) && mode === "playing";
+    systemSettingsPopover.hidden = !next;
+    systemButton.setAttribute("aria-expanded", String(next));
+    if (next) syncSystemSoundControl();
   }
 
   function syncHudCollapse() {
@@ -1896,7 +1923,7 @@
     if (entity.kind === "portal") return entity.interactionMode === "door"
       ? (entity.prompt || `進入${entity.name}`)
       : (entity.prompt || `前往${entity.name}`);
-    if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "戰技面板" : "查看公會委託";
+    if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "面板配置" : "查看公會委託";
     return "睇下寫咩";
   }
 
@@ -2555,7 +2582,7 @@
         isEquipped,
         disabled: isEquipped || levelLocked || classLocked,
         action: "equip",
-        actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "撳一下換上",
+        actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "裝備",
       });
     }
     if (player.potions > 0) items.push({
@@ -2661,40 +2688,43 @@
       ].filter(Boolean).join(" ");
       return `<button class="facility-action-button" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`;
     };
+    const quantityMarkup = (item) => item.quantity > 1
+      ? `<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b>`
+      : "";
     const itemCards = visibleItems.map((item) => `<button class="inventory-grid-item ui-slot ${item.equipment ? "inventory-equipment-item" : ""} ${item.isEquipped ? "is-equipped" : ""} ${selectedItem?.id === item.id ? "is-selected" : ""}" type="button" data-item-id="${item.id}" data-facility-action="select-item" aria-pressed="${selectedItem?.id === item.id ? "true" : "false"}" aria-label="選取${item.name}，數量 ${item.quantity}">
-      <div class="inventory-item-art">${iconMarkup(item)}<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b>${item.isEquipped ? '<span class="inventory-equipped-mark">已裝備</span>' : ""}</div>
-      <div class="inventory-item-copy">${item.rankLabel ? `<small class="inventory-item-rank">${item.rankLabel}</small>` : ""}<strong>${item.name}</strong></div>
+      <div class="inventory-item-art">${iconMarkup(item)}${quantityMarkup(item)}${item.isEquipped ? '<span class="inventory-equipped-mark" aria-label="已裝備" title="已裝備">✓</span>' : ""}</div>
+      <div class="inventory-item-copy"><strong title="${item.name}">${item.name}</strong></div>
     </button>`).join("");
     const filters = Object.entries(categoryLabels).map(([key, label]) => `<button class="inventory-filter" type="button" data-facility-action="inventory-filter" data-inventory-category="${key}" aria-selected="${inventoryCategory === key ? "true" : "false"}">${label}</button>`).join("");
     const detail = selectedItem
-      ? `<section class="inventory-selected-detail" aria-label="已選物品詳情" aria-live="polite">
-          <div class="inventory-item-art">${iconMarkup(selectedItem)}<b class="inventory-quantity" aria-label="數量 ${selectedItem.quantity}">×${selectedItem.quantity}</b></div>
-          <div class="inventory-selected-copy">${selectedItem.rankLabel ? `<small>${selectedItem.rankLabel}</small>` : ""}<strong>${selectedItem.name}</strong><p>${selectedItem.description}</p><span>${selectedItem.detail}</span><div class="inventory-selected-actions">${actionMarkup(selectedItem)}</div></div>
-        </section>`
-      : `<section class="inventory-selected-detail inventory-empty-selection" aria-label="已選物品詳情"><strong>選擇物品查看詳情</strong></section>`;
-    const totalQuantity = visibleItems.reduce((total, item) => total + item.quantity, 0);
+      ? `<div class="inventory-detail-layer" data-inventory-detail-dismiss aria-hidden="false">
+          <section class="inventory-detail-popup" role="dialog" aria-modal="true" aria-label="${selectedItem.name}" aria-live="polite">
+            <div class="inventory-detail-art">${iconMarkup(selectedItem)}${quantityMarkup(selectedItem)}</div>
+            ${selectedItem.rankLabel ? `<small class="inventory-detail-rank">${selectedItem.rankLabel}</small>` : ""}
+            <strong class="inventory-detail-name">${selectedItem.name}</strong>
+            <div class="inventory-detail-copy"><p>${selectedItem.description}</p><span>${selectedItem.detail}</span></div>
+            <div class="inventory-detail-actions">${actionMarkup(selectedItem)}</div>
+          </section>
+        </div>`
+      : "";
     facilityContent.innerHTML = `
       <section class="unified-inventory-layout" aria-label="角色裝備與隨身物品">
         <aside class="bag-loadout-panel" aria-label="角色目前裝備">
-          <div class="paperdoll-board bag-paperdoll-board">
-            ${paperdollSlotHtml("head", "頭部", "head")}
-            ${paperdollSlotHtml("upperBody", "上身", "upperBody")}
-            ${paperdollSlotHtml("lowerBody", "下身", "lowerBody")}
-            ${paperdollSlotHtml("feet", "腳部", "feet")}
-            <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="280" aria-hidden="true"></canvas><strong>時光之光</strong><span>LV.${player.level}</span></div>
-            ${paperdollSlotHtml("charm", "飾物", "charm")}
-            ${paperdollSlotHtml("hands", "手部", "hands")}
-            ${paperdollSlotHtml("weapon", "武器", "weapon")}
+          <div class="paperdoll-board bag-paperdoll-board bag-equipment-grid">
+            ${paperdollSlotHtml("head", "頭部", "head", { iconOnly: true })}
+            ${paperdollSlotHtml("weapon", "武器", "weapon", { iconOnly: true })}
+            ${paperdollSlotHtml("upperBody", "上身", "upperBody", { iconOnly: true })}
+            ${paperdollSlotHtml("hands", "手部", "hands", { iconOnly: true })}
+            ${paperdollSlotHtml("lowerBody", "下身", "lowerBody", { iconOnly: true })}
+            ${paperdollSlotHtml("feet", "腳部", "feet", { iconOnly: true })}
           </div>
-          <dl class="bag-loadout-stats" aria-label="裝備後能力"><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>移動</dt><dd>${stats.moveRange} 格</dd></div></dl>
         </aside>
         <section class="bag-items-panel" aria-label="隨身物品">
           <div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div>
-          ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="facility-empty-state"><strong>呢類物品仲係空嘅</strong></div>`}
-          ${detail}
+          ${visibleItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>` : `<div class="inventory-empty-grid" aria-label="呢類物品仲係空嘅"></div>`}
         </section>
+        ${detail}
       </section>`;
-    drawEquipmentPaperdoll();
     setFacilityFooter("");
   }
 
@@ -2721,13 +2751,18 @@
     return `<span class="paperdoll-line-icon" aria-hidden="true"><svg ${common}>${paths[visualSlot] || paths.charm}</svg></span>`;
   }
 
-  function paperdollSlotHtml(visualSlot, label, equipmentSlot) {
+  function paperdollSlotHtml(visualSlot, label, equipmentSlot, options = {}) {
     let item = equipmentSlot ? equipmentItem(equipped[equipmentSlot]) : null;
     if (equipmentSlot === "lowerBody" && !item && equipped.upperBody) {
       const upper = equipmentItem(equipped.upperBody);
       if (upper?.occupiesSlots?.includes?.("lowerBody")) item = upper;
     }
-    if (!item) return `<article class="paperdoll-slot is-empty" data-paperdoll-slot="${visualSlot}" aria-label="${label}：未裝備">${paperdollSlotIconHtml(visualSlot)}</article>`;
+    if (!item) return `<article class="paperdoll-slot is-empty ${options.iconOnly ? "is-icon-only" : ""}" data-paperdoll-slot="${visualSlot}" aria-label="${label}：未裝備">${paperdollSlotIconHtml(visualSlot)}</article>`;
+    if (options.iconOnly) {
+      return `<article class="paperdoll-slot is-filled is-icon-only" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
+        ${equipmentIconHtml(item, "paperdoll-slot-icon")}
+      </article>`;
+    }
     return `<article class="paperdoll-slot is-filled" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
       ${equipmentIconHtml(item, "paperdoll-slot-icon")}<div class="paperdoll-item-name"><strong>${item.name}</strong></div>
     </article>`;
@@ -2822,9 +2857,8 @@
 
   function skillBadgeMarkup(skill) {
     const passive = skill.tags.includes("passive");
-    const label = passive ? "PSV" : "CMD";
-    const source = passive ? "assets/ui/ui-badge-psv-v1.png" : "assets/ui/ui-badge-cmd-v1.png";
-    return `<span class="skill-kind-badge ${passive ? "is-psv" : "is-cmd"}"><img src="${source}" alt="${label}" /><b>${label}</b></span>`;
+    const label = passive ? "P" : "C";
+    return `<span class="skill-kind-badge ${passive ? "is-psv" : "is-cmd"}" aria-hidden="true"><b>${label}</b></span>`;
   }
 
   function skillRangeText(skill) {
@@ -3151,27 +3185,23 @@
   function renderDeckFacility() {
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
     const canEdit = facilityContext === "deck" && currentMapId === "world";
-    const equipped = new Set(skillState.equippedSkillIds);
     const slots = skillState.deckSlots.map((skillId, index) => {
       const skill = skillId ? Skills.getSkill(skillId) : null;
-      const removeAction = canEdit && skill
-        ? `<button class="facility-action-button is-quiet deck-slot-action" type="button" data-facility-action="unequip-skill" data-skill-id="${skill.id}">卸下</button>`
-        : "";
-      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" aria-label="第 ${index + 1} 格${skill ? `：${skill.name}` : ""}"><span class="deck-slot-number">${index + 1}</span>${skill
-        ? `<div class="deck-slot-copy"><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div>${removeAction}`
-        : ""}</article>`;
+      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" data-deck-slot-index="${index}" ${skill ? `data-deck-drag-source="slot" data-skill-id="${skill.id}"` : ""} aria-label="${skill ? skill.name : "未配置"}">${skill
+        ? `${skillBadgeMarkup(skill)}<strong>${skill.name}</strong>`
+        : '<span class="deck-slot-empty">未配置</span>'}</article>`;
     }).join("");
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
-      const available = learnedSkills.filter((skill) => !equipped.has(skill.id)).map((skill) => `<article class="deck-skill-choice"><div><div class="deck-skill-title">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></div></div><button class="facility-action-button" type="button" data-facility-action="equip-skill" data-skill-id="${skill.id}" ${skillState.equippedSkillIds.length >= skillState.deckCapacity ? "disabled" : ""}>裝入</button></article>`).join("");
-      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><div><h3 id="deckLearnedHeading">已學技能</h3></div></div><div class="deck-skill-list">${available || '<div class="facility-empty-state"><strong>冇其他可裝技能</strong><small>先喺技能樹使用技能書。</small></div>'}</div></section>`;
+      const learned = learnedSkills.map((skill) => `<article class="deck-skill-choice" data-deck-drag-source="library" data-skill-id="${skill.id}" aria-label="${skill.name}">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></article>`).join("");
+      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><h3 id="deckLearnedHeading">技能</h3></div><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>未有已學技能</strong></div>'}</div></section>`;
     })() : "";
-    const currentDeckHeading = `<div class="deck-region-heading"><div><h3 id="deckCurrentHeading">目前配置</h3></div><strong class="deck-capacity">已裝 ${skillState.equippedSkillIds.length} / ${skillState.deckCapacity}</strong></div>`;
-    const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="目前戰技面板">${currentDeckHeading}<div class="deck-slot-list">${slots}</div></section>`;
+    const currentDeckHeading = `<div class="deck-region-heading"><h3 id="deckCurrentHeading">面板</h3></div>`;
+    const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-labelledby="deckCurrentHeading">${currentDeckHeading}<div class="deck-slot-list">${slots}</div></section>`;
     facilityContent.innerHTML = canEdit
       ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
       : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;
-    setFacilityFooter(`<span aria-hidden="true">▤</span> ${canEdit ? "戰技面板可管理出戰技能；戰鬥只會使用目前配置。" : "唯讀查看目前配置；要更換配置先去舊港城門戰技面板。"}`);
+    setFacilityFooter("");
   }
 
   function openGuildSkillBook(star) {
@@ -3225,7 +3255,7 @@
     }
     skillState = result.state;
     sound.crystal();
-    showToast(result.duplicate ? `重複技能書化成 ${result.shardsAwarded} 精通碎片。` : `已學識「${result.skill.name}」；去城門 DECK 面板裝設先可出戰。`, "good");
+    showToast(result.duplicate ? `重複技能書化成 ${result.shardsAwarded} 精通碎片。` : `已學識「${result.skill.name}」；去城門面板配置先可出戰。`, "good");
     closeSkillManualConfirm();
     renderFacility();
     saveImportant(false);
@@ -3249,14 +3279,113 @@
 
   function changeSkillLoadout(skillId, equip, options = {}) {
     if (!options.force && !(facilityContext === "deck" && currentMapId === "world")) {
-      return showToast("而家只可查看；要去舊港城門戰技面板先可以換技。", "danger");
+      return showToast("而家只可查看；要去舊港城門面板配置先可以換技。", "danger");
     }
     const result = equip ? Skills.equipSkill(skillState, skillId) : Skills.unequipSkill(skillState, skillId);
     if (!result.ok) return showToast(result.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
     skillState = result.state;
-    showToast(`${equip ? "已裝備" : "已卸下"}：${Skills.getSkill(skillId).name}`, "good");
+    showToast(`${equip ? "已配置" : "已移除"}：${Skills.getSkill(skillId).name}`, "good");
     renderFacility();
     saveImportant(false);
+  }
+
+  function configureSkillInDeckSlot(skillId, slotIndex) {
+    if (!(facilityContext === "deck" && currentMapId === "world")) return false;
+    const result = Skills.equipSkill(skillState, skillId, slotIndex);
+    if (!result.ok) {
+      showToast(result.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+      return false;
+    }
+    skillState = result.state;
+    showToast(`已配置：${Skills.getSkill(skillId).name}`, "good");
+    renderFacility();
+    saveImportant(false);
+    return true;
+  }
+
+  function clearDeckDropTarget() {
+    facilityContent.querySelectorAll(".deck-slot.is-drop-target").forEach((slot) => slot.classList.remove("is-drop-target"));
+  }
+
+  function deckDropSlotAt(clientX, clientY) {
+    const target = document.elementFromPoint(clientX, clientY);
+    const slot = target?.closest?.(".deck-slot[data-deck-slot-index]");
+    return slot && facilityContent.contains(slot) ? slot : null;
+  }
+
+  function cancelDeckDrag() {
+    if (!deckDragGesture) return;
+    const gesture = deckDragGesture;
+    deckDragGesture = null;
+    clearDeckDropTarget();
+    gesture.sourceElement?.classList.remove("is-drag-source");
+    gesture.ghost?.remove();
+    try { facilityContent.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
+  }
+
+  function beginDeckDrag(event) {
+    if (!(facilityContext === "deck" && currentMapId === "world") || event.button !== 0) return;
+    const sourceElement = event.target.closest("[data-deck-drag-source][data-skill-id]");
+    if (!sourceElement || !facilityContent.contains(sourceElement)) return;
+    deckDragGesture = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      sourceElement,
+      source: sourceElement.dataset.deckDragSource,
+      skillId: sourceElement.dataset.skillId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      ghost: null,
+    };
+    try { facilityContent.setPointerCapture?.(event.pointerId); } catch (_) {}
+  }
+
+  function moveDeckDrag(event) {
+    const gesture = deckDragGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.dragging) {
+      if (Math.hypot(dx, dy) < 7) return;
+      if (gesture.pointerType === "touch" && gesture.source === "library" && Math.abs(dy) > Math.abs(dx) * 1.2) {
+        cancelDeckDrag();
+        return;
+      }
+      gesture.dragging = true;
+      gesture.ghost = gesture.sourceElement.cloneNode(true);
+      gesture.ghost.classList.add("deck-drag-ghost");
+      gesture.ghost.removeAttribute("data-deck-drag-source");
+      gesture.ghost.removeAttribute("data-deck-slot-index");
+      document.body.appendChild(gesture.ghost);
+      gesture.sourceElement.classList.add("is-drag-source");
+    }
+    gesture.ghost.style.left = `${event.clientX}px`;
+    gesture.ghost.style.top = `${event.clientY}px`;
+    clearDeckDropTarget();
+    deckDropSlotAt(event.clientX, event.clientY)?.classList.add("is-drop-target");
+    event.preventDefault();
+  }
+
+  function finishDeckDrag(event) {
+    const gesture = deckDragGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (!gesture.dragging) {
+      cancelDeckDrag();
+      return;
+    }
+    const slot = deckDropSlotAt(event.clientX, event.clientY);
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const droppedInsideCurrentPanel = Boolean(target?.closest?.(".deck-current-column"));
+    const skillId = gesture.skillId;
+    const source = gesture.source;
+    cancelDeckDrag();
+    if (slot) {
+      configureSkillInDeckSlot(skillId, Number(slot.dataset.deckSlotIndex));
+    } else if (source === "slot" && !droppedInsideCurrentPanel) {
+      changeSkillLoadout(skillId, false);
+    }
+    event.preventDefault();
   }
 
   function masterSkill(skillId) {
@@ -3301,7 +3430,7 @@
       missions: ["", "任務", ""],
       bag: ["", "物品欄", ""],
       equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
-      deck: ["", facilityContext === "deck" ? "戰技配置" : "戰技面板", facilityContext === "deck" ? "喺城門配置今次戰鬥會用到嘅技能。" : "查看目前出戰技能；要更換配置先去城門戰技面板。"],
+      deck: ["", facilityContext === "deck" ? "面板配置" : "面板", ""],
       guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
       shop: ["", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
       skills: ["", "技能樹", ""],
@@ -3348,11 +3477,12 @@
 
   function openFacility(tab = "bag", requestedContext) {
     if (!["playing", "facility"].includes(mode)) return false;
+    setSystemSettingsOpen(false);
     const nextContext = requestedContext || (tab === "guild" ? "guild" : tab === "shop" ? "shop" : tab === "deck" ? "deck-view" : "portable");
     const normalizedContext = ["portable", "guild", "shop", "deck", "deck-view"].includes(nextContext) ? nextContext : "portable";
     const availableTabs = facilityTabsForContext(normalizedContext, currentMapId);
     if (!availableTabs.includes(tab) && ["guild", "shop", "deck"].includes(tab)) {
-      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "DECK 要去舊港城門嘅戰技面板設定。", "danger");
+      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "面板配置要去舊港城門設定。", "danger");
       return false;
     }
     facilityContext = normalizedContext;
@@ -3374,6 +3504,7 @@
 
   function closeFacility() {
     if (mode !== "facility") return;
+    cancelDeckDrag();
     setFacilityHelpOpen(false);
     facilityPanel.hidden = true;
     mode = "playing";
@@ -3680,6 +3811,11 @@
 
   function startBattle(source, instant = false) {
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
+    setSystemSettingsOpen(false);
+    activeBattleTouches.clear();
+    battlePinchGesture = null;
+    suppressBattleTouchTap = false;
+    battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
     const stats = playerStats();
     const battleMoveCapacity = playerClassId === "fighter" ? stats.moveRange + BATTLE_FINAL_FACING_RESERVE : stats.moveRange;
     const battlefield = battleFieldContextFor(currentMapId);
@@ -4154,7 +4290,11 @@
     const labels = projected
       ? { up: "左上", right: "右上", down: "右下", left: "左下" }
       : { up: "上", right: "右", down: "下", left: "左" };
-    const pickerRadius = Core.clamp(layout.cell * .48, width <= 530 ? 24 : 31, width <= 530 ? 34 : 45);
+    const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    const touchSizedPicker = coarseBattlePointer || width <= 530;
+    const pickerRadius = touchSizedPicker
+      ? Core.clamp(layout.cell * .56, 34, 48)
+      : Core.clamp(layout.cell * .48, 31, 45);
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
@@ -4185,7 +4325,7 @@
     }
     const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
     const point = battleCellCentre(endpoint, layout);
-    const edge = width <= 530 ? 54 : 66;
+    const edge = touchSizedPicker ? 62 : 66;
     battleFacingPicker.style.left = `${Core.clamp(point.x, edge, width - edge)}px`;
     battleFacingPicker.style.top = `${Core.clamp(point.y, edge, height - edge)}px`;
   }
@@ -5005,6 +5145,10 @@
 
   function closeBattleHud() {
     stopBattleBgm();
+    activeBattleTouches.clear();
+    battlePinchGesture = null;
+    suppressBattleTouchTap = false;
+    battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
     battleToken += 1;
     battleHud.hidden = true;
     battleEncounterIntro.hidden = true;
@@ -5538,6 +5682,43 @@
     }
   }
 
+  function setBattleView(zoom, offsetX = battleView.offsetX, offsetY = battleView.offsetY) {
+    const nextZoom = Core.clamp(Number(zoom) || 1, BATTLE_VIEW_ZOOM_MIN, BATTLE_VIEW_ZOOM_MAX);
+    const extra = Math.max(0, nextZoom - 1);
+    const maxX = width * (.16 + extra * .5);
+    const maxY = height * (.14 + extra * .5);
+    battleView = {
+      zoom: nextZoom,
+      offsetX: Core.clamp(Number(offsetX) || 0, -maxX, maxX),
+      offsetY: Core.clamp(Number(offsetY) || 0, -maxY, maxY),
+    };
+  }
+
+  function applyBattleViewToLayout(layout) {
+    if (!layout) return layout;
+    const zoom = battleView.zoom || 1;
+    const centreX = width / 2;
+    const centreY = height / 2;
+    const projectX = (value) => centreX + (value - centreX) * zoom + battleView.offsetX;
+    const projectY = (value) => centreY + (value - centreY) * zoom + battleView.offsetY;
+    return {
+      ...layout,
+      cell: layout.cell * zoom,
+      x: projectX(layout.x),
+      y: projectY(layout.y),
+      width: layout.width * zoom,
+      height: layout.height * zoom,
+      originX: projectX(layout.originX),
+      originY: projectY(layout.originY),
+      stepX: { x: layout.stepX.x * zoom, y: layout.stepX.y * zoom },
+      stepY: { x: layout.stepY.x * zoom, y: layout.stepY.y * zoom },
+      elevationStep: layout.elevationStep * zoom,
+      baseThickness: layout.baseThickness * zoom,
+      actorCell: layout.actorCell * zoom,
+      viewZoom: zoom,
+    };
+  }
+
   function battleLayout() {
     const gridWidth = battle?.grid?.width || DEFAULT_BATTLE_WIDTH;
     const gridHeight = battle?.grid?.height || DEFAULT_BATTLE_HEIGHT;
@@ -5556,7 +5737,7 @@
       const boardHeight = cell * gridHeight;
       const x = Math.round((width - boardWidth) / 2);
       const y = Math.round(top + Math.max(0, (availableHeight - boardHeight) / 2));
-      return {
+      return applyBattleViewToLayout({
         cell,
         x,
         y,
@@ -5570,7 +5751,7 @@
         baseThickness: cell * .12,
         actorCell: cell,
         projected: false,
-      };
+      });
     }
 
     const rawXAxis = projection.xAxis || { x: .78, y: -.36 };
@@ -5613,7 +5794,7 @@
     const originX = x - minX * cell;
     // Reserve room above the flat board for the tallest elevated top face.
     const originY = y + maxElevation * elevationStep - minY * cell;
-    return {
+    return applyBattleViewToLayout({
       cell,
       x,
       y,
@@ -5627,7 +5808,7 @@
       baseThickness: cell * baseThicknessRatio,
       actorCell,
       projected: true,
-    };
+    });
   }
 
   function battleProjectCorner(gridX, gridY, layout = battleLayout(), elevation = 0) {
@@ -6612,8 +6793,72 @@
     return true;
   }
 
+  function beginBattlePinch() {
+    if (!usesMobileExploreControls() || activeBattleTouches.size < 2 || mode !== "battle") return false;
+    const touches = [...activeBattleTouches.values()].slice(0, 2);
+    const distance = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    if (distance < 2) return false;
+    const rect = canvas.getBoundingClientRect();
+    const toCanvasPoint = (touch) => ({
+      x: (touch.clientX - rect.left) * (width / Math.max(1, rect.width)),
+      y: (touch.clientY - rect.top) * (height / Math.max(1, rect.height)),
+    });
+    const first = toCanvasPoint(touches[0]);
+    const second = toCanvasPoint(touches[1]);
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const centre = { x: width / 2, y: height / 2 };
+    const startZoom = battleView.zoom || 1;
+    battlePinchGesture = {
+      pointerIds: [touches[0].pointerId, touches[1].pointerId],
+      startDistance: distance,
+      startZoom,
+      startOffsetX: battleView.offsetX,
+      startOffsetY: battleView.offsetY,
+      anchorBaseX: centre.x + (midpoint.x - centre.x - battleView.offsetX) / startZoom,
+      anchorBaseY: centre.y + (midpoint.y - centre.y - battleView.offsetY) / startZoom,
+    };
+    suppressBattleTouchTap = true;
+    return true;
+  }
+
+  function updateBattlePinch() {
+    const pinch = battlePinchGesture;
+    if (!pinch || mode !== "battle") return false;
+    const firstTouch = activeBattleTouches.get(pinch.pointerIds[0]);
+    const secondTouch = activeBattleTouches.get(pinch.pointerIds[1]);
+    if (!firstTouch || !secondTouch) return false;
+    const distance = Math.hypot(firstTouch.clientX - secondTouch.clientX, firstTouch.clientY - secondTouch.clientY);
+    if (distance < 2 || pinch.startDistance < 2) return false;
+    const rect = canvas.getBoundingClientRect();
+    const first = {
+      x: (firstTouch.clientX - rect.left) * (width / Math.max(1, rect.width)),
+      y: (firstTouch.clientY - rect.top) * (height / Math.max(1, rect.height)),
+    };
+    const second = {
+      x: (secondTouch.clientX - rect.left) * (width / Math.max(1, rect.width)),
+      y: (secondTouch.clientY - rect.top) * (height / Math.max(1, rect.height)),
+    };
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const centre = { x: width / 2, y: height / 2 };
+    const nextZoom = Core.clamp(pinch.startZoom * (distance / pinch.startDistance), BATTLE_VIEW_ZOOM_MIN, BATTLE_VIEW_ZOOM_MAX);
+    const offsetX = midpoint.x - centre.x - (pinch.anchorBaseX - centre.x) * nextZoom;
+    const offsetY = midpoint.y - centre.y - (pinch.anchorBaseY - centre.y) * nextZoom;
+    setBattleView(nextZoom, offsetX, offsetY);
+    syncBattleFacingPicker();
+    syncBattleCommandMenu();
+    return true;
+  }
+
   function handleCanvasPointer(event) {
-    if (mode === "battle") return handleBattlePointer(event);
+    if (mode === "battle") {
+      const battleTouch = event.pointerType === "touch" && usesMobileExploreControls();
+      if (!battleTouch) return handleBattlePointer(event);
+      event.preventDefault();
+      activeBattleTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
+      try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
+      if (activeBattleTouches.size >= 2) beginBattlePinch();
+      return;
+    }
     if (mode !== "playing" || event.button > 0) return;
 
     const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
@@ -6662,6 +6907,14 @@
   }
 
   function handleCanvasPointerMove(event) {
+    if (mode === "battle" && event.pointerType === "touch" && activeBattleTouches.has(event.pointerId)) {
+      activeBattleTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
+      if (battlePinchGesture) {
+        event.preventDefault();
+        updateBattlePinch();
+        return;
+      }
+    }
     if (event.pointerType === "touch" && activeExploreTouches.has(event.pointerId)) {
       activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
       if (explorePinchGesture) {
@@ -6687,6 +6940,23 @@
   }
 
   function finishCanvasPointer(event) {
+    const battleTouch = mode === "battle" && event.pointerType === "touch" && usesMobileExploreControls();
+    if (battleTouch) {
+      const wasTracked = activeBattleTouches.has(event.pointerId);
+      activeBattleTouches.delete(event.pointerId);
+      if (battlePinchGesture || suppressBattleTouchTap) {
+        event.preventDefault();
+        if (activeBattleTouches.size < 2) battlePinchGesture = null;
+        if (activeBattleTouches.size === 0) suppressBattleTouchTap = false;
+        return;
+      }
+      if (wasTracked) {
+        event.preventDefault();
+        handleBattlePointer(event);
+      }
+      return;
+    }
+
     const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
     if (mobileTouch) {
       activeExploreTouches.delete(event.pointerId);
@@ -6734,6 +7004,12 @@
   }
 
   function cancelExploreTouchPointer(event) {
+    if (event?.pointerType === "touch" && activeBattleTouches.has(event.pointerId)) {
+      activeBattleTouches.delete(event.pointerId);
+      if (activeBattleTouches.size < 2) battlePinchGesture = null;
+      if (activeBattleTouches.size === 0) suppressBattleTouchTap = false;
+      return;
+    }
     if (event?.pointerType === "touch") {
       activeExploreTouches.delete(event.pointerId);
       if (activeExploreTouches.size < 2) explorePinchGesture = null;
@@ -7260,44 +7536,27 @@
     return entity.y + (entity.radius || 0);
   }
 
-  // Traced directly from the pink clickable-region mask in
-  // assets/main-town/maintown_walkable.jpg (the deck-configuration board's
-  // authored interaction shape), as offsets in world px from the region's
-  // centre (deck.x + width/2, deck.y + height/2). This is the board's real
-  // silhouette, not a guessed rectangle — see AGENTS notes on the
-  // authoring/walkable mask workflow if this board's art ever moves.
-  const NOTICE_BOARD_OUTLINE = [
-    [-113.5, -141], [-123.5, -98], [-110.5, -70], [-89.5, 106],
-    [48.5, 148], [111.5, 124], [123.5, 89], [119.5, -98],
-    [110.5, -120], [82.5, -133], [-12.5, -149], [-89.5, -149],
-  ];
-
-  function drawSkillPanelGlow(prop, shakeX, shakeY) {
+  // The clickable deck-board region stays authoritative, but Main Town no
+  // longer paints a yellow hover outline over the baked artwork. A compact
+  // label is anchored a few pixels above the authored interaction region.
+  function drawSkillPanelLabel(prop, shakeX, shakeY) {
     if (!prop || prop.boardId !== "deck-loadout") return;
-    const near = nearestInteraction?.id === prop.id;
-    const hover = exploreHoverEntityId === prop.id;
-    if (!near && !hover) return;
     const point = worldToScreen(prop, shakeX, shakeY);
     const scale = camera.zoom;
-    const pulse = .5 + .5 * Math.sin(elapsed * Core.TAU / 1.8);
+    const authoredHeight = Number(prop.authoredRegion?.h) || 0;
+    const topY = point.y - authoredHeight * scale / 2;
+    const fontSize = Core.clamp(15 * scale, 10.5, 15);
+    const labelY = topY - Math.max(4, 7 * scale);
     ctx.save();
-    ctx.strokeStyle = hover
-      ? `rgba(255,200,87,${.52 + pulse * .12})`
-      : `rgba(255,200,87,${.2 + pulse * .08})`;
-    ctx.lineWidth = Math.max(1.2, 1.7 * scale);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = `850 ${fontSize}px system-ui, -apple-system, "Noto Sans TC", sans-serif`;
     ctx.lineJoin = "round";
-    ctx.shadowColor = hover
-      ? `rgba(255,200,87,${.34 + pulse * .14})`
-      : `rgba(255,200,87,${.12 + pulse * .08})`;
-    ctx.shadowBlur = (hover ? 14 : 7 + pulse * 3) * scale;
-    ctx.beginPath();
-    NOTICE_BOARD_OUTLINE.forEach(([ox, oy], index) => {
-      const px = point.x + ox * scale;
-      const py = point.y + oy * scale;
-      if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.closePath();
-    ctx.stroke();
+    ctx.lineWidth = Math.max(2.2, fontSize * .22);
+    ctx.strokeStyle = "rgba(4,8,18,.88)";
+    ctx.strokeText("面板配置", point.x, labelY);
+    ctx.fillStyle = "#f5e9ca";
+    ctx.fillText("面板配置", point.x, labelY);
     ctx.restore();
   }
 
@@ -7322,7 +7581,7 @@
     // only the subtle gold outline when the separate prop itself is hidden.
     for (const board of world.boards || []) {
       if (board.boardId === "deck-loadout" && board.render === false && inView(board, 120)) {
-        drawSkillPanelGlow(board, shakeX, shakeY);
+        drawSkillPanelLabel(board, shakeX, shakeY);
       }
     }
   }
@@ -7367,7 +7626,7 @@
       const indoor = ["guild", "shop", "clinic", "general-store", "inn", "dungeon"].includes(currentMapId);
       const boardDrawer = indoor ? Art.drawInteriorSprite : Art.drawEnvironmentSprite;
       const isSkillPanel = prop.boardId === "deck-loadout";
-      if (isSkillPanel) drawSkillPanelGlow(prop, shakeX, shakeY);
+      if (isSkillPanel) drawSkillPanelLabel(prop, shakeX, shakeY);
       if (boardDrawer(ctx, {
         sprite: indoor ? "indoorQuestBoard" : "questBoard",
         x: point.x,
@@ -8054,6 +8313,11 @@
         if (code === "Escape" || code === "KeyE") closeAbandonCommission();
         return;
       }
+      if (facilityTab === "bag" && selectedInventoryItemId && (code === "Escape" || code === "KeyE")) {
+        selectedInventoryItemId = null;
+        renderBagFacility();
+        return;
+      }
       if (code === "Escape" || code === "KeyE" || (code === "KeyI" && facilityTab === "bag") || (code === "KeyL" && facilityTab === "skills")) closeFacility();
       return;
     }
@@ -8115,6 +8379,11 @@
       return;
     }
     if (mode !== "playing") return;
+    if (code === "Escape" && systemSettingsPopover?.hidden === false) {
+      setSystemSettingsOpen(false);
+      systemButton?.focus({ preventScroll: true });
+      return;
+    }
     if (code === "KeyI") openFacility("bag");
     else if (code === "KeyL") openFacility("skills");
     else if (code === "KeyE" || code === "Enter") interact();
@@ -8646,6 +8915,11 @@
     renderFacility();
   });
   facilityContent.addEventListener("click", (event) => {
+    if (event.target.matches("[data-inventory-detail-dismiss]")) {
+      selectedInventoryItemId = null;
+      renderBagFacility();
+      return;
+    }
     const button = event.target.closest("[data-facility-action]");
     if (!button || button.disabled) return;
     const action = button.dataset.facilityAction;
@@ -8671,6 +8945,10 @@
     else if (action === "unequip-skill") changeSkillLoadout(button.dataset.skillId, false);
     else if (action === "master-skill") masterSkill(button.dataset.skillId);
   });
+  facilityContent.addEventListener("pointerdown", beginDeckDrag);
+  facilityContent.addEventListener("pointermove", moveDeckDrag);
+  facilityContent.addEventListener("pointerup", finishDeckDrag);
+  facilityContent.addEventListener("pointercancel", cancelDeckDrag);
   battleHud.addEventListener("click", (event) => {
     if (event.target.closest("[data-battle-command-follow]")) {
       followBattleCommandMenu();
@@ -8705,7 +8983,17 @@
     if (!button) return;
     setExploreZoomLevel(button.dataset.zoomLevel);
   });
-  document.getElementById("soundButton").addEventListener("click", () => {
+  systemButton?.addEventListener("click", () => setSystemSettingsOpen(systemSettingsPopover?.hidden !== false));
+  systemSettingsCloseButton?.addEventListener("click", () => {
+    setSystemSettingsOpen(false);
+    systemButton?.focus({ preventScroll: true });
+  });
+  stage.addEventListener("pointerdown", (event) => {
+    if (systemSettingsPopover?.hidden !== false) return;
+    if (systemSettingsPopover.contains(event.target) || systemButton?.contains(event.target)) return;
+    setSystemSettingsOpen(false);
+  });
+  soundButton?.addEventListener("click", () => {
     soundEnabled = !soundEnabled;
     if (mode === "battle") {
       bgm.setEnabled(false);
@@ -8717,10 +9005,7 @@
       bgm.setEnabled(soundEnabled);
     }
     try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
-    const button = document.getElementById("soundButton");
-    button.setAttribute("aria-pressed", String(soundEnabled));
-    button.setAttribute("aria-label", soundEnabled ? "關閉音樂與聲效" : "開啟音樂與聲效");
-    button.textContent = soundEnabled ? "♪" : "×";
+    syncSystemSoundControl();
     if (soundEnabled) sound.tone(520, .1, { to: 760, gain: .03 });
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
@@ -8730,6 +9015,9 @@
     activeExploreTouches.clear();
     explorePinchGesture = null;
     suppressExploreTouchTap = false;
+    activeBattleTouches.clear();
+    battlePinchGesture = null;
+    suppressBattleTouchTap = false;
     cancelExplorePointerTracking();
   });
   document.addEventListener("visibilitychange", () => {
@@ -8749,7 +9037,7 @@
 
   const savedGameAvailable = hasSave();
   continueButton.hidden = !savedGameAvailable;
-  document.getElementById("soundButton").setAttribute("aria-pressed", String(soundEnabled));
+  syncSystemSoundControl();
   syncExploreZoomControls();
   syncHudCollapse();
   resetEnemies();

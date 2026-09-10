@@ -1281,11 +1281,16 @@
       STARTING_DECK_CAPACITY,
       MAX_EQUIPPED_SKILLS,
     );
+    const hasExplicitLoadout = Array.isArray(source.deckSlots)
+      || Array.isArray(source.equippedSkillIds)
+      || Array.isArray(source.equipped);
     let slotSource = Array.isArray(source.deckSlots)
       ? source.deckSlots
       : suppliedEquipped == null ? unlockedSkillIds : suppliedEquipped;
     let deckSlots = normalizeDeckSlots(slotSource, deckCapacity, unlockedSet, classId);
-    if (!deckIds(deckSlots).length && unlockedSkillIds.length && options.ensureEquipped !== false) {
+    // An explicitly empty deck is a valid player choice. Only seed a deck when
+    // loading data that never supplied a loadout at all (new/very old saves).
+    if (!hasExplicitLoadout && !deckIds(deckSlots).length && unlockedSkillIds.length && options.ensureEquipped !== false) {
       deckSlots = normalizeDeckSlots(unlockedSkillIds, deckCapacity, unlockedSet, classId);
     }
     // Old saves only stored a flat equipped list. Preserve up to six existing slots

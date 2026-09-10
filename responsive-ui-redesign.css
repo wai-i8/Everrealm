@@ -613,3 +613,1030 @@
   .mission-progress-row { align-items: flex-start !important; }
   .inventory-icon-grid { max-height: 36vh !important; }
 }
+
+
+/* ======================================================================
+   2026-09-10 follow-up: readable mobile rail, non-squashing skill tree,
+   and icon-first inventory/equipment view.
+   ====================================================================== */
+
+/* The five illustrated function medallions have much more transparent/bright
+   edge detail than the solid music button. Enlarge their artwork without
+   changing the tap target so their *visual* diameter matches the music button. */
+@media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
+  #exploreSidebar .sidebar-primary.explore-function-menu,
+  #exploreSidebar.is-collapsed .sidebar-primary.explore-function-menu,
+  #gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu {
+    gap: clamp(.42rem, 2vh, .68rem) !important;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-icon img {
+    transform: scale(1.68) !important;
+    transform-origin: center !important;
+  }
+}
+
+/* Skill tree: never squeeze authored nodes/branches below a readable canvas.
+   Large viewports naturally stretch the board; smaller ones scroll instead. */
+.facility-overlay[data-facility-tab="skills"] {
+  --skill-tree-min-width: 52rem;
+  --skill-tree-min-height: 31rem;
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-scroll {
+  overflow: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255,200,87,.62) rgba(5,10,21,.32) !important;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-scroll::-webkit-scrollbar {
+  display: block !important;
+  width: .42rem !important;
+  height: .42rem !important;
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-scroll::-webkit-scrollbar-track {
+  background: rgba(5,10,21,.3);
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255,200,87,.62);
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-board {
+  width: max(100%, var(--skill-tree-min-width)) !important;
+  min-width: var(--skill-tree-min-width) !important;
+  height: max(100%, var(--skill-tree-min-height)) !important;
+  min-height: var(--skill-tree-min-height) !important;
+  margin: 0 !important;
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-node {
+  width: clamp(5.3rem, 6vw, 6.6rem) !important;
+  min-width: 5.3rem !important;
+  min-height: 2.28rem !important;
+}
+.facility-overlay[data-facility-tab="skills"] .skill-tree-node-trigger {
+  min-height: 1.94rem !important;
+  padding: .22rem .35rem !important;
+  font-size: clamp(.59rem, .72vw, .74rem) !important;
+}
+
+/* Inventory: compact six-slot loadout on the left, icon grid on the right. */
+.facility-overlay[data-facility-tab="bag"] .facility-content {
+  position: relative;
+  overflow: hidden !important;
+}
+.facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+  position: relative;
+  grid-template-columns: minmax(12rem, .58fr) minmax(0, 1.72fr) !important;
+  gap: .72rem !important;
+  align-items: stretch !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-panel {
+  display: grid;
+  align-content: start;
+  padding: .62rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(4.4rem, 1fr)) !important;
+  grid-template-areas:
+    "head weapon"
+    "upper hands"
+    "lower feet" !important;
+  gap: .52rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot {
+  min-width: 0 !important;
+  min-height: 4.4rem !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: .35rem !important;
+  border-radius: .72rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot.is-empty {
+  color: rgba(202,211,224,.46) !important;
+  border-color: rgba(184,197,214,.16) !important;
+  background: rgba(8,17,34,.5) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-line-icon {
+  width: 2.7rem !important;
+  height: 2.7rem !important;
+  opacity: .6 !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot.is-filled.is-icon-only {
+  grid-template-columns: 1fr !important;
+  border-color: rgba(255,200,87,.4) !important;
+  background: linear-gradient(145deg, rgba(24,39,65,.84), rgba(7,16,32,.82)) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot-icon {
+  width: 3.35rem !important;
+  height: 3.35rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-stats,
+.facility-overlay[data-facility-tab="bag"] .paperdoll-avatar,
+.facility-overlay[data-facility-tab="bag"] .paperdoll-item-name {
+  display: none !important;
+}
+
+.facility-overlay[data-facility-tab="bag"] .bag-items-panel {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: .62rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  min-height: 9rem !important;
+  max-height: min(29rem, 61vh) !important;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)) !important;
+  gap: .5rem !important;
+  overflow: auto !important;
+  align-content: start;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  aspect-ratio: 1 / 1;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: 1fr !important;
+  place-items: center !important;
+  padding: .42rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-copy {
+  display: none !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+  width: 3.7rem !important;
+  height: 3.7rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-equipped-mark {
+  width: 1.08rem;
+  height: 1.08rem;
+  display: grid;
+  place-items: center;
+  top: .08rem !important;
+  left: .08rem !important;
+  padding: 0 !important;
+  color: #071a19;
+  font-size: .68rem !important;
+  line-height: 1;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-empty-grid {
+  min-height: 9rem;
+}
+
+/* Item detail is a true secondary popup: no placeholder text and no X.
+   Tapping the dimmed layer dismisses it. */
+.inventory-detail-layer {
+  position: absolute;
+  z-index: 30;
+  inset: -.48rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: clamp(.7rem, 2vw, 1.2rem);
+  background: rgba(2,6,14,.48);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.inventory-detail-popup {
+  width: min(18rem, 46%);
+  min-width: 13rem;
+  max-height: calc(100% - 1rem);
+  display: grid;
+  justify-items: center;
+  gap: .48rem;
+  overflow: auto;
+  padding: .78rem .82rem .82rem;
+  border: 1px solid rgba(255,200,87,.52);
+  border-radius: .82rem;
+  color: var(--cream);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(54,116,178,.18), transparent 42%),
+    linear-gradient(155deg, rgba(17,32,58,.985), rgba(6,14,29,.99));
+  box-shadow: 0 .75rem 2rem rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.035);
+}
+.inventory-detail-art {
+  position: relative;
+  width: 6rem;
+  height: 6rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,200,87,.35);
+  border-radius: .72rem;
+  background: radial-gradient(circle, rgba(43,116,194,.22), rgba(5,12,25,.48) 68%);
+}
+.inventory-detail-art > .atlas-icon,
+.inventory-detail-art > .inventory-envelope-icon {
+  width: 5rem !important;
+  height: 5rem !important;
+}
+.inventory-detail-rank {
+  color: var(--gold);
+  font: 850 .52rem/1 ui-monospace, monospace;
+}
+.inventory-detail-name {
+  color: var(--cream);
+  font-size: .82rem;
+  text-align: center;
+}
+.inventory-detail-copy {
+  width: 100%;
+  display: grid;
+  gap: .26rem;
+  padding-top: .45rem;
+  border-top: 1px solid rgba(255,200,87,.18);
+  text-align: center;
+}
+.inventory-detail-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .55rem;
+  line-height: 1.42;
+}
+.inventory-detail-copy span {
+  color: var(--teal);
+  font-size: .54rem;
+}
+.inventory-detail-actions {
+  width: 100%;
+  padding-top: .12rem;
+}
+.inventory-detail-actions .facility-action-button {
+  width: 100%;
+  min-height: 2rem;
+}
+.inventory-detail-layer > .inventory-detail-popup {
+  pointer-events: auto;
+}
+
+/* Phone landscape keeps the two-column inventory composition, just tighter. */
+@media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
+  .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+    grid-template-columns: minmax(9.8rem, .58fr) minmax(0, 1.72fr) !important;
+    gap: .46rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-loadout-panel {
+    padding: .4rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+    grid-template-rows: repeat(3, minmax(3.35rem, 1fr)) !important;
+    gap: .3rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot {
+    min-height: 3.35rem !important;
+    padding: .2rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-line-icon {
+    width: 2.05rem !important;
+    height: 2.05rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot-icon {
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+    max-height: min(20rem, 57vh) !important;
+    grid-template-columns: repeat(auto-fill, minmax(3.85rem, 1fr)) !important;
+    gap: .3rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+    width: 3rem !important;
+    height: 3rem !important;
+  }
+  .inventory-detail-popup {
+    width: min(15.5rem, 48%);
+    min-width: 11.5rem;
+    gap: .34rem;
+    padding: .56rem .62rem .62rem;
+  }
+  .inventory-detail-art {
+    width: 4.8rem;
+    height: 4.8rem;
+  }
+  .inventory-detail-art > .atlas-icon,
+  .inventory-detail-art > .inventory-envelope-icon {
+    width: 4rem !important;
+    height: 4rem !important;
+  }
+}
+
+/* Portrait: stack loadout above items, but keep the six-slot 2×3 matrix.
+   The item-detail popup stays centered and comfortably tappable. */
+@media (max-width: 700px) and (orientation: portrait) {
+  .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+    grid-template-rows: repeat(3, minmax(3.7rem, auto)) !important;
+  }
+  .inventory-detail-layer {
+    position: fixed;
+    inset: 0;
+    justify-content: center;
+  }
+  .inventory-detail-popup {
+    width: min(19rem, calc(100vw - 2rem));
+    min-width: 0;
+    max-height: min(32rem, calc(100vh - 2rem));
+  }
+}
+
+
+/* ======================================================================
+   2026-09-10 unified icon rail + system popover + final inventory fit pass
+   ====================================================================== */
+
+/* The world stays edge-to-edge, while the interaction rail respects each
+   device's safe area (iPhone cutouts/Dynamic Island included). Desktop and
+   mobile now deliberately share the same icon-only navigation. */
+#exploreSidebar,
+#exploreSidebar.is-collapsed {
+  --explore-rail-size: clamp(3rem, 10.8vh, 4.25rem);
+  z-index: 24 !important;
+  left: max(.8rem, calc(env(safe-area-inset-left) + .45rem)) !important;
+  top: max(.65rem, calc(env(safe-area-inset-top) + .35rem)) !important;
+  width: var(--explore-rail-size) !important;
+  height: auto !important;
+  max-width: var(--explore-rail-size) !important;
+  max-height: calc(100% - max(1.1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom) + .7rem)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+#exploreSidebar .sidebar-toggle,
+#exploreSidebar :is(.sidebar-character,.sidebar-quick-info,.sidebar-quest,.sidebar-secondary) {
+  display: none !important;
+}
+
+#exploreSidebar .sidebar-primary.explore-function-menu,
+#exploreSidebar.is-collapsed .sidebar-primary.explore-function-menu,
+#gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu {
+  width: var(--explore-rail-size) !important;
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: clamp(.28rem, 1.1vh, .58rem) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: auto !important;
+}
+
+#exploreSidebar .sidebar-primary .explore-menu-button,
+#exploreSidebar.is-collapsed .sidebar-primary .explore-menu-button,
+#gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu > .explore-menu-button {
+  position: relative !important;
+  flex: 0 0 var(--explore-rail-size) !important;
+  width: var(--explore-rail-size) !important;
+  height: var(--explore-rail-size) !important;
+  min-width: var(--explore-rail-size) !important;
+  min-height: var(--explore-rail-size) !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#exploreSidebar .sidebar-primary .explore-menu-button::before {
+  content: "" !important;
+  position: absolute !important;
+  z-index: 0 !important;
+  inset: .08rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 50% !important;
+  opacity: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: opacity .12s ease, border-color .12s ease !important;
+  pointer-events: none !important;
+}
+
+#exploreSidebar .sidebar-primary .explore-menu-button:hover::before,
+#exploreSidebar .sidebar-primary .explore-menu-button:focus-visible::before {
+  opacity: 1 !important;
+  border-color: rgba(255,225,143,.72) !important;
+}
+
+#exploreSidebar .sidebar-primary span.explore-menu-icon {
+  position: relative !important;
+  z-index: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#exploreSidebar .sidebar-primary .explore-menu-icon img {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  /* Do not reset transform here: the earlier coarse/mobile rule intentionally
+     scales the artwork to match the full circular hit target. */
+  transform-origin: center !important;
+  filter: drop-shadow(0 .12rem .2rem rgba(0,0,0,.5)) !important;
+  pointer-events: none !important;
+}
+
+#exploreSidebar .sidebar-primary .explore-menu-copy {
+  display: none !important;
+}
+
+#statusButton { order: 1 !important; }
+#inventoryButton { order: 2 !important; }
+#deckButton { order: 3 !important; }
+#skillTreeButton { order: 4 !important; }
+#missionButton { order: 5 !important; }
+#systemButton { order: 6 !important; }
+
+#exploreSidebar .sidebar-primary .menu-badge:not([hidden]) {
+  right: -.02rem !important;
+  top: -.02rem !important;
+}
+
+/* Compact settings popup. It is intentionally content-sized rather than a
+   facility/full-screen screen; future settings can be appended as rows. */
+#systemSettingsPopover[hidden] {
+  display: none !important;
+}
+#exploreSidebar > #systemSettingsPopover:not([hidden]),
+#exploreSidebar.is-collapsed > #systemSettingsPopover:not([hidden]) {
+  position: absolute !important;
+  z-index: 30 !important;
+  left: calc(100% + .7rem) !important;
+  bottom: 0 !important;
+  width: min(15rem, calc(100vw - 6.5rem - env(safe-area-inset-left) - env(safe-area-inset-right))) !important;
+  min-width: 11rem !important;
+  display: grid !important;
+  gap: .58rem !important;
+  padding: .72rem !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255,200,87,.54) !important;
+  border-radius: .82rem !important;
+  color: var(--cream) !important;
+  background:
+    radial-gradient(circle at 50% 0, rgba(82,220,203,.08), transparent 9rem),
+    linear-gradient(155deg, rgba(20,35,62,.985), rgba(6,14,29,.99)) !important;
+  box-shadow: 0 .7rem 2rem rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,.035) !important;
+  pointer-events: auto !important;
+}
+
+.system-settings-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  padding-bottom: .48rem;
+  border-bottom: 1px solid rgba(255,200,87,.18);
+}
+.system-settings-header strong {
+  color: var(--cream);
+  font-size: .86rem;
+  letter-spacing: .06em;
+}
+.system-settings-close {
+  flex: 0 0 1.8rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  font: 600 1.35rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.system-settings-close:hover,
+.system-settings-close:focus-visible {
+  color: var(--cream);
+  outline: none;
+  background: rgba(245,233,202,.08);
+}
+.system-setting-row {
+  width: 100%;
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .52rem .62rem;
+  border: 1px solid rgba(245,233,202,.18);
+  border-radius: .62rem;
+  color: var(--cream);
+  background: rgba(7,16,32,.6);
+  font: 800 .72rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.system-setting-row:hover,
+.system-setting-row:focus-visible {
+  border-color: rgba(255,200,87,.5);
+  outline: none;
+}
+.system-toggle-track {
+  position: relative;
+  flex: 0 0 2.7rem;
+  width: 2.7rem;
+  height: 1.42rem;
+  border: 1px solid rgba(245,233,202,.3);
+  border-radius: 999px;
+  background: rgba(4,8,18,.78);
+  transition: background .15s ease, border-color .15s ease;
+}
+.system-toggle-track i {
+  position: absolute;
+  left: .15rem;
+  top: 50%;
+  width: 1.02rem;
+  height: 1.02rem;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--cream);
+  box-shadow: 0 .08rem .2rem rgba(0,0,0,.42);
+  transition: left .15s ease;
+}
+.system-setting-row[data-enabled="true"] .system-toggle-track {
+  border-color: rgba(82,220,203,.76);
+  background: rgba(82,220,203,.3);
+}
+.system-setting-row[data-enabled="true"] .system-toggle-track i {
+  left: 1.5rem;
+}
+
+/* Inventory uses more of the viewport vertically and stays responsive. */
+.facility-overlay[data-facility-tab="bag"] .facility-window {
+  height: min(44rem, calc(100vh - 2rem)) !important;
+  min-height: min(34rem, calc(100vh - 2rem)) !important;
+  max-height: calc(100vh - 2rem) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .facility-content {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+  height: 100% !important;
+  min-height: 0 !important;
+  align-items: stretch !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-panel,
+.facility-overlay[data-facility-tab="bag"] .bag-items-panel {
+  min-height: 0 !important;
+  align-self: stretch !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-panel {
+  display: grid !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+  min-height: 0 !important;
+  height: 100% !important;
+  grid-template-rows: repeat(3, minmax(0,1fr)) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-slot.is-empty {
+  grid-template-columns: 1fr !important;
+  place-items: center !important;
+  justify-items: center !important;
+  align-items: center !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-equipment-grid .paperdoll-line-icon {
+  justify-self: center !important;
+  align-self: center !important;
+  margin: auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-items-panel {
+  grid-template-rows: auto minmax(0,1fr) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: none !important;
+  grid-template-columns: repeat(auto-fill, minmax(5.15rem, 1fr)) !important;
+  grid-auto-rows: minmax(6.25rem, auto);
+  align-content: start !important;
+  align-items: stretch !important;
+  gap: .48rem !important;
+  overflow: auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  aspect-ratio: auto !important;
+  min-width: 0 !important;
+  min-height: 6.25rem !important;
+  height: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: minmax(0,1fr) 1.15rem !important;
+  place-items: stretch !important;
+  gap: .18rem !important;
+  padding: .34rem .34rem .38rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art {
+  width: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-copy {
+  min-width: 0 !important;
+  width: 100% !important;
+  display: grid !important;
+  place-items: center !important;
+  align-content: center !important;
+  text-align: center !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-copy strong {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  color: var(--cream) !important;
+  font-size: .55rem !important;
+  line-height: 1.15 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  -webkit-line-clamp: unset !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+  width: min(3.7rem, 78%) !important;
+  height: min(3.7rem, 78%) !important;
+}
+
+/* Remove the retired battle turn-status chrome and its faint top-right gold
+   remnant. The tactical board remains fully interactive underneath. */
+#battleTurnHeader,
+.battle-corner-right {
+  display: none !important;
+}
+
+/* Keep the remaining battle status card inside the same safe-area contract. */
+.game-stage[data-game-state="battle"] .selected-unit-card {
+  left: max(.8rem, calc(env(safe-area-inset-left) + .35rem)) !important;
+  top: max(.8rem, calc(env(safe-area-inset-top) + .35rem)) !important;
+}
+
+@media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
+  #exploreSidebar,
+  #exploreSidebar.is-collapsed {
+    left: max(.65rem, calc(env(safe-area-inset-left) + .38rem)) !important;
+    top: max(.48rem, calc(env(safe-area-inset-top) + .28rem)) !important;
+  }
+
+  .facility-overlay[data-facility-tab="bag"] .facility-window {
+    width: calc(100vw - max(.56rem, env(safe-area-inset-left) + env(safe-area-inset-right))) !important;
+    height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+  }
+
+  .facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+    grid-template-columns: repeat(auto-fill, minmax(4.2rem,1fr)) !important;
+    grid-auto-rows: minmax(5.55rem, auto);
+    gap: .32rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+    min-height: 5.55rem !important;
+    grid-template-rows: minmax(0,1fr) 1rem !important;
+    padding: .25rem .25rem .3rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-copy strong {
+    font-size: .5rem !important;
+  }
+  /* Touch targets stay comfortably tappable even before/after a battle pinch.
+     The visible arrow remains compact; only its transparent hit box grows. */
+  .battle-facing-picker button {
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+    font-size: .56rem !important;
+  }
+  .battle-facing-picker[data-projected="true"] button {
+    margin-left: -1.325rem !important;
+    margin-top: -1.325rem !important;
+  }
+  .battle-facing-picker[data-projected="true"] button > span {
+    font-size: .86rem !important;
+  }
+  .battle-facing-picker .facing-up { left: -1.325rem; top: -3.25rem; }
+  .battle-facing-picker .facing-left { left: -3.25rem; top: -1.325rem; }
+  .battle-facing-picker .facing-right { left: .6rem; top: -1.325rem; }
+  .battle-facing-picker .facing-down { left: -1.325rem; top: .6rem; }
+
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+    width: min(3.05rem, 78%) !important;
+    height: min(3.05rem, 78%) !important;
+  }
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .facility-overlay[data-facility-tab="bag"] .facility-content {
+    overflow-y: auto !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+    height: auto !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+    height: auto !important;
+    grid-template-rows: repeat(3, minmax(3.7rem,auto)) !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+    height: auto !important;
+    max-height: 42vh !important;
+  }
+}
+
+
+/* ======================================================================
+   MERGED: city-gate panel configuration drag/drop UI (preserved from prior patch)
+   ====================================================================== */
+/* ---------------------------------------------------------------------
+   Deck configuration: compact two-column drag-and-drop panel.
+   The learned-skill library never consumes skills; only the right panel
+   mutates. Pointer Events cover mouse, pen and touch with the same UI.
+   --------------------------------------------------------------------- */
+.facility-overlay[data-facility-tab="deck"] {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: clamp(.45rem, 1.7vw, 1.1rem) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .facility-window.ui-window {
+  width: min(50rem, calc(100vw - 1.2rem)) !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 1rem) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .facility-header.ui-header {
+  min-height: 3rem !important;
+  padding: .3rem .48rem .3rem .76rem !important;
+  border-bottom: 1px solid rgba(255,200,87,.16);
+}
+.facility-overlay[data-facility-tab="deck"] .facility-header h2 {
+  font-size: clamp(1rem, 1.8vw, 1.14rem) !important;
+  line-height: 1.15;
+}
+.facility-overlay[data-facility-tab="deck"] #facilityHelpButton,
+.facility-overlay[data-facility-tab="deck"] .facility-help-popover,
+.facility-overlay[data-facility-tab="deck"] .facility-tabs,
+.facility-overlay[data-facility-tab="deck"] .facility-summary,
+.facility-overlay[data-facility-tab="deck"] .facility-footer {
+  display: none !important;
+}
+.facility-overlay[data-facility-tab="deck"] .facility-content {
+  min-height: 0;
+  padding: clamp(.65rem, 1.6vw, 1rem) !important;
+  overflow: hidden !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-view-shell.is-editable {
+  width: min(100%, 45rem) !important;
+  margin-inline: auto;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-manage-layout {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: clamp(.65rem, 1.8vw, 1rem) !important;
+  align-items: start;
+  margin-inline: auto;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-management-column,
+.facility-overlay[data-facility-tab="deck"] .deck-current-column {
+  min-width: 0;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-region-heading {
+  min-height: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  margin: 0 0 .5rem !important;
+  text-align: center;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-region-heading h3 {
+  margin: 0 !important;
+  color: var(--cream);
+  font-size: .94rem !important;
+  line-height: 1.2;
+  text-align: center;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-capacity,
+.facility-overlay[data-facility-tab="deck"] .deck-slot-number,
+.facility-overlay[data-facility-tab="deck"] .deck-slot-action,
+.facility-overlay[data-facility-tab="deck"] .deck-skill-choice .facility-action-button {
+  display: none !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-list,
+.facility-overlay[data-facility-tab="deck"] .deck-slot-list {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: .34rem !important;
+  margin: 0 !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-list {
+  max-height: 20.1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,200,87,.55) rgba(4,8,17,.22);
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-list::-webkit-scrollbar { width: .38rem; }
+.facility-overlay[data-facility-tab="deck"] .deck-skill-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,200,87,.55); }
+.facility-overlay[data-facility-tab="deck"] .deck-skill-choice,
+.facility-overlay[data-facility-tab="deck"] .deck-slot {
+  position: relative !important;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3.05rem !important;
+  height: 3.05rem;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  place-items: center !important;
+  gap: 0 !important;
+  padding: .35rem 2.7rem !important;
+  overflow: hidden;
+  border: 1px solid rgba(255,200,87,.26) !important;
+  border-radius: .62rem !important;
+  color: var(--cream);
+  background: linear-gradient(145deg, rgba(28,43,70,.9), rgba(8,16,32,.96)) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 2px 3px 0 rgba(0,0,0,.22) !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-choice {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-slot.is-filled {
+  cursor: grab;
+  touch-action: none;
+  border-color: rgba(82,220,203,.56) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-slot.is-empty {
+  opacity: .78;
+  border-style: dashed !important;
+  border-color: rgba(245,233,202,.22) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-choice strong,
+.facility-overlay[data-facility-tab="deck"] .deck-slot strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--cream) !important;
+  font-size: .8rem !important;
+  line-height: 1.2;
+  text-align: center !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.facility-overlay[data-facility-tab="deck"] .skill-kind-badge {
+  position: absolute !important;
+  left: .62rem;
+  top: 50%;
+  width: 1.65rem !important;
+  height: 1.65rem !important;
+  display: grid !important;
+  place-items: center !important;
+  transform: translateY(-50%);
+  overflow: visible !important;
+  border: 1px solid rgba(137,255,177,.54);
+  border-radius: .36rem !important;
+  background: linear-gradient(145deg, #32a760, #14643b) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.18), 0 2px 4px rgba(0,0,0,.28);
+}
+.facility-overlay[data-facility-tab="deck"] .skill-kind-badge img { display: none !important; }
+.facility-overlay[data-facility-tab="deck"] .skill-kind-badge b {
+  position: static !important;
+  color: #f5fff6 !important;
+  font: 900 .9rem/1 ui-monospace, monospace !important;
+  letter-spacing: 0 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.45) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-slot-empty {
+  color: rgba(205,214,231,.42);
+  font-size: .74rem;
+  text-align: center;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-skill-choice:hover,
+.facility-overlay[data-facility-tab="deck"] .deck-slot.is-filled:hover,
+.facility-overlay[data-facility-tab="deck"] .deck-slot.is-drop-target {
+  border-color: rgba(82,220,203,.88) !important;
+  background: linear-gradient(145deg, rgba(30,62,77,.94), rgba(8,23,36,.98)) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .is-drag-source { opacity: .42 !important; }
+.deck-drag-ghost {
+  position: fixed !important;
+  z-index: 9999 !important;
+  width: min(18rem, 42vw) !important;
+  height: 3.05rem !important;
+  min-height: 3.05rem !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: .35rem 2.7rem !important;
+  transform: translate(-50%, -50%) scale(.96);
+  pointer-events: none !important;
+  opacity: .92;
+  border: 1px solid rgba(82,220,203,.9) !important;
+  border-radius: .62rem !important;
+  background: linear-gradient(145deg, rgba(30,62,77,.98), rgba(8,23,36,.99)) !important;
+  box-shadow: 0 .75rem 1.6rem rgba(0,0,0,.45) !important;
+}
+.deck-drag-ghost .skill-kind-badge {
+  position: absolute !important;
+  left: .62rem;
+  top: 50%;
+  width: 1.65rem !important;
+  height: 1.65rem !important;
+  display: grid !important;
+  place-items: center !important;
+  transform: translateY(-50%);
+  border: 1px solid rgba(137,255,177,.54);
+  border-radius: .36rem !important;
+  background: linear-gradient(145deg, #32a760, #14643b) !important;
+}
+.deck-drag-ghost .skill-kind-badge b { color: #f5fff6 !important; font: 900 .9rem/1 ui-monospace, monospace !important; }
+.deck-drag-ghost strong { color: var(--cream); font-size: .8rem; text-align: center; }
+
+.facility-overlay[data-facility-tab="deck"] .deck-view-shell.is-readonly {
+  width: min(100%, 21rem) !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-view-shell.is-readonly .deck-slot-list {
+  width: 100% !important;
+}
+.facility-overlay[data-facility-tab="deck"] .deck-view-shell.is-readonly .deck-slot.is-filled {
+  cursor: default;
+  touch-action: auto;
+}
+
+@media (max-width: 650px), (hover: none) and (pointer: coarse) {
+  .facility-overlay[data-facility-tab="deck"] {
+    padding:
+      max(.28rem, env(safe-area-inset-top))
+      max(.28rem, env(safe-area-inset-right))
+      max(.28rem, env(safe-area-inset-bottom))
+      max(.28rem, env(safe-area-inset-left)) !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .facility-window.ui-window {
+    width: min(100%, 46rem) !important;
+    max-height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+    border-width: 8px !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .facility-header.ui-header {
+    min-height: 2.55rem !important;
+    padding: .2rem .3rem .2rem .58rem !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .facility-header h2 { font-size: .92rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .facility-content { padding: .48rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-manage-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .42rem !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .deck-region-heading { margin-bottom: .34rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-region-heading h3 { font-size: .78rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-skill-list,
+  .facility-overlay[data-facility-tab="deck"] .deck-slot-list { gap: .25rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-skill-choice,
+  .facility-overlay[data-facility-tab="deck"] .deck-slot {
+    min-height: 2.72rem !important;
+    height: 2.72rem;
+    padding: .28rem 2.15rem !important;
+    border-radius: .5rem !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .deck-skill-list { max-height: 17.55rem; }
+  .facility-overlay[data-facility-tab="deck"] .skill-kind-badge {
+    left: .42rem;
+    width: 1.45rem !important;
+    height: 1.45rem !important;
+  }
+  .facility-overlay[data-facility-tab="deck"] .skill-kind-badge b { font-size: .78rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-skill-choice strong,
+  .facility-overlay[data-facility-tab="deck"] .deck-slot strong { font-size: .7rem !important; }
+  .facility-overlay[data-facility-tab="deck"] .deck-slot-empty { font-size: .64rem; }
+}

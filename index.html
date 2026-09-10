@@ -50,9 +50,9 @@
         const stylesheets = [
           ["", "styles.css?v=20260910-05"],
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
-          ["everrealmUiStyles", "ui-system.css?v=20260910-08"],
+          ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
-          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-08"],
+          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-11"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -90,38 +90,43 @@
 
           <nav class="sidebar-zone sidebar-primary explore-function-menu" aria-label="主要功能">
             <button id="statusButton" class="explore-menu-button" type="button" aria-label="打開角色狀態欄">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/status-v2.png" alt="" /></span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/status-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>狀態</b><small>STATUS</small></span>
             </button>
             <button id="inventoryButton" class="explore-menu-button" type="button" aria-label="打開物品欄（I）">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/inventory-v2.png" alt="" /></span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/inventory-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>物品欄</b><small>I · ITEMS</small></span>
               <b id="inventoryBookBadge" class="menu-badge" hidden>0</b>
             </button>
             <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開戰技面板">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/panel-v2.png" alt="" /></span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/panel-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>戰技面板</b><small>DECK · 唯讀查看</small></span>
             </button>
             <button id="skillTreeButton" class="explore-menu-button" type="button" aria-label="打開技能樹（L）">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/skills-v2.png" alt="" /></span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/skills-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>技能樹</b><small>L · SKILLS</small></span>
               <b id="skillMenuBadge" class="menu-badge" hidden aria-label="有可學習技能"></b>
             </button>
             <button id="missionButton" class="explore-menu-button" type="button" aria-label="打開任務">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/missions-v2.png" alt="" /></span>
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/missions-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>任務</b><small>QUESTS</small></span>
               <b id="missionMenuBadge" class="menu-badge" hidden aria-label="有可回報任務"></b>
             </button>
+            <button id="systemButton" class="explore-menu-button" type="button" aria-label="打開系統設定" aria-expanded="false" aria-controls="systemSettingsPopover">
+              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/system-v3.png" alt="" /></span>
+              <span class="explore-menu-copy"><b>系統</b><small>SETTINGS</small></span>
+            </button>
           </nav>
 
-          <section class="sidebar-zone sidebar-secondary" aria-label="次要控制">
-            <div id="zoomControl" class="explore-zoom-control" role="group" aria-label="地圖視角">
-              <span>視角</span>
-              <button type="button" data-zoom-level="far" aria-pressed="false">遠</button>
-              <button type="button" data-zoom-level="mid" aria-pressed="true">中</button>
-              <button type="button" data-zoom-level="near" aria-pressed="false">近</button>
-            </div>
-            <button id="soundButton" class="sidebar-sound-button round-button" type="button" aria-label="關閉音樂與聲效" aria-pressed="true">♪</button>
+          <section id="systemSettingsPopover" class="system-settings-popover" aria-labelledby="systemSettingsTitle" hidden>
+            <header class="system-settings-header">
+              <strong id="systemSettingsTitle">系統</strong>
+              <button id="systemSettingsCloseButton" class="system-settings-close" type="button" aria-label="關閉系統設定">×</button>
+            </header>
+            <button id="soundButton" class="system-setting-row" type="button" aria-label="關閉音樂" aria-pressed="true">
+              <span>音樂</span>
+              <span class="system-toggle-track" aria-hidden="true"><i></i></span>
+            </button>
           </section>
 
           <section id="commissionHud" class="sidebar-zone sidebar-quest quest-hud" aria-label="公會委託">
@@ -438,14 +443,14 @@
           "guild-commission-core.js",
           "tactics-core.js",
           "fighter-skill-data.js",
-          "skill-core.js",
+          "skill-core.js?v=20260910-11",
           "audio-core.js?v=20260910-04",
           "main-town-bgm-loop.js?v=20260910-04",
           "save-system.js",
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260910-08",
+          "game.js?v=20260910-11",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);
@@ -471,7 +476,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-08", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-11", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
