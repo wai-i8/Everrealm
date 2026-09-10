@@ -9,11 +9,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Everrealm" />
-    <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/pwa/icon-180.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/pwa/icon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/pwa/icon-16.png" />
-    <link rel="shortcut icon" href="favicon.ico" />
+    <meta name="application-name" content="Everrealm" />
+    <link rel="manifest" href="/Everrealm/everrealm.webmanifest?v=20260910-02" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/Everrealm/assets/pwa/everrealm-icon-180-v2.png?v=20260910-02" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/Everrealm/assets/pwa/everrealm-icon-32-v2.png?v=20260910-02" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/Everrealm/assets/pwa/everrealm-icon-16-v2.png?v=20260910-02" />
+    <link rel="shortcut icon" href="/Everrealm/assets/pwa/everrealm-favicon-v2.ico?v=20260910-02" />
     <title>永恆國度 · Everrealm</title>
     <link rel="stylesheet" href="styles.css" />
     <link id="inventoryOverhaulStyles" rel="stylesheet" href="inventory-overhaul.css" />
@@ -415,8 +416,8 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("./service-worker.js", {
-              scope: "./",
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-02", {
+              scope: "/Everrealm/",
               updateViaCache: "none",
             });
 

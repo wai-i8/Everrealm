@@ -1,0 +1,10 @@
+Everrealm PWA v2 strict-scope patch
+
+- App identity is pinned to /Everrealm/.
+- start_url and scope are pinned to /Everrealm/.
+- Service worker is registered with the explicit /Everrealm/ scope.
+- Manifest, worker and icon paths use Everrealm-specific versioned names.
+- Android maskable 192/512 icons are included.
+- Legacy manifest.webmanifest and service-worker.js are kept synchronized for smooth migration.
+
+Deploy: merge this ZIP into the repository root, preserving the existing assets/game files, then commit and push.
