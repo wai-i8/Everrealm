@@ -103,7 +103,7 @@
 
 ### Fighter V1 equipment
 
-格鬥士 V1 只可購買及裝備拳套系武器與下列拳腳防具；戰士武器及其他職業裝備不可跨職業使用。四件拳套武器依序為 `metal_knuckles`（Lv6，攻擊 10，450）、`giz_armguard`（Lv12，攻擊 17，1800）、`heavy_knuckles`（Lv18，攻擊 25，4050）及 `superheavy_knuckles`（Lv24，攻擊 34，7200）。防具分為 `disciple`（Lv5）、`training`（Lv14）及 `conditioning`（Lv23）三套上／下身、手、腳部件，另有 Lv10 `white_martial_gi` 及 Lv20 `colored_martial_gi` 全身套裝；完整欄位、價格、數值、互斥部位及移動加成由 `expansion-core.js` catalog 保存。等級不足或職業不符時，商店購買與裝備都必須拒絕，不能以 UI 隱藏取代核心驗證。
+格鬥士 V1 商店只顯示五類：武器、頭部、上身、下身、武道服；戰士武器及其他職業裝備不可跨職業使用。四件拳套武器依序為 `metal_knuckles`（Lv6，攻擊 10，450）、`giz_armguard`（Lv12，攻擊 17，1800）、`heavy_knuckles`（Lv18，攻擊 25，4050）及 `superheavy_knuckles`（Lv24，攻擊 34，7200）。現行上／下身為 `disciple`、`training`、`conditioning` 三階段，另有 Lv10 `white_martial_gi` 及 Lv20 `colored_martial_gi` 一件式武道服；舊版手／腳裝備及已被替換的舊拳套只留作舊存檔兼容，不會出現在現行商店。完整固定資料由 `data/equipment.js` 保存，購買／裝備驗證由 `expansion-core.js` 負責。等級不足或職業不符時，商店購買與裝備都必須拒絕，不能以 UI 隱藏取代核心驗證。
 
 ## 世界與美術一致性
 

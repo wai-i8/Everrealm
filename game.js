@@ -26,6 +26,9 @@
   const Core = window.LanternCore;
   const World = window.LanternWorld;
   const Expansion = window.LanternExpansion;
+  const ClassData = window.EverrealmClassData;
+  const EquipmentData = window.EverrealmEquipmentData;
+  const ItemData = window.EverrealmItemData;
   const ExpansionWorld = window.LanternExpansionWorld;
   const Guild = window.LanternGuildCommission;
   const MapRegistry = window.LanternMapRegistry;
@@ -143,8 +146,6 @@
     zone: document.getElementById("zoneName"),
   };
 
-  const expansionEnemyColors = { chick: "#d89d42", fox: "#c9783e", raccoon: "#7c6656", wild_boar: "#9a684c", bear: "#a66f45", turtle: "#817548", coyote: "#87786f", frog: "#7ba15a", snake: "#d09535" };
-  const explorationSpeed = { bird: 92, beast: 104, reptile: 76, amphibian: 88 };
   const enemyTypes = {};
   for (const type of ExpansionWorld.CANONICAL_MONSTER_IDS) {
     const blueprint = ExpansionWorld.monsterBlueprint(type);
@@ -155,16 +156,16 @@
       hp: stats.hp,
       damage: stats.attack,
       defence: stats.defense,
-      speed: explorationSpeed[blueprint.family] || 86,
+      speed: blueprint.exploration?.speed || 86,
       battleSpeed: firstSkill.speedGrade === "A" ? 14 : firstSkill.speedGrade === "B" ? 11 : firstSkill.speedGrade === "D" ? 7 : 9,
       moveRange: blueprint.moveRange,
       attackRange: firstSkill.range.max,
       xp: blueprint.rewards.baseXp,
       coins: blueprint.rewards.coins,
-      radius: blueprint.id === "bear" ? 28 : blueprint.id === "turtle" ? 22 : 15,
-      aggro: blueprint.boss ? 500 : 225,
+      radius: blueprint.exploration?.radius || 15,
+      aggro: blueprint.exploration?.aggro || (blueprint.boss ? 500 : 225),
       range: firstSkill.range.max > 1 ? 155 : 38,
-      color: expansionEnemyColors[type] || "#9b8ab7",
+      color: blueprint.exploration?.color || "#9b8ab7",
       artType: blueprint.id,
       drop: blueprint.drop,
       ability: blueprint.ability,
@@ -190,8 +191,6 @@
   let openedChests = new Set();
   let ownedEquipment = ["novice_blade", "traveller_coat"];
   let equipped = { head: null, weapon: "novice_blade", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
-  let activeContracts = [];
-  let contractRotation = 0;
   let guildCommissionState = Guild.normalizeState();
   let pendingAbandonContractId = null;
   let guildMarks = 0;
@@ -227,6 +226,7 @@
   let suppressSkillTreeClickUntil = 0;
   let selectedInventoryItemId = null;
   let inventoryCategory = "all";
+  let equipmentShopCategory = "weapon";
   let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
@@ -248,74 +248,7 @@
     inn: .60,
   });
   const mobileExploreZoomByMap = new Map();
-  const ITEM_ICON_INDEX = Object.freeze({
-    healing_potion: 0,
-    skill_book_1: 1,
-    skill_book_2: 2,
-    skill_book_3: 3,
-    lamp_dust: 4,
-    hound_fang: 5,
-    bright_spore: 6,
-    moth_scale: 7,
-    golem_core: 8,
-    "golem-core": 8,
-    deep_crystal: 9,
-    moss_jelly: 10,
-    "moss-jelly": 10,
-    "mist-wing": 11,
-    "crag-tusk": 12,
-    "hollow-rune": 13,
-    warden_lens: 14,
-    "warden-lens": 14,
-    coins: 15,
-  });
-  const EQUIPMENT_ICON_INDEX = Object.freeze({
-    novice_blade: 0,
-    tide_iron_sword: 1,
-    windfeather_dagger: 2,
-    lantern_sabre: 3,
-    starfall_glaive: 4,
-    dawn_oath: 5,
-    traveller_coat: 6,
-    guild_mail: 7,
-    mistweave_cape: 8,
-    cavern_guard: 9,
-    aurora_plate: 10,
-    copper_lantern_bell: 11,
-    hunter_fang: 12,
-    wayfarer_compass: 13,
-    deep_lantern_core: 14,
-  });
-  const FIGHTER_EQUIPMENT_ICON_INDEX = Object.freeze({
-    novice_gloves: 0,
-    tide_iron_knuckles: 1,
-    gale_gauntlets: 2,
-    dragon_knuckles: 3,
-    metal_knuckles: 0,
-    giz_armguard: 1,
-    heavy_knuckles: 2,
-    superheavy_knuckles: 3,
-  });
-  const EQUIPMENT_ICON_FALLBACK_INDEX = Object.freeze({
-    disciple_gi: 6,
-    disciple_lower: 6,
-    disciple_handguards: 7,
-    disciple_shoes: 6,
-    training_wrap: 6,
-    training_belt: 6,
-    training_bracers: 7,
-    training_zori: 6,
-    conditioning_suit: 6,
-    conditioning_skirt: 6,
-    conditioning_handguards: 7,
-    conditioning_shoes: 6,
-    white_martial_gi: 8,
-    cloth_bracers: 7,
-    barefoot_bands: 6,
-    colored_martial_gi: 8,
-    joint_bracers: 7,
-    barefoot_guard: 6,
-  });
+  const FIGHTER_SHOP_ITEM_ID_SET = EquipmentData?.FIGHTER_SHOP_ITEM_ID_SET || new Set();
   const FIGHTER_GUILD_BOOK_RANKS = new Map(
     (window.LanternFighterSkillData?.skills || []).map((sourceSkill) => {
       const ranks = (sourceSkill.original_reference?.acquisition?.guild_reward_books || [])
@@ -642,27 +575,6 @@
     return Guild.activeCommission(guildCommissionState);
   }
 
-  function syncGuildCommissionProjection() {
-    guildCommissionState = Guild.normalizeState(guildCommissionState);
-    const commission = activeGuildCommission();
-    activeContracts = commission ? [{
-      id: `${guildCommissionState.cycle}:${commission.id}`,
-      templateId: commission.id,
-      rotation: String(guildCommissionState.cycle),
-      title: commission.title,
-      description: commission.description,
-      minLevel: commission.recommendedLevel,
-      objective: commission.type === "hunt"
-        ? { event: "defeat", target: commission.objective.monster_id, count: commission.objective.count }
-        : { event: "delivery", target: commission.objective.recipient_npc_id, count: 1 },
-      reward: { coins: 0, xp: 0, items: [] },
-      rewardBookStar: commission.reward.skill_envelope_star,
-      progress: guildCommissionState.progress,
-      status: guildCommissionState.status === "ready_to_report" ? "ready" : guildCommissionState.status,
-      type: commission.type,
-    }] : [];
-    contractRotation = guildCommissionState.cycle;
-  }
 
   function makeEnemy(spawn, overrides = {}) {
     const requestedType = overrides.type || spawn.type;
@@ -760,12 +672,12 @@
 
   function resetExpansionProgress(classId = playerClassId) {
     playerClassId = Skills.CLASS_IDS?.includes(classId) ? classId : (Skills.DEFAULT_CLASS_ID || "warrior");
-    const starterWeapon = playerClassId === "fighter" ? "novice_gloves" : "novice_blade";
-    ownedEquipment = [starterWeapon, "traveller_coat"];
-    equipped = { head: null, weapon: starterWeapon, upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
+    const starterGear = Expansion.starterEquipmentForClass(playerClassId);
+    const starterWeapon = starterGear.weapon;
+    const starterUpperBody = starterGear.upperBody;
+    ownedEquipment = [starterWeapon, starterUpperBody];
+    equipped = { head: null, weapon: starterWeapon, upperBody: starterUpperBody, lowerBody: null, hands: null, feet: null, charm: null };
     guildCommissionState = Guild.emptyState();
-    syncGuildCommissionProjection();
-    contractRotation = 0;
     guildMarks = 0;
     guildRenown = 0;
     inventory = {};
@@ -778,6 +690,7 @@
     facilityContext = "portable";
     selectedInventoryItemId = null;
     inventoryCategory = "all";
+    equipmentShopCategory = "weapon";
     inventoryFixtureCount = 0;
   }
 
@@ -785,30 +698,24 @@
     const data = raw && typeof raw === "object" ? raw : {};
     skillState = Skills.normalizeSkillState(data.skills, { classId: data.classId || data.skills?.classId });
     playerClassId = skillState.classId;
-    const starterWeapon = playerClassId === "fighter" ? "novice_gloves" : "novice_blade";
+    const starterGear = Expansion.starterEquipmentForClass(playerClassId);
+    const starterWeapon = starterGear.weapon;
+    const starterUpperBody = starterGear.upperBody;
     const knownEquipment = new Set(Expansion.DEFAULT_EQUIPMENT_CATALOG.map((item) => item.id));
     const savedOwned = Array.isArray(data.ownedEquipment) ? data.ownedEquipment.filter((id) => knownEquipment.has(id)) : [];
     const gearState = Expansion.normalizeEquipmentState({
       coins: player.coins,
       level: player.level,
-      ownedEquipment: [...new Set([starterWeapon, "traveller_coat", ...savedOwned])],
+      ownedEquipment: [...new Set([starterWeapon, starterUpperBody, ...savedOwned])],
       classId: playerClassId,
-      equipped: data.equipped || { weapon: starterWeapon, body: "traveller_coat", charm: null },
+      equipped: data.equipped || { weapon: starterWeapon, body: starterUpperBody, charm: null },
     });
     ownedEquipment = gearState.ownedEquipment;
-    equipped = { ...gearState.equipped, weapon: gearState.equipped.weapon || starterWeapon, upperBody: gearState.equipped.upperBody || "traveller_coat" };
+    equipped = { ...gearState.equipped, weapon: gearState.equipped.weapon || starterWeapon, upperBody: gearState.equipped.upperBody || starterUpperBody };
     guildCommissionState = Guild.normalizeState(data.guildCommission);
-    syncGuildCommissionProjection();
-    contractRotation = Core.clamp(Math.floor(Number(data.contractRotation) || guildCommissionState.cycle || 0), 0, 999999999);
     guildMarks = Core.clamp(Math.floor(Number(data.guildMarks) || 0), 0, 99999);
     guildRenown = Core.clamp(Math.floor(Number(data.guildRenown) || 0), 0, 999999);
-    inventory = {};
-    const knownInventory = new Set(["warden_lens"]);
-    for (const template of Expansion.DEFAULT_CONTRACT_TEMPLATES) for (const item of template.reward.items) knownInventory.add(item.id);
-    for (const blueprint of Object.values(ExpansionWorld.MONSTER_BLUEPRINTS)) if (blueprint.drop) knownInventory.add(blueprint.drop.id);
-    if (data.inventory && typeof data.inventory === "object") {
-      for (const [id, amount] of Object.entries(data.inventory).slice(0, 80)) if (knownInventory.has(id)) inventory[id] = Core.clamp(Math.floor(Number(amount) || 0), 0, 999);
-    }
+    inventory = ItemData?.normalizeInventory?.(data.inventory, { maxEntries: 80, maxQuantity: 999 }) || {};
     monsterKills = {};
     if (data.monsterKills && typeof data.monsterKills === "object") {
       for (const [type, amount] of Object.entries(data.monsterKills).slice(0, 40)) if (enemyTypes[type]) monsterKills[type] = Core.clamp(Math.floor(Number(amount) || 0), 0, 99999);
@@ -964,8 +871,6 @@
         ownedEquipment: [...ownedEquipment],
         equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
-        activeContracts,
-        contractRotation,
         guildMarks,
         guildRenown,
         inventory: { ...inventory },
@@ -1502,7 +1407,7 @@
     return JSON.stringify({
       player: { x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
       pendingLevelUps, openedChests: [...openedChests].sort(),
-      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, activeContracts, contractRotation, guildMarks, guildRenown, inventory, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
+      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
     });
   }
 
@@ -1532,7 +1437,6 @@
       instanceId: enemy?.instanceId || enemy?.id,
     });
     guildCommissionState = result.state;
-    syncGuildCommissionProjection();
     if (result.changed) {
       const commission = result.commission;
       showToast(commission.type === "hunt" && result.state.status === "ready_to_report"
@@ -1555,7 +1459,7 @@
       defeatedDungeonBosses.add(enemy.id);
       dungeonClears += 1;
       guildMarks += 2;
-      inventory["warden-lens"] = (inventory["warden-lens"] || 0) + 1;
+      inventory.warden_lens = (inventory.warden_lens || 0) + 1;
       player.coins += enemy.coins;
       sound.crystal();
       showToast(`沉燈坑道突破！第 ${dungeonClears} 次 · +2 公會印記`, "good");
@@ -1968,7 +1872,6 @@
       return startDialogue({ speaker: npc.name, color: npc.color, lines: ["你手上而家冇要交畀我嘅公會信件。"] });
     }
     guildCommissionState = result.state;
-    syncGuildCommissionProjection();
     sound.crystal();
     showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
     saveImportant(false);
@@ -2334,10 +2237,7 @@
   }
 
   function inventoryItemName(id) {
-    const names = { warden_lens: "看守者霧鏡" };
-    for (const template of Expansion.DEFAULT_CONTRACT_TEMPLATES) for (const item of template.reward.items) names[item.id] = item.name;
-    for (const blueprint of Object.values(ExpansionWorld.MONSTER_BLUEPRINTS)) if (blueprint.drop) names[blueprint.drop.id] = blueprint.drop.name;
-    return names[id] || id.replaceAll("_", " ").replaceAll("-", " ");
+    return ItemData?.getItem?.(id)?.name || String(id || "").replaceAll("_", " ").replaceAll("-", " ");
   }
 
   function rewardItemText(reward) {
@@ -2538,22 +2438,7 @@
   }
 
   function materialDescription(id) {
-    return ({
-      lamp_dust: "公會用嚟修補燈具嘅幼細晶粉。",
-      hound_fang: "霧犬留下嘅硬牙，可以磨成護符。",
-      bright_spore: "會喺黑暗中發光嘅孢子，藥師十分珍惜。",
-      moth_scale: "薄而閃亮嘅晶翅鱗粉，可用作輕裝材料。",
-      golem_core: "委託指定嘅石像核心，仍然帶住微弱熱力。",
-      "golem-core": "失控燈偶留下嘅動力核心。",
-      deep_crystal: "只會喺深層濃霧凝結嘅紫晶。",
-      moss_jelly: "柔軟又有生命力嘅青苔凝膠。",
-      "moss-jelly": "苔糰子留下嘅青苔啫喱，可作回復藥素材。",
-      "mist-wing": "幾乎冇重量嘅翼膜，適合製作敏捷裝備。",
-      "crag-tusk": "岩甲小豚嘅短牙，堅硬得似礦石。",
-      "hollow-rune": "空殼術士身上剝落嘅古老符片。",
-      warden_lens: "深霧看守者嘅稀有霧鏡，映住地城最深處。",
-      "warden-lens": "深霧看守者嘅稀有霧鏡，映住地城最深處。",
-    })[id] || "冒險途中取得嘅素材，可以留作交換或製作裝備。";
+    return ItemData?.getItem?.(id)?.description || "冒險途中取得嘅素材，可以留作交換或製作裝備。";
   }
 
   function renderBagFacility() {
@@ -2678,7 +2563,7 @@
       ? equipmentIconHtml(item.equipment, extraClass)
       : item.iconType === "envelope"
         ? envelopeIconHtml(item.name)
-        : atlasIconHtml("item", ITEM_ICON_INDEX[item.iconId || item.id] ?? 4, item.name, extraClass);
+        : atlasIconHtml("item", Number.isFinite(Number(item.iconId)) ? Number(item.iconId) : (ItemData?.getItem?.(item.id)?.iconIndex ?? 4), item.name, extraClass);
     const actionMarkup = (item) => {
       if (!item.action) return "";
       const attrs = [
@@ -2731,12 +2616,15 @@
   }
 
   function equipmentIconHtml(item, extraClass = "") {
-    if (Object.hasOwn(FIGHTER_EQUIPMENT_ICON_INDEX, item?.id)) {
-      const index = FIGHTER_EQUIPMENT_ICON_INDEX[item.id];
-      return `<span class="atlas-icon fighter-equipment-icon-atlas ${extraClass}" style="--atlas-x:${index * 33.333333}%;--atlas-y:0%" role="img" aria-label="${item.name || "拳套"}"></span>`;
+    const icon = item?.icon || EquipmentData?.getEquipment?.(item?.id)?.icon;
+    if (icon?.type === "image" && icon.src) {
+      return `<span class="equipment-item-art ${extraClass}" style="--equipment-art:url('${icon.src}')" role="img" aria-label="${item?.name || "裝備"}"></span>`;
     }
-    const index = EQUIPMENT_ICON_FALLBACK_INDEX[item?.id] ?? EQUIPMENT_ICON_INDEX[item?.id] ?? item?.iconIndex ?? 0;
-    return atlasIconHtml("equipment", index, item?.name || "裝備", extraClass);
+    if (icon?.type === "atlas" && icon.atlas === "fighter-equipment") {
+      const index = Math.max(0, Math.min(3, Number(icon.index) || 0));
+      return `<span class="atlas-icon fighter-equipment-icon-atlas ${extraClass}" style="--atlas-x:${index * 33.333333}%;--atlas-y:0%" role="img" aria-label="${item?.name || "拳套"}"></span>`;
+    }
+    return atlasIconHtml("equipment", icon?.index ?? item?.iconIndex ?? 0, item?.name || "裝備", extraClass);
   }
 
   function paperdollSlotIconHtml(visualSlot) {
@@ -2814,35 +2702,59 @@
       </section>
       <div class="facility-section-heading skill-list-heading"><div><small>OWNED GEAR</small><h3>已擁有裝備</h3></div><span>${ownedEquipment.length} 件</span></div>
       <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>未有裝備</strong></div>'}</div>
-      <div class="facility-note"><b>裝備槽位</b><span>頭部暫未開放；上身、下身、手部同腳部會按裝備資料獨立或一件式佔用。</span></div>`;
+      <div class="facility-note"><b>裝備槽位</b><span>頭部、武器、上身、下身都會按裝備資料獨立佔用；武道服屬一件式裝備，會同時佔用上身及下身。</span></div>`;
     drawEquipmentPaperdoll();
     setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`);
   }
 
   function renderShopFacility() {
-    const slotNames = { weapon: "武器", upperBody: "上身", lowerBody: "下身", hands: "手部", feet: "腳部", charm: "飾物" };
     const atShop = currentMapId === "shop";
     const discountRate = guildDiscountRate();
-    const sections = Expansion.EQUIPMENT_SHOP_SLOTS.map((slot) => {
-      const cards = Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.slot === slot && equipmentMatchesClass(item)).map((item) => {
-        const owned = ownedEquipment.includes(item.id);
-        const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
-        const levelLocked = player.level < item.requiredLevel;
-        const shopCost = Math.max(0, Math.floor(item.cost * (1 - discountRate)));
-        let label = isEquipped ? "裝備中" : owned ? "裝備" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : !item.purchasable ? "寶箱限定" : `${shopCost} 燈幣購買${discountRate ? `（-${Math.round(discountRate * 100)}%）` : ""}`;
-        const action = owned ? "equip" : "buy";
-        const disabled = isEquipped || levelLocked || (!owned && (!item.purchasable || !atShop));
-        return `<article class="equipment-card ${isEquipped ? "is-equipped" : ""}">
-          ${equipmentIconHtml(item, "equipment-card-atlas-icon")}
-          <div class="equipment-copy"><div class="facility-card-heading"><span class="facility-chip">LV.${item.requiredLevel}</span><strong>${item.name}</strong></div><p>${item.description}</p><small>${statText(item.stats)}</small></div>
-          <button class="facility-action-button" type="button" data-facility-action="${action}" data-item-id="${item.id}" ${disabled ? "disabled" : ""}>${label}</button>
-        </article>`;
-      }).join("");
-      return `<section class="equipment-section"><div class="facility-section-heading"><div><small>${slot.toUpperCase()}</small><h3>${slotNames[slot]}</h3></div></div><div class="equipment-grid">${cards}</div></section>`;
+    const categories = [
+      { key: "weapon", label: "武器", matches: (item) => item.slot === "weapon" },
+      { key: "head", label: "頭部", matches: (item) => item.slot === "head" },
+      { key: "upper", label: "上身", matches: (item) => item.slot === "upperBody" && !item.occupiesSlots.includes("lowerBody") },
+      { key: "lower", label: "下身", matches: (item) => item.slot === "lowerBody" },
+      { key: "martial", label: "武道服", matches: (item) => item.slot === "upperBody" && item.occupiesSlots.includes("lowerBody") },
+    ];
+    if (!categories.some((category) => category.key === equipmentShopCategory)) equipmentShopCategory = "weapon";
+    const activeCategory = categories.find((category) => category.key === equipmentShopCategory) || categories[0];
+    const shopItems = Expansion.DEFAULT_EQUIPMENT_CATALOG
+      .filter((item) => FIGHTER_SHOP_ITEM_ID_SET.has(item.id) && equipmentMatchesClass(item) && activeCategory.matches(item))
+      .sort((left, right) => left.requiredLevel - right.requiredLevel || left.name.localeCompare(right.name, "zh-HK"));
+    const tabs = categories.map((category) => `<button class="equipment-shop-tab" type="button" role="tab" data-facility-action="shop-category" data-shop-category="${category.key}" aria-selected="${category.key === equipmentShopCategory ? "true" : "false"}">${category.label}</button>`).join("");
+    const cards = shopItems.map((item) => {
+      const owned = ownedEquipment.includes(item.id);
+      const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
+      const levelLocked = player.level < item.requiredLevel;
+      const shopCost = Math.max(0, Math.floor(item.cost * (1 - discountRate)));
+      const action = owned ? "equip" : "buy";
+      const disabled = isEquipped || levelLocked || (!owned && (!item.purchasable || !atShop));
+      const buttonLabel = isEquipped ? "裝備中" : owned ? "裝備" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : !item.purchasable ? "非賣品" : "購買";
+      const price = owned
+        ? '<span class="equipment-price is-owned">已擁有</span>'
+        : !item.purchasable
+          ? '<span class="equipment-price">非賣品</span>'
+          : `<span class="equipment-price">${shopCost} 燈幣${discountRate ? `<small>原價 ${item.cost}</small>` : ""}</span>`;
+      const onePiece = item.occupiesSlots.includes("upperBody") && item.occupiesSlots.includes("lowerBody");
+      return `<article class="equipment-card equipment-shop-card ${isEquipped ? "is-equipped" : ""}">
+        <div class="equipment-shop-art">${equipmentIconHtml(item, "equipment-card-atlas-icon")}</div>
+        <div class="equipment-copy">
+          <div class="facility-card-heading"><span class="facility-chip">LV.${item.requiredLevel}</span><strong>${item.name}</strong>${onePiece ? '<em class="equipment-one-piece">一件式</em>' : ""}</div>
+          <p>${item.description}</p>
+          <small>${statText(item.stats)}</small>
+        </div>
+        <div class="equipment-shop-purchase">${price}<button class="facility-action-button" type="button" data-facility-action="${action}" data-item-id="${item.id}" ${disabled ? "disabled" : ""}>${buttonLabel}</button></div>
+      </article>`;
     }).join("");
-    const bag = Object.entries(inventory).filter(([, amount]) => amount > 0).map(([id, amount]) => `<span>${inventoryItemName(id)} × ${amount}</span>`).join("") || "<span>素材袋仲係空嘅</span>";
-    facilityContent.innerHTML = `${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去米克雷帝國「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}${sections}<div class="facility-note"><b>素材袋</b><span class="inventory-row">${bag}</span></div>`;
-    setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 燈幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}輕裝快、重裝硬。`);
+    facilityContent.innerHTML = `
+      ${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去米克雷帝國「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}
+      <nav class="equipment-shop-tabs" role="tablist" aria-label="裝備分類">${tabs}</nav>
+      <section class="equipment-shop-browser" aria-label="${activeCategory.label}">
+        <div class="facility-section-heading equipment-shop-heading"><div><small>FIGHTER EQUIPMENT</small><h3>${activeCategory.label}</h3></div><span>格鬥士專用裝備</span></div>
+        <div class="equipment-grid">${cards || '<div class="facility-empty-state"><strong>呢個分類暫時冇商品</strong></div>'}</div>
+      </section>`;
+    setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 燈幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}銀火裝備店`);
   }
 
   function skillStars(star) {
@@ -3486,7 +3398,7 @@
       equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
       deck: ["", facilityContext === "deck" ? "面板配置" : "面板", ""],
       guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
-      shop: ["", "銀火裝備店", "武器、防具、飾物各有取捨；唔係只睇最大數字。"],
+      shop: ["", "銀火裝備店", "同一間店可以購買格鬥士武器與防具；用分類切換武器、頭部、上身、下身及武道服。"],
       skills: ["", "技能樹", ""],
       codex: ["", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
     }[facilityTab];
@@ -3600,7 +3512,6 @@
     const result = Guild.accept(guildCommissionState, offerId);
     if (!result.ok) return showToast(result.reason === "already-active" ? "同一時間只可以接一份委託。" : "搵唔到呢份委託。", "danger");
     guildCommissionState = result.state;
-    syncGuildCommissionProjection();
     sound.crystal();
     showToast(`已接委託：${result.commission.title}`, "good");
     renderFacility();
@@ -3615,7 +3526,6 @@
     const result = Guild.report(guildCommissionState);
     if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
     guildCommissionState = result.state;
-    syncGuildCommissionProjection();
     sound.level();
     showToast(`委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1`, "good");
     renderFacility();
@@ -3656,7 +3566,6 @@
       return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
     }
     guildCommissionState = result.state;
-    syncGuildCommissionProjection();
     closeAbandonCommission(false);
     showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
     renderFacility();
@@ -3688,7 +3597,7 @@
   function changeEquipment(itemId, buyFirst = false) {
     const beforeMax = playerStats().maxHp;
     const requestedItem = equipmentItem(itemId);
-    if (!equipmentMatchesClass(requestedItem)) return showToast(playerClassId === "fighter" ? "格鬥士只可以裝備拳套。" : "戰士唔可以裝備拳套。", "danger");
+    if (!equipmentMatchesClass(requestedItem)) return showToast("呢件裝備唔適合目前職業。", "danger");
     let state = { coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped };
     if (buyFirst) {
       if (currentMapId !== "shop") return showToast("購買裝備要親身去銀火裝備店。", "danger");
@@ -8563,7 +8472,7 @@
         currentMapId, bgm: bgm.snapshot(), pendingLevelUps,
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
-        activeContracts, guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
+        guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
         skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
@@ -8829,7 +8738,7 @@
         return window.__RPG_DEBUG__.snapshot();
       },
       acceptOffer: (id) => acceptGuildOffer(id || currentContractOffers()[0]?.id),
-      claimContract: (id) => claimGuildContract(id || activeContracts[0]?.id),
+      claimContract: (id) => claimGuildContract(id),
       recordGuildKill: (monsterId, instanceId) => {
         const result = recordDefeatedMonster({ type: monsterId, instanceId: instanceId || `${monsterId}:debug:${Date.now()}` });
         updateHud(true);
@@ -8991,6 +8900,11 @@
         ? button.dataset.inventoryCategory
         : "all";
       renderBagFacility();
+    } else if (action === "shop-category") {
+      equipmentShopCategory = ["weapon", "head", "upper", "lower", "martial"].includes(button.dataset.shopCategory)
+        ? button.dataset.shopCategory
+        : "weapon";
+      renderShopFacility();
     } else if (action === "accept") acceptGuildOffer(button.dataset.offerId);
     else if (action === "claim") claimGuildContract(button.dataset.contractId);
     else if (action === "abandon") openAbandonCommission(button.dataset.contractId);

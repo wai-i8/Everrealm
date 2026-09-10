@@ -4,7 +4,7 @@
 
 ## Runtime source
 
-完整 machine-readable data 由根目錄 `fighter-skill-data.js` 載入 `LanternFighterSkillData`，再由 `skill-core.js` 建立 immutable `SKILL_CATALOG`。`skills[]` 每一招均保存：
+完整 machine-readable data 由 `data/skills/fighter.js` 載入 `LanternFighterSkillData`，再由 `skill-core.js` 建立 immutable `SKILL_CATALOG`。`skills[]` 每一招均保存：
 
 - `id`、`name_zh`、`type`、`category`、explicit `requires[]`、`requires_status`；
 - `original_reference.ap`、`speed`、`interrupt`、`durability`、`range.range_cells_relative`、`range.height_difference`、`effect_area`、`acquisition`；
@@ -203,4 +203,4 @@ capacity, passive-skill restrictions or any gameplay data contract.
 
 ### Compatibility
 
-The catalog contains exactly the 65 canonical ids above. A read-only legacy alias map in `fighter-skill-data.js` accepts older Everrealm save/debug ids (for example `straight_punch → kentotsu`) without adding duplicate nodes or graph edges.
+The catalog contains exactly the 65 canonical ids above. A read-only legacy alias map in `data/skills/fighter.js` accepts older Everrealm save/debug ids (for example `straight_punch → kentotsu`) without adding duplicate nodes or graph edges.

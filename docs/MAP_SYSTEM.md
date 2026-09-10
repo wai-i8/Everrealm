@@ -223,7 +223,7 @@ special
 | `general-store` | `maps/interiors/general-store.js` |
 | `inn` | `maps/interiors/inn.js` |
 
-共用 `TILE`、`TILES`、`MAP_IDS` 只在 `map/map-constants.js` 定義；`point()`、tile generation、deterministic `mulberry32()`、`makeExit()`、collection normalization、`tileAt()` 等只在 `map/map-helpers.js` 共用。怪物 blueprint／hydration 屬獨立的 `map/monster-blueprints.js`，不再由某張 map 擁有。
+共用 `TILE`、`TILES`、`MAP_IDS` 只在 `map/map-constants.js` 定義；`point()`、tile generation、deterministic `mulberry32()`、`makeExit()`、collection normalization、`tileAt()` 等只在 `map/map-helpers.js` 共用。怪物固定資料由 `data/monsters.js` 擁有；blueprint hydration／legacy resolver 屬獨立的 `map/monster-blueprints.js`，不再由某張 map 擁有。
 
 新增地圖的流程是：新增自己的 `maps/**/*.js` factory → 在 `map/map-registry.js` 註冊 → 在 `map/map-transitions.js` 定義 connection/linking → 新增 `docs/maps/*.md` → 加入 registry/transition tests。不得把新 map definition 加回 monolithic compatibility wrapper。
 

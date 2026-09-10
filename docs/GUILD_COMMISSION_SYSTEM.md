@@ -4,7 +4,7 @@
 
 ## 委託身份與 V1 目錄
 
-每份委託以穩定 `id` 識別；`star`、`type`、`recommendedLevel`、`repeatable`、`objective` 與 `reward.skill_envelope_star` 由 `guild-commission-core.js` 的中央目錄擁有。V1 必須而且只可以有以下五份：
+每份委託以穩定 `id` 識別；`star`、`type`、`recommendedLevel`、`repeatable`、`objective` 與 `reward.skill_envelope_star` 由 `data/quests.js` 的中央目錄擁有；`guild-commission-core.js` 只負責 state／accept／progress／report logic。V1 必須而且只可以有以下五份：
 
 | rank | ID | 類型 | 目標 | 推薦等級 | 報酬 |
 | --- | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@
 - `cycle`、`rewardClaimed`
 - 各星級 `envelopes` 數量與 `envelopeDrawSerial`
 
-載入時會以 state normalizer 修正數字、未知委託與不完整舊資料；active Hunt／Delivery 的進度及 `ready_to_report` 必須原樣保留。放棄後保存的 `available` state 不會復原舊進度；回報後保存的 envelope 數量仍只可消費一次。舊版只有 `activeContracts` 的存檔會安全地回到可用的 V1 委託板，不會沿用舊的固定金幣／XP／物品獎勵路徑。現有 `activeContracts` 欄位只保留為舊 UI／測試的相容投影，並非新的資料來源。
+載入時會以 state normalizer 修正數字、未知委託與不完整舊資料；active Hunt／Delivery 的進度及 `ready_to_report` 必須原樣保留。放棄後保存的 `available` state 不會復原舊進度；回報後保存的 envelope 數量仍只可消費一次。舊版只有 `activeContracts`／`contractRotation` 的存檔會安全地忽略呢兩個舊欄位並回到可用的 V1 委託板，不會沿用舊的固定金幣／XP／物品獎勵路徑；新存檔不再寫入呢兩個欄位。
 
 ## Guild UI 與互動
 
@@ -60,9 +60,9 @@
 
 ## 系統 ownership
 
-- 本文件及 `guild-commission-core.js`：委託目錄、討伐／送信 objective、狀態、回報與信封獎勵。
-- `docs/MONSTER_SYSTEM.md`、`map/monster-blueprints.js`：canonical Monster ID、等級、屬性、生態與戰鬥資料。
-- `docs/FIGHTER_SKILL_TREE.md`、`fighter-skill-data.js`、`skill-core.js`：Fighter skill ID、星級／取得 eligibility、前置與學習規則。
+- 本文件及 `data/quests.js`：委託目錄與固定 objective／reward data；`guild-commission-core.js`：狀態、接受、進度、放棄、回報與信封操作。
+- `docs/MONSTER_SYSTEM.md`、`data/monsters.js`、`map/monster-blueprints.js`：canonical Monster ID、等級、屬性、生態與戰鬥資料。
+- `docs/FIGHTER_SKILL_TREE.md`、`data/skills/fighter.js`、`skill-core.js`：Fighter skill ID、星級／取得 eligibility、前置與學習規則。
 - `docs/BATTLE_SYSTEM.md`：戰鬥單位、擊殺與戰鬥結算。
 - `docs/MAP_SYSTEM.md`、`docs/maps/MOUNTAIN_FIELD.md`、`maps/**/*.js`：地圖語意、NPC 穩定 ID 與 exact runtime placement。
 - `game.js`：把現有探索／戰鬥／NPC／save UI 接到以上 resolver；不重新建立 Monster 或 Fighter catalog。

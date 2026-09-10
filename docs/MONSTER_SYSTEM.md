@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Monster identity, ecology, combat data, rewards and Codex records use one canonical catalog: `map/monster-blueprints.js`. Map files own only placement and encounter context; `game.js` consumes hydrated catalog data and does not invent species stats.
+Monster identity, ecology, combat data, rewards, exploration presentation tuning and Codex records use one canonical machine-readable catalog: `data/monsters.js`. `map/monster-blueprints.js` is the runtime hydration/resolver layer. Map files own only placement and encounter context; `game.js` consumes hydrated catalog data and does not invent species stats.
 
 ## Canonical roster
 
@@ -12,7 +12,7 @@ The current roster is exactly nine stable IDs:
 
 Every entry contains a stable name, family, normal level band, habitat maps/zones, base stats, species multipliers, move range, battle role, AI profile, skills, rewards, quest tags, Codex copy and locomotion status. `fox` and `coyote` are separate species: foxes are fast flankers while coyotes are pack hunters.
 
-The catalog deliberately has no generic monster speed stat. Exploration speed is a runtime movement tuning value, while battle action speed comes from each skill's shared `speedGrade` (`S` through `F`) and is resolved by the existing battle action-order resolver.
+Each monster record may contain an `exploration` block for movement speed, radius, aggro distance and presentation colour. Battle action speed remains separate and comes from each skill's shared `speedGrade` (`S` through `F`), resolved by the battle action-order resolver.
 
 ## Stats and level scaling
 
@@ -40,7 +40,7 @@ Boss and elite encounters use the normal encounter formula; no monster carries a
 
 ## Migration and stable IDs
 
-`LEGACY_MONSTER_MIGRATION` is the only compatibility table for old saves and old authored maps. New map spawns and new contracts must use canonical IDs. Guild contracts and defeat events use `objective.target` / `monster_id` with canonical IDs; localized names are presentation only. Codex cards enumerate `CANONICAL_MONSTER_IDS` and aggregate legacy kill counters for old saves.
+`data/monsters.js` owns `LEGACY_MONSTER_MIGRATION`, which is the only compatibility table for old saves and old authored maps. New map spawns and new contracts must use canonical IDs. Guild contracts and defeat events use `objective.target` / `monster_id` with canonical IDs; localized names are presentation only. Codex cards enumerate `CANONICAL_MONSTER_IDS` and aggregate legacy kill counters for old saves.
 
 ## Maps and encounters
 

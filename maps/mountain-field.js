@@ -82,10 +82,10 @@
       { id: "mountain_delivery_recipient", name: "洛安", displayName: "山地收件員", role: "山地收件員／公會送信", kind: "npc", ...point(35, 12), radius: 12, color: "#8ac9c0", facing: "down", actor: "mountainCourier", gender: "male", age: 38, appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使", zone: "far-field-clearing", services: ["guild-delivery"], chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。" },
     ];
     const enemySpawns = [
-      { id: "slime-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "slime-2", type: "raccoon", ...point(12, 27), level: 1 },
-      { id: "slime-3", type: "raccoon", ...point(20, 25), level: 1 }, { id: "slime-4", type: "raccoon", ...point(25, 27), level: 2 },
+      { id: "raccoon-1", type: "raccoon", ...point(8, 25), level: 1 }, { id: "raccoon-2", type: "raccoon", ...point(12, 27), level: 1 },
+      { id: "raccoon-3", type: "raccoon", ...point(20, 25), level: 1 }, { id: "raccoon-4", type: "raccoon", ...point(25, 27), level: 2 },
       { id: "warden-west", type: "turtle", ...point(16, 25), level: 2 }, { id: "warden-hollow", type: "turtle", ...point(28, 27), level: 3 }, { id: "warden-north", type: "turtle", ...point(37, 14), level: 2 },
-      { id: "wisp-1", type: "chick", ...point(22, 27), level: 2 }, { id: "wisp-2", type: "fox", ...point(34, 21), level: 2 }, { id: "hound-1", type: "wild_boar", ...point(37, 18), level: 3 }, { id: "hound-2", type: "wild_boar", ...point(37, 10), level: 3 }, { id: "hound-3", type: "coyote", ...point(35, 7), level: 4 },
+      { id: "chick-1", type: "chick", ...point(22, 27), level: 2 }, { id: "fox-1", type: "fox", ...point(34, 21), level: 2 }, { id: "wild-boar-1", type: "wild_boar", ...point(37, 18), level: 3 }, { id: "wild-boar-2", type: "wild_boar", ...point(37, 10), level: 3 }, { id: "coyote-1", type: "coyote", ...point(35, 7), level: 4 },
     ];
     const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回米克雷帝國", point(32.5, 13), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     westExit.direction = "west"; westExit.mapLabel = "米克雷帝國出口"; westExit.alwaysVisible = true;

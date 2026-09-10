@@ -1,7 +1,9 @@
 # Everrealm Equipment System
 
 Equipment is the primary player build surface. The equipment schema is owned
-here; shared hit, damage, action-order and pending-action formulas remain in
+here; canonical machine-readable records live in `data/equipment.js`, while
+`expansion-core.js` owns normalization, purchase/equip and stat aggregation logic.
+Shared hit, damage, action-order and pending-action formulas remain in
 [`docs/BATTLE_SYSTEM.md`](BATTLE_SYSTEM.md).
 
 ## Canonical item schema
@@ -40,3 +42,8 @@ Legacy saves may still use `body` or `armor` slot aliases; normalization maps
 them to `upperBody`. Obsolete legacy combat attributes are ignored by save
 sanitization rather than copied into generic ATK/DEF, preventing duplicate or
 invented bonuses.
+
+
+## Active catalog and legacy saves
+
+`data/equipment.js` explicitly separates `EQUIPMENT_CATALOG` (currently obtainable/starting gear) from `LEGACY_EQUIPMENT_CATALOG`. `ALL_EQUIPMENT_CATALOG` is used only where save compatibility is required. Legacy-only gear is never added back to the current shop simply because an old save owns it. Static icon/art metadata is stored with the equipment record rather than duplicated in `game.js`.

@@ -1,60 +1,107 @@
 (function (root, factory) {
-  const api = factory();
+  const monsterData = root.EverrealmMonsterData
+    || (typeof require === "function" ? require("../data/monsters.js") : null);
+  const itemData = root.EverrealmItemData
+    || (typeof require === "function" ? require("../data/items.js") : null);
+  const api = factory(monsterData, itemData);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternMonsterBlueprints = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (monsterData, itemData) {
   "use strict";
 
-  const freeze = (value) => Object.freeze(value);
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-  const standardMeleeCells = freeze([{ x: 0, y: -1 }, { x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }]);
-  const shortRangeCells = freeze([{ x: 0, y: -1 }, { x: -1, y: 0 }, { x: 1, y: 0 }]);
-  function skill(id, name, speedGrade, apCost, options = {}) {
-    return freeze({ id, name, speedGrade, apCost, range: freeze({ min: options.minRange ?? 1, max: options.maxRange ?? 1 }), rangeCellsRelative: options.rangeCellsRelative || standardMeleeCells, area: freeze(options.area || { shape: "single" }), targeting: freeze(options.targeting || { team: "enemy", mode: "unit" }), deliveryMode: options.deliveryMode || "contact", pathMode: options.pathMode || "facingOrthogonalPriority", heightDifference: options.heightDifference ?? 0, actionKind: options.actionKind || "attack", dealsDamage: options.dealsDamage !== false, damageModel: freeze(options.damageModel || { scale: 1 }), effects: freeze(options.effects || []) });
+  function deepFreeze(value) {
+    if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+    for (const child of Object.values(value)) deepFreeze(child);
+    return Object.freeze(value);
   }
-  const SKILLS = Object.freeze({
-    basic_claw: skill("basic_claw", "爪擊", "C", 4, { damageModel: { scale: .9 } }),
-    peck: skill("peck", "啄擊", "B", 4, { damageModel: { scale: .82 } }),
-    quick_bite: skill("quick_bite", "迅咬", "A", 5, { rangeCellsRelative: shortRangeCells, damageModel: { scale: .86 } }),
-    pounce: skill("pounce", "撲躍", "D", 7, { minRange: 1, maxRange: 2, deliveryMode: "leap", damageModel: { scale: 1.2 }, effects: [{ type: "knockback", amount: 1 }] }),
-    shell_defense: skill("shell_defense", "龜甲防禦", "A", 5, { actionKind: "guard", dealsDamage: false, targeting: { team: "self", mode: "self" }, effects: [{ type: "guard", amount: .42, duration: 1 }] }),
-    ram: skill("ram", "角撞", "D", 6, { minRange: 1, maxRange: 2, deliveryMode: "charge", damageModel: { scale: 1.25 }, effects: [{ type: "knockback", amount: 1 }] }),
-    bear_slam: skill("bear_slam", "熊掌震擊", "D", 8, { area: { shape: "radius", radius: 1 }, targeting: { team: "enemy", mode: "cell" }, damageModel: { scale: .95 }, effects: [{ type: "knockdown", chance: .32 }] }),
-    charge: skill("charge", "衝鋒", "D", 7, { minRange: 1, maxRange: 3, deliveryMode: "charge", damageModel: { scale: 1.3 }, effects: [{ type: "knockback", amount: 1 }] }),
-    tongue_snap: skill("tongue_snap", "長舌彈", "B", 5, { minRange: 1, maxRange: 3, deliveryMode: "projectile", damageModel: { scale: .74 } }),
-    snake_bite: skill("snake_bite", "毒牙", "A", 5, { rangeCellsRelative: shortRangeCells, damageModel: { scale: .78 }, effects: [{ type: "poison", duration: 3 }] }),
-    poison_spit: skill("poison_spit", "毒液噴吐", "C", 7, { minRange: 2, maxRange: 4, deliveryMode: "projectile", damageModel: { scale: .7 }, effects: [{ type: "poison", duration: 3 }] }),
-    poison_cloud: skill("poison_cloud", "毒霧", "A", 9, { minRange: 1, maxRange: 3, area: { shape: "radius", radius: 1 }, targeting: { team: "enemy", mode: "cell" }, deliveryMode: "pathless-area", damageModel: { scale: .42 }, effects: [{ type: "poison", duration: 2 }] }),
-  });
-  const common = { normalLevelRange: [1, 3], baseStats: { hp: 30, attack: 8, defense: 1 }, multipliers: { hp: 1, attack: 1, defense: 1 }, moveRange: 4, battleRole: "melee", aiProfile: "approach-and-attack", rewards: { baseXp: 24, coins: 8, drops: [] }, habitat: { maps: ["field"], zones: ["mountain-forest"] }, questTags: [], boss: false, locomotion: { status: "blocked-source-reference", assetKey: null, atlas: null, sourceArt: null } };
-  const drops = (...items) => items.map((item) => freeze(item));
-  function monster(data) {
-    const entry = { ...common, ...data, baseStats: freeze({ ...common.baseStats, ...(data.baseStats || {}) }), multipliers: freeze({ ...common.multipliers, ...(data.multipliers || {}) }), normalLevelRange: freeze(data.normalLevelRange || common.normalLevelRange), habitat: freeze({ ...common.habitat, ...(data.habitat || {}), maps: freeze([...(data.habitat?.maps || common.habitat.maps)]), zones: freeze([...(data.habitat?.zones || common.habitat.zones)]) }), rewards: freeze({ ...common.rewards, ...(data.rewards || {}), drops: freeze(data.rewards?.drops || common.rewards.drops) }), skills: freeze((data.skills || ["basic_claw"]).map((id) => typeof id === "string" ? SKILLS[id] : id).filter(Boolean)), encounterParty: freeze(data.encounterParty || []), questTags: freeze(data.questTags || []), codex: freeze({ summary: "霧梅爾山地生態中的常見魔物。", notes: "以穩定的攻擊模式守住棲地。", ...(data.codex || {}) }), locomotion: freeze({ ...common.locomotion, ...(data.locomotion || {}) }) };
-    entry.type = entry.id; entry.name = entry.name_zh; entry.artType = entry.id; entry.baseLevel = entry.normalLevelRange[0]; entry.hp = entry.baseStats.hp; entry.attack = entry.baseStats.attack; entry.defense = entry.baseStats.defense; entry.ability = entry.skills[0]?.name || "普通攻擊"; entry.drop = entry.rewards.drops[0] || null;
-    return freeze(entry);
+
+  const SKILLS = deepFreeze({ ...(monsterData?.SKILLS || {}) });
+  const LEGACY_MONSTER_MIGRATION = deepFreeze({ ...(monsterData?.LEGACY_MONSTER_MIGRATION || {}) });
+
+  function hydrateBlueprint(raw) {
+    const rewards = {
+      ...(raw.rewards || {}),
+      drops: (raw.rewards?.drops || []).map((drop) => {
+        const item = itemData?.getItem?.(drop.id);
+        return { ...drop, id: item?.id || drop.id, name: item?.name || drop.name || drop.id };
+      }),
+    };
+    const entry = {
+      ...raw,
+      rewards,
+      skills: (raw.skills || []).map((id) => typeof id === "string" ? SKILLS[id] : id).filter(Boolean),
+      encounterParty: [...(raw.encounterParty || [])],
+      questTags: [...(raw.questTags || [])],
+    };
+    entry.type = entry.id;
+    entry.name = entry.name_zh;
+    entry.artType = entry.id;
+    entry.baseLevel = entry.normalLevelRange?.[0] || 1;
+    entry.hp = entry.baseStats?.hp || 1;
+    entry.attack = entry.baseStats?.attack || 1;
+    entry.defense = entry.baseStats?.defense || 0;
+    entry.ability = entry.skills[0]?.name || "普通攻擊";
+    entry.drop = rewards.drops[0] || null;
+    return deepFreeze(entry);
   }
-  const MONSTER_BLUEPRINTS = Object.freeze({
-    chick: monster({ id: "chick", name_zh: "山雀仔", name_en: "Mountain Chick", family: "bird", baseStats: { hp: 27, attack: 8, defense: 1 }, multipliers: { hp: .9, attack: .95, defense: .8 }, moveRange: 5, battleRole: "skirmisher", aiProfile: "flank-and-peck", skills: ["peck", "pounce"], rewards: { baseXp: 22, coins: 7, drops: drops({ id: "bright-feather", name: "亮羽", chance: .25 }) }, questTags: ["bird", "field"], locomotion: { status: "approved", assetKey: "chick", atlas: "assets/locomotion/chick-v1.png" }, codex: { summary: "棲息山路樹冠的膽小山雀，受驚時會突然撲下。" } }),
-    fox: monster({ id: "fox", name_zh: "霧狐", name_en: "Mist Fox", family: "beast", baseStats: { hp: 39, attack: 12, defense: 2 }, multipliers: { hp: 1.05, attack: 1.12, defense: 1 }, moveRange: 5, battleRole: "skirmisher", aiProfile: "fast-flank", skills: ["quick_bite", "pounce"], rewards: { baseXp: 32, coins: 11, drops: drops({ id: "fox-fang", name: "霧狐尖牙", chance: .25 }) }, questTags: ["beast", "field"], locomotion: { status: "approved", assetKey: "fox", atlas: "assets/locomotion/fox-v1.png" }, codex: { summary: "沿山徑巡行的霧狐，會利用速度從側面撲擊。" } }),
-    raccoon: monster({ id: "raccoon", name_zh: "燈紋浣熊", name_en: "Lantern Raccoon", family: "beast", baseStats: { hp: 42, attack: 10, defense: 3 }, multipliers: { hp: 1.1, attack: .96, defense: 1.15 }, moveRange: 4, battleRole: "bruiser", skills: ["basic_claw", "shell_defense"], rewards: { baseXp: 30, coins: 10, drops: drops({ id: "lantern-pelt", name: "燈紋毛皮", chance: .3 }) }, questTags: ["beast", "field", "dungeon"], locomotion: { status: "approved", assetKey: "raccoon", atlas: "assets/locomotion/raccoon-v1.png" }, codex: { summary: "喜歡翻找燈屑的浣熊，防禦姿勢比外表更頑強。" } }),
-    wild_boar: monster({ id: "wild_boar", name_zh: "荒野野豬", name_en: "Wild Boar", family: "beast", baseStats: { hp: 58, attack: 14, defense: 4 }, multipliers: { hp: 1.35, attack: 1.18, defense: 1.2 }, moveRange: 4, battleRole: "charger", skills: ["basic_claw", "charge"], rewards: { baseXp: 42, coins: 14, drops: drops({ id: "boar-tusk", name: "野豬獠牙", chance: .28 }) }, habitat: { maps: ["field", "dungeon"], zones: ["mountain-forest", "mine-entrance"] }, questTags: ["beast", "charge"], locomotion: { status: "approved", assetKey: "wild_boar", atlas: "assets/locomotion/wild-boar-v1.png", sourceArt: "assets/monster-sources/wild-boar.png" }, codex: { summary: "在林道與坑道入口出沒的厚皮野豬，擅長直線衝鋒。" } }),
-    bear: monster({ id: "bear", name_zh: "岩穴熊", name_en: "Cave Bear", family: "beast", baseStats: { hp: 88, attack: 18, defense: 7 }, multipliers: { hp: 1.55, attack: 1.25, defense: 1.4 }, moveRange: 3, battleRole: "tank", skills: ["bear_slam", "charge"], encounterParty: ["turtle", "snake"], rewards: { baseXp: 68, coins: 24, drops: drops({ id: "bear-claw", name: "岩穴熊爪", chance: .25 }) }, habitat: { maps: ["dungeon"], zones: ["deep-mine"] }, normalLevelRange: [7, 10], questTags: ["beast", "deep"], locomotion: { status: "approved", assetKey: "bear", atlas: "assets/locomotion/bear-v1.png", sourceArt: "assets/monster-sources/bear.png" }, codex: { summary: "守在沉燈坑道深處的巨熊，一掌足以震亂陣形。" } }),
-    turtle: monster({ id: "turtle", name_zh: "苔甲龜", name_en: "Moss Turtle", family: "reptile", baseStats: { hp: 64, attack: 9, defense: 9 }, multipliers: { hp: 1.45, attack: .82, defense: 1.85 }, moveRange: 2, battleRole: "tank", skills: ["shell_defense", "basic_claw"], rewards: { baseXp: 46, coins: 16, drops: drops({ id: "moss-shell", name: "苔甲碎片", chance: .3 }) }, habitat: { maps: ["field", "dungeon"], zones: ["wet-road", "flooded-ruins"] }, questTags: ["reptile", "guard"], locomotion: { status: "approved", assetKey: "turtle", atlas: "assets/locomotion/turtle-v1.png", sourceArt: "assets/monster-sources/turtle.png" }, codex: { summary: "背著厚重苔甲的慢行守衛，會先穩住防線再反擊。" } }),
-    coyote: monster({ id: "coyote", name_zh: "灰原郊狼", name_en: "Grey Coyote", family: "beast", baseStats: { hp: 46, attack: 15, defense: 2 }, multipliers: { hp: 1.12, attack: 1.2, defense: .9 }, moveRange: 5, battleRole: "hunter", skills: ["quick_bite", "charge"], rewards: { baseXp: 39, coins: 13, drops: drops({ id: "coyote-fang", name: "郊狼尖牙", chance: .26 }) }, habitat: { maps: ["field", "dungeon"], zones: ["mountain-forest", "mine-entrance"] }, questTags: ["beast", "pack"], locomotion: { status: "approved", assetKey: "coyote", atlas: "assets/locomotion/coyote-v1.png", sourceArt: "assets/locomotion/sources/raw/coyote-atlas-source-v1.png" }, codex: { summary: "在灰霧邊界結群狩獵的郊狼，會追擊落單目標。" } }),
-    frog: monster({ id: "frog", name_zh: "霧沼蛙", name_en: "Mist Frog", family: "amphibian", baseStats: { hp: 36, attack: 9, defense: 2 }, moveRange: 4, battleRole: "ranged", skills: ["tongue_snap", "poison_cloud"], rewards: { baseXp: 35, coins: 12, drops: drops({ id: "mist-gland", name: "霧蛙腺囊", chance: .24 }) }, habitat: { maps: ["field", "dungeon"], zones: ["wet-road", "flooded-ruins"] }, questTags: ["amphibian", "poison"], locomotion: { status: "approved", assetKey: "frog", atlas: "assets/locomotion/frog-v1.png", sourceArt: "assets/monster-sources/frog.png" }, codex: { summary: "躲在濕地與積水石室的霧沼蛙，以長舌和毒霧保持距離。" } }),
-    snake: monster({ id: "snake", name_zh: "毒霧蛇", name_en: "Venom Snake", family: "reptile", baseStats: { hp: 33, attack: 13, defense: 2 }, multipliers: { hp: .92, attack: 1.15, defense: .92 }, moveRange: 5, battleRole: "poison", skills: ["snake_bite", "poison_spit", "poison_cloud"], rewards: { baseXp: 48, coins: 18, drops: drops({ id: "venom-sac", name: "毒霧囊", chance: .3 }) }, habitat: { maps: ["dungeon"], zones: ["flooded-ruins", "deep-mine"] }, normalLevelRange: [6, 10], questTags: ["reptile", "poison", "deep"], locomotion: { status: "approved", assetKey: "snake", atlas: "assets/locomotion/snake-v1.png", sourceArt: "assets/monster-sources/snake.png" }, codex: { summary: "沉燈坑道的毒霧蛇會先以噴吐削弱，再用毒牙收尾。" } }),
-  });
-  const LEGACY_MONSTER_MIGRATION = Object.freeze({ slime: { id: "raccoon", reason: "舊版一般野外怪物" }, wisp: { id: "chick", reason: "舊版飛行外觀暫以山雀承接" }, hound: { id: "fox", reason: "舊版犬科野獸" }, mossbun: { id: "raccoon", reason: "舊版坑道小型怪物" }, mistwing: { id: "chick", reason: "舊版飛行怪物" }, cragboar: { id: "wild_boar", reason: "舊版野豬" }, hollowmage: { id: "snake", reason: "舊版深窟遠程怪物，保留毒系行為" }, "lantern-golem": { id: "turtle", reason: "舊版防禦型坑道怪物" }, deepwarden: { id: "bear", reason: "舊版地城首領，改為資料化精英熊首領" }, boss: { id: "bear", reason: "舊版主線首領兼容別名" } });
+
+  const MONSTER_BLUEPRINTS = deepFreeze(Object.fromEntries(
+    Object.entries(monsterData?.MONSTERS || {}).map(([id, raw]) => [id, hydrateBlueprint(raw)]),
+  ));
   const CANONICAL_MONSTER_IDS = Object.freeze(Object.keys(MONSTER_BLUEPRINTS));
-  function normalizeMonsterId(id) { const raw = String(id || "").trim(); return MONSTER_BLUEPRINTS[raw] ? raw : LEGACY_MONSTER_MIGRATION[raw]?.id || null; }
-  function monsterBlueprint(id) { const canonical = normalizeMonsterId(id); return canonical ? MONSTER_BLUEPRINTS[canonical] : null; }
-  function levelStats(blueprintOrId, level = 1, options = {}) { const blueprint = typeof blueprintOrId === "string" ? monsterBlueprint(blueprintOrId) : blueprintOrId; if (!blueprint) return null; const safeLevel = clamp(Math.floor(Number(level) || blueprint.baseLevel || 1), 1, options.levelCap || 30); const delta = safeLevel - 1; const elite = options.elite ? 1.18 : 1; return { level: safeLevel, hp: Math.max(1, Math.round(blueprint.baseStats.hp * (1 + delta * .2) * blueprint.multipliers.hp * elite)), attack: Math.max(1, Math.round(blueprint.baseStats.attack * (1 + delta * .12) * blueprint.multipliers.attack * (options.elite ? 1.1 : 1))), defense: Math.max(0, Math.round(blueprint.baseStats.defense * (1 + delta * .1) * blueprint.multipliers.defense * (options.elite ? 1.12 : 1))), moveRange: blueprint.moveRange }; }
+
+  function normalizeMonsterId(id) {
+    const raw = String(id || "").trim();
+    return MONSTER_BLUEPRINTS[raw] ? raw : LEGACY_MONSTER_MIGRATION[raw]?.id || null;
+  }
+  function monsterBlueprint(id) {
+    const normalized = normalizeMonsterId(id);
+    return normalized ? MONSTER_BLUEPRINTS[normalized] : null;
+  }
+  function levelStats(id, level, options = {}) {
+    const blueprint = typeof id === "string" ? monsterBlueprint(id) : id;
+    if (!blueprint) return null;
+    const safeLevel = clamp(Math.floor(Number(level) || blueprint.baseLevel || 1), 1, options.levelCap || 30);
+    const delta = safeLevel - 1;
+    const elite = options.elite ? 1.18 : 1;
+    return {
+      level: safeLevel,
+      hp: Math.max(1, Math.round(blueprint.baseStats.hp * (1 + delta * .2) * blueprint.multipliers.hp * elite)),
+      attack: Math.max(1, Math.round(blueprint.baseStats.attack * (1 + delta * .12) * blueprint.multipliers.attack * (options.elite ? 1.1 : 1))),
+      defense: Math.max(0, Math.round(blueprint.baseStats.defense * (1 + delta * .1) * blueprint.multipliers.defense * (options.elite ? 1.12 : 1))),
+      moveRange: blueprint.moveRange,
+    };
+  }
   function monsterStatsAtLevel(id, level, options) { return levelStats(id, level, options); }
   function xpReward(baseXp, monsterLevel, playerLevel) { return Math.max(0, Math.round((Number(baseXp) || 0) * clamp(1 + .2 * ((Number(monsterLevel) || 1) - (Number(playerLevel) || 1)), .1, 1.6))); }
   function highestLivingEnemyLevel(enemies) { return Math.max(0, ...(Array.isArray(enemies) ? enemies : []).filter((enemy) => enemy && enemy.alive !== false && (enemy.hp ?? 1) > 0).map((enemy) => Number(enemy.level) || 0)); }
   function retreatChance(playerLevel, enemies) { return clamp(.4 + .15 * ((Number(playerLevel) || 1) - highestLivingEnemyLevel(enemies)), .05, 1); }
-  function selectMonsterSkill(blueprintOrId, context = {}) { const blueprint = typeof blueprintOrId === "string" ? monsterBlueprint(blueprintOrId) : blueprintOrId; if (!blueprint?.skills.length) return null; const preferred = context.skillId && blueprint.skills.find((candidate) => candidate.id === context.skillId); if (preferred) return preferred; if (context.poisonNeeded) return blueprint.skills.find((candidate) => candidate.effects.some((effect) => effect.type === "poison")) || blueprint.skills[0]; return blueprint.skills[Math.max(0, Math.min(blueprint.skills.length - 1, Number(context.round || 1) % blueprint.skills.length))]; }
-  function hydrateMonsterSpawn(spawn) { if (!spawn || typeof spawn !== "object") return spawn ? { ...spawn } : null; const blueprint = monsterBlueprint(spawn.type || spawn.id); if (!blueprint) return { ...spawn }; const stats = levelStats(blueprint, spawn.level || blueprint.baseLevel, { elite: spawn.elite }); return { ...blueprint, ...spawn, type: blueprint.id, name: spawn.name || blueprint.name_zh, artType: blueprint.id, stats, reward: { xp: xpReward(blueprint.rewards.baseXp, stats.level, spawn.playerLevel || 1), coins: Math.round(blueprint.rewards.coins * (1 + Math.max(0, stats.level - 1) * .12)), drop: blueprint.drop }, skills: blueprint.skills }; }
-  function validateMonsterCatalog(catalog = MONSTER_BLUEPRINTS) { const errors = []; for (const id of CANONICAL_MONSTER_IDS) { const entry = catalog[id]; if (!entry || entry.id !== id) errors.push(`${id}: missing id`); if (!entry?.name_zh || !entry?.family || !entry?.battleRole) errors.push(`${id}: incomplete identity`); if (!entry?.baseStats || !entry?.multipliers || !entry?.skills?.length) errors.push(`${id}: incomplete combat data`); } return { ok: errors.length === 0, errors }; }
+  function selectMonsterSkill(blueprintOrId, context = {}) {
+    const blueprint = typeof blueprintOrId === "string" ? monsterBlueprint(blueprintOrId) : blueprintOrId;
+    if (!blueprint?.skills.length) return null;
+    const preferred = context.skillId && blueprint.skills.find((candidate) => candidate.id === context.skillId);
+    if (preferred) return preferred;
+    if (context.poisonNeeded) return blueprint.skills.find((candidate) => candidate.effects.some((effect) => effect.type === "poison")) || blueprint.skills[0];
+    return blueprint.skills[Math.max(0, Math.min(blueprint.skills.length - 1, Number(context.round || 1) % blueprint.skills.length))];
+  }
+  function hydrateMonsterSpawn(spawn) {
+    if (!spawn || typeof spawn !== "object") return spawn ? { ...spawn } : null;
+    const blueprint = monsterBlueprint(spawn.type || spawn.id);
+    if (!blueprint) return { ...spawn };
+    const stats = levelStats(blueprint, spawn.level || blueprint.baseLevel, { elite: spawn.elite });
+    return { ...blueprint, ...spawn, type: blueprint.id, name: spawn.name || blueprint.name_zh, artType: blueprint.id, stats, reward: { xp: xpReward(blueprint.rewards.baseXp, stats.level, spawn.playerLevel || 1), coins: Math.round(blueprint.rewards.coins * (1 + Math.max(0, stats.level - 1) * .12)), drop: blueprint.drop }, skills: blueprint.skills };
+  }
+  function validateMonsterCatalog(catalog = MONSTER_BLUEPRINTS) {
+    const errors = [];
+    for (const id of CANONICAL_MONSTER_IDS) {
+      const entry = catalog[id];
+      if (!entry || entry.id !== id) errors.push(`${id}: missing id`);
+      if (!entry?.name_zh || !entry?.family || !entry?.battleRole) errors.push(`${id}: incomplete identity`);
+      if (!entry?.baseStats || !entry?.multipliers || !entry?.skills?.length) errors.push(`${id}: incomplete combat data`);
+      if (entry?.drop && itemData?.normalizeItemId && !itemData.normalizeItemId(entry.drop.id)) errors.push(`${id}: unknown drop ${entry.drop.id}`);
+    }
+    return { ok: errors.length === 0, errors };
+  }
   return { MONSTER_BLUEPRINTS, CANONICAL_MONSTER_IDS, LEGACY_MONSTER_MIGRATION, SKILLS, monsterBlueprint, normalizeMonsterId, hydrateMonsterSpawn, levelStats, monsterStatsAtLevel, xpReward, highestLivingEnemyLevel, retreatChance, selectMonsterSkill, validateMonsterCatalog };
 });

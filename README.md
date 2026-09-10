@@ -28,11 +28,14 @@ npm test
 
 ## Project structure
 
+- `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。
 - `assets/`：正式 runtime 美術資產，包括角色、NPC、怪物、動畫、terrain、battlefield、場景物件、UI、物品及裝備圖示。
 - `tests/`：自動 regression / gameplay tests。
 - `tools/`：資產清理、atlas 重排、透明 alpha audit 等開發工具。
 - `docs/`：大型獨立系統嘅詳細規格。
-- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `fighter-skill-data.js` 實作。
+- `docs/DATA_ARCHITECTURE.md`：固定 Game Data ownership、stable ID／legacy migration 同 Firebase boundary。
+- `docs/PLAYER_DATA_SCHEMA.md`：玩家永久 state／save boundary，同日後 Firestore／RTDB 分工。
+- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `data/skills/fighter.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
 - `maps/`：每張地圖唯一 owning JS definition；`maps/interiors/` 放主城室內地圖。
 - `docs/maps/`：每張地圖的語意／設計文件，不是 runtime tile database；其中 `docs/maps/MAIN_TOWN.md` 是主城 authored navigation package contract。
@@ -84,7 +87,7 @@ npm test
 - 修改 exact runtime layout → 只改該地圖的 owning `maps/**/*.js`。
 - 修改永久 semantic/layout rule → 同步更新對應 Markdown。
 - `game.js` 只消費 registry／執行已解析 transition；`world.js`、`expansion-world.js` 只屬薄兼容 API。
-- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm Fighter source of truth；完整 runtime 欄位由 `fighter-skill-data.js` 載入。
+- `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm Fighter source of truth；完整 runtime 欄位由 `data/skills/fighter.js` 載入。
 - `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`：保存原版格鬥士技能樹、來源證據與研究 provenance；唔覆蓋現行 Everrealm 規格。
 
 ## 核心文件原則

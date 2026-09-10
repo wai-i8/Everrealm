@@ -48,7 +48,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["", "styles.css?v=20260910-05"],
+          ["", "styles.css?v=20260910-06"],
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
           ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
@@ -410,6 +410,13 @@
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const scripts = [
           "rpg-core.js",
+          "data/classes.js",
+          "data/items.js",
+          "data/equipment.js",
+          "data/quests.js",
+          "data/monsters.js",
+          "data/skills/warrior.js",
+          "data/skills/fighter.js",
           "map/map-constants.js",
           "map/map-helpers.js",
           "map/monster-blueprints.js",
@@ -438,19 +445,18 @@
           "map/map-transitions.js",
           "map/map-registry.js",
           "world.js",
-          "expansion-core.js",
+          "expansion-core.js?v=20260910-02",
           "expansion-world.js",
           "guild-commission-core.js",
           "tactics-core.js",
-          "fighter-skill-data.js",
-          "skill-core.js?v=20260910-11",
+          "skill-core.js?v=20260910-12",
           "audio-core.js?v=20260910-04",
           "main-town-bgm-loop.js?v=20260910-04",
           "save-system.js",
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260910-12",
+          "game.js?v=20260910-14",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);

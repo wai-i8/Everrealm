@@ -1,10 +1,14 @@
 (function (root, factory) {
+  const classData = root.EverrealmClassData
+    || (typeof require === "function" ? require("./data/classes.js") : null);
+  const warriorData = root.LanternWarriorSkillData
+    || (typeof require === "function" ? require("./data/skills/warrior.js") : null);
   const fighterData = root.LanternFighterSkillData
-    || (typeof require === "function" ? require("./fighter-skill-data.js") : null);
-  const api = factory(fighterData);
+    || (typeof require === "function" ? require("./data/skills/fighter.js") : null);
+  const api = factory(classData, warriorData, fighterData);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternSkills = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (fighterData) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (classData, warriorData, fighterData) {
   "use strict";
 
   const STARTING_AP = 10;
@@ -17,8 +21,8 @@
     "guild:rank-2": 5,
     "main:light-eater-defeated": 6,
   });
-  const CLASS_IDS = Object.freeze(["warrior", "fighter"]);
-  const DEFAULT_CLASS_ID = "warrior";
+  const CLASS_IDS = Object.freeze([...(classData?.CLASS_IDS || ["warrior", "fighter"])]);
+  const DEFAULT_CLASS_ID = classData?.DEFAULT_CLASS_ID || "warrior";
   const SPEED_GRADES = Object.freeze(["S", "A", "B", "C", "D", "E", "F", "PSV"]);
   const DEFAULT_TARGET_ARC = Object.freeze(["front", "left", "right"]);
   const TARGET_ARCS = Object.freeze(["front", "left", "right", "rear", "self"]);
@@ -32,7 +36,7 @@
   const DUPLICATE_SHARDS = deepFreeze({ 1: 2, 2: 5, 3: 10 });
   const MASTERY_UNLOCK_COST = deepFreeze({ 1: 12, 2: 28, 3: 55 });
   const AREA_SHAPES = Object.freeze(["single", "self", "line", "cone", "cross", "radius", "relative_cells", "line_to_target", "impact_area"]);
-  const DEFAULT_STARTER_SKILLS = Object.freeze(["quick_slash", "lantern_shot", "guard_stance"]);
+  const DEFAULT_STARTER_SKILLS = Object.freeze([...(warriorData?.starterSkills || classData?.starterSkills?.("warrior") || ["quick_slash", "lantern_shot", "guard_stance"])]);
   // The promoted Fighter specification uses the original romanized ids.  A
   // small compatibility map keeps saves, debug commands and old Warrior-era
   // integrations readable without adding duplicate skills to the catalog.
@@ -40,10 +44,10 @@
   const CANONICAL_ID_ALIASES = Object.freeze(Object.fromEntries(
     Object.entries(LEGACY_ID_ALIASES).map(([legacyId, canonicalId]) => [canonicalId, legacyId]),
   ));
-  const CLASS_STARTER_SKILLS = deepFreeze({
-    warrior: [...DEFAULT_STARTER_SKILLS],
-    fighter: ["kentotsu"],
-  });
+  const CLASS_STARTER_SKILLS = deepFreeze(Object.fromEntries(CLASS_IDS.map((classId) => [
+    classId,
+    classId === "warrior" ? [...DEFAULT_STARTER_SKILLS] : [...(classData?.starterSkills?.(classId) || ["kentotsu"])],
+  ])));
   const COMPATIBILITY_STARTER_SKILLS = Object.freeze({ fighter: ["straight_punch"] });
 
   function fighterBookTier(apCost) {
@@ -57,123 +61,6 @@
   const FIGHTER_TREE_GRID = deepFreeze(fighterData?.display?.layout?.grid || []);
   const FIGHTER_TREE_POSITIONS = Object.fromEntries(FIGHTER_TREE_GRID.flatMap((row, treeRow) =>
     row.flatMap((id, treeColumn) => id ? [[id, { treeColumn, treeRow }]] : [])));
-
-  function fighterSkillSpec(id, name, description, apCost, speedGrade, treeGroup, treeColumn, treeRow, options = {}) {
-    const passive = options.passive === true;
-    const range = options.range || (passive || options.self ? { min: 0, max: 0 } : { min: options.team === "ally" ? 0 : 1, max: 1 });
-    const area = options.area || { shape: passive || options.self ? "self" : "single" };
-    const defaultScale = Math.min(2.5, .55 + Math.max(0, apCost) / 38);
-    const effects = options.effects || (passive
-      ? [{ type: "passive_stat", stat: options.passiveStat || "utility", amount: options.amount || .06 }]
-      : [{ type: "damage", scale: options.power || defaultScale, ...(options.hits ? { hits: options.hits } : {}) }]);
-    const team = options.team || (passive || options.self ? "self" : "enemy");
-    const mode = options.mode || (passive || options.self ? "self" : area.shape === "single" ? "unit" : "cell");
-    return {
-      id,
-      name,
-      description,
-      star: options.star || fighterBookTier(apCost),
-      apCost,
-      range,
-      area,
-      power: options.power ?? (effects.find((effect) => effect.type === "damage")?.scale || 0),
-      effects,
-      targeting: {
-        team,
-        mode,
-        lineOfSight: options.lineOfSight ?? Boolean(options.ranged),
-        ...(mode === "cell" ? { allowsEmpty: true } : {}),
-        ...(options.cardinal ? { requiresCardinal: true } : {}),
-        ...(team === "ally" ? { allowsSelf: true } : {}),
-      },
-      tags: options.tags || [passive ? "passive" : options.ranged ? "ranged" : "melee", passive || options.self ? "utility" : "physical", ...(options.hits ? ["combo"] : [])],
-      poolWeight: options.poolWeight || (passive ? 7 : 14),
-      speedGrade,
-      prerequisites: options.prerequisites || [],
-      targetArc: options.targetArc,
-      treeGroup,
-      treeColumn: FIGHTER_TREE_POSITIONS[id]?.treeColumn ?? treeColumn,
-      treeRow: FIGHTER_TREE_POSITIONS[id]?.treeRow ?? treeRow,
-    };
-  }
-
-  const LEGACY_FIGHTER_SKILL_SPECS = deepFreeze([
-    // 左側 PSV 欄：圖上垂直排列，但每一招都係獨立技能，絕無前置。
-    fighterSkillSpec("iron_body", "鐵身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 0, { passive: true, passiveStat: "defence", star: 1 }),
-    fighterSkillSpec("floating_body", "浮身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 1, { passive: true, passiveStat: "defence", star: 1 }),
-    fighterSkillSpec("steel_body", "鋼身", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 2, { passive: true, passiveStat: "defence", star: 1 }),
-    fighterSkillSpec("mind_over_heat", "心火滅卻", "時刻將氣息注入身體，提升防禦力。", 0, "PSV", "PSV", 0, 3, { passive: true, passiveStat: "defence", star: 1 }),
-    fighterSkillSpec("mental_focus", "精神統一", "集中精神，提升防禦力。", 0, "PSV", "PSV", 0, 4, { passive: true, passiveStat: "defence", star: 2 }),
-    fighterSkillSpec("body_targeting", "狙身捉體", "精準掌握對手身體動向，提升命中率。", 0, "PSV", "PSV", 0, 5, { passive: true, passiveStat: "accuracy", star: 2 }),
-    fighterSkillSpec("supple_body", "避身柔體", "令身體保持柔韌，提升迴避率。", 0, "PSV", "PSV", 0, 6, { passive: true, passiveStat: "evasion", star: 2 }),
-    fighterSkillSpec("striking_body", "功身擊體", "將氣息集中於攻擊動作，提升攻擊力。", 0, "PSV", "PSV", 0, 7, { passive: true, passiveStat: "attack", star: 2 }),
-    fighterSkillSpec("guarded_body", "防身鋼體", "鍛鍊護身勁力，提升防禦力。", 0, "PSV", "PSV", 0, 8, { passive: true, passiveStat: "defence", star: 3 }),
-    fighterSkillSpec("light_body", "速身輕體", "令全身動作變得輕巧，提升行動速度。", 0, "PSV", "PSV", 0, 9, { passive: true, passiveStat: "speed", star: 3 }),
-
-    fighterSkillSpec("straight_punch", "正拳", "推出握住的拳頭攻擊對象，格鬥士的基本招式。", 3, "B", "正拳列", 1, 0, { power: .68 }),
-    fighterSkillSpec("backfist", "背拳", "往背後出拳，使對象受到傷害。", 12, "B", "正拳列", 1, 1, { power: 1.02, prerequisites: ["straight_punch"], targetArc: ["rear"] }),
-    fighterSkillSpec("one_inch_punch", "寸勁", "將爆發氣息注入拳頭攻擊，並把對象擊退一格。", 18, "D", "正拳列", 1, 2, { prerequisites: ["backfist"], effects: [{ type: "damage", scale: 1.12 }, { type: "knockback", amount: 1 }] }),
-    fighterSkillSpec("fist_cannon", "拳砲", "將注入氣息的拳勁擊出，攻擊並把對象擊退三格。", 32, "D", "正拳列", 1, 3, { prerequisites: ["one_inch_punch"], effects: [{ type: "damage", scale: 1.38 }, { type: "knockback", amount: 3 }] }),
-    fighterSkillSpec("rock_fang_strike", "岩牙突", "從地面突出石柱，使指定對象受到攻擊。", 36, "D", "正拳列", 1, 4, { prerequisites: ["fist_cannon"], range: { min: 1, max: 2 }, area: { shape: "cross", radius: 2 }, mode: "cell" }),
-    fighterSkillSpec("rock_fang_formation", "岩牙方陣", "從四周地面突出石柱，攻擊自身附近的全部目標。", 45, "D", "正拳列", 1, 5, { prerequisites: ["rock_fang_strike"], self: true, area: { shape: "radius", radius: 1 }, mode: "cell" }),
-    fighterSkillSpec("nine_shadow_amber", "九影琥", "以拳勁釋放大範圍衝擊波，令目標高機率跌倒。", 49, "D", "正拳列", 1, 6, { prerequisites: ["rock_fang_formation"], self: true, area: { shape: "radius", radius: 3 }, mode: "cell", effects: [{ type: "damage", scale: 1.08 }, { type: "knockdown", chance: .72 }] }),
-    fighterSkillSpec("quaking_nine_shadow_amber", "列陣九影琥", "猛烈衝擊地面，令範圍內目標高機率跌倒。", 56, "D", "正拳列", 1, 7, { prerequisites: ["nine_shadow_amber"], self: true, area: { shape: "radius", radius: 2 }, mode: "cell", effects: [{ type: "damage", scale: 1.28 }, { type: "knockdown", chance: .82 }] }),
-    fighterSkillSpec("rock_fang_line", "岩牙列陣", "沿一直線連續突出石柱，攻擊線上的全部目標。", 75, "D", "正拳列", 1, 5, { prerequisites: ["rock_fang_strike"], range: { min: 1, max: 8 }, area: { shape: "line", length: 8 }, mode: "cell", ranged: true, cardinal: true }),
-    fighterSkillSpec("earth_shatter", "地碎崩", "使勁撞擊地面，使對象受傷並高機率跌倒。", 52, "D", "正拳列", 1, 6, { prerequisites: ["rock_fang_line"], effects: [{ type: "damage", scale: 1.72 }, { type: "knockdown", chance: .82 }] }),
-    fighterSkillSpec("sky_rend", "天裂崩", "運用撕裂天空的攻擊技巧，攻擊並把對象擊退五格。", 85, "D", "正拳列", 1, 7, { prerequisites: ["earth_shatter"], effects: [{ type: "damage", scale: 2.35 }, { type: "knockback", amount: 5 }] }),
-
-    fighterSkillSpec("rapid_fist", "迅拳", "如疾風般快速出拳攻擊目標。", 6, "A", "迅拳列", 2, 1, { power: .92, prerequisites: ["straight_punch"] }),
-    fighterSkillSpec("rising_knuckle", "連擊", "連續出拳，使對象受到兩段獨立攻擊。", 12, "B", "迅拳列", 2, 2, { power: .48, hits: 2, star: 2, prerequisites: ["rapid_fist"] }),
-    fighterSkillSpec("delayed_punch", "時差正拳", "針對採取防守架式的對象發揮效果的延遲攻擊。", 7, "C", "迅拳列", 2, 3, { power: .82, prerequisites: ["rising_knuckle"] }),
-    fighterSkillSpec("scatter_burst", "散彈", "從拳頭釋放衝擊波，攻擊自身前方多個目標。", 16, "C", "迅拳列", 2, 4, { prerequisites: ["delayed_punch"], range: { min: 1, max: 1 }, area: { shape: "cone", length: 1, width: 1 }, mode: "cell", cardinal: true }),
-    fighterSkillSpec("tiger_chain", "虎連擊", "連續出拳，使對象受到三段威力變動的攻擊。", 24, "C", "迅拳列", 2, 5, { power: .42, hits: 3, prerequisites: ["scatter_burst"] }),
-    fighterSkillSpec("crimson_meteor", "紅流星", "以拳頭釋放直線衝擊波，攻擊路線上的目標。", 28, "D", "迅拳列", 2, 6, { prerequisites: ["tiger_chain"], range: { min: 1, max: 3 }, area: { shape: "line", length: 3 }, mode: "cell", ranged: true, cardinal: true }),
-    fighterSkillSpec("zantetsu_fist", "殘充拳", "如雷鳴般以極高速出拳攻擊目標。", 12, "S", "迅拳列", 2, 7, { power: 1.02, prerequisites: ["crimson_meteor"] }),
-    fighterSkillSpec("poison_hand_fist", "毒手拳", "以自身毒素攻擊，使對象中毒；自身亦會短暫中毒。", 25, "D", "迅拳列", 2, 8, { prerequisites: ["zantetsu_fist"], effects: [{ type: "damage", scale: 1.08 }, { type: "poison", duration: 5, selfDuration: 1 }] }),
-    fighterSkillSpec("hundred_tiger_chain", "百虎連擊", "連續出拳，使對象受到五段威力變動的攻擊。", 42, "C", "迅拳列", 2, 8, { power: .32, hits: 5, prerequisites: ["zantetsu_fist"] }),
-    fighterSkillSpec("oni_slayer", "鬼殺", "躍至半空急降出拳，向對象施展三連擊。", 100, "D", "迅拳列", 2, 9, { power: .75, hits: 3, prerequisites: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"] }),
-    fighterSkillSpec("oni_cry", "鬼哭", "使出禁招般的連續攻勢，向對象施展八連擊。", 100, "D", "迅拳列", 2, 9, { power: .32, hits: 8, prerequisites: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"] }),
-    fighterSkillSpec("oni_lament", "鬼嘆", "在空中連續踢擊六次，最後把對象擊退兩格。", 100, "D", "迅拳列", 2, 9, { power: .4, hits: 6, prerequisites: ["poison_hand_fist", "hundred_tiger_chain", "grand_cannon_kick"], effects: [{ type: "damage", scale: .4, hits: 6 }, { type: "knockback", amount: 2 }] }),
-
-    fighterSkillSpec("turning_cannon_kick", "轉砲腳", "利用身體迴轉踢擊，造成傷害並擊退一格。", 22, "D", "足技", 3, 2, { prerequisites: ["rapid_fist"], effects: [{ type: "damage", scale: 1.08 }, { type: "knockback", amount: 1 }] }),
-    fighterSkillSpec("horizon_kick", "地平腳", "貼近地面踢擊，使對象受傷並跌倒。", 25, "C", "足技", 3, 3, { prerequisites: ["turning_cannon_kick", "preemptive_counter"], effects: [{ type: "damage", scale: 1.12 }, { type: "knockdown", chance: .78 }] }),
-    fighterSkillSpec("wind_blade_kick", "風刃腳", "高速踢擊產生真空，從特殊角度攻擊遠處對象。", 25, "C", "足技", 3, 4, { prerequisites: ["horizon_kick"], range: { min: 1, max: 3 }, area: { shape: "cone", length: 3, width: 1 }, mode: "cell", ranged: true }),
-    fighterSkillSpec("grand_cannon_kick", "豪砲腳", "以強力踢擊造成傷害，並把對象擊退四格。", 36, "D", "足技", 3, 5, { prerequisites: ["wind_blade_kick"], effects: [{ type: "damage", scale: 1.48 }, { type: "knockback", amount: 4 }] }),
-    fighterSkillSpec("wind_god_chi_kick", "風神氣功腳", "把氣功化成鐮鼬般的直線斬擊，攻擊遠方目標。", 55, "D", "足技", 3, 7, { prerequisites: ["grand_cannon_kick", "chi_blast"], range: { min: 1, max: 6 }, area: { shape: "line", length: 6 }, mode: "cell", ranged: true, cardinal: true }),
-
-    fighterSkillSpec("dancing_leaf", "舞葉", "觀察對手動作，採取高機率迴避的架式。", 7, "A", "迴避・反擊", 4, 1, { prerequisites: ["straight_punch"], self: true, effects: [{ type: "evasion", amount: .55, duration: 1 }] }),
-    fighterSkillSpec("preemptive_counter", "先之先", "觀察對手行動，準備反擊攻擊自身的對象。", 18, "B", "迴避・反擊", 4, 2, { prerequisites: ["dancing_leaf"], self: true, effects: [{ type: "counter", amount: .9, duration: 1 }] }),
-    fighterSkillSpec("projectile_counter_kick", "跳彈腳", "採取架式，把所見的投射攻擊反擊回去。", 18, "B", "迴避・反擊", 4, 3, { prerequisites: ["turning_cannon_kick", "preemptive_counter"], self: true, effects: [{ type: "projectile_counter", amount: 1, duration: 1 }] }),
-    fighterSkillSpec("dragon_eye", "龍之眼", "從大氣觀察攻擊，採取高機率迴避的架式。", 16, "A", "迴避・反擊", 4, 4, { prerequisites: ["projectile_counter_kick"], self: true, effects: [{ type: "evasion", amount: .72, duration: 1 }] }),
-
-    fighterSkillSpec("roar", "咆哮", "大聲咆哮，妨礙大範圍內所有目標的行動。", 38, "B", "狀態異常", 5, 1, { prerequisites: ["straight_punch"], self: true, area: { shape: "radius", radius: 3 }, mode: "cell", effects: [{ type: "move_down", amount: 2, duration: 1 }] }),
-    fighterSkillSpec("vanishing_aura", "無鬥氣", "使氣息與自然同化，進入兩回合透明狀態。", 35, "B", "狀態異常", 5, 2, { prerequisites: ["roar"], self: true, effects: [{ type: "stealth", duration: 2 }] }),
-    fighterSkillSpec("immobility_bind", "不動縛", "以咆哮從遠處束縛目標，使其麻痺兩回合。", 35, "D", "狀態異常", 5, 3, { prerequisites: ["vanishing_aura"], range: { min: 1, max: 3 }, area: { shape: "cross", radius: 3 }, mode: "cell", ranged: true, effects: [{ type: "paralysis", duration: 2 }] }),
-    fighterSkillSpec("chi_gathering", "集氣術", "融合氣功與自然之力，回復少量生命。", 20, "C", "狀態異常", 5, 3, { prerequisites: ["vanishing_aura"], self: true, effects: [{ type: "heal", maxHpRatio: .18, flat: 6 }] }),
-    fighterSkillSpec("secret_chi_gathering", "集氣秘術", "深度融合氣功與自然之力，回復大量生命。", 38, "C", "狀態異常", 5, 4, { prerequisites: ["chi_gathering", "immobility_bind"], self: true, effects: [{ type: "heal", maxHpRatio: .38, flat: 12 }] }),
-    fighterSkillSpec("rending_flash", "裂閃光", "令身體放出強光，使範圍內目標陷入黑暗。", 35, "D", "狀態異常", 5, 4, { prerequisites: ["chi_gathering", "immobility_bind"], self: true, area: { shape: "cone", length: 3, width: 2 }, mode: "cell", effects: [{ type: "blind", duration: 4 }] }),
-
-    fighterSkillSpec("finger_bullet", "指彈", "將氣功化成小型子彈，攻擊遠處目標。", 12, "C", "氣功・遠距離", 6, 5, { prerequisites: ["rending_flash"], range: { min: 1, max: 5 }, ranged: true }),
-    fighterSkillSpec("chi_blast", "氣功彈", "將體內氣功化成子彈，攻擊遠處目標。", 32, "D", "氣功・遠距離", 6, 6, { prerequisites: ["finger_bullet"], range: { min: 1, max: 5 }, ranged: true }),
-    fighterSkillSpec("empowered_chi_blast", "激氣功彈", "將體內氣功化成更強力的大型子彈。", 45, "D", "氣功・遠距離", 6, 7, { prerequisites: ["chi_blast"], range: { min: 1, max: 5 }, ranged: true }),
-    fighterSkillSpec("giant_chi_blast", "激氣功巨彈", "發射巨大的氣功子彈，重創遠處目標。", 63, "E", "氣功・遠距離", 6, 8, { prerequisites: ["empowered_chi_blast"], range: { min: 1, max: 5 }, ranged: true }),
-    fighterSkillSpec("dragon_bullet", "龍彈", "將氣功化成龍形射出，攻擊自身與對象之間的所有目標。", 90, "E", "氣功・遠距離", 6, 9, { prerequisites: ["giant_chi_blast"], range: { min: 1, max: 6 }, area: { shape: "line", length: 6 }, mode: "cell", ranged: true, cardinal: true }),
-    fighterSkillSpec("chi_cannon", "氣功砲", "迴轉並強化氣功彈，貫穿自身與對象之間的全部目標。", 42, "D", "氣功・遠距離", 6, 7, { prerequisites: ["chi_blast"], range: { min: 1, max: 5 }, area: { shape: "line", length: 5 }, mode: "cell", ranged: true, cardinal: true }),
-    fighterSkillSpec("explosive_chi_blast", "氣功炸裂彈", "發射會爆炸的氣功彈，攻擊曲線範圍內的全部目標。", 55, "D", "氣功・遠距離", 6, 8, { prerequisites: ["chi_cannon"], range: { min: 2, max: 5 }, area: { shape: "radius", radius: 2 }, mode: "cell", ranged: true }),
-
-    // 右側兩條副職分支各自成鏈，與正拳中央網絡完全分離。
-    fighterSkillSpec("defense_stance", "防禦", "採取架式，減輕本回合受到的傷害。", 5, "A", "副職・戰士", 7, 0, { self: true, effects: [{ type: "guard", amount: .38, duration: 1 }] }),
-    fighterSkillSpec("lightning_punch", "電擊拳", "伴隨落雷揮拳攻擊，並有低機率使對象麻痺。", 42, "D", "副職・戰士", 7, 1, { prerequisites: ["defense_stance"], effects: [{ type: "damage", scale: 1.55, element: "storm" }, { type: "paralysis", chance: .24, duration: 1 }] }),
-    fighterSkillSpec("halving_fist", "留下半氣拳", "命中成功時，以特殊拳勁把對象生命壓至一半。", 47, "D", "副職・戰士", 7, 2, { prerequisites: ["lightning_punch"], effects: [{ type: "halve_hp" }] }),
-    fighterSkillSpec("one_hp_fist", "留下後一拳", "命中成功時，以特殊拳勁把對象生命壓至一點。", 77, "D", "副職・戰士", 7, 3, { prerequisites: ["halving_fist"], effects: [{ type: "set_hp", amount: 1 }] }),
-    fighterSkillSpec("flash_fist", "拳瞬", "以超高速的一步揮拳，使對象受到猛烈傷害。", 48, "S", "副職・戰士", 7, 4, { prerequisites: ["one_hp_fist"], power: 1.82 }),
-
-    fighterSkillSpec("paralysis_release", "痺除點穴", "以穴道療法解除對象的麻痺狀態。", 6, "D", "副職・守護", 8, 0, { team: "ally", mode: "unit", effects: [{ type: "cleanse", statuses: ["paralysis"] }] }),
-    fighterSkillSpec("mind_release", "心著點穴", "以穴道療法解除對象的混亂、激怒等精神狀態。", 8, "D", "副職・守護", 8, 1, { prerequisites: ["paralysis_release"], team: "ally", mode: "unit", effects: [{ type: "cleanse", statuses: ["confusion", "rage"] }] }),
-    fighterSkillSpec("sight_release", "快目點穴", "以穴道療法解除對象的黑暗狀態。", 6, "D", "副職・守護", 8, 2, { prerequisites: ["mind_release"], team: "ally", mode: "unit", effects: [{ type: "cleanse", statuses: ["blind"] }] }),
-    fighterSkillSpec("sleep_recovery", "謀眠打破", "受到天使加護，睡眠後會自動甦醒。", 0, "PSV", "副職・守護", 8, 3, { passive: true, prerequisites: ["sight_release"], passiveStat: "sleep_recovery", star: 2 }),
-    fighterSkillSpec("poison_recovery", "氣孔解毒", "受到天使加護，中毒後會自動解除。", 0, "PSV", "副職・守護", 8, 4, { passive: true, prerequisites: ["sleep_recovery"], passiveStat: "poison_recovery", star: 3 }),
-  ]);
 
   const CLEANSE_STATUS_ALIASES = Object.freeze({
     "放心": "panic",
@@ -424,268 +311,12 @@
   }
 
   const RAW_SKILLS = [
-    {
-      id: "quick_slash",
-      name: "瞬刃",
-      description: "貼身快速斬擊；消耗低，適合留低 AP 接下一輪大招。",
-      star: 1,
-      apCost: 4,
-      range: { min: 1, max: 1 },
-      area: { shape: "single" },
-      power: 0.72,
-      effects: [{ type: "damage", scale: 0.72 }],
-      targeting: { team: "enemy", mode: "unit", lineOfSight: false },
-      tags: ["melee", "physical", "combo"],
-      poolWeight: 26,
-    },
-    {
-      id: "steady_strike",
-      name: "破甲直劈",
-      description: "穩重一劈削弱護甲，傷害比瞬刃高但連招空間較少。",
-      star: 1,
-      apCost: 6,
-      range: { min: 1, max: 1 },
-      area: { shape: "single" },
-      power: 1.05,
-      effects: [
-        { type: "damage", scale: 1.05 },
-        { type: "defense_down", amount: 0.12, duration: 1 },
-      ],
-      targeting: { team: "enemy", mode: "unit", lineOfSight: false },
-      tags: ["melee", "physical", "debuff"],
-      poolWeight: 20,
-    },
-    {
-      id: "lantern_shot",
-      name: "燈火彈",
-      description: "射出一粒穩定燈火，射程遠但威力低過同級近戰。",
-      star: 1,
-      apCost: 7,
-      range: { min: 2, max: 5 },
-      area: { shape: "single" },
-      power: 0.8,
-      effects: [{ type: "damage", scale: 0.8, element: "light" }],
-      targeting: { team: "enemy", mode: "unit", lineOfSight: true },
-      tags: ["ranged", "magic", "light"],
-      poolWeight: 23,
-    },
-    {
-      id: "crescent_sweep",
-      name: "半月掃",
-      description: "向面前掃出短小扇形劍風；命中多人時划算，單體威力偏低。",
-      star: 1,
-      apCost: 8,
-      range: { min: 1, max: 1 },
-      area: { shape: "cone", length: 2, width: 1 },
-      power: 0.62,
-      effects: [{ type: "damage", scale: 0.62 }],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: false, allowsEmpty: true, requiresCardinal: true },
-      tags: ["melee", "physical", "aoe"],
-      poolWeight: 15,
-    },
-    {
-      id: "guard_stance",
-      name: "提燈守勢",
-      description: "今個技能階段減少所受傷害，仍可儲起一半回合 AP 做穩健部署。",
-      star: 1,
-      apCost: 5,
-      range: { min: 0, max: 0 },
-      area: { shape: "self" },
-      power: 0,
-      effects: [{ type: "guard", amount: 0.35, duration: 1 }],
-      targeting: { team: "self", mode: "self", lineOfSight: false },
-      tags: ["utility", "defense"],
-      poolWeight: 22,
-    },
-    {
-      id: "field_dressing",
-      name: "燈芯包紮",
-      description: "替自己或附近同伴急救；回復量有限，但能救急。",
-      star: 1,
-      apCost: 8,
-      range: { min: 0, max: 2 },
-      area: { shape: "single" },
-      power: 0,
-      effects: [{ type: "heal", maxHpRatio: 0.2, flat: 8 }],
-      targeting: { team: "ally", mode: "unit", lineOfSight: true, allowsSelf: true },
-      tags: ["ranged", "heal", "support"],
-      poolWeight: 14,
-    },
-    {
-      id: "piercing_lance",
-      name: "貫霧突",
-      description: "沿一直線刺穿三格敵人，部分無視防禦；要先排好直線。",
-      star: 2,
-      apCost: 12,
-      range: { min: 1, max: 3 },
-      area: { shape: "line", length: 3 },
-      power: 0.88,
-      effects: [
-        { type: "damage", scale: 0.88 },
-        { type: "armor_pierce", amount: 0.2 },
-      ],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: true, allowsEmpty: true, requiresCardinal: true },
-      tags: ["melee", "physical", "aoe", "pierce"],
-      poolWeight: 22,
-    },
-    {
-      id: "mist_arrow",
-      name: "凝霧狙擊",
-      description: "遠距離集中一箭並令目標下回合少走一格；近身無法使用。",
-      star: 2,
-      apCost: 11,
-      range: { min: 3, max: 6 },
-      area: { shape: "single" },
-      power: 0.96,
-      effects: [
-        { type: "damage", scale: 0.96 },
-        { type: "move_down", amount: 1, duration: 1 },
-      ],
-      targeting: { team: "enemy", mode: "unit", lineOfSight: true },
-      tags: ["ranged", "physical", "debuff"],
-      poolWeight: 24,
-    },
-    {
-      id: "cross_burst",
-      name: "十字燈爆",
-      description: "引爆目標格同上下左右；覆蓋靈活，但中心外傷害不算高。",
-      star: 2,
-      apCost: 14,
-      range: { min: 1, max: 4 },
-      area: { shape: "cross", radius: 1 },
-      power: 0.78,
-      effects: [{ type: "damage", scale: 0.78, element: "light" }],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: true, allowsEmpty: true },
-      tags: ["ranged", "magic", "light", "aoe"],
-      poolWeight: 18,
-    },
-    {
-      id: "lantern_field",
-      name: "暖燈結界",
-      description: "於小範圍治療友軍；需要預先儲 AP，換取團隊續戰力。",
-      star: 2,
-      apCost: 16,
-      range: { min: 0, max: 3 },
-      area: { shape: "radius", radius: 1 },
-      power: 0,
-      effects: [{ type: "heal", maxHpRatio: 0.18, flat: 10 }],
-      targeting: { team: "ally", mode: "cell", lineOfSight: true, allowsEmpty: true, allowsSelf: true },
-      tags: ["ranged", "heal", "support", "aoe"],
-      poolWeight: 15,
-    },
-    {
-      id: "gale_step",
-      name: "風踏架勢",
-      description: "下次移動階段額外走兩格並提升閃避；本階段不造成傷害。",
-      star: 2,
-      apCost: 10,
-      range: { min: 0, max: 0 },
-      area: { shape: "self" },
-      power: 0,
-      effects: [
-        { type: "move_up", amount: 2, duration: 1 },
-        { type: "evasion", amount: 0.15, duration: 1 },
-      ],
-      targeting: { team: "self", mode: "self", lineOfSight: false },
-      tags: ["utility", "mobility", "defense"],
-      poolWeight: 21,
-    },
-    {
-      id: "starfall_array",
-      name: "星墜燈陣",
-      description: "轟擊菱形大範圍；總傷害潛力極高，但容易打空而且要儲 AP。",
-      star: 3,
-      apCost: 30,
-      range: { min: 2, max: 5 },
-      area: { shape: "radius", radius: 2 },
-      power: 0.82,
-      effects: [{ type: "damage", scale: 0.82, element: "light" }],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: true, allowsEmpty: true },
-      tags: ["ranged", "magic", "light", "aoe"],
-      poolWeight: 19,
-    },
-    {
-      id: "dragon_crescent",
-      name: "蒼龍半月",
-      description: "向前方斬出三格扇形巨浪；站位要求高，近距群戰極強。",
-      star: 3,
-      apCost: 22,
-      range: { min: 1, max: 1 },
-      area: { shape: "cone", length: 3, width: 1 },
-      power: 1,
-      effects: [{ type: "damage", scale: 1, element: "wind" }],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: false, allowsEmpty: true, requiresCardinal: true },
-      tags: ["melee", "physical", "wind", "aoe"],
-      poolWeight: 22,
-    },
-    {
-      id: "thunder_pillar",
-      name: "雷燈貫線",
-      description: "雷光貫穿前方六格；威力高但只能沿正交直線施放。",
-      star: 3,
-      apCost: 24,
-      range: { min: 1, max: 6 },
-      area: { shape: "line", length: 6 },
-      power: 1.14,
-      effects: [{ type: "damage", scale: 1.14, element: "storm" }],
-      targeting: { team: "enemy", mode: "cell", lineOfSight: true, allowsEmpty: true, requiresCardinal: true },
-      tags: ["ranged", "magic", "storm", "aoe"],
-      poolWeight: 17,
-    },
-    {
-      id: "oathbreaker",
-      name: "破曉誓斬",
-      description: "將超過一回合嘅 AP 集中於單體重斬；射程短，爆發最高。",
-      star: 3,
-      apCost: 28,
-      range: { min: 1, max: 1 },
-      area: { shape: "single" },
-      power: 2.15,
-      effects: [
-        { type: "damage", scale: 2.15, element: "light" },
-        { type: "armor_pierce", amount: 0.35 },
-      ],
-      targeting: { team: "enemy", mode: "unit", lineOfSight: false },
-      tags: ["melee", "physical", "light", "burst"],
-      poolWeight: 16,
-    },
-    {
-      id: "aurora_sanctuary",
-      name: "極光聖域",
-      description: "為大範圍友軍治療並提供短暫守護；完全放棄今輪輸出。",
-      star: 3,
-      apCost: 26,
-      range: { min: 0, max: 4 },
-      area: { shape: "radius", radius: 2 },
-      power: 0,
-      effects: [
-        { type: "heal", maxHpRatio: 0.28, flat: 14 },
-        { type: "guard", amount: 0.18, duration: 1 },
-      ],
-      targeting: { team: "ally", mode: "cell", lineOfSight: true, allowsEmpty: true, allowsSelf: true },
-      tags: ["ranged", "heal", "support", "defense", "aoe"],
-      poolWeight: 14,
-    },
+    ...(warriorData?.skills || []),
     ...FIGHTER_SKILL_SPECS.map(fighterRawSkill),
   ];
 
   const SKILL_PROGRESSION = deepFreeze({
-    quick_slash: { classId: "warrior", speedGrade: "A", prerequisites: [] },
-    steady_strike: { classId: "warrior", speedGrade: "B", prerequisites: ["quick_slash"] },
-    lantern_shot: { classId: "warrior", speedGrade: "B", prerequisites: [] },
-    crescent_sweep: { classId: "warrior", speedGrade: "C", prerequisites: ["quick_slash"] },
-    guard_stance: { classId: "warrior", speedGrade: "C", prerequisites: [] },
-    field_dressing: { classId: "warrior", speedGrade: "D", prerequisites: ["guard_stance"] },
-    piercing_lance: { classId: "warrior", speedGrade: "C", prerequisites: ["steady_strike"] },
-    mist_arrow: { classId: "warrior", speedGrade: "C", prerequisites: ["lantern_shot"] },
-    cross_burst: { classId: "warrior", speedGrade: "D", prerequisites: ["lantern_shot"] },
-    lantern_field: { classId: "warrior", speedGrade: "D", prerequisites: ["field_dressing"] },
-    gale_step: { classId: "warrior", speedGrade: "S", prerequisites: ["guard_stance"] },
-    starfall_array: { classId: "warrior", speedGrade: "F", prerequisites: ["cross_burst"] },
-    dragon_crescent: { classId: "warrior", speedGrade: "E", prerequisites: ["crescent_sweep"] },
-    thunder_pillar: { classId: "warrior", speedGrade: "E", prerequisites: ["mist_arrow"] },
-    oathbreaker: { classId: "warrior", speedGrade: "F", prerequisites: ["piercing_lance", "dragon_crescent"] },
-    aurora_sanctuary: { classId: "warrior", speedGrade: "F", prerequisites: ["lantern_field"] },
+    ...(warriorData?.progression || {}),
     ...Object.fromEntries(FIGHTER_SKILL_SPECS.map((skill) => [skill.id, {
       classId: "fighter",
       speedGrade: skill.speedGrade,

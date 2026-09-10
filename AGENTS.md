@@ -69,6 +69,7 @@ If a task spans systems, read only the affected system documents plus the shared
 
 ## Project directories
 
+- `data/` — Canonical fixed Game Data (classes, items, equipment, monsters, quests and player skills). Runtime logic consumes these records and must not redefine them in `game.js`.
 - `assets/` — Runtime artwork and visual assets: characters, NPCs, monsters, animations, terrain, battlefield art, environment objects, UI art, item/equipment icons.
 - `tests/` — Automated regression and gameplay tests.
 - `tools/` — Asset cleanup, atlas repacking, alpha auditing and other development utilities.
@@ -85,7 +86,7 @@ For exact asset filenames, atlas layouts and art-processing rules, use `ART_PIPE
 - `ART_PIPELINE.md` decides how those environments, tiles and props look and how their assets are produced; it also owns the shared Standard Mobile Unit `4×7 / 28-frame` Idle+Walk sprite contract.
 - `docs/PET_SYSTEM.md` plugs Familiar units into the existing battle / map / production systems; it must not duplicate their core resolvers.
 - `docs/PRODUCTION_SYSTEM.md` owns production rules; map placement / interaction of resource nodes and workstations belongs to `docs/MAP_SYSTEM.md`.
-- `docs/MONSTER_SYSTEM.md` owns canonical monster IDs, ecology, level scaling, combat skill data, rewards, migration and Codex contracts.
+- `docs/MONSTER_SYSTEM.md` owns monster design contracts; canonical machine-readable monster records live in `data/monsters.js`, with `map/monster-blueprints.js` as the runtime hydration/resolver layer.
 
 ### Map source-of-truth routing
 

@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260910-09";
+const CACHE_VERSION = "everrealm-pwa-v2-20260910-10";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -15,6 +15,13 @@ const PRECACHE_URLS = [
   `${APP_BASE}inventory-minimal.css`,
   `${APP_BASE}responsive-ui-redesign.css`,
   `${APP_BASE}rpg-core.js`,
+  `${APP_BASE}data/classes.js`,
+  `${APP_BASE}data/items.js`,
+  `${APP_BASE}data/equipment.js`,
+  `${APP_BASE}data/quests.js`,
+  `${APP_BASE}data/monsters.js`,
+  `${APP_BASE}data/skills/warrior.js`,
+  `${APP_BASE}data/skills/fighter.js`,
   `${APP_BASE}map/map-constants.js`,
   `${APP_BASE}map/map-helpers.js`,
   `${APP_BASE}map/monster-blueprints.js`,
@@ -47,7 +54,6 @@ const PRECACHE_URLS = [
   `${APP_BASE}expansion-world.js`,
   `${APP_BASE}guild-commission-core.js`,
   `${APP_BASE}tactics-core.js`,
-  `${APP_BASE}fighter-skill-data.js`,
   `${APP_BASE}skill-core.js`,
   `${APP_BASE}audio-core.js`,
   `${APP_BASE}main-town-bgm-loop.js`,
