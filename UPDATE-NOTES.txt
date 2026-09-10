@@ -1,0 +1,18 @@
+Everrealm UI redesign patch — 2026-09-10
+
+Use: extract this ZIP at the repository root and overwrite matching files.
+Do not delete your existing assets or other project files.
+
+Included changes:
+- Touch/mobile exploration HUD is a vertical left-side icon rail.
+- Canonical order: Status -> Inventory -> Panel -> Skills -> Missions.
+- Removed heavy mobile HUD blur; versioned icon files ensure clean loading.
+- Notification dots retained for mission/inventory/skills when relevant.
+- Exploration HUD is hidden while a facility panel is open.
+- Phone pinch zoom retained; closest zoom limit reduced from 1.08 to 0.82.
+- Main city label renamed to 米克雷帝國 across world/return-route labels.
+- Continue-game welcome toast uses the player's display name (default 阿巡).
+- Minimap is player-centred and zoomed to the nearby area instead of fitting the whole map.
+- Status, Missions and Inventory layouts are denser and responsive on desktop and mobile.
+- Added responsive-ui-redesign.css as the final UI override stylesheet.
+- PWA/service-worker cache bumped to revision 20260910-05.

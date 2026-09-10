@@ -1,0 +1,512 @@
+/* Everrealm responsive UI redesign — 2026-09-10
+   Loaded after inventory-minimal.css. This file intentionally owns the final
+   responsive layout without rewriting the existing domain skins. */
+
+/* ---------------------------------------------------------------------
+   Exploration HUD: phone/tablet uses a clean vertical icon rail.
+   --------------------------------------------------------------------- */
+@media (hover: none), (pointer: coarse) {
+  #exploreSidebar,
+  #exploreSidebar.is-collapsed {
+    z-index: 24 !important;
+    left: max(.42rem, env(safe-area-inset-left)) !important;
+    top: max(.42rem, env(safe-area-inset-top)) !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: calc(100% - .84rem - env(safe-area-inset-bottom)) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: .34rem !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none !important;
+  }
+
+  #exploreSidebar .sidebar-toggle,
+  #exploreSidebar.is-collapsed .sidebar-toggle,
+  #exploreSidebar :is(.sidebar-character,.sidebar-quick-info,.sidebar-quest) {
+    display: none !important;
+  }
+
+  #exploreSidebar .sidebar-primary.explore-function-menu,
+  #exploreSidebar.is-collapsed .sidebar-primary.explore-function-menu {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: clamp(.16rem, 1.2vh, .28rem) !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: auto !important;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-button,
+  #exploreSidebar.is-collapsed .sidebar-primary .explore-menu-button {
+    --mobile-menu-size: clamp(2.62rem, 10.3vh, 3.35rem);
+    position: relative !important;
+    flex: 0 0 var(--mobile-menu-size) !important;
+    width: var(--mobile-menu-size) !important;
+    height: var(--mobile-menu-size) !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    color: inherit !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-button::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: .08rem;
+    border-radius: 50%;
+    opacity: 0;
+    background: rgba(255,200,87,.07);
+    box-shadow: 0 0 .28rem rgba(255,221,116,.96), 0 0 .92rem rgba(255,188,49,.72);
+    transition: opacity .12s ease, transform .12s ease;
+    pointer-events: none;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-button:active::before,
+  #exploreSidebar .sidebar-primary .explore-menu-button:focus-visible::before {
+    opacity: 1;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-icon {
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-icon img {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    object-fit: contain !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: scale(1) !important;
+    filter: drop-shadow(0 .12rem .18rem rgba(0,0,0,.55)) !important;
+    transition: transform .12s ease, filter .12s ease;
+    pointer-events: none;
+  }
+
+  #exploreSidebar .sidebar-primary .explore-menu-copy { display: none !important; }
+
+  /* Canonical function order: Status -> Inventory -> Panel -> Skills -> Missions. */
+  #statusButton { order: 1 !important; }
+  #inventoryButton { order: 2 !important; }
+  #deckButton { order: 3 !important; }
+  #skillTreeButton { order: 4 !important; }
+  #missionButton { order: 5 !important; }
+
+  #exploreSidebar .sidebar-primary .menu-badge:not([hidden]) {
+    position: absolute !important;
+    z-index: 4 !important;
+    right: -.01rem !important;
+    top: -.01rem !important;
+    width: .66rem !important;
+    height: .66rem !important;
+    min-width: 0 !important;
+    display: block !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 2px solid #fff0cf !important;
+    border-radius: 50% !important;
+    background: #ff4d42 !important;
+    box-shadow: 0 .08rem .2rem rgba(0,0,0,.52), 0 0 .32rem rgba(255,77,66,.48) !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    pointer-events: none !important;
+  }
+
+  #exploreSidebar .sidebar-secondary,
+  #exploreSidebar.is-collapsed .sidebar-secondary {
+    order: 6 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: .08rem 0 0 !important;
+    padding: .28rem 0 0 !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(245,233,202,.22) !important;
+    pointer-events: auto !important;
+  }
+
+  #exploreSidebar .sidebar-secondary .explore-zoom-control { display: none !important; }
+  #exploreSidebar .sidebar-secondary .sidebar-sound-button {
+    flex: 0 0 clamp(2rem, 7.9vh, 2.42rem) !important;
+    width: clamp(2rem, 7.9vh, 2.42rem) !important;
+    height: clamp(2rem, 7.9vh, 2.42rem) !important;
+    margin: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 0 .08rem !important;
+    border: 1px solid rgba(245,233,202,.42) !important;
+    border-radius: 50% !important;
+    color: var(--cream) !important;
+    background: rgba(4,8,18,.78) !important;
+    box-shadow: 0 .12rem .35rem rgba(0,0,0,.4) !important;
+    font-size: 1rem !important;
+  }
+}
+
+/* Any facility/menu takes focus. The exploration controls disappear until it
+   closes, so they never sit on top of the status/inventory/mission screens. */
+#gameStage[data-game-state="facility"] #exploreSidebar {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------------
+   Shared portable-panel shell: less empty chrome, more useful content.
+   --------------------------------------------------------------------- */
+.facility-overlay[data-facility-tab="status"],
+.facility-overlay[data-facility-tab="missions"],
+.facility-overlay[data-facility-tab="bag"] {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: clamp(.45rem, 1.7vw, 1.15rem) !important;
+}
+
+.facility-overlay[data-facility-tab="status"] .facility-window,
+.facility-overlay[data-facility-tab="missions"] .facility-window,
+.facility-overlay[data-facility-tab="bag"] .facility-window {
+  min-height: 0 !important;
+  max-height: calc(100vh - clamp(.9rem, 3.4vw, 2.3rem)) !important;
+}
+.facility-overlay[data-facility-tab="status"] .facility-window { width: min(55rem, 100%) !important; }
+.facility-overlay[data-facility-tab="missions"] .facility-window { width: min(44rem, 100%) !important; }
+.facility-overlay[data-facility-tab="bag"] .facility-window { width: min(62rem, 100%) !important; }
+
+.facility-overlay[data-facility-tab="status"] .facility-header.ui-header,
+.facility-overlay[data-facility-tab="missions"] .facility-header.ui-header,
+.facility-overlay[data-facility-tab="bag"] .facility-header.ui-header {
+  min-height: 3.15rem !important;
+  padding: .34rem .62rem .34rem .82rem !important;
+}
+.facility-overlay[data-facility-tab="status"] .facility-header h2,
+.facility-overlay[data-facility-tab="missions"] .facility-header h2,
+.facility-overlay[data-facility-tab="bag"] .facility-header h2 {
+  font-size: clamp(1.02rem, 2vw, 1.18rem) !important;
+}
+.facility-overlay[data-facility-tab="status"] .facility-content,
+.facility-overlay[data-facility-tab="missions"] .facility-content,
+.facility-overlay[data-facility-tab="bag"] .facility-content {
+  padding: clamp(.58rem, 1.35vw, .9rem) !important;
+}
+
+/* ---------------------------------------------------------------------
+   Status: compact identity card + a real dashboard instead of giant tiles.
+   --------------------------------------------------------------------- */
+.status-layout {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr) !important;
+  gap: .7rem !important;
+  align-items: stretch !important;
+}
+.status-character-card {
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: minmax(8.8rem, 1fr) auto auto auto auto !important;
+  justify-items: center !important;
+  align-content: stretch !important;
+  padding: .58rem !important;
+  overflow: hidden !important;
+}
+.status-character-card canvas {
+  width: min(100%, 9.5rem) !important;
+  height: 11.25rem !important;
+  max-height: 32vh !important;
+  object-fit: contain !important;
+}
+.status-character-card strong { font-size: .82rem !important; }
+.status-character-card > span { font-size: .61rem !important; }
+.status-level-line,
+.xp-progress { width: min(100%, 10.5rem) !important; }
+.status-level-line { margin-top: .24rem !important; }
+
+.status-stat-grid {
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  grid-auto-rows: minmax(4.2rem, 1fr) !important;
+  gap: .48rem !important;
+  margin: 0 !important;
+}
+.status-stat-grid > div {
+  min-height: 0 !important;
+  padding: .58rem .68rem !important;
+  gap: .28rem !important;
+}
+.status-stat-grid > div.is-hp { grid-column: 1 / -1 !important; }
+.status-stat-grid dt { font-size: .67rem !important; }
+.status-stat-grid dd { font-size: .82rem !important; }
+
+/* ---------------------------------------------------------------------
+   Missions: content-sized window and a denser readable card.
+   --------------------------------------------------------------------- */
+.facility-overlay[data-facility-tab="missions"] .facility-content {
+  display: block !important;
+  min-height: 0 !important;
+}
+.mission-view {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+.mission-view.is-empty {
+  min-height: 10rem !important;
+  gap: .45rem !important;
+}
+.mission-card {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.45fr) minmax(10rem, .75fr) !important;
+  grid-template-areas:
+    "heading heading"
+    "objective progress"
+    "meta meta"
+    "bar bar"
+    "note note" !important;
+  gap: .58rem .75rem !important;
+  padding: .82rem .9rem !important;
+}
+.mission-card-heading { grid-area: heading; }
+.mission-objective { grid-area: objective; }
+.mission-progress-row { grid-area: progress; }
+.mission-progress-bar { grid-area: bar; }
+.mission-report-note { grid-area: note; }
+.mission-card-heading strong { font-size: .88rem !important; }
+.mission-objective,
+.mission-progress-row {
+  min-height: 2.65rem;
+  align-items: center !important;
+  padding: .44rem .52rem;
+  border: 1px solid rgba(245,233,202,.12);
+  border-radius: .5rem;
+  background: rgba(4,8,18,.28);
+}
+.mission-objective { flex-direction: column; align-items: flex-start !important; gap: .22rem !important; }
+.mission-objective strong { text-align: left !important; }
+.mission-progress-row { flex-direction: column; align-items: flex-end !important; gap: .22rem !important; }
+.mission-meta-grid {
+  grid-area: meta;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: .48rem;
+}
+.mission-meta-grid > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .55rem;
+  padding: .42rem .52rem;
+  border-radius: .48rem;
+  background: rgba(255,200,87,.055);
+}
+.mission-meta-grid small { color: var(--muted); font-size: .52rem; }
+.mission-meta-grid strong { min-width: 0; color: var(--gold); font-size: .61rem; text-align: right; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------------
+   Inventory: smaller loadout column, more room for the item grid.
+   --------------------------------------------------------------------- */
+.unified-inventory-layout {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(18.5rem, .78fr) minmax(0, 1.42fr) !important;
+  gap: .68rem !important;
+  align-items: start !important;
+}
+.bag-loadout-panel {
+  padding: .55rem !important;
+  border-radius: .7rem !important;
+}
+.bag-paperdoll-board,
+.paperdoll-board {
+  min-height: 0 !important;
+  grid-template-columns: minmax(5.7rem,1fr) minmax(6.3rem,.9fr) minmax(5.7rem,1fr) !important;
+  grid-template-rows: repeat(4, minmax(3.55rem, auto)) !important;
+  gap: .32rem .38rem !important;
+}
+.paperdoll-slot { min-height: 3.55rem !important; border-radius: .56rem !important; }
+.paperdoll-slot.is-filled { grid-template-columns: 2.15rem minmax(0,1fr) !important; gap: .3rem !important; padding: .28rem .34rem !important; }
+.paperdoll-slot-icon { width: 2rem !important; height: 2rem !important; }
+.paperdoll-line-icon { width: 2.05rem !important; height: 2.05rem !important; }
+.paperdoll-item-name strong { font-size: .58rem !important; }
+.paperdoll-avatar canvas { height: min(100%, 12.6rem) !important; }
+.bag-loadout-stats { margin-top: .42rem !important; gap: .25rem !important; }
+.bag-loadout-stats > div { padding: .32rem .18rem !important; }
+
+.bag-items-panel {
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0,1fr) auto !important;
+  gap: .5rem !important;
+}
+.inventory-filter-bar { gap: .28rem !important; }
+.inventory-filter { min-height: 1.8rem !important; padding: .28rem .56rem !important; font-size: .58rem !important; }
+.inventory-icon-grid {
+  min-height: 0 !important;
+  max-height: min(20.5rem, 48vh) !important;
+  overflow-y: auto !important;
+  grid-template-columns: repeat(auto-fill, minmax(5.55rem, 1fr)) !important;
+  gap: .38rem !important;
+  padding-right: .16rem;
+  overscroll-behavior: contain;
+}
+.inventory-grid-item {
+  min-height: 6.2rem !important;
+  grid-template-rows: 3.75rem minmax(0,auto) !important;
+  gap: .22rem !important;
+  padding: .3rem .3rem .36rem !important;
+}
+.inventory-item-art > .atlas-icon,
+.inventory-item-art > .inventory-envelope-icon { width: 3.25rem !important; height: 3.25rem !important; }
+.inventory-item-copy strong { font-size: .55rem !important; }
+.inventory-selected-detail {
+  min-height: 4.55rem !important;
+  grid-template-columns: 3.55rem minmax(0,1fr) !important;
+  gap: .54rem !important;
+  padding: .48rem .56rem !important;
+}
+.inventory-selected-detail .inventory-item-art > .atlas-icon,
+.inventory-selected-detail .inventory-item-art > .inventory-envelope-icon { width: 3.15rem !important; height: 3.15rem !important; }
+
+/* Phone / landscape: keep the same information architecture, just compress
+   it enough to fit one game viewport. Internal lists scroll when needed. */
+@media (hover: none), (pointer: coarse) {
+  .facility-overlay[data-facility-tab="status"],
+  .facility-overlay[data-facility-tab="missions"],
+  .facility-overlay[data-facility-tab="bag"] {
+    padding:
+      max(.28rem, env(safe-area-inset-top))
+      max(.28rem, env(safe-area-inset-right))
+      max(.28rem, env(safe-area-inset-bottom))
+      max(.28rem, env(safe-area-inset-left)) !important;
+  }
+
+  .facility-overlay[data-facility-tab="status"] .facility-window,
+  .facility-overlay[data-facility-tab="missions"] .facility-window,
+  .facility-overlay[data-facility-tab="bag"] .facility-window {
+    max-height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+    border-width: 8px !important;
+  }
+
+  .facility-overlay[data-facility-tab="status"] .facility-header.ui-header,
+  .facility-overlay[data-facility-tab="missions"] .facility-header.ui-header,
+  .facility-overlay[data-facility-tab="bag"] .facility-header.ui-header {
+    min-height: 2.72rem !important;
+    padding: .24rem .46rem .24rem .64rem !important;
+  }
+
+  .facility-overlay[data-facility-tab="status"] .facility-content,
+  .facility-overlay[data-facility-tab="missions"] .facility-content,
+  .facility-overlay[data-facility-tab="bag"] .facility-content {
+    padding: .48rem !important;
+  }
+
+  .status-layout {
+    grid-template-columns: minmax(10rem, 12rem) minmax(0,1fr) !important;
+    gap: .48rem !important;
+  }
+  .status-character-card { padding: .4rem !important; }
+  .status-character-card canvas { width: 7.6rem !important; height: 8.7rem !important; max-height: 31vh !important; }
+  .status-character-card strong { font-size: .72rem !important; }
+  .status-stat-grid { gap: .34rem !important; grid-auto-rows: minmax(3.5rem,1fr) !important; }
+  .status-stat-grid > div { padding: .42rem .5rem !important; }
+
+  .mission-card {
+    gap: .42rem .5rem !important;
+    padding: .62rem .68rem !important;
+  }
+  .mission-objective,
+  .mission-progress-row { min-height: 2.25rem; padding: .34rem .42rem; }
+
+  .unified-inventory-layout {
+    grid-template-columns: minmax(16rem, .78fr) minmax(0,1.42fr) !important;
+    gap: .48rem !important;
+  }
+  .bag-loadout-panel { padding: .4rem !important; }
+  .bag-paperdoll-board,
+  .paperdoll-board {
+    grid-template-columns: minmax(4.8rem,1fr) minmax(5.4rem,.86fr) minmax(4.8rem,1fr) !important;
+    grid-template-rows: repeat(4, minmax(2.85rem, auto)) !important;
+    gap: .23rem .28rem !important;
+  }
+  .paperdoll-slot { min-height: 2.85rem !important; }
+  .paperdoll-slot.is-filled { grid-template-columns: 1.65rem minmax(0,1fr) !important; padding: .2rem .24rem !important; }
+  .paperdoll-slot-icon,
+  .paperdoll-line-icon { width: 1.58rem !important; height: 1.58rem !important; }
+  .paperdoll-item-name strong { font-size: .48rem !important; line-height: 1.18 !important; }
+  .paperdoll-avatar canvas { height: min(100%, 9.5rem) !important; }
+  .paperdoll-avatar strong { font-size: .58rem !important; }
+  .bag-loadout-stats { margin-top: .3rem !important; gap: .18rem !important; }
+  .bag-loadout-stats > div { padding: .23rem .12rem !important; }
+  .inventory-filter { min-height: 1.62rem !important; padding: .22rem .45rem !important; }
+  .inventory-icon-grid {
+    max-height: min(17.2rem, 47vh) !important;
+    grid-template-columns: repeat(auto-fill, minmax(4.9rem,1fr)) !important;
+    gap: .28rem !important;
+  }
+  .inventory-grid-item {
+    min-height: 5.15rem !important;
+    grid-template-rows: 3.05rem auto !important;
+    padding: .24rem !important;
+  }
+  .inventory-item-art > .atlas-icon,
+  .inventory-item-art > .inventory-envelope-icon { width: 2.72rem !important; height: 2.72rem !important; }
+  .inventory-selected-detail { min-height: 3.8rem !important; grid-template-columns: 3rem minmax(0,1fr) !important; padding: .36rem .42rem !important; }
+  .inventory-selected-detail .inventory-item-art > .atlas-icon,
+  .inventory-selected-detail .inventory-item-art > .inventory-envelope-icon { width: 2.65rem !important; height: 2.65rem !important; }
+  .inventory-selected-copy > p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
+
+/* Narrow portrait fallback. */
+@media (max-width: 700px) and (orientation: portrait) {
+  .status-layout,
+  .unified-inventory-layout { grid-template-columns: 1fr !important; }
+  .status-character-card {
+    grid-template-columns: 7.5rem minmax(0,1fr) !important;
+    grid-template-rows: auto auto auto auto !important;
+    justify-items: start !important;
+    align-items: center !important;
+  }
+  .status-character-card canvas { grid-row: 1 / -1; width: 7rem !important; height: 8.3rem !important; justify-self: center !important; }
+  .mission-card {
+    grid-template-columns: 1fr !important;
+    grid-template-areas: "heading" "objective" "progress" "meta" "bar" "note" !important;
+  }
+  .mission-progress-row { align-items: flex-start !important; }
+  .inventory-icon-grid { max-height: 36vh !important; }
+}

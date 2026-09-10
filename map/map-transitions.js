@@ -216,7 +216,7 @@
 
   function ensureMapShape(map, id) {
     map.id = map.id || id;
-    map.name = map.name || (id === MAP_IDS.WORLD ? "霧都" : id);
+    map.name = map.name || (id === MAP_IDS.WORLD ? "米克雷帝國" : id);
     for (const key of ["houses", "trees", "rocks", "flowers", "lamps", "npcs", "signs", "chests", "staticObjects", "enemySpawns", "portals", "exits", "boards", "collisionObjects", "decorations"]) if (!Array.isArray(map[key])) map[key] = [];
     if (!map.shrine) map.shrine = null;
     if (!map.spawnPoints) map.spawnPoints = {};

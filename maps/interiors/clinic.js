@@ -71,7 +71,7 @@
         ty: EXIT_POINT.y / 40 - .5,
         targetMap: MAP_IDS.WORLD,
         targetSpawn: "clinicFront",
-        label: "返回霧都",
+        label: "返回米克雷帝國",
         targetPosition: point(27, 8),
         navigationRegion: "exit",
         entrance: {

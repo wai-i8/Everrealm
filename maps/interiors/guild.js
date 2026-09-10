@@ -48,7 +48,7 @@
       width: Math.ceil(data.source.width / TILE), height: Math.ceil(data.source.height / TILE), floor: TILES.WALL,
       features: [], furniture, decorations, npcs, exit: {
         id: "guild-to-world", tx: exitPoint.x / TILE - .5, ty: exitPoint.y / TILE - .5,
-        targetMap: MAP_IDS.WORLD, targetSpawn: "guildFront", label: "返回霧都", targetPosition: point(11, 10), navigationRegion: "exit",
+        targetMap: MAP_IDS.WORLD, targetSpawn: "guildFront", label: "返回米克雷帝國", targetPosition: point(11, 10), navigationRegion: "exit",
         entrance: { outward: "south", approachPoint: entry, threshold: { shape: "rect", x: exitRegion.bbox.x, y: exitRegion.bbox.y, w: exitRegion.bbox.width, h: exitRegion.bbox.height }, approachDistance: 0, entryFacing: "up", returnFacing: "down", marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 } },
       },
       map: {

@@ -190,8 +190,8 @@
     };
     return {
       id: MAP_IDS.WORLD,
-      name: "霧都主城",
-      shortName: "霧都",
+      name: "米克雷帝國",
+      shortName: "米克雷帝國",
       kind: "town",
       type: "world",
       biome: "town",

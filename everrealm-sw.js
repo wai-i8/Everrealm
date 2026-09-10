@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260910-04";
+const CACHE_VERSION = "everrealm-pwa-v2-20260910-05";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   `${APP_BASE}inventory-overhaul.css`,
   `${APP_BASE}ui-system.css`,
   `${APP_BASE}inventory-minimal.css`,
+  `${APP_BASE}responsive-ui-redesign.css`,
   `${APP_BASE}rpg-core.js`,
   `${APP_BASE}map/map-constants.js`,
   `${APP_BASE}map/map-helpers.js`,
@@ -63,7 +64,12 @@ const PRECACHE_URLS = [
   `${APP_BASE}assets/ui/mobile-menu/missions.png`,
   `${APP_BASE}assets/ui/mobile-menu/inventory.png`,
   `${APP_BASE}assets/ui/mobile-menu/skills.png`,
-  `${APP_BASE}assets/ui/mobile-menu/panel.png`
+  `${APP_BASE}assets/ui/mobile-menu/panel.png`,
+  `${APP_BASE}assets/ui/mobile-menu/status-v2.png`,
+  `${APP_BASE}assets/ui/mobile-menu/inventory-v2.png`,
+  `${APP_BASE}assets/ui/mobile-menu/panel-v2.png`,
+  `${APP_BASE}assets/ui/mobile-menu/skills-v2.png`,
+  `${APP_BASE}assets/ui/mobile-menu/missions-v2.png`
 ];
 
 function isEverrealmUrl(url) {
