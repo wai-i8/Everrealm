@@ -86,6 +86,8 @@
   const deckButton = document.getElementById("deckButton");
   const skillTreeButton = document.getElementById("skillTreeButton");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
+  const missionMenuBadge = document.getElementById("missionMenuBadge");
+  const skillMenuBadge = document.getElementById("skillMenuBadge");
   const continueButton = document.getElementById("continueButton");
   const interactionPrompt = document.getElementById("interactionPrompt");
   const interactionText = document.getElementById("interactionText");
@@ -202,6 +204,9 @@
   const EXPLORE_HOLD_DELAY_MS = 500;
   const EXPLORE_RETARGET_INTERVAL_MS = 150;
   let explorePointerGesture = null;
+  const activeExploreTouches = new Map();
+  let explorePinchGesture = null;
+  let suppressExploreTouchTap = false;
   let exploreHoverEntityId = null;
   let pendingClickInteractionId = null;
   let pendingManualSkillId = null;
@@ -217,6 +222,19 @@
   // unit conversion, not a runtime map/migration scale.
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
   const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
+  const MOBILE_EXPLORE_ZOOM_MIN = .26;
+  const MOBILE_EXPLORE_ZOOM_MAX = .82;
+  const MOBILE_EXPLORE_ZOOM_DEFAULTS = Object.freeze({
+    world: .34,
+    field: .38,
+    dungeon: .42,
+    guild: .60,
+    shop: .60,
+    clinic: .60,
+    "general-store": .60,
+    inn: .60,
+  });
+  const mobileExploreZoomByMap = new Map();
   const ITEM_ICON_INDEX = Object.freeze({
     healing_potion: 0,
     skill_book_1: 1,
@@ -320,7 +338,7 @@
   let damageNumbers = [];
   let nearestInteraction = null;
   let camera = { x: world.start.x, y: world.start.y, zoom: 1.35 };
-  let currentZone = "霧都主城";
+  let currentZone = "米克雷帝國";
   let screenShake = 0;
   let screenFlash = 0;
   let rainOffset = 0;
@@ -484,6 +502,7 @@
 
   function createPlayer() {
     return {
+      name: "阿巡",
       x: world.start.x,
       y: world.start.y,
       radius: 12,
@@ -510,6 +529,13 @@
   function resetPlayer() {
     const fresh = createPlayer();
     Object.assign(player, fresh);
+  }
+
+  function playerDisplayName() {
+    const value = String(player?.name || "").trim();
+    if (value) return value.slice(0, 24);
+    const hudName = document.querySelector("#playerHud .name-row strong")?.textContent?.trim();
+    return hudName || "阿巡";
   }
 
   function playerStats() {
@@ -787,7 +813,7 @@
     stage.dataset.gameState = mode;
     bgm.setMap(currentMapId);
     sound.start();
-    showLocation("霧都主城", true);
+    showLocation("米克雷帝國", true);
     if (!skipIntro) showToast("沿山路自由探索；想接工作就隨時返公會查看委託。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
@@ -824,6 +850,7 @@
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
+    player.name = String(rawSave?.player?.name || player.name || "阿巡").trim().slice(0, 24) || "阿巡";
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
     playTime = save.playTime;
@@ -849,7 +876,7 @@
     persistence?.markLoaded(getPersistenceFingerprint());
     sound.start();
     showLocation(zoneForPosition(player), true);
-    showToast("歡迎返嚟，守燈人。", "good");
+    showToast(`歡迎返嚟，${playerDisplayName()}。`, "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
     return true;
@@ -861,6 +888,7 @@
     const payload = {
       version: 1,
       player: {
+        name: playerDisplayName(),
         x: player.x,
         y: player.y,
         hp: player.hp,
@@ -923,11 +951,52 @@
     battleEncounterIntro.hidden = true;
   }
 
+  function usesMobileExploreControls() {
+    return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  }
+
+  function mobileZoomStorageKey(mapId = currentMapId) {
+    return `everrealm-mobile-zoom:${mapId}`;
+  }
+
+  function mobileZoomBounds() {
+    const mapWidth = Math.max(1, Number(world?.pixelWidth) || 1);
+    const mapHeight = Math.max(1, Number(world?.pixelHeight) || 1);
+    const coverZoom = width > 0 && height > 0
+      ? Math.max(width / mapWidth, height / mapHeight)
+      : MOBILE_EXPLORE_ZOOM_MIN;
+    const min = Math.max(MOBILE_EXPLORE_ZOOM_MIN, coverZoom);
+    return { min, max: Math.max(min, MOBILE_EXPLORE_ZOOM_MAX) };
+  }
+
+  function mobileExploreZoom(mapId = currentMapId) {
+    if (!mobileExploreZoomByMap.has(mapId)) {
+      let saved = NaN;
+      try { saved = Number(localStorage.getItem(mobileZoomStorageKey(mapId))); } catch (_) {}
+      const fallback = MOBILE_EXPLORE_ZOOM_DEFAULTS[mapId] ?? .40;
+      mobileExploreZoomByMap.set(mapId, Number.isFinite(saved) && saved > 0 ? saved : fallback);
+    }
+    const bounds = mobileZoomBounds();
+    return Core.clamp(mobileExploreZoomByMap.get(mapId), bounds.min, bounds.max);
+  }
+
+  function setMobileExploreZoom(value, options = {}) {
+    const bounds = mobileZoomBounds();
+    const next = Core.clamp(Number(value) || mobileExploreZoom(), bounds.min, bounds.max);
+    mobileExploreZoomByMap.set(currentMapId, next);
+    try { localStorage.setItem(mobileZoomStorageKey(), String(next)); } catch (_) {}
+    stage.dataset.mobileZoom = next.toFixed(3);
+    if (options.immediate !== false) {
+      camera.zoom = next;
+      renderPreviousCamera.zoom = next;
+    }
+    return next;
+  }
+
   function targetZoom() {
-    // Near / mid / far are one global exploration camera. Mid is the authored
-    // 1:1 world view; the map only owns its world bounds and cannot change a
-    // preset based on its dimensions or artwork resolution.
-    return EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+    // Touch / coarse-pointer layouts use pinch zoom with a wider phone default.
+    // Desktop keeps the authored Near / Mid / Far presets unchanged.
+    return usesMobileExploreControls() ? mobileExploreZoom() : EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
   function syncExploreZoomControls() {
@@ -1807,7 +1876,7 @@
     else if (npc.id === "mountain_delivery_recipient") interactDeliveryRecipient(npc);
     else if (["guildmaster-yin", "guild-clerk-po"].includes(npc.id)) openFacility("guild");
     else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) openFacility("shop");
-    else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "霧都今晚比平時熱鬧，多得你周圍探索。"] });
+    else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "米克雷帝國今晚比平時熱鬧，多得你周圍探索。"] });
   }
 
   function interactDeliveryRecipient(npc) {
@@ -2285,6 +2354,10 @@
           </div>
           <div class="mission-objective"><small>目標</small><strong>${guildCommissionObjectiveText(active)}</strong></div>
           <div class="mission-progress-row"><small>進度</small><strong>${progressText}</strong></div>
+          <div class="mission-meta-grid">
+            <div><small>建議等級</small><strong>Lv.${active.recommendedLevel}</strong></div>
+            <div><small>完成獎勵</small><strong>${skillBookRewardText(active)}</strong></div>
+          </div>
           <div class="mission-progress-bar" role="progressbar" aria-label="任務進度" aria-valuemin="0" aria-valuemax="${progressMax}" aria-valuenow="${progressValue}"><i style="width:${progressPercent}%"></i></div>
           ${ready ? '<p class="mission-report-note">返回公會回報</p>' : ""}
         </article>
@@ -2369,6 +2442,16 @@
       ? `打開物品欄（I），有 ${bookCount} 本未開技能書`
       : "打開物品欄（I）";
     if (inventoryButton.getAttribute("aria-label") !== label) inventoryButton.setAttribute("aria-label", label);
+
+    const missionReady = Boolean(activeGuildCommission() && guildCommissionState.status === "ready_to_report");
+    if (missionMenuBadge && missionMenuBadge.hidden === missionReady) missionMenuBadge.hidden = !missionReady;
+
+    let skillReady = false;
+    try {
+      const normalized = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+      skillReady = Skills.getSkillsByClass(playerClassId).some((skill) => Skills.skillLearnability(normalized, skill.id) === "canLearn");
+    } catch (_) {}
+    if (skillMenuBadge && skillMenuBadge.hidden === skillReady) skillMenuBadge.hidden = !skillReady;
   }
 
   function atlasIconHtml(atlas, index, label, extraClass = "") {
@@ -2677,7 +2760,7 @@
       return `<section class="equipment-section"><div class="facility-section-heading"><div><small>${slot.toUpperCase()}</small><h3>${slotNames[slot]}</h3></div></div><div class="equipment-grid">${cards}</div></section>`;
     }).join("");
     const bag = Object.entries(inventory).filter(([, amount]) => amount > 0).map(([id, amount]) => `<span>${inventoryItemName(id)} × ${amount}</span>`).join("") || "<span>素材袋仲係空嘅</span>";
-    facilityContent.innerHTML = `${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去霧都「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}${sections}<div class="facility-note"><b>素材袋</b><span class="inventory-row">${bag}</span></div>`;
+    facilityContent.innerHTML = `${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去米克雷帝國「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}${sections}<div class="facility-note"><b>素材袋</b><span class="inventory-row">${bag}</span></div>`;
     setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 燈幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}輕裝快、重裝硬。`);
   }
 
@@ -4156,7 +4239,10 @@
     if (action === "lantern-skill" || action === "flare") action = "skill:lantern_shot";
     battle.messageDanger = false;
     if (action === "cancel-target") return cancelBattleTargetSelection();
-    if (action === "flee") return fleeBattle();
+    if (action === "flee") {
+      if (battle.phase !== "planning_move") return setBattleMessage("移動階段先可以撤退。", true);
+      return fleeBattle();
+    }
     if (battle.phase === "planning_move") {
       if (action === "end-move") return finishBattleMoveDraft();
       if (action === "reset-move" || action === "move") return resetBattleMoveDraft();
@@ -5017,9 +5103,8 @@
     }).join("");
     buttons.innerHTML = `
       <div class="battle-command-skill-list">${skillButtons}</div>
-      <div class="battle-command-utility-row">
+      <div class="battle-command-utility-row battle-single-command-row">
         <button id="battleEndTurnButton" class="battle-command-secondary end-turn-skill" type="button" data-battle-action="end-turn"><b>待機</b></button>
-        <button id="battleFleeButton" class="battle-command-secondary flee-skill" type="button" data-battle-action="flee"><b>撤退</b></button>
       </div>`;
     battleUi.potionCount = null;
   }
@@ -5308,7 +5393,7 @@
       if (tx <= 7) return "霧梅爾山地 · 西口";
       return "霧梅爾山地 · 林間道";
     }
-    return "霧都主城";
+    return "米克雷帝國";
   }
 
   function showLocation(name, immediate = false) {
@@ -6228,9 +6313,11 @@
     // Names belong to the rendered sprite, not the logical tile.  Character
     // art supplies semantic anchors that remain correct across different body
     // proportions, attack frames and monster species.
-    const nameX = Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
+    const movingUnit = battle.phase === "resolving_move" && Boolean(unit.renderCell);
+    const nameX = movingUnit ? point.x : (Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x);
     const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
-    const nameY = (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY) - Math.max(2, actorCell * .025);
+    const nameAnchorY = movingUnit ? fallbackNameY : (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY);
+    const nameY = nameAnchorY - Math.max(2, actorCell * .025);
     ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -6452,15 +6539,58 @@
     if (canvas) canvas.dataset.exploreCursor = "default";
   }
 
+  function beginExplorePinch() {
+    if (!usesMobileExploreControls() || activeExploreTouches.size < 2 || mode !== "playing") return false;
+    const touches = [...activeExploreTouches.values()].slice(0, 2);
+    const distance = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    if (distance < 2) return false;
+    clearExplorePointerGesture();
+    pendingClickInteractionId = null;
+    suppressExploreTouchTap = true;
+    explorePinchGesture = {
+      pointerIds: [touches[0].pointerId, touches[1].pointerId],
+      startDistance: distance,
+      startZoom: targetZoom(),
+    };
+    return true;
+  }
+
+  function updateExplorePinch() {
+    const pinch = explorePinchGesture;
+    if (!pinch || mode !== "playing") return false;
+    const first = activeExploreTouches.get(pinch.pointerIds[0]);
+    const second = activeExploreTouches.get(pinch.pointerIds[1]);
+    if (!first || !second) return false;
+    const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+    if (distance < 2 || pinch.startDistance < 2) return false;
+    setMobileExploreZoom(pinch.startZoom * (distance / pinch.startDistance));
+    return true;
+  }
+
   function handleCanvasPointer(event) {
     if (mode === "battle") return handleBattlePointer(event);
     if (mode !== "playing" || event.button > 0) return;
+
+    const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
+    if (mobileTouch) {
+      event.preventDefault();
+      activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
+      try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
+      if (activeExploreTouches.size >= 2) {
+        beginExplorePinch();
+        return;
+      }
+      // Defer a one-finger tap until release so a second finger can turn the
+      // gesture into pinch zoom without accidentally sending the hero walking.
+      suppressExploreTouchTap = false;
+    }
+
     // A new press exits latched mouse-follow before issuing its single target.
     clearExplorePointerGesture();
     const target = screenToWorld(event.clientX, event.clientY);
     const entity = clickedExploreEntity(target.screenX, target.screenY);
     event.preventDefault();
-    setExploreClickTarget(entity || target, entity);
+    if (!mobileTouch) setExploreClickTarget(entity || target, entity);
     if (mode !== "playing") return;
     const gesture = {
       pointerId: event.pointerId,
@@ -6480,13 +6610,21 @@
     explorePointerGesture = gesture;
     try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
     gesture.holdTimer = window.setTimeout(() => {
-      if (explorePointerGesture !== gesture || mode !== "playing") return;
+      if (explorePointerGesture !== gesture || mode !== "playing" || explorePinchGesture) return;
       gesture.holdActive = true;
       retargetExploreHoldGesture(gesture, true);
     }, EXPLORE_HOLD_DELAY_MS);
   }
 
   function handleCanvasPointerMove(event) {
+    if (event.pointerType === "touch" && activeExploreTouches.has(event.pointerId)) {
+      activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
+      if (explorePinchGesture) {
+        event.preventDefault();
+        updateExplorePinch();
+        return;
+      }
+    }
     if (mode !== "battle") updateExploreHoverPointer(event);
     if (mode === "battle" && ["planning_move", "planning_action"].includes(battle?.phase)) {
       const cell = battleCellFromPointer(event);
@@ -6504,10 +6642,33 @@
   }
 
   function finishCanvasPointer(event) {
+    const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
+    if (mobileTouch) {
+      activeExploreTouches.delete(event.pointerId);
+      if (explorePinchGesture || suppressExploreTouchTap) {
+        event.preventDefault();
+        clearExplorePointerGesture(event.pointerId);
+        if (activeExploreTouches.size < 2) explorePinchGesture = null;
+        if (activeExploreTouches.size === 0) suppressExploreTouchTap = false;
+        return;
+      }
+    }
+
     const gesture = explorePointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     gesture.clientX = event.clientX;
     gesture.clientY = event.clientY;
+
+    // A quick touch is a normal move / interaction tap. It is intentionally
+    // committed here (rather than pointerdown) so pinch recognition wins.
+    if (mobileTouch && !gesture.holdActive) {
+      const target = screenToWorld(event.clientX, event.clientY);
+      const entity = clickedExploreEntity(target.screenX, target.screenY);
+      setExploreClickTarget(entity || target, entity);
+      clearExplorePointerGesture(event.pointerId);
+      return;
+    }
+
     if (!gesture.holdActive && performance.now() - gesture.startedAt >= EXPLORE_HOLD_DELAY_MS) {
       gesture.holdActive = true;
     }
@@ -6525,6 +6686,16 @@
     try {
       if (canvas.hasPointerCapture?.(gesture.pointerId)) canvas.releasePointerCapture(gesture.pointerId);
     } catch (_) {}
+  }
+
+  function cancelExploreTouchPointer(event) {
+    if (event?.pointerType === "touch") {
+      activeExploreTouches.delete(event.pointerId);
+      if (activeExploreTouches.size < 2) explorePinchGesture = null;
+      if (activeExploreTouches.size === 0) suppressExploreTouchTap = false;
+    }
+    if (!suppressExploreTouchTap) cancelExplorePointerTracking(event?.pointerId);
+    else clearExplorePointerGesture(event?.pointerId);
   }
 
   function cancelExplorePointerTracking(pointerId = null, releaseCapture = true) {
@@ -6559,12 +6730,12 @@
     const centreY = mapHeight / 2;
     const radius = Math.min(mapWidth, mapHeight) * .485;
     const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
-    const visibleTiles = ["world", "field"].includes(currentMapId) ? 22 : 18;
-    const scale = flattenedMapArt
-      ? Math.min((mapWidth - 12) / world.pixelWidth, (mapHeight - 12) / world.pixelHeight)
-      : Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
-    const originX = flattenedMapArt ? (mapWidth - world.pixelWidth * scale) / 2 : centreX - player.x * scale;
-    const originY = flattenedMapArt ? (mapHeight - world.pixelHeight * scale) / 2 : centreY - player.y * scale;
+    // A minimap is a local navigation tool, not a thumbnail of the whole map.
+    // Keep the player centred, but show enough nearby roads/buildings to orient the player.
+    const visibleTiles = ["world", "field"].includes(currentMapId) ? 16 : 12.5;
+    const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
+    const originX = centreX - player.x * scale;
+    const originY = centreY - player.y * scale;
     const minTileX = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
     const maxTileX = flattenedMapArt ? -1 : Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
     const minTileY = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
@@ -6575,34 +6746,14 @@
     miniCtx.arc(centreX, centreY, radius, 0, Core.TAU);
     miniCtx.clip();
 
-    const backgroundCacheKey = flattenedMiniMapBackgroundKey(mapWidth, mapHeight);
-    const cachedFlattenedBackground = flattenedMapArt
-      && miniMapBackgroundCacheKey === backgroundCacheKey
-      && miniMapBackgroundCache.width === mapWidth
-      && miniMapBackgroundCache.height === mapHeight;
-
-    if (cachedFlattenedBackground) {
-      miniCtx.drawImage(miniMapBackgroundCache, 0, 0);
-    } else {
-      miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
-      miniCtx.fillRect(0, 0, mapWidth, mapHeight);
-      let flattenedBackgroundReady = true;
-      if (flattenedMapArt) {
-        flattenedBackgroundReady = Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
-          x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .9,
-        }) !== false;
-      }
-      if (flattenedMapArt && flattenedBackgroundReady) {
-        if (miniMapBackgroundCache.width !== mapWidth || miniMapBackgroundCache.height !== mapHeight) {
-          miniMapBackgroundCache.width = mapWidth;
-          miniMapBackgroundCache.height = mapHeight;
-        }
-        miniMapBackgroundCacheCtx.clearRect(0, 0, mapWidth, mapHeight);
-        miniMapBackgroundCacheCtx.drawImage(miniMap, 0, 0);
-        miniMapBackgroundCacheKey = backgroundCacheKey;
-      } else if (flattenedMapArt) {
-        miniMapBackgroundCacheKey = "";
-      }
+    miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
+    miniCtx.fillRect(0, 0, mapWidth, mapHeight);
+    if (flattenedMapArt) {
+      // Draw the authored flattened scene at local-navigation scale. The circle
+      // clip above naturally crops it around the centred player.
+      Art.drawFlattenedBackground(miniCtx, world.art.backgroundScene, {
+        x: originX, y: originY, width: world.pixelWidth * scale, height: world.pixelHeight * scale, alpha: .94,
+      });
     }
 
     const tilePixels = world.tileSize * scale + .7;
@@ -7584,6 +7735,13 @@
   }
 
   function drawPlayer(shakeX, shakeY) {
+    // Do not flash the procedural placeholder while the real mobile-unit
+    // sprite is still loading. Once the canonical atlas is ready, the player
+    // appears at one stable size instead of swapping between fallback atlases.
+    const artStatus = Art?.spriteStatus?.();
+    const canonicalAtlas = artStatus?.[`locomotion_${playerClassId}`];
+    if (canonicalAtlas && !canonicalAtlas.ready && !canonicalAtlas.failed) return;
+
     const point = worldToScreen(player, shakeX, shakeY);
     const blink = player.invulnerable > 0 && Math.floor(elapsed * 18) % 2 === 0;
     ctx.save();
@@ -7896,7 +8054,7 @@
         const skill = equippedBattleSkills()[1];
         if (skill) selectBattleAction(`skill:${skill.id}`);
       } else if (code === "KeyE" || code === "Digit9") selectBattleAction("end-turn");
-      else if (code === "Escape" || code === "Digit0") selectBattleAction("flee");
+      else if ((code === "Escape" || code === "Digit0") && battle.phase === "planning_move") selectBattleAction("flee");
       return;
     }
     if (mode === "dialogue") {
@@ -8500,7 +8658,7 @@
   canvas.addEventListener("pointermove", handleCanvasPointerMove);
   canvas.addEventListener("pointerleave", clearExploreHoverPointer);
   canvas.addEventListener("pointerup", finishCanvasPointer);
-  canvas.addEventListener("pointercancel", (event) => cancelExplorePointerTracking(event.pointerId));
+  canvas.addEventListener("pointercancel", cancelExploreTouchPointer);
   canvas.addEventListener("lostpointercapture", (event) => {
     if (explorePointerGesture?.pressed) cancelExplorePointerTracking(event.pointerId, false);
   });
@@ -8529,7 +8687,13 @@
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("blur", () => { keys.clear(); cancelExplorePointerTracking(); });
+  window.addEventListener("blur", () => {
+    keys.clear();
+    activeExploreTouches.clear();
+    explorePinchGesture = null;
+    suppressExploreTouchTap = false;
+    cancelExplorePointerTracking();
+  });
   document.addEventListener("visibilitychange", () => {
     keys.clear();
     cancelExplorePointerTracking();
