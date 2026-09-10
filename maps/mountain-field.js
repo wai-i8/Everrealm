@@ -70,7 +70,7 @@
       flowers.push({ id: `field-flower-${flowers.length}`, x: base.x + (random() - .5) * 28, y: base.y + (random() - .5) * 28, color: random() > .55 ? "#f5e9ca" : "#ae91ff", seed: random() });
     }
     const signs = [
-      { id: "field-west-sign", kind: "sign", name: "城外路牌", ...point(5, 24), radius: 10, text: "← 米克雷帝國　　沉燈坑道 ↑" },
+      { id: "field-west-sign", kind: "sign", name: "城外路牌", ...point(5, 24), radius: 10, text: "← 霧都主城　　沉燈坑道 ↑" },
       { id: "field-bend-sign", kind: "sign", name: "山道路牌", ...point(33, 24), radius: 10, text: "沿山路向北可達沉燈坑道。樹海內無路可行。" },
     ];
     const chests = [
@@ -87,8 +87,8 @@
       { id: "warden-west", type: "turtle", ...point(16, 25), level: 2 }, { id: "warden-hollow", type: "turtle", ...point(28, 27), level: 3 }, { id: "warden-north", type: "turtle", ...point(37, 14), level: 2 },
       { id: "wisp-1", type: "chick", ...point(22, 27), level: 2 }, { id: "wisp-2", type: "fox", ...point(34, 21), level: 2 }, { id: "hound-1", type: "wild_boar", ...point(37, 18), level: 3 }, { id: "hound-2", type: "wild_boar", ...point(37, 10), level: 3 }, { id: "hound-3", type: "coyote", ...point(35, 7), level: 4 },
     ];
-    const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回米克雷帝國", point(32.5, 13), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
-    westExit.direction = "west"; westExit.mapLabel = "米克雷帝國出口"; westExit.alwaysVisible = true;
+    const westExit = makeExit("field-to-world", 1, 26, MAP_IDS.WORLD, "eastGateInside", "返回霧都主城", point(32.5, 13), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
+    westExit.direction = "west"; westExit.mapLabel = "霧都出口"; westExit.alwaysVisible = true;
     const dungeonExit = makeExit("field-to-dungeon", 37, 1, MAP_IDS.DUNGEON, "entrance", "進入沉燈坑道", point(9, 26), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     dungeonExit.direction = "north"; dungeonExit.mapLabel = "坑道"; dungeonExit.alwaysVisible = true; dungeonExit.minLevel = 5;
     const start = point(3, 26);
