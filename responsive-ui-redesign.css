@@ -37,8 +37,11 @@
   }
 
   #exploreSidebar .sidebar-primary.explore-function-menu,
-  #exploreSidebar.is-collapsed .sidebar-primary.explore-function-menu {
+  #exploreSidebar.is-collapsed .sidebar-primary.explore-function-menu,
+  #gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu {
     display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
     flex-direction: column !important;
     align-items: center !important;
     gap: clamp(.16rem, 1.2vh, .28rem) !important;
@@ -50,9 +53,12 @@
   }
 
   #exploreSidebar .sidebar-primary .explore-menu-button,
-  #exploreSidebar.is-collapsed .sidebar-primary .explore-menu-button {
+  #exploreSidebar.is-collapsed .sidebar-primary .explore-menu-button,
+  #gameStage #exploreSidebar.is-collapsed > .sidebar-primary.explore-function-menu > .explore-menu-button {
     --mobile-menu-size: clamp(2.62rem, 10.3vh, 3.35rem);
     position: relative !important;
+    opacity: 1 !important;
+    visibility: visible !important;
     flex: 0 0 var(--mobile-menu-size) !important;
     width: var(--mobile-menu-size) !important;
     height: var(--mobile-menu-size) !important;

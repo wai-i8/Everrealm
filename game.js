@@ -6723,8 +6723,8 @@
     const radius = Math.min(mapWidth, mapHeight) * .485;
     const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
     // A minimap is a local navigation tool, not a thumbnail of the whole map.
-    // Keep the player centred and show roughly 9–11 tiles around them.
-    const visibleTiles = ["world", "field"].includes(currentMapId) ? 10.5 : 9;
+    // Keep the player centred, but show enough nearby roads/buildings to orient the player.
+    const visibleTiles = ["world", "field"].includes(currentMapId) ? 16 : 12.5;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
     const originX = centreX - player.x * scale;
     const originY = centreY - player.y * scale;

@@ -1,0 +1,8 @@
+Everrealm hotfix — 2026-09-10
+
+- Minimap local view widened: outdoor 10.5 -> 16 tiles; interiors 9 -> 12.5 tiles.
+- Touch icon rail visibility hardened for persisted collapsed-sidebar state.
+- PWA/cache revision bumped to 20260910-06.
+- game.js and responsive UI stylesheet URLs version-bumped so Pixel/Chrome fetches this build immediately.
+
+Extract at repo root and overwrite matching files.
