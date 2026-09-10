@@ -1,0 +1,18 @@
+Everrealm mobile HUD / camera patch — 2026-09-10
+
+Use index.html and audio-core.js in this archive as the latest copies.
+
+Mobile / touch changes:
+- Top-left horizontal dock: Status / Missions / Inventory / Skills / Panel.
+- Uses the five supplied circular PNG icons; no persistent text labels.
+- Active facility icon gets a gold glow and slight scale-up.
+- Conditional red badges: mission ready to report, unread skill books in inventory, learnable skills.
+- Near / Mid / Far controls are hidden on touch devices; desktop presets remain unchanged.
+- Two-finger pinch zoom added for exploration; a pinch does not issue an accidental walk command.
+- One-finger tap-to-move remains supported.
+- Mobile default outdoor view is wider than the old Far preset; zoom is remembered per map.
+- Indoor zoom is clamped so the camera cannot zoom out beyond the map artwork.
+- Sound toggle remains as the small utility control to the right of the five icons.
+- Mobile facility panels leave room for the top icon dock so icons can be used to switch panels.
+
+PWA cache version bumped to 20260910-04 and the new mobile-menu icons are precached.
