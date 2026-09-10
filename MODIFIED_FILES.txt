@@ -1,0 +1,10 @@
+Everrealm - Vanmer Mountains native 10032 update
+Modified / added files only
+
+assets/field/vanmer-mountains.jpg
+assets/field/vanmer-mountains_walkable.png
+map/field-navigation.generated.js
+map/field-navigation.js
+maps/mountain-field.js
+character-art.js
+index.html

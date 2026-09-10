@@ -38,6 +38,7 @@
   const houseSpriteSettings = MapTransitions.houseSpriteSettings;
   const Tactics = window.LanternTactics;
   const Skills = window.LanternSkills;
+  const MonsterAI = window.EverrealmMonsterAI;
   const Bgm = window.LanternBgm;
   const FighterEffects = window.LanternFighterEffects;
   const Art = window.LanternArt;
@@ -146,6 +147,7 @@
     zone: document.getElementById("zoneName"),
   };
 
+  const MONSTER_INITIATIVE_BY_SPEED = Object.freeze({ S: 16, A: 14, B: 12, C: 10, D: 8, E: 6, F: 4 });
   const enemyTypes = {};
   for (const type of ExpansionWorld.CANONICAL_MONSTER_IDS) {
     const blueprint = ExpansionWorld.monsterBlueprint(type);
@@ -157,13 +159,13 @@
       damage: stats.attack,
       defence: stats.defense,
       speed: blueprint.exploration?.speed || 86,
-      battleSpeed: firstSkill.speedGrade === "A" ? 14 : firstSkill.speedGrade === "B" ? 11 : firstSkill.speedGrade === "D" ? 7 : 9,
+      battleSpeed: MONSTER_INITIATIVE_BY_SPEED[firstSkill.speedGrade] || 10,
       moveRange: blueprint.moveRange,
       attackRange: firstSkill.range.max,
       xp: blueprint.rewards.baseXp,
       coins: blueprint.rewards.coins,
       radius: blueprint.exploration?.radius || 15,
-      aggro: blueprint.exploration?.aggro || (blueprint.boss ? 500 : 225),
+      aggro: blueprint.exploration?.aggro || 225,
       range: firstSkill.range.max > 1 ? 155 : 38,
       color: blueprint.exploration?.color || "#9b8ab7",
       artType: blueprint.id,
@@ -582,7 +584,7 @@
     const base = enemyTypes[type] || enemyTypes[requestedType];
     const level = overrides.level || spawn.level || 1;
     const blueprint = ExpansionWorld.monsterBlueprint(type);
-    const levelStats = blueprint ? ExpansionWorld.monsterStatsAtLevel(type, level, { elite: spawn.elite }) : null;
+    const levelStats = blueprint ? ExpansionWorld.monsterStatsAtLevel(type, level) : null;
     const levelDelta = Math.max(0, level - (blueprint?.baseLevel || 1));
     const hpScale = 1 + levelDelta * .22;
     const damageScale = 1 + levelDelta * .14;
@@ -614,9 +616,9 @@
       moveRange: Math.max(2, base.moveRange || 4),
       attackRange: base.attackRange || 1,
       dropInfo: base.drop || null,
-      boss: Boolean(spawn.boss || blueprint?.boss),
+      boss: false,
       monsterSkills: blueprint?.skills || [],
-      elite: Boolean(spawn.elite),
+      elite: false,
       alive: true,
       respawnTimer: 0,
       attackCooldown: .4 + Math.random() * .7,
@@ -642,12 +644,10 @@
   }
 
   function resetEnemies() {
-    const dungeonLevelBoost = currentMapId === "dungeon"
-      ? Math.min(28, Math.floor(Math.max(0, player.level - 8) * .55) + Math.min(12, dungeonClears))
-      : 0;
-    enemies = world.enemySpawns.map((spawn) => makeEnemy(spawn, dungeonLevelBoost
-      ? { level: Math.min(Expansion.LEVEL_CAP, (spawn.level || 1) + dungeonLevelBoost) }
-      : {}));
+    // Monster progression is authored by species/map data. Do not dynamically
+    // scale exploration spawns to the player's level or dungeon-clear count;
+    // doing so destroys the fixed Lv1→45 progression ladder.
+    enemies = world.enemySpawns.map((spawn) => makeEnemy(spawn));
     projectiles = [];
     drops = [];
   }
@@ -1430,7 +1430,7 @@
     const monsterId = ExpansionWorld.normalizeMonsterId(enemy?.type) || String(enemy?.type || "");
     if (!monsterId) return { changed: false, reason: "unknown-monster" };
     monsterKills[monsterId] = (monsterKills[monsterId] || 0) + 1;
-    guildRenown += enemy?.boss ? 8 : enemy?.elite ? 3 : 1;
+    guildRenown += 1;
     markPersistenceDirty();
     const result = Guild.recordHuntKill(guildCommissionState, {
       monsterId,
@@ -1449,24 +1449,12 @@
   function killEnemy(enemy) {
     if (!enemy.alive) return;
     enemy.alive = false;
-    enemy.respawnTimer = enemy.boss ? Infinity : 11 + Math.random() * 5;
+    enemy.respawnTimer = 11 + Math.random() * 5;
     enemy.windup = 0;
-    spawnBurst(enemy.x, enemy.y, enemy.color, enemy.boss ? 70 : 24, enemy.boss ? 150 : 90);
+    spawnBurst(enemy.x, enemy.y, enemy.color, 24, 90);
     recordDefeatedMonster(enemy);
     const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
     gainXp(rewardXp);
-    if (enemy.boss) {
-      defeatedDungeonBosses.add(enemy.id);
-      dungeonClears += 1;
-      guildMarks += 2;
-      inventory.warden_lens = (inventory.warden_lens || 0) + 1;
-      player.coins += enemy.coins;
-      sound.crystal();
-      showToast(`沉燈坑道突破！第 ${dungeonClears} 次 · +2 公會印記`, "good");
-      announce(`擊敗${enemy.name}，沉燈坑道突破。`);
-      saveImportant(false);
-      return;
-    }
     drops.push({ id: `drop-${Date.now()}-${Math.random()}`, kind: "coin", x: enemy.x, y: enemy.y, value: enemy.coins, radius: 8, life: 22, phase: Math.random() * Core.TAU });
     if (Math.random() < .12) drops.push({ id: `potion-${Date.now()}-${Math.random()}`, kind: "potion", x: enemy.x + 12, y: enemy.y - 5, value: 1, radius: 9, life: 22, phase: 0 });
     if (enemy.dropInfo && Math.random() < enemy.dropInfo.chance) {
@@ -3645,7 +3633,6 @@
     obstacleSet: Object.freeze(["rock", "boulder", "bush"]),
     backgroundId: "mountain-battle-background-v1",
   });
-  const ENEMY_SPEED_GRADES = Object.freeze({ chick: "B", fox: "A", raccoon: "C", wild_boar: "D", bear: "D", turtle: "A", coyote: "A", frog: "B", snake: "A" });
 
   function scheduleBattle(callback, delay = 0) {
     if (!battle) return;
@@ -3669,16 +3656,15 @@
         .filter((cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y));
     }
     const layouts = {
-      slime: [[4, 1], [4, 5], [5, 3]],
-      wisp: [[3, 1], [3, 5], [5, 2], [5, 4]],
-      hound: [[3, 2], [3, 4], [5, 1], [5, 5]],
-      boss: [[3, 1], [3, 5], [5, 1], [5, 5]],
-      mossbun: [[3, 1], [4, 4], [6, 2]],
-      mistwing: [[3, 3], [5, 1], [5, 5]],
-      cragboar: [[4, 2], [4, 4], [6, 3]],
-      hollowmage: [[3, 1], [3, 5], [5, 3]],
-      "lantern-golem": [[3, 2], [3, 4], [5, 1], [5, 5]],
-      deepwarden: [[3, 1], [3, 5], [5, 1], [5, 5]],
+      chick: [[3, 1], [3, 5], [5, 2], [5, 4]],
+      fox: [[3, 2], [3, 4], [5, 1], [5, 5]],
+      raccoon: [[4, 1], [4, 5], [5, 3]],
+      wild_boar: [[4, 2], [4, 4], [6, 3]],
+      frog: [[3, 3], [5, 1], [5, 5]],
+      coyote: [[3, 2], [3, 4], [5, 1], [5, 5]],
+      turtle: [[3, 2], [3, 4], [5, 1], [5, 5]],
+      snake: [[3, 1], [3, 5], [5, 3]],
+      bear: [[3, 1], [3, 5], [5, 1], [5, 5]],
     };
     return (layouts[source.type] || layouts.raccoon || [[4, 1], [4, 5], [5, 3]]).map(([x, y]) => ({ x, y }));
   }
@@ -3718,46 +3704,45 @@
     const canonicalType = ExpansionWorld.normalizeMonsterId(type) || type;
     const base = enemyTypes[canonicalType] || enemyTypes[type];
     const blueprint = ExpansionWorld.monsterBlueprint(canonicalType);
-    const level = primary ? source.level : Math.max(1, source.level - 1);
+    const level = source.level || blueprint?.baseLevel || 1;
     const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(canonicalType, level) : null;
-    const rawHp = primary ? source.maxHp : Math.round((stats?.hp || base.hp) * .7);
-    const maxHp = Math.max(12, Math.round(rawHp));
+    const maxHp = Math.max(12, Math.round(primary ? (source.maxHp || stats?.hp || base.hp) : (stats?.hp || base.hp)));
     const spawnCell = battleDeploymentCell(battlefield, "enemy", index);
-    const boss = Boolean(primary && source.boss);
-    const skill = ExpansionWorld.selectMonsterSkill(canonicalType, { round: battle?.round || 1 });
-    const attackRange = primary ? source.attackRange : skill?.range.max || 1;
-    const ranged = attackRange > 1;
+    const skill = blueprint?.skills?.[0] || null;
+    const attackRange = skill?.range?.max || 1;
     return {
-      id: primary ? `battle-${source.id}` : `battle-${source.id}-helper-${index}`,
+      id: primary ? `battle-${source.id}` : `battle-${source.id}-pack-${index + 1}`,
       sourceId: primary ? source.id : null,
-      instanceId: `${source.instanceId || source.id}:helper-${index}`,
+      instanceId: `${source.instanceId || source.id}:pack-${index + 1}`,
       primary,
       side: "enemy",
       type: canonicalType,
       artType: base.artType || canonicalType,
-      boss,
-      name: primary ? source.name : `幼小${base.name}`,
+      boss: false,
+      name: primary ? source.name : (blueprint?.name_zh || base.name),
       level,
       cell: { ...spawnCell },
       hp: maxHp,
       maxHp,
-      attack: Math.max(5, primary ? source.damage : stats?.attack || base.damage),
-      defence: primary ? source.defence : stats?.defense || base.defence || 1,
+      attack: Math.max(1, primary ? (source.damage || stats?.attack || base.damage) : (stats?.attack || base.damage)),
+      defence: primary ? (source.defence ?? stats?.defense ?? base.defence ?? 0) : (stats?.defense ?? base.defence ?? 0),
+      xp: blueprint?.rewards?.baseXp ?? source.xp ?? base.xp ?? 0,
+      coins: blueprint?.rewards?.coins ?? source.coins ?? base.coins ?? 0,
       accuracy: 100,
       evasion: 0,
       weight: 0,
-      moveRange: Math.max(2, primary ? source.moveRange : stats?.moveRange || base.moveRange || 4),
+      moveRange: Math.max(0, blueprint?.moveRange ?? source.moveRange ?? stats?.moveRange ?? base.moveRange ?? 4),
       turnCost: BATTLE_TURN_COST,
       attackRange,
-      minAttackRange: attackRange > 1 ? 2 : 1,
-      initiative: primary ? source.battleSpeed : base.battleSpeed || (ENEMY_SPEED_GRADES[canonicalType] === "A" ? 14 : ENEMY_SPEED_GRADES[canonicalType] === "B" ? 11 : 8),
+      minAttackRange: skill?.range?.min || 1,
+      initiative: base.battleSpeed || 8,
       ap: 0,
-      skillCost: skill?.apCost || (boss ? 10 : ranged ? 7 : 5),
+      skillCost: skill?.apCost || 0,
       skillId: skill?.id || null,
-      skill: skill || null,
+      skill,
       skills: blueprint?.skills || [],
-      skillName: skill?.name || base.ability || (ranged ? "凝霧彈" : "霧爪擊"),
-      speedGrade: skill?.speedGrade || ENEMY_SPEED_GRADES[canonicalType] || "C",
+      skillName: skill?.name || base.ability || "普通攻擊",
+      speedGrade: skill?.speedGrade || "C",
       targetArc: ["front", "side"],
       alive: true,
       facing: "left",
@@ -3767,9 +3752,9 @@
 
   function battlePartyFor(source, battlefield = null) {
     const blueprint = ExpansionWorld.monsterBlueprint(source.type);
-    const types = [source.type, ...(blueprint?.encounterParty || [])];
-    if (source.boss && types.length === 1) types.push("turtle", "snake");
-    return types.slice(0, 3).map((type, index) => createBattleEnemy(source, type, index, index === 0, battlefield));
+    const type = blueprint?.id || source.type;
+    const count = Math.max(1, Math.min(3, Number(blueprint?.encounterCount) || 1));
+    return Array.from({ length: count }, (_, index) => createBattleEnemy(source, type, index, index === 0, battlefield));
   }
 
   function startBattle(source, instant = false) {
@@ -3912,12 +3897,21 @@
       if (actual.moveDownUntilRound >= battle.round) enemy.moveRange = Math.max(0, enemy.moveRange - (actual.moveDown || 0));
       enemy.moveRange = Math.max(0, enemy.moveRange - (FighterEffects?.movementPenalty(actual, battle.round) || 0));
       if (FighterEffects?.isDisabled(actual, battle.round, "move") || FighterEffects?.isStealthed?.(battle.hero, battle.round)) {
-        plans.push({ enemyId: actual.id, move: { ...actual.cell }, path: [{ ...actual.cell }], targetCells: [], willAttack: false, facing: actual.facing });
+        plans.push({ enemyId: actual.id, move: { ...actual.cell }, path: [{ ...actual.cell }], targetCells: [], willAttack: false, facing: actual.facing, reason: "disabled" });
         continue;
       }
-      const action = Tactics.chooseEnemyAction({ grid: battle.grid, enemy, targets: [hero], units: simulated });
+
+      const action = MonsterAI?.planEnemyAction({
+        grid: battle.grid,
+        enemy,
+        targets: [hero],
+        units: simulated,
+        skills: actual.skills,
+        apGain: BATTLE_AP_GAIN,
+      }) || Tactics.chooseEnemyAction({ grid: battle.grid, enemy, targets: [hero], units: simulated });
       if (!action) continue;
-      const selectedSkill = ExpansionWorld.selectMonsterSkill(actual.type, { round: battle.round, skillId: actual.skillId });
+
+      const selectedSkill = action.skill || action.setupSkill || null;
       if (selectedSkill) {
         actual.skill = selectedSkill;
         actual.skillId = selectedSkill.id;
@@ -3927,32 +3921,35 @@
         actual.attackRange = selectedSkill.range.max;
         actual.minAttackRange = selectedSkill.range.min;
       }
+
       enemy.cell = { ...action.move };
       enemy.facing = action.facing || enemy.facing;
-      const target = { ...hero.cell };
-      const targetCells = [];
-      const willAttack = Boolean(action.attackTargetId) && (actual.ap || 0) >= actual.skillCost && (!actual.skill || actual.skill.actionKind !== "guard");
-      if (willAttack) {
-        targetCells.push(target);
-        if (actual.skill?.area?.shape === "radius" || (actual.boss && battle.round % 3 === 0)) {
-          for (const direction of Tactics.DIRECTIONS) {
-            const splash = { x: target.x + direction.x, y: target.y + direction.y };
-            if (Tactics.isInside(battle.grid, splash)) targetCells.push(splash);
-          }
-        }
-      }
+      const willAttack = Boolean(action.attackTargetId && action.skill)
+        && (actual.ap || 0) >= (action.skill?.apCost || 0);
+      const targetCells = willAttack
+        ? Skills.patternCells(action.skill, action.move, hero.cell, {
+            grid: battle.grid,
+            battlefield: battle.battlefield,
+            heightMap: battle.battlefield?.heightMap,
+            facing: action.facing || actual.facing,
+          })
+        : [];
+
       plans.push({
         enemyId: actual.id,
         move: { ...action.move },
         path: action.path,
+        targetId: hero.id,
         targetCells,
         willAttack,
-        skillName: actual.skillName,
-        skillId: actual.skillId,
-        skill: actual.skill,
-        apCost: actual.skillCost,
-        speedGrade: actual.speedGrade || "C",
+        skillName: action.skill?.name || selectedSkill?.name || actual.skillName,
+        skillId: action.skill?.id || selectedSkill?.id || actual.skillId,
+        skill: action.skill || selectedSkill || actual.skill,
+        apCost: action.skill?.apCost || selectedSkill?.apCost || actual.skillCost,
+        speedGrade: action.skill?.speedGrade || selectedSkill?.speedGrade || actual.speedGrade || "C",
         facing: action.facing || actual.facing,
+        reason: action.reason || (willAttack ? "attack" : "move"),
+        setupSkillId: action.setupSkill?.id || null,
       });
     }
     return plans;
@@ -3997,7 +3994,7 @@
         // Fighter CMD skills own exact actor-local target geometry. Resolve it
         // again at execution time so knockback, displacement or a facing
         // change cannot reuse the range that was valid when the round began.
-        const skill = action.skillId ? Skills.getSkill(action.skillId) : null;
+        const skill = action.skillId ? (Skills.getSkill(action.skillId) || currentActor?.skills?.find((candidate) => candidate.id === action.skillId) || (currentActor?.skill?.id === action.skillId ? currentActor.skill : null)) : null;
         if (skill) {
           const actorTeam = currentActor?.side || (currentActor?.id === battle.hero.id ? "ally" : "enemy");
           const validation = Skills.validateSkillTarget(skill, currentActor.cell, cell, {
@@ -4132,22 +4129,32 @@
       }
       plan.facing = enemy.facing;
       plan.move = copyBattleCell(enemy.cell);
-      if (enemy.skill?.actionKind === "guard" || enemy.skill?.dealsDamage === false) {
+      const skill = plan.skill || enemy.skill;
+      if (!skill || skill.dealsDamage === false || skill.actionKind === "guard") {
         plan.willAttack = false;
         plan.targetCells = [];
         continue;
       }
-      const inRange = Tactics.isInAttackRange(enemy.cell, battle.hero.cell, enemy.attackRange, enemy.minAttackRange);
-      const targetPosition = Tactics.relativePosition(enemy.cell, enemy.facing, battle.hero.cell);
-      const facingAllowed = (enemy.targetArc || ["front", "side"]).includes(targetPosition);
-      plan.willAttack = inRange && facingAllowed && (enemy.ap || 0) >= (plan.apCost || enemy.skillCost || 0);
-      plan.targetCells = plan.willAttack ? [copyBattleCell(battle.hero.cell)] : [];
-      if (plan.willAttack && enemy.boss && battle.round % 3 === 0) {
-        for (const direction of Tactics.DIRECTIONS) {
-          const splash = { x: battle.hero.cell.x + direction.x, y: battle.hero.cell.y + direction.y };
-          if (Tactics.isInside(battle.grid, splash)) plan.targetCells.push(splash);
-        }
-      }
+      const legalTarget = MonsterAI?.validateSkillFrom
+        ? MonsterAI.validateSkillFrom(skill, enemy, enemy.cell, enemy.facing, battle.hero, battle.grid, battleUnits())
+        : Skills.validateSkillTarget(skill, enemy.cell, battle.hero.cell, {
+            grid: battle.grid,
+            battlefield: battle.battlefield,
+            heightMap: battle.battlefield?.heightMap,
+            facing: enemy.facing,
+            actorTeam: "enemy",
+            actorId: enemy.id,
+            targetUnit: { ...battle.hero, team: "ally" },
+          }).ok;
+      plan.willAttack = legalTarget && (enemy.ap || 0) >= (plan.apCost || skill.apCost || 0);
+      plan.targetCells = plan.willAttack
+        ? Skills.patternCells(skill, enemy.cell, battle.hero.cell, {
+            grid: battle.grid,
+            battlefield: battle.battlefield,
+            heightMap: battle.battlefield?.heightMap,
+            facing: enemy.facing,
+          })
+        : [];
     }
   }
 
@@ -4662,7 +4669,7 @@
         id: `round-${battle.round}:${plan.enemyId}`,
         actorId: plan.enemyId,
         targetId: battle.hero.id,
-        targetCell: plan.targetCells[0],
+        targetCell: { ...battle.hero.cell },
         skillId: plan.skill?.id || plan.skillId,
         skillDurability: plan.skill?.durability,
         deliveryMode: plan.skill?.deliveryMode || "pathless",
@@ -4823,11 +4830,20 @@
     for (const plan of battle.enemyPlans) {
       const enemy = enemiesAtStart.find((unit) => unit.id === plan.enemyId);
       if (!enemy || !plan.willAttack || !plan.targetCells.length) continue;
-      const coreTarget = plan.targetCells[0];
-      const stillInRange = Tactics.isInAttackRange(enemy.cell, coreTarget, enemy.attackRange, enemy.minAttackRange);
-      const targetPosition = Tactics.relativePosition(enemy.cell, enemy.facing, coreTarget);
-      const facingAllowed = (enemy.targetArc || ["front", "side"]).includes(targetPosition);
-      const hit = stillInRange && facingAllowed && plan.targetCells.some((cell) => sameBattleCell(cell, battle.hero.cell));
+      const skill = plan.skill || enemy.skill;
+      const hit = Boolean(skill)
+        && (MonsterAI?.validateSkillFrom
+          ? MonsterAI.validateSkillFrom(skill, enemy, enemy.cell, enemy.facing, battle.hero, battle.grid, battleUnits())
+          : Skills.validateSkillTarget(skill, enemy.cell, battle.hero.cell, {
+              grid: battle.grid,
+              battlefield: battle.battlefield,
+              heightMap: battle.battlefield?.heightMap,
+              facing: enemy.facing,
+              actorTeam: "enemy",
+              actorId: enemy.id,
+              targetUnit: { ...battle.hero, team: "ally" },
+            }).ok)
+        && plan.targetCells.some((cell) => sameBattleCell(cell, battle.hero.cell));
       // A stale/empty prediction is cancelled silently: the monster does not
       // spend AP or perform an attack at a square where no target exists.
       if (!hit) continue;
@@ -4962,7 +4978,7 @@
       }
       const activeGuard = battle.guardReduction || 0;
       hit.damage = Tactics.calculateDamage(hit.enemy, battle.hero, {
-        multiplier: (hit.plan.skill?.damageModel?.scale || 1) * (hit.enemy.boss && battle.round % 3 === 0 ? 1.25 : 1) * (hit.position === "rear" ? 1 + BATTLE_REAR_DAMAGE_BONUS : hit.position === "side" ? 1 + BATTLE_SIDE_DAMAGE_BONUS : 1),
+        multiplier: (hit.plan.skill?.damageModel?.scale || 1) * (hit.position === "rear" ? 1 + BATTLE_REAR_DAMAGE_BONUS : hit.position === "side" ? 1 + BATTLE_SIDE_DAMAGE_BONUS : 1),
         guarded: activeGuard > 0,
         guardMultiplier: 1 - activeGuard,
         minimum: 2,
@@ -5052,8 +5068,9 @@
       if (!battle || battle.token !== token) return;
       const finished = battle;
       const bonusUnits = finished.enemies.filter((unit) => !unit.primary);
-      const bonusXp = bonusUnits.reduce((sum, unit) => sum + 10 + unit.level * 4, 0);
-      const bonusCoins = bonusUnits.reduce((sum, unit) => sum + 3 + unit.level * 2, 0);
+      const primaryXp = ExpansionWorld.xpReward(finished.source.xp, finished.source.level, player.level);
+      const bonusXp = bonusUnits.reduce((sum, unit) => sum + ExpansionWorld.xpReward(unit.xp, unit.level, player.level), 0);
+      const bonusCoins = bonusUnits.reduce((sum, unit) => sum + Math.max(0, Math.round(unit.coins || 0)), 0);
       player.hp = Math.max(1, finished.hero.hp);
       closeBattleHud();
       mode = "playing";
@@ -5063,7 +5080,7 @@
       if (bonusXp) gainXp(bonusXp);
       player.coins += bonusCoins;
       encounterGrace = 1;
-      const earnedXp = finished.source.xp + bonusXp;
+      const earnedXp = primaryXp + bonusXp;
       showToast(`戰鬥勝利 · +${earnedXp} XP${bonusCoins ? `、+${bonusCoins} 燈幣` : ""}`, "good");
       updateHud(true);
       saveImportant(false);

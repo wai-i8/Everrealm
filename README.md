@@ -29,6 +29,7 @@ npm test
 ## Project structure
 
 - `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。
+- 怪物本體資料：`data/monsters.js`；怪物技能：`data/skills/monster.js`；戰場技能驅動 AI：`monster-ai.js`。
 - `assets/`：正式 runtime 美術資產，包括角色、NPC、怪物、動畫、terrain、battlefield、場景物件、UI、物品及裝備圖示。
 - `tests/`：自動 regression / gameplay tests。
 - `tools/`：資產清理、atlas 重排、透明 alpha audit 等開發工具。

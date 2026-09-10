@@ -306,22 +306,20 @@ Right Walk
 
 ## 7. 怪物移動 AI
 
-- 所有普通怪物基礎 movement 最少 `4`。
-- AI 目標通常係縮短同玩家／友軍嘅有效攻擊距離，而唔係單純改朝向。
-- 如果 AI 嘗試追玩家所在格，但該格被玩家佔用：
-  - pathfinding 應尋找最接近目標嘅合法相鄰格。
-  - 唔可以因終點不可佔用而只原地轉身。
+- 每隻怪嘅 battle movement 由 `data/monsters.js -> combat.moveRange` 決定；唔設共同最少 4 格（例如苔甲龜正式為 2）。
+- 怪物移動由技能有效攻擊格驅動：AI 應搵「今輪可出最佳技能」或「下輪高 AP 技能可用」嘅合法企位，而唔係一律貼住玩家。
+- Range-1 近戰追蹤嘅 pathfinding goal 係**玩家實際被佔用的 cell**，並容許 occupied goal 參與尋路；真正 movement route 剔除最後玩家 cell，再由 shared occupancy/collision 阻止疊格。呢個做法容許多隻同種近戰怪由其他方向繞過已被佔用嘅相鄰格，形成包圍。
+- Range 2+ 技能應按技能 authored exact range cells 尋找企位，唔應先追到 Range 1 再決定出招。
 - AI movement 使用同玩家完全相同：
   - movement cost
   - +0.5 turn cost
   - occupancy
   - collision
   - STOP
-- 低智能怪物移動完成後保留最後實際行走方向。
-- 唔免費自動面向玩家。
-- 移動後重新按實際位置／朝向／攻擊路線判斷技能。
+- 移動完成後保留最後實際行走方向，唔免費自動面向玩家。
+- 移動後重新按實際位置／朝向／攻擊路線／AP 判斷技能；同步移動令預定攻擊失效時必須取消。
 
-禁止為怪物另寫簡化 movement rules。
+禁止為怪物另寫簡化 movement rules。探索地圖追蹤／遊蕩 AI 不屬於本節。
 
 ---
 
@@ -2050,16 +2048,19 @@ Preview 必須同實際 resolver 共用同一函數。
 
 ## 27. 怪物攻擊 AI
 
-AI 選技能時要評估：
+怪物使用 `monster-ai.js` 嘅 skill-driven planner；唔使用 round-robin 技能輪替。AI 選「移動 + 技能」組合時要評估：
 
-- AP
-- range
+- 現有 AP、技能 AP cost，以及下輪 `+10 AP` 後可否解鎖更合適技能
+- authored exact range cells / area，而唔係只睇一個抽象 range 數字
 - facing
 - intended target
 - attack trace
-- blocker
-- expected impact
+- blocker / occupancy
+- expected damage / secondary effect
+- movement cost 與技能可用距離
 - side／back opportunity
+
+如果現位置已有合法攻擊，可以直接出招；如果只有長距離移動後先做到廉價 Range-1 攻擊，但下一輪會有足夠 AP 使用更長射程技能，AI 可以先移到該技能合適距離並待機儲 AP。
 
 禁止：
 

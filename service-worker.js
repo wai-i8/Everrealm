@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260910-10";
+const CACHE_VERSION = "everrealm-pwa-v2-20260910-11";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -19,6 +19,7 @@ const PRECACHE_URLS = [
   `${APP_BASE}data/items.js`,
   `${APP_BASE}data/equipment.js`,
   `${APP_BASE}data/quests.js`,
+  `${APP_BASE}data/skills/monster.js`,
   `${APP_BASE}data/monsters.js`,
   `${APP_BASE}data/skills/warrior.js`,
   `${APP_BASE}data/skills/fighter.js`,
@@ -55,6 +56,7 @@ const PRECACHE_URLS = [
   `${APP_BASE}guild-commission-core.js`,
   `${APP_BASE}tactics-core.js`,
   `${APP_BASE}skill-core.js`,
+  `${APP_BASE}monster-ai.js`,
   `${APP_BASE}audio-core.js`,
   `${APP_BASE}main-town-bgm-loop.js`,
   `${APP_BASE}save-system.js`,

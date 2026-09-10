@@ -11,9 +11,17 @@
   const { mulberry32, point, tileRect, makeTiles, fillTiles, paintLine, makeExit, withMapCollections } = helpers;
   const { MONSTER_BLUEPRINTS } = monsters;
 
-  function monsterSpawn(id, type, tx, ty, level, extra) {
+  function monsterSpawn(id, type, tx, ty, extra) {
     const blueprint = MONSTER_BLUEPRINTS[type];
-    return Object.assign({ id, type, name: blueprint?.name || type, artType: blueprint?.artType || type, family: blueprint?.family || "monster", ...point(tx, ty), level: level || blueprint?.baseLevel || 1 }, extra || {});
+    return Object.assign({
+      id,
+      type,
+      name: blueprint?.name || type,
+      artType: blueprint?.artType || type,
+      family: blueprint?.family || "monster",
+      ...point(tx, ty),
+      level: blueprint?.baseLevel || 1,
+    }, extra || {});
   }
 
   function createMineMap() {
@@ -27,7 +35,7 @@
       { id: "west-crypt", x: 2, y: 8, w: 8, h: 9, label: "苔石窟" },
       { id: "east-gallery", x: 28, y: 10, w: 11, h: 8, label: "殘燈迴廊" },
       { id: "relic-room", x: 14, y: 2, w: 11, h: 6, label: "封存庫" },
-      { id: "boss-chamber", x: 30, y: 2, w: 10, h: 7, label: "深霧核心" },
+      { id: "deep-chamber", x: 30, y: 2, w: 10, h: 7, label: "深霧核心" },
     ];
     rooms.forEach((room) => fillTiles(tiles, room.x, room.y, room.w, room.h, TILES.STONE));
     paintLine(tiles, { x: 8, y: 24 }, { x: 15, y: 24 }, 1, TILES.STONE);
@@ -47,8 +55,8 @@
       tileRect(18.2, 13.2, 1.1, 1.1, { id: "dungeon-pillar-3", kind: "pillar", name: "刻紋石柱" }),
       tileRect(32.2, 14.2, .9, .9, { id: "dungeon-pillar-4", kind: "pillar", name: "殘燈柱" }),
       tileRect(36.2, 14.2, .9, .9, { id: "dungeon-pillar-5", kind: "pillar", name: "殘燈柱" }),
-      tileRect(33, 4.1, 1, 1, { id: "boss-pillar-left", kind: "pillar", name: "深霧石柱" }),
-      tileRect(37, 4.1, 1, 1, { id: "boss-pillar-right", kind: "pillar", name: "深霧石柱" }),
+      tileRect(33, 4.1, 1, 1, { id: "deep-pillar-left", kind: "pillar", name: "深霧石柱" }),
+      tileRect(37, 4.1, 1, 1, { id: "deep-pillar-right", kind: "pillar", name: "深霧石柱" }),
     ];
     const random = mulberry32(0x4d495354);
     const decorations = [];
@@ -65,28 +73,28 @@
     [[5, 14], [17, 17], [21, 10], [29, 15], [23, 4], [31, 7], [38, 7]].forEach(([tx, ty], index) => decorations.push({ id: `dungeon-lamp-${index}`, kind: "ancientLamp", ...point(tx, ty), radius: 8, glow: "#75dbc7", solid: false }));
     const chests = [
       { id: "moss-cave-chest", kind: "chest", name: "長苔補給箱", ...point(3, 9), radius: 13, reward: { coins: 95, potions: 2, itemId: "mistguard-boots" } },
-      { id: "sealed-relic-chest", kind: "chest", name: "封存庫寶箱", ...point(22, 3), radius: 13, lockedBy: "lantern-golem-1", reward: { coins: 145, itemId: "echo-blade" } },
+      { id: "sealed-relic-chest", kind: "chest", name: "封存庫寶箱", ...point(22, 3), radius: 13, lockedBy: "turtle-vault-1", reward: { coins: 145, itemId: "echo-blade" } },
       { id: "gallery-chest", kind: "chest", name: "迴廊鐵箱", ...point(37, 16), radius: 13, reward: { coins: 120, potions: 2, itemId: "fogweave-coat" } },
-      { id: "warden-chest", kind: "chest", name: "看守者秘藏", ...point(35, 3), radius: 14, lockedBy: "deepwarden-1", reward: { coins: 260, potions: 3, itemId: "warden-lantern" } },
+      { id: "warden-chest", kind: "chest", name: "深霧秘藏", ...point(35, 3), radius: 14, lockedBy: "bear-deep-2", reward: { coins: 260, potions: 3, itemId: "warden-lantern" } },
     ];
     const shrine = { id: "echo-lantern-shrine", kind: "shrine", name: "回音燈龕", ...point(18, 24), radius: 19, prompt: "E　點亮回音燈", waypointId: "dungeon-echo-lantern", services: ["heal", "save", "waypoint"] };
     const exit = makeExit("dungeon-to-field", 10.5, 29, MAP_IDS.FIELD, "dungeonFront", "返回霧梅爾山地", point(37, 2.6), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     const enemySpawns = [
-      monsterSpawn("mossbun-1", "raccoon", 5, 24, 5),
-      monsterSpawn("mossbun-2", "raccoon", 8, 22, 5),
-      monsterSpawn("mistwing-1", "frog", 15, 26, 6),
-      monsterSpawn("mistwing-2", "frog", 21, 21, 6),
-      monsterSpawn("cragboar-1", "wild_boar", 16, 15, 7),
-      monsterSpawn("lantern-golem-1", "turtle", 23, 11, 7, { elite: true, guardsChest: "sealed-relic-chest" }),
-      monsterSpawn("mistwing-3", "frog", 4, 15, 7),
-      monsterSpawn("cragboar-2", "wild_boar", 4, 10, 8),
-      monsterSpawn("hollowmage-1", "snake", 31, 16, 8),
-      monsterSpawn("hollowmage-2", "snake", 37, 12, 9),
-      monsterSpawn("lantern-golem-2", "bear", 20, 4, 10, { elite: true }),
-      monsterSpawn("mistwing-4", "frog", 16, 4, 9),
-      monsterSpawn("hollowmage-3", "snake", 32, 7, 10),
-      monsterSpawn("deepwarden-helper", "bear", 38, 7, 11, { elite: true }),
-      monsterSpawn("deepwarden-1", "bear", 35, 5, 12, { boss: true, guardsChest: "warden-chest", respawn: false }),
+      monsterSpawn("frog-entry-1", "frog", 5, 24),
+      monsterSpawn("frog-entry-2", "frog", 8, 22),
+      monsterSpawn("coyote-entry-1", "coyote", 15, 26),
+      monsterSpawn("coyote-gallery-1", "coyote", 21, 21),
+      monsterSpawn("turtle-court-1", "turtle", 16, 15),
+      monsterSpawn("turtle-vault-1", "turtle", 23, 11, { guardsChest: "sealed-relic-chest" }),
+      monsterSpawn("coyote-west-1", "coyote", 4, 15),
+      monsterSpawn("turtle-west-1", "turtle", 4, 10),
+      monsterSpawn("snake-gallery-1", "snake", 31, 16),
+      monsterSpawn("snake-gallery-2", "snake", 37, 12),
+      monsterSpawn("snake-relic-1", "snake", 20, 4),
+      monsterSpawn("turtle-relic-1", "turtle", 16, 4),
+      monsterSpawn("snake-deep-1", "snake", 32, 7),
+      monsterSpawn("bear-deep-1", "bear", 38, 7),
+      monsterSpawn("bear-deep-2", "bear", 35, 5, { guardsChest: "warden-chest" }),
     ];
     const npcs = [{
       id: "lost-explorer-kai",
@@ -103,12 +111,12 @@
       age: 29,
       appearance: "銀髮冰系女法師造型、冰藍法袍、雪晶披肩與白銀長靴",
       services: ["dungeon-tip"],
-      chatter: "點著回音燈就有落腳點。再入面嗰啲燈偶會隔住石柱射過嚟！",
+      chatter: "點著回音燈就有落腳點。再入面啲毒霧蛇會遠距離噴毒，行位要小心。",
     }];
     return withMapCollections({
-      id: MAP_IDS.DUNGEON, name: "沉燈坑道", shortName: "沉燈坑道", kind: "dungeon", type: "dungeon", biome: "cave", theme: "flooded-ruins", ambient: "deep-mist", recommendedLevel: 5, maxRecommendedLevel: 12,
-      tileSize: TILE, tileTypes: TILES, width, height, tiles, rooms, start: point(9, 26), spawnPoints: { entrance: point(9, 26), waypoint: point(18, 25.5), bossDoor: point(35, 8) }, exits: [exit], solidRects, furniture: [], decorations, boards: [], npcs, enemySpawns, chests, shrine, waypoint: shrine, worldPortalId: "field-to-dungeon",
-      objectives: { waypoint: point(18, 24), relic: point(20, 4), boss: point(35, 5), exit: point(10.5, 29) },
+      id: MAP_IDS.DUNGEON, name: "沉燈坑道", shortName: "沉燈坑道", kind: "dungeon", type: "dungeon", biome: "cave", theme: "flooded-ruins", ambient: "deep-mist", recommendedLevel: 21, maxRecommendedLevel: 45,
+      tileSize: TILE, tileTypes: TILES, width, height, tiles, rooms, start: point(9, 26), spawnPoints: { entrance: point(9, 26), waypoint: point(18, 25.5), deepDoor: point(35, 8) }, exits: [exit], solidRects, furniture: [], decorations, boards: [], npcs, enemySpawns, chests, shrine, waypoint: shrine, worldPortalId: "field-to-dungeon",
+      objectives: { waypoint: point(18, 24), relic: point(20, 4), deepChamber: point(35, 5), exit: point(10.5, 29) },
     });
   }
   return { TILE, TILES, MAP_IDS, createMineMap, createDungeonMap: createMineMap, monsterSpawn };

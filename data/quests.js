@@ -9,8 +9,8 @@
     "id": "guild_hunt_chick_1star",
     "star": 1,
     "type": "hunt",
-    "title": "山雀仔討伐",
-    "description": "清理山路附近受驚的山雀仔，讓往來的旅人可以安心通行。",
+    "title": "山野小雞討伐",
+    "description": "清理山路附近受驚的山野小雞，讓往來的旅人可以安心通行。",
     "recommendedLevel": 1,
     "repeatable": true,
     "objective": {
@@ -43,7 +43,7 @@
     "type": "hunt",
     "title": "郊狼討伐",
     "description": "壓制灰霧邊界結群出沒的郊狼，免得牠們追上落單旅人。",
-    "recommendedLevel": 4,
+    "recommendedLevel": 27,
     "repeatable": true,
     "objective": {
       "monster_id": "coyote",
@@ -59,7 +59,7 @@
     "type": "hunt",
     "title": "岩穴熊討伐",
     "description": "挑戰沉燈坑道深處的岩穴熊，替深入礦坑的隊伍清出道路。",
-    "recommendedLevel": 7,
+    "recommendedLevel": 45,
     "repeatable": true,
     "objective": {
       "monster_id": "bear",
@@ -75,7 +75,7 @@
     "type": "hunt",
     "title": "毒霧蛇討伐",
     "description": "深入沉燈坑道，處理會以毒霧封路的毒霧蛇。",
-    "recommendedLevel": 8,
+    "recommendedLevel": 39,
     "repeatable": true,
     "objective": {
       "monster_id": "snake",

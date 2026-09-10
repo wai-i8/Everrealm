@@ -1,57 +1,118 @@
 # Monster System
 
-## Purpose
+## Purpose / source of truth
 
-Monster identity, ecology, combat data, rewards, exploration presentation tuning and Codex records use one canonical machine-readable catalog: `data/monsters.js`. `map/monster-blueprints.js` is the runtime hydration/resolver layer. Map files own only placement and encounter context; `game.js` consumes hydrated catalog data and does not invent species stats.
+怪物固定資料只由 `data/monsters.js` 擁有；怪物技能只由 `data/skills/monster.js` 擁有。`map/monster-blueprints.js` 只負責 runtime hydration、level stats、舊 ID migration 及 map/save boundary。`monster-ai.js` 只負責戰場決策，唔可以重新定義怪物 stats 或技能。
 
-## Canonical roster
+探索地圖追蹤／遊蕩 AI 今次不重設；日後探索遭遇會另行改成碰撞式 encounter。以下 AI 規則全部只指格仔戰場。
 
-The current roster is exactly nine stable IDs:
+## Canonical roster / progression
 
-`chick`, `fox`, `raccoon`, `wild_boar`, `bear`, `turtle`, `coyote`, `frog`, `snake`.
+現行 roster 固定為 9 種普通怪，**沒有 Boss、Elite 或混合 encounter party**。每次 encounter 只生成同一 species，數量由怪物資料固定。
 
-Every entry contains a stable name, family, normal level band, habitat maps/zones, base stats, species multipliers, move range, battle role, AI profile, skills, rewards, quest tags, Codex copy and locomotion status. `fox` and `coyote` are separate species: foxes are fast flankers while coyotes are pack hunters.
+| Rank | ID | 名稱 | Lv | 每場數量 | Battle Move |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 1 | `chick` | 山野小雞 | 1 | 1 | 5 |
+| 2 | `fox` | 赤尾狐 | 5 | 2 | 6 |
+| 3 | `raccoon` | 灰紋浣熊 | 10 | 1 | 4 |
+| 4 | `wild_boar` | 荒原野豬 | 15 | 3 | 4 |
+| 5 | `frog` | 霧沼蛙 | 21 | 1 | 4 |
+| 6 | `coyote` | 灰原郊狼 | 27 | 3 | 5 |
+| 7 | `turtle` | 苔甲龜 | 33 | 1 | 2 |
+| 8 | `snake` | 毒霧蛇 | 39 | 2 | 5 |
+| 9 | `bear` | 岩穴熊 | 45 | 1 | 3 |
 
-Each monster record may contain an `exploration` block for movement speed, radius, aggro distance and presentation colour. Battle action speed remains separate and comes from each skill's shared `speedGrade` (`S` through `F`), resolved by the battle action-order resolver.
+呢個 Lv 係 species / authored map progression，唔跟玩家等級或 dungeon clear 次數動態提升。怪物 level cap 獨立為 45。
 
-## Stats and level scaling
+## Monster record
 
-`monsterStatsAtLevel(id, level, options)` derives levelled HP, attack, defence and move range from `baseStats`, `multipliers`, the level and optional elite modifier. The resolver clamps normal runtime levels to the project cap and keeps the result deterministic. Species multipliers are data, not per-species branches in the renderer or UI.
+`data/monsters.js` 每隻怪以同一 schema 保存：
 
-`hydrateMonsterSpawn(spawn)` is the save/map boundary. It normalizes legacy IDs, preserves placement fields, adds levelled tactical stats, rewards and skill references, and never mutates its input.
+- `id`, `name`, `family`
+- `progression.rank / level`
+- `encounter.count`
+- `stats.hp / attack / defense`
+- `combat.moveRange / role / skills[]`
+- `rewards`
+- `habitat`, `questTags`, `locomotion`, `codex`
+- `exploration` 只保留目前探索畫面仍需使用的 presentation/movement metadata；不屬於今次 Battle AI 設計。
 
-## Battle skills
+同一技能不可喺怪物 record 再抄 AP、range、speed、damage。怪物只引用 skill ID。
 
-Skills are plain catalog records with AP cost, shared speed grade, relative range cells, area shape, target mode, delivery mode, height limit, damage model and effects. Melee skills use the same facing-relative orthogonal geometry contract as player linear skills (`pathMode: facingOrthogonalPriority`); projectile and pathless area skills state their delivery mode explicitly. Snake has fast venom bite, slower poison spit and poison cloud. Turtle has Shell Defense. Bear has a high-impact slam and charge.
+## Monster skills
 
-Enemy action planning selects catalog skills, passes speed/AP/range into the existing tactical planner, orders actions through `Skills.orderActionsBySpeed`, and applies status effects through `FighterEffects`. No separate monster speed resolver is allowed.
+技能 machine-readable source 係 `data/skills/monster.js`。格式跟玩家 Fighter 技能相同思路：唔可以淨係寫 `range: 3`，必須明確寫出 `sourcePattern`、`rangeDescription`、`rangeCellsRelative`，令人同 AI 都可以一眼知道實際可選格。
 
-## Rewards and retreat
+| 怪物 | 技能 | AP | Speed | 攻擊格 / 效果 |
+| --- | --- | ---: | :---: | --- |
+| 山野小雞 | 啄擊 | 4 | C | 前左／前／前右／左／右 5 格 |
+| 赤尾狐 | 迅咬 | 5 | B | 近身 5 格 |
+|  | 飛撲 | 12 | C | 前方第 1–2 格、3 格闊 |
+| 灰紋浣熊 | 爪擊 | 5 | C | 近身 5 格 |
+|  | 連環抓 | 11 | D | 近身 5 格，高傷 |
+| 荒原野豬 | 獠牙撞擊 | 6 | D | 近身 5 格 |
+|  | 衝鋒 | 14 | E | 正前方第 1–3 格，擊退 1 |
+| 霧沼蛙 | 舌擊 | 7 | C | 正前方第 1–2 格 |
+|  | 黏液彈 | 15 | D | 正前方第 1–3 格，Move -1 / 1 turn |
+| 灰原郊狼 | 迅咬 | 6 | B | 近身 5 格 |
+|  | 獵殺飛撲 | 13 | C | 前方第 1–2 格、3 格闊 |
+| 苔甲龜 | 甲殼撞擊 | 6 | D | 近身 5 格 |
+|  | 旋殼迴擊 | 16 | E | 自身周圍 8 格 AoE，擊退 1 |
+| 毒霧蛇 | 毒牙 | 8 | B | 近身 5 格，中毒 |
+|  | 毒液噴吐 | 18 | D | 最遠 4 格的明確前方 pattern，中毒 |
+| 岩穴熊 | 重掌 | 7 | C | 近身 5 格 |
+|  | 震地掌 | 18 | E | 前方 4 格 AoE |
 
-XP uses the level-sensitive multiplier:
+技能速度沿用全戰鬥共同 `S > A > B > C > D > E > F` resolver；怪物冇另一套 speed system。
 
-`round(baseXp × clamp(1 + 0.20 × (monsterLevel - playerLevel), 0.10, 1.60))`.
+## AP contract
 
-Retreat uses:
+怪物同玩家沿用同一 AP 節奏：
 
-`clamp(0.40 + 0.15 × (playerLevel - highestLivingEnemyLevel), 0.05, 1.00)`.
+```text
+戰鬥開始 / 第一輪取得 10 AP
+每輪 +10 AP
+未用 AP 保留
+上限 200 AP
+```
 
-Boss and elite encounters use the normal encounter formula; no monster carries a main-story gate flag and no exploration route is blocked by story state. Retreat rules remain owned by the battle system.
+每隻怪有獨立 AP pool。AI 可選擇今輪唔攻擊，保留 AP 俾下輪較高 AP 技能。
 
-## Migration and stable IDs
+## Battle AI: skill-driven planner
 
-`data/monsters.js` owns `LEGACY_MONSTER_MIGRATION`, which is the only compatibility table for old saves and old authored maps. New map spawns and new contracts must use canonical IDs. Guild contracts and defeat events use `objective.target` / `monster_id` with canonical IDs; localized names are presentation only. Codex cards enumerate `CANONICAL_MONSTER_IDS` and aggregate legacy kill counters for old saves.
+`monster-ai.js` 唔按 species 寫死「狐狸一定繞側／蛇一定逃走」。每輪由以下資料共同決定：
 
-## Maps and encounters
+1. 目前 AP 與下輪可獲得 AP。
+2. 所有技能 AP cost、speed、exact range cells、damage / secondary effect。
+3. 本輪可達格、movement cost、facing。
+4. 玩家實際位置、terrain、其他 unit occupancy / blocker。
 
-The Mountain Field uses chick, fox, raccoon, turtle, wild_boar and coyote. The Mine uses raccoon, frog, wild_boar, turtle, snake and bear. Spawn level, elite and chest guard remain map-owned. Encounter companions are optional `encounterParty` data on the blueprint, not a type chain in the battle UI.
+核心順序：
 
-## Art status
+```text
+現位置可合法出招 → 優先評估直接攻擊
+否則評估「移動後可出招」
+同時評估「為下輪高 AP / 長射程技企位並儲 AP」
+都做唔到 → 追蹤目標
+```
 
-`assets/monster-sources/` stores the original single-image references. The six
-new canonical sets are normalized under
-`assets/locomotion/sources/<monster>/`, packed into runtime atlases under
-`assets/locomotion/`, and audited against the Standard Mobile Unit
-`4×7 / 28-frame` contract. `chick`, `fox` and `raccoon` retain their existing
-approved atlases; all nine canonical ordinary monsters resolve to their own
-runtime locomotion asset and no longer use the legacy four-facing fallback.
+因此高 AP 長射程怪唔會無必要衝到玩家身邊。例如毒霧蛇 AP 未夠 `venom_spit` 時，可以先行到下一輪適合 Range 4 出招的位置並待機。
+
+### Range-1 pursuit / 卡位
+
+近戰追蹤時，pathfinding **以玩家目前被佔用的 cell 做 goal**，並使用 `allowGoalOccupied`。路徑真正執行前會剔除玩家最後一格，shared occupancy / collision resolver 亦禁止疊格。
+
+呢個設計刻意唔指定「玩家前面嗰一格」做唯一 goal：如果一隻怪已經卡住玩家其中一邊，第二／第三隻近戰怪仍可沿另一條合法路線追向玩家並形成包圍。
+
+## Runtime / migration
+
+`LEGACY_MONSTER_MIGRATION` 只供舊 save / 舊 authored ID 讀取。`deepwarden`, `lantern-golem`, `mossbun` 等名稱唔係現行怪物，亦唔代表現行 Boss / Elite。新 map、quest、save write 只可使用 9 個 canonical IDs。
+
+`hydrateMonsterSpawn()` 會去除舊 `boss`, `elite`, `encounterParty` flags。現行 encounter 數量只讀 `encounter.count`。
+
+## Maps
+
+- Mountain Field：`chick`, `fox`, `raccoon`, `wild_boar`, `coyote`。
+- Mine：`frog`, `coyote`, `turtle`, `snake`, `bear`。
+
+Map file 只決定 world placement；species Lv / stats / encounter count / skills 仍由 Monster System 擁有。
