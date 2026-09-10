@@ -127,7 +127,6 @@
             </div>
             <div class="selected-unit-copy">
               <div class="selected-unit-heading">
-                <span id="selectedUnitRole">巡燈人</span>
                 <b id="selectedUnitLevel">LV. 1</b>
               </div>
               <strong id="selectedUnitName">阿巡</strong>
@@ -136,26 +135,21 @@
                 <div class="battle-stat-bar"><i id="selectedUnitHpFill" style="width: 100%"></i></div>
                 <b id="selectedUnitHpText">88 / 88</b>
               </div>
+              <div class="battle-stat-row battle-ap-row">
+                <span>AP</span>
+                <div class="battle-stat-bar battle-ap-bar"><i id="selectedUnitApFill" style="width: 100%"></i></div>
+                <b id="selectedUnitApText">0 / 0</b>
+              </div>
               <div id="selectedUnitStatuses" class="unit-status-list" data-battle-status-list aria-label="角色狀態">
                 <span class="unit-status is-good" data-status="lantern">燈護</span>
               </div>
             </div>
           </aside>
 
-          <nav id="battleTurnOrder" class="battle-turn-order battle-card" data-battle-panel="turn-order" aria-label="行動次序">
-            <span class="turn-order-title">今輪行動</span>
-            <ol id="battleTurnOrderList" data-battle-turn-list>
-              <li class="is-current" data-unit-id="player"><span class="turn-avatar ally-avatar" aria-hidden="true">巡</span><b>阿巡</b></li>
-              <li data-unit-id="enemy-preview"><span class="turn-avatar enemy-avatar" aria-hidden="true">霧</span><b>霧獸</b></li>
-            </ol>
-          </nav>
 
           <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
             <div class="battle-action-heading" data-battle-command-drag-handle>
-              <span>戰鬥指令 <small>移動</small></span>
-              <button id="battleCommandFollowButton" class="battle-command-follow" type="button" data-battle-command-follow aria-label="讓戰鬥指令選單重新跟隨主角" title="跟隨主角">
-                <span aria-hidden="true">⌖</span> 跟隨
-              </button>
+              <span>戰鬥指令</span>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
               <span class="battle-actions-loading">戰鬥指令準備中</span>
@@ -353,13 +347,6 @@
         <div id="ariaLive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
       </section>
 
-      <footer class="footer-hints">
-        <span><b>滑鼠 / 觸控</b> 撳地面移動</span>
-        <span><b>撳 NPC / 設施</b> 靠近或互動</span>
-        <span><b>左側選單</b> 狀態／任務／物品／技能</span>
-        <span><b>戰鬥</b> 揀指令再揀格仔</span>
-        <span><b>ESC</b> 戰鬥撤退</span>
-      </footer>
     </main>
 
     <script src="rpg-core.js"></script>

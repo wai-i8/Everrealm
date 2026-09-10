@@ -4143,7 +4143,10 @@
     if (action === "lantern-skill" || action === "flare") action = "skill:lantern_shot";
     battle.messageDanger = false;
     if (action === "cancel-target") return cancelBattleTargetSelection();
-    if (action === "flee") return fleeBattle();
+    if (action === "flee") {
+      if (battle.phase !== "planning_move") return setBattleMessage("移動階段先可以撤退。", true);
+      return fleeBattle();
+    }
     if (battle.phase === "planning_move") {
       if (action === "end-move") return finishBattleMoveDraft();
       if (action === "reset-move" || action === "move") return resetBattleMoveDraft();
@@ -5004,9 +5007,8 @@
     }).join("");
     buttons.innerHTML = `
       <div class="battle-command-skill-list">${skillButtons}</div>
-      <div class="battle-command-utility-row">
+      <div class="battle-command-utility-row battle-single-command-row">
         <button id="battleEndTurnButton" class="battle-command-secondary end-turn-skill" type="button" data-battle-action="end-turn"><b>待機</b></button>
-        <button id="battleFleeButton" class="battle-command-secondary flee-skill" type="button" data-battle-action="flee"><b>撤退</b></button>
       </div>`;
     battleUi.potionCount = null;
   }
@@ -6215,9 +6217,11 @@
     // Names belong to the rendered sprite, not the logical tile.  Character
     // art supplies semantic anchors that remain correct across different body
     // proportions, attack frames and monster species.
-    const nameX = Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
+    const movingUnit = battle.phase === "resolving_move" && Boolean(unit.renderCell);
+    const nameX = movingUnit ? point.x : (Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x);
     const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
-    const nameY = (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY) - Math.max(2, actorCell * .025);
+    const nameAnchorY = movingUnit ? fallbackNameY : (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY);
+    const nameY = nameAnchorY - Math.max(2, actorCell * .025);
     ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -7883,7 +7887,7 @@
         const skill = equippedBattleSkills()[1];
         if (skill) selectBattleAction(`skill:${skill.id}`);
       } else if (code === "KeyE" || code === "Digit9") selectBattleAction("end-turn");
-      else if (code === "Escape" || code === "Digit0") selectBattleAction("flee");
+      else if ((code === "Escape" || code === "Digit0") && battle.phase === "planning_move") selectBattleAction("flee");
       return;
     }
     if (mode === "dialogue") {
