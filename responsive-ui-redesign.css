@@ -120,7 +120,7 @@
     object-fit: contain !important;
     opacity: 1 !important;
     visibility: visible !important;
-    transform: scale(1.68) !important;
+    transform: scale(1.06) !important;
     filter: drop-shadow(0 .12rem .18rem rgba(0,0,0,.55)) !important;
     transition: transform .12s ease, filter .12s ease;
     pointer-events: none;
@@ -631,7 +631,7 @@
   }
 
   #exploreSidebar .sidebar-primary .explore-menu-icon img {
-    transform: scale(1.68) !important;
+    transform: scale(1.06) !important;
     transform-origin: center !important;
   }
 }
@@ -1023,6 +1023,12 @@
   min-height: var(--explore-rail-size) !important;
   display: grid !important;
   place-items: center !important;
+  /* The legacy menu uses two columns for icon + text.  The rail hides the
+     text, so reset that layout or the icon remains confined to the old
+     1.55rem first track inside the full circular hit target. */
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0 !important;
   padding: 0 !important;
   overflow: visible !important;
   border: 0 !important;
