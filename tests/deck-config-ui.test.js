@@ -77,3 +77,13 @@ test("deck layout stays two-column, centered, compact, and scrolls only when nee
   assert.match(responsiveCss, /\.deck-skill-choice,[\s\S]*?\.deck-slot\s*\{[\s\S]*?height:\s*3\.05rem/);
   assert.match(responsiveCss, /\.skill-kind-badge b\s*\{[\s\S]*?\.9rem\/1/);
 });
+
+test("deck skill cards are edge-to-edge compact rows", () => {
+  const finalRuleStart = responsiveCss.lastIndexOf('.facility-overlay[data-facility-tab="deck"] .deck-skill-choice,');
+  const finalRuleEnd = responsiveCss.indexOf("\n}", finalRuleStart) + 2;
+  const finalRule = responsiveCss.slice(finalRuleStart, finalRuleEnd);
+  assert.match(finalRule, /min-height:\s*1\.42rem !important/);
+  assert.match(finalRule, /height:\s*1\.42rem !important/);
+  assert.match(finalRule, /padding:\s*0 !important/);
+  assert.match(responsiveCss, /\.facility-overlay\[data-facility-tab="deck"\] \.deck-skill-list,[\s\S]*?\.deck-slot-list\s*\{[\s\S]*?gap:\s*0 !important/);
+});

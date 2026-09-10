@@ -1706,7 +1706,7 @@
 }
 .facility-overlay[data-facility-tab="deck"] .deck-skill-list,
 .facility-overlay[data-facility-tab="deck"] .deck-slot-list {
-  gap: .16rem !important;
+  gap: 0 !important;
 }
 .facility-overlay[data-facility-tab="deck"] .deck-skill-list {
   max-height: calc(100dvh - 6.5rem) !important;
@@ -1714,53 +1714,51 @@
 .facility-overlay[data-facility-tab="deck"] .deck-skill-choice,
 .facility-overlay[data-facility-tab="deck"] .deck-slot {
   width: 100% !important;
-  min-height: 1.72rem !important;
-  height: auto !important;
-  padding: .08rem 1.7rem .08rem 1.75rem !important;
-  border-radius: .42rem !important;
+  min-height: 1.42rem !important;
+  height: 1.42rem !important;
+  padding: 0 !important;
+  border-radius: .24rem !important;
 }
 .facility-overlay[data-facility-tab="deck"] .skill-kind-badge {
-  left: .28rem !important;
-  width: 1.2rem !important;
-  height: 1.2rem !important;
-  border-radius: .26rem !important;
+  left: 0 !important;
+  width: 1.02rem !important;
+  height: 1.02rem !important;
+  border-radius: .18rem !important;
 }
 .facility-overlay[data-facility-tab="deck"] .skill-kind-badge b {
-  font-size: .64rem !important;
+  font-size: .56rem !important;
 }
 .facility-overlay[data-facility-tab="deck"] .deck-skill-choice strong,
 .facility-overlay[data-facility-tab="deck"] .deck-slot strong {
-  display: -webkit-box !important;
+  display: block !important;
   overflow: hidden !important;
-  font-size: .67rem !important;
-  line-height: 1.12 !important;
+  font-size: .62rem !important;
+  line-height: 1 !important;
   text-align: center !important;
-  white-space: normal !important;
-  text-overflow: clip !important;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
 }
 .facility-overlay[data-facility-tab="deck"] .deck-slot-empty {
-  font-size: .6rem !important;
-  line-height: 1.1;
+  font-size: .56rem !important;
+  line-height: 1;
 }
 .deck-drag-ghost {
   width: min(14.75rem, 44vw) !important;
-  min-height: 1.72rem !important;
-  height: auto !important;
-  padding: .08rem 1.7rem .08rem 1.75rem !important;
-  border-radius: .42rem !important;
+  min-height: 1.42rem !important;
+  height: 1.42rem !important;
+  padding: 0 !important;
+  border-radius: .24rem !important;
 }
 .deck-drag-ghost .skill-kind-badge {
-  left: .28rem !important;
-  width: 1.2rem !important;
-  height: 1.2rem !important;
-  border-radius: .26rem !important;
+  left: 0 !important;
+  width: 1.02rem !important;
+  height: 1.02rem !important;
+  border-radius: .18rem !important;
 }
-.deck-drag-ghost .skill-kind-badge b { font-size: .64rem !important; }
+.deck-drag-ghost .skill-kind-badge b { font-size: .56rem !important; }
 .deck-drag-ghost strong {
   font-size: .67rem !important;
-  line-height: 1.12 !important;
-  white-space: normal !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
   text-align: center !important;
 }
