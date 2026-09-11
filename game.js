@@ -55,9 +55,6 @@
   const expansionMaps = Object.fromEntries(Object.entries(maps).filter(([id]) => id !== "world"));
   let currentMapId = "world";
   let world = overworld;
-  const SAVE_KEY = "everrealm-save-v1";
-  // Keep reading the pre-migration key so existing player progress survives the rename.
-  const LEGACY_SAVE_KEYS = Object.freeze(["lanternbound-save-v1"]);
   const SOUND_KEY = "everrealm-sound";
   const LEGACY_SOUND_KEY = "lanternbound-sound";
   const ZOOM_KEY = "everrealm-zoom";
@@ -102,6 +99,7 @@
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
   const continueButton = document.getElementById("continueButton");
+  const titleActions = document.getElementById("titleActions");
   const titleAccountStatus = document.getElementById("titleAccountStatus");
   const titleAccountText = document.getElementById("titleAccountText");
   const accountButton = document.getElementById("accountButton");
@@ -222,7 +220,7 @@
   let authUser = null;
   let authMode = "login";
   let authSyncToken = 0;
-  let authStateResolved = !Firebase?.onAuthStateChanged;
+  let authStateResolved = false;
   let legacyClaimUid = null;
   let openedChests = new Set();
   let ownedEquipment = ["novice_blade", "traveller_coat"];
@@ -718,20 +716,30 @@
     try { return localStorage.getItem(key) || (legacyKey ? localStorage.getItem(legacyKey) : null) || fallback; } catch (_) { return fallback; }
   }
 
-  function readSaveRaw(uid = null) {
-    if (savePersistence) return savePersistence.readLocal({ uid })?.data || null;
-    for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
-      try {
-        const raw = JSON.parse(localStorage.getItem(key));
-        if (raw) return raw;
-      } catch (_) {}
-    }
-    return null;
+  function authenticatedUser() {
+    const current = Firebase?.currentUser?.();
+    return current?.uid ? current : null;
   }
 
-  function hasSave(uid = null) {
-    if (savePersistence) return savePersistence.hasLocalSave(uid);
-    return Boolean(Core.sanitizeSave(readSaveRaw(uid)));
+  function authenticatedUid() {
+    return authenticatedUser()?.uid || null;
+  }
+
+  function isGameplayAuthorized() {
+    const current = authenticatedUser();
+    return Boolean(
+      authStateResolved &&
+      authUser?.uid &&
+      current?.uid === authUser.uid &&
+      savePersistence?.getActiveUid?.() === current.uid &&
+      savePersistence?.isCloudReady?.(),
+    );
+  }
+
+  function requireAuthenticatedGameplay() {
+    if (isGameplayAuthorized()) return true;
+    if (authStateResolved && !authUser) openAuthPanel("login", true);
+    return false;
   }
 
   function resetExpansionProgress(classId = playerClassId) {
@@ -853,6 +861,7 @@
   }
 
   function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "warrior") {
+    if (!requireAuthenticatedGameplay()) return false;
     sound.ensure();
     closeBattleHud();
     encounterGrace = 1;
@@ -884,7 +893,8 @@
   }
 
   function requestNewGame() {
-    if (!testingMode && hasSave(authUser?.uid || null) && !window.confirm("開始新旅程會覆蓋而家嘅存檔。確定重新出發？")) return;
+    if (!requireAuthenticatedGameplay()) return;
+    if (!testingMode && savePersistence?.hasCloudSave?.() && !window.confirm("開始新旅程會覆蓋而家嘅存檔。確定重新出發？")) return;
     classSelectPanel.hidden = false;
     drawClassSelectionPreviews();
     classSelectPanel.querySelector("[data-class-choice]")?.focus({ preventScroll: true });
@@ -945,24 +955,21 @@
 
   function loadGame(rawSave = null, options = {}) {
     if (rawSave && typeof rawSave.preventDefault === "function") rawSave = null;
-    return applySaveData(rawSave || readSaveRaw(authUser?.uid || null), options);
+    if (!requireAuthenticatedGameplay()) return false;
+    return applySaveData(savePersistence?.getCloudData?.() || null, options);
   }
 
   function saveGame(showNotice = true, force = false) {
+    if (!isGameplayAuthorized()) return false;
     if (testingMode && !force) return true;
     if (!force && persistence && !persistence.needsSave()) return true;
     const payload = buildSaveData();
     try {
-      const result = savePersistence
-        ? savePersistence.save(payload, { uid: authUser?.uid || null })
-        : (() => {
-          localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-          return { ok: true };
-        })();
-      if (!result?.ok) throw result?.localResult?.error || new Error("local save failed");
+      const result = savePersistence?.save(payload, { uid: authenticatedUid() });
+      if (!result?.ok) throw result?.error || new Error("cloud save unavailable");
       persistenceFingerprint = getPersistenceFingerprint();
       persistence?.markSaved(persistenceFingerprint);
-      continueButton.hidden = false;
+      syncAccountStatus(savePersistence?.getCloudStatus?.());
       if (showNotice) {
         saveToast.classList.remove("show");
         void saveToast.offsetWidth;
@@ -970,7 +977,7 @@
       }
       return true;
     } catch (_) {
-      if (showNotice) showToast("未能儲存；今次旅程仍然可以繼續。", "danger");
+      if (showNotice) showToast("未能儲存到雲端；今次進度留喺記憶體，請保持登入後重試。", "danger");
       return false;
     }
   }
@@ -983,7 +990,7 @@
       "auth/email-already-in-use": "呢個 Email 已經有帳戶。",
       "auth/weak-password": "密碼至少需要 6 個字元。",
       "auth/too-many-requests": "嘗試次數太多，請稍後再試。",
-      "auth/network-request-failed": "網絡連線失敗；本機存檔仍然可用。",
+      "auth/network-request-failed": "網絡連線失敗；登入後才可以開始遊戲。",
     };
     return messages[code] || error?.message || "帳戶操作未能完成。";
   }
@@ -1010,32 +1017,38 @@
     setAuthMessage("");
   }
 
-  function openAuthPanel(modeName = "login") {
+  function openAuthPanel(modeName = "login", required = false) {
     if (authUser) return;
     setAuthMode(modeName);
+    authPanel.dataset.authRequired = required ? "true" : "false";
+    authCloseButton.hidden = required;
     authPanel.hidden = false;
     authEmail.focus({ preventScroll: true });
   }
 
-  function closeAuthPanel() {
+  function closeAuthPanel(force = false) {
+    if (!force && authPanel.dataset.authRequired === "true") return;
     authPanel.hidden = true;
+    authPanel.dataset.authRequired = "false";
+    authCloseButton.hidden = false;
     setAuthMessage("");
   }
 
   function syncAccountStatus(status = savePersistence?.getCloudStatus?.()) {
-    const email = authUser?.email || "";
+    const email = authenticatedUser()?.email || authUser?.email || "";
     const signedIn = Boolean(authUser);
+    const canPlay = isGameplayAuthorized();
     const statusLabel = signedIn
       ? `${email} · ${status === "cloud-error" ? "雲端同步有問題" : status === "syncing" ? "同步中" : "已同步"}`
-      : "本機旅程 · 未登入";
+      : authStateResolved ? "需要登入才可以開始遊戲" : "正在確認帳戶…";
     titleAccountStatus.dataset.authState = signedIn ? (status === "cloud-error" ? "error" : "signed-in") : "signed-out";
     titleAccountText.textContent = statusLabel;
-    accountButton.hidden = signedIn;
+    titleActions.hidden = !canPlay;
+    accountButton.hidden = !authStateResolved || signedIn;
     titleLogoutButton.hidden = !signedIn;
-    systemAccountText.textContent = signedIn ? statusLabel : "本機存檔（未登入）";
+    systemAccountText.textContent = signedIn ? statusLabel : "需要登入才可以開始遊戲";
     systemLogoutButton.hidden = !signedIn;
-    const uid = authUser?.uid || null;
-    continueButton.hidden = !hasSave(uid);
+    continueButton.hidden = !canPlay || !savePersistence?.hasCloudSave?.();
   }
 
   function returnToTitleWithoutSave() {
@@ -1044,7 +1057,27 @@
     mode = "title";
     stage.dataset.gameState = mode;
     titleScreen.hidden = false;
-    continueButton.hidden = !hasSave(authUser?.uid || null);
+    syncAccountStatus(savePersistence?.getCloudStatus?.());
+    updateHud(true);
+  }
+
+  function clearGameplayState() {
+    closeBattleHud();
+    hideAllOverlays();
+    currentMapId = "world";
+    world = overworld;
+    mode = "title";
+    stage.dataset.gameState = mode;
+    titleScreen.hidden = false;
+    clearExploreMovePath();
+    pendingClickInteractionId = null;
+    resetPlayer();
+    resetExpansionProgress();
+    resetEnemies();
+    camera.x = player.x;
+    camera.y = player.y;
+    camera.zoom = targetZoom();
+    persistenceFingerprint = "";
     updateHud(true);
   }
 
@@ -1055,13 +1088,13 @@
     syncAccountStatus(user ? "syncing" : undefined);
     if (!user) {
       savePersistence?.deactivateUser();
-      closeAuthPanel();
+      clearGameplayState();
       syncAccountStatus();
-      if (!autoplay && mode === "title" && hasSave()) loadGame();
+      openAuthPanel("login", true);
       return;
     }
     if (mode !== "title") returnToTitleWithoutSave();
-    const result = await savePersistence?.resolveUser(user.uid);
+    const result = await savePersistence?.resolveUser(authenticatedUid());
     if (token !== authSyncToken || authUser?.uid !== user.uid) return;
     syncAccountStatus(savePersistence?.getCloudStatus());
     if (result?.status === "legacy-claim") {
@@ -1071,7 +1104,7 @@
       legacyUseButton.focus({ preventScroll: true });
     } else if (result?.status === "error") {
       setAuthMessage(`已登入，但未能同步雲端存檔：${authErrorMessage(result.error)}`, "error");
-      if (!hasSave(user.uid)) showToast("雲端暫時未能連線；可以稍後再試。", "danger");
+      showToast("雲端暫時未能連線；登入後才可以開始遊戲。", "danger");
     }
   }
 
@@ -1088,7 +1121,7 @@
     try {
       if (authMode === "register") await Firebase.createAccount(email, password);
       else await Firebase.signIn(email, password);
-      closeAuthPanel();
+      closeAuthPanel(true);
     } catch (error) {
       setAuthMessage(authErrorMessage(error), "error");
     } finally {
@@ -1115,15 +1148,18 @@
   }
 
   async function signOutAccount() {
-    if (!Firebase || !authUser) return;
+    const current = authenticatedUser();
+    if (!Firebase || !authUser || !current || current.uid !== authUser.uid) return;
     titleLogoutButton.disabled = true;
     systemLogoutButton.disabled = true;
     try {
-      await savePersistence?.flushCloud();
+      const result = await savePersistence?.flushCloud();
+      if (result && result.saved === false && !result.created) throw result.error || new Error("cloud save failed");
+      savePersistence?.clearLegacyGameplayKeys?.();
+      clearGameplayState();
       await Firebase.signOut();
-      returnToTitleWithoutSave();
     } catch (error) {
-      showToast(`未能登出：${authErrorMessage(error)}`, "danger");
+      showToast(`未能登出，進度未被捨棄：${authErrorMessage(error)}`, "danger");
     } finally {
       titleLogoutButton.disabled = false;
       systemLogoutButton.disabled = false;
@@ -1165,6 +1201,8 @@
   function hideAllOverlays() {
     setSystemSettingsOpen(false);
     authPanel.hidden = true;
+    authPanel.dataset.authRequired = "false";
+    authCloseButton.hidden = false;
     legacySavePanel.hidden = true;
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
@@ -9834,12 +9872,13 @@
   window.addEventListener("pageshow", () => {
     if (document.visibilityState === "visible") resumeGameAudio();
   });
-  window.addEventListener("beforeunload", () => { if (mode !== "title") persistence?.flush(); });
+  window.addEventListener("beforeunload", () => { if (mode !== "title" && isGameplayAuthorized()) persistence?.flush(); });
   window.addEventListener("resize", resize, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
-  const savedGameAvailable = hasSave();
-  continueButton.hidden = !savedGameAvailable;
+  titleScreen.hidden = false;
+  titleActions.hidden = true;
+  continueButton.hidden = true;
   syncAccountStatus();
   syncSystemSoundControl();
   syncExploreZoomControls();
@@ -9856,26 +9895,16 @@
     Firebase.onAuthStateChanged((user, error) => {
       authStateResolved = true;
       if (error) {
+        authUser = null;
         savePersistence?.deactivateUser();
+        clearGameplayState();
         syncAccountStatus();
-        if (!autoplay && mode === "title" && savedGameAvailable) loadGame();
+        setAuthMessage("未能確認帳戶；請重新載入後再試。", "error");
+        openAuthPanel("login", true);
         return;
       }
       void syncAuthenticatedUser(user);
     });
-  } else if (savedGameAvailable && !autoplay) {
-    loadGame();
-  }
-  if (autoplay) {
-    window.setTimeout(() => {
-      newGame(true);
-      transitionMap("field", maps.field.start);
-      player.x = world.enemySpawns[0].x - 90;
-      player.y = world.enemySpawns[0].y;
-      player.invulnerable = 999;
-      camera.x = player.x;
-      camera.y = player.y;
-    }, 80);
   }
   requestAnimationFrame(frame);
 })();

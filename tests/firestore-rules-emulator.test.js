@@ -16,6 +16,8 @@ test("players rules isolate unauthenticated, USER_A, and USER_B contexts", async
   const testEnv = await initializeTestEnvironment({
     projectId: "everrealm-f5a7d",
     firestore: {
+      host: "127.0.0.1",
+      port: 18085,
       rules: fs.readFileSync(path.join(__dirname, "..", "firestore.rules"), "utf8"),
     },
   });

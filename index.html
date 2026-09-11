@@ -218,12 +218,12 @@
           <p class="eyebrow">A SHORT NIGHT-TIME ADVENTURE</p>
           <h1 id="gameTitle"><span>永恆</span><span>國度</span></h1>
           <p class="english-title">EVERREALM</p>
-          <div class="title-actions">
+          <div id="titleActions" class="title-actions" hidden>
             <button id="newGameButton" class="primary-button" type="button"><span>開始夜巡</span></button>
             <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span></button>
           </div>
           <div id="titleAccountStatus" class="account-status" data-auth-state="signed-out" aria-live="polite">
-            <span id="titleAccountText">本機旅程 · 未登入</span>
+            <span id="titleAccountText">正在確認帳戶…</span>
             <button id="accountButton" class="account-link-button" type="button">登入／註冊</button>
             <button id="titleLogoutButton" class="account-link-button" type="button" hidden>登出</button>
           </div>
@@ -253,11 +253,11 @@
           <div class="ui-modal-window auth-window legacy-save-window">
             <p class="modal-kicker">LOCAL CHARACTER FOUND</p>
             <h2 id="legacySaveTitle">發現本機角色</h2>
-            <p id="legacySaveDescription">這個裝置有一份尚未連結 Firebase 的本機存檔。要將它連結到目前帳戶嗎？</p>
+            <p id="legacySaveDescription">這個裝置發現一個現有角色。要將它連結到目前帳戶嗎？<br />An existing local character was found on this device. Would you like to link it to this account?</p>
             <p id="legacySaveMessage" class="auth-message" aria-live="polite"></p>
             <div class="modal-actions auth-actions">
               <button id="legacyUseButton" class="primary-button" type="button"><span>使用現有存檔</span></button>
-              <button id="legacyStartButton" class="secondary-button" type="button"><span>唔使用</span></button>
+              <button id="legacyStartButton" class="secondary-button" type="button"><span>開始新角色</span></button>
             </div>
           </div>
         </section>

@@ -15,11 +15,15 @@ test("Firebase client assets are loaded before game runtime and expose account c
     assert.ok(html.indexOf(`"${asset}"`) >= 0, `${asset} should be in the runtime manifest`);
   }
   assert.ok(html.indexOf('"firebase-client.js"') < html.indexOf('"game.js'), "Firebase client must load before game.js");
-  for (const id of ["accountButton", "authPanel", "authForm", "legacySavePanel", "systemLogoutButton"]) {
+  for (const id of ["titleActions", "accountButton", "authPanel", "authForm", "legacySavePanel", "systemLogoutButton"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(game, /savePersistence = SavePersistence\?\.create/);
   assert.match(game, /await savePersistence\?\.flushCloud\(\)/);
+  assert.match(game, /function isGameplayAuthorized\(\)/);
+  assert.match(game, /if \(!requireAuthenticatedGameplay\(\)\) return false/);
+  assert.match(game, /continueButton\.hidden = true/);
+  assert.match(game, /需要登入才可以開始遊戲/);
 });
 
 test("Firebase configuration is public Web config only and rules enforce document ownership", () => {

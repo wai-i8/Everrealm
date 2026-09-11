@@ -24,14 +24,15 @@
     const applySaveData = typeof options.applySaveData === "function" ? options.applySaveData : () => false;
     const onStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
     let activeUid = null;
-    let cloudReady = !cloud;
+    let cloudReady = false;
     let cloudExists = false;
-    let cloudStatus = cloud ? "signed-out" : "offline";
+    let cloudData = null;
+    let cloudStatus = "signed-out";
     let resolutionToken = 0;
-    let generation = 0;
     let pendingPayload = null;
     let pendingTimer = null;
-    let cloudWrite = Promise.resolve();
+    let cloudWrite = Promise.resolve({ saved: true, idle: true });
+    let legacyDeclined = false;
 
     function setStatus(status, detail = null) {
       cloudStatus = status;
@@ -40,11 +41,6 @@
 
     function getItem(key) {
       try { return storage?.getItem(key) ?? null; } catch (_) { return null; }
-    }
-
-    function setItem(key, value) {
-      if (!storage) throw new Error("localStorage is unavailable.");
-      storage.setItem(key, value);
     }
 
     function removeItem(key) {
@@ -56,130 +52,36 @@
       if (!raw) return null;
       try {
         const data = JSON.parse(raw);
-        return sanitize(data) ? data : null;
+        const normalized = sanitize(data);
+        return normalized ? normalized : null;
       } catch (_) {
         return null;
       }
     }
 
-    function ownerUid() {
-      const owner = getItem(KEYS.owner);
-      return owner && owner.trim() ? owner.trim() : null;
-    }
-
-    function cacheKey(uid) {
-      const safeUid = String(uid || "").trim();
-      if (!safeUid) throw new Error("A UID is required for a scoped local save.");
-      return `${KEYS.cachePrefix}${safeUid}`;
-    }
-
-    function readPrimary() {
-      const primary = parseValid(KEYS.save);
-      if (primary) return { data: primary, key: KEYS.save };
-      for (const key of KEYS.legacy) {
-        const legacy = parseValid(key);
-        if (legacy) return { data: legacy, key };
+    function readLegacySave() {
+      for (const key of [KEYS.save, ...KEYS.legacy]) {
+        const data = parseValid(key);
+        if (data) return { data, key };
       }
       return null;
     }
 
-    function readLocal({ uid = null } = {}) {
-      const owner = ownerUid();
-      const primary = readPrimary();
-      if (!uid) {
-        if (owner) {
-          const scoped = parseValid(cacheKey(owner));
-          if (scoped) return { data: scoped, source: "scoped", ownerUid: owner, key: cacheKey(owner) };
+    function storageKeys() {
+      const keys = [];
+      try {
+        for (let index = 0; index < (storage?.length || 0); index += 1) {
+          const key = storage.key(index);
+          if (key) keys.push(key);
         }
-        return primary ? { ...primary, source: primary.key === KEYS.save ? "primary" : "legacy", ownerUid: owner } : null;
-      }
-
-      const safeUid = String(uid).trim();
-      if (!safeUid) return null;
-      if (owner && owner !== safeUid) {
-        const scoped = parseValid(cacheKey(safeUid));
-        return scoped ? { data: scoped, source: "scoped", ownerUid: safeUid, key: cacheKey(safeUid) } : null;
-      }
-      if (owner === safeUid) {
-        const scoped = parseValid(cacheKey(safeUid));
-        if (scoped) return { data: scoped, source: "scoped", ownerUid: safeUid, key: cacheKey(safeUid) };
-        return primary ? { ...primary, source: primary.key === KEYS.save ? "primary" : "legacy", ownerUid: owner } : null;
-      }
-      return primary ? { ...primary, source: primary.key === KEYS.save ? "legacy" : "legacy", ownerUid: null } : null;
+      } catch (_) {}
+      return keys;
     }
 
-    function hasLocalSave(uid = null) {
-      return Boolean(readLocal({ uid })?.data);
-    }
-
-    function serialized(data) {
-      return JSON.stringify(clone(data));
-    }
-
-    function restoreKey(key, value) {
-      if (value == null) removeItem(key);
-      else {
-        try { setItem(key, value); } catch (_) {}
-      }
-    }
-
-    function promotePrimary(data, uid) {
-      const safeUid = String(uid || "").trim();
-      if (!safeUid) return { ok: false, error: new Error("A UID is required to promote a local save.") };
-      const payload = clone(data);
-      const payloadString = serialized(payload);
-      const previous = new Map([
-        [KEYS.save, getItem(KEYS.save)],
-        [KEYS.owner, getItem(KEYS.owner)],
-        [cacheKey(safeUid), getItem(cacheKey(safeUid))],
-        [KEYS.legacyCache, getItem(KEYS.legacyCache)],
-      ]);
-      const previousOwner = ownerUid();
-      if (previousOwner && previousOwner !== safeUid) previous.set(cacheKey(previousOwner), getItem(cacheKey(previousOwner)));
-      const written = [];
-      try {
-        if (previousOwner && previousOwner !== safeUid) {
-          const oldPrimary = previous.get(KEYS.save);
-          if (oldPrimary) {
-            setItem(cacheKey(previousOwner), oldPrimary);
-            written.push(cacheKey(previousOwner));
-          }
-        } else if (!previousOwner && previous.get(KEYS.save)) {
-          setItem(KEYS.legacyCache, previous.get(KEYS.save));
-          written.push(KEYS.legacyCache);
-        }
-        setItem(cacheKey(safeUid), payloadString);
-        written.push(cacheKey(safeUid));
-        setItem(KEYS.save, payloadString);
-        written.push(KEYS.save);
-        // Ownership is deliberately the final write.  If it fails, rollback
-        // earlier writes and leave the prior owner metadata untouched.
-        setItem(KEYS.owner, safeUid);
-        written.push(KEYS.owner);
-        return { ok: true, ownerUid: safeUid };
-      } catch (error) {
-        for (const key of written.reverse()) restoreKey(key, previous.get(key));
-        return { ok: false, error };
-      }
-    }
-
-    function writeScoped(uid, data) {
-      try {
-        setItem(cacheKey(uid), serialized(data));
-        return { ok: true };
-      } catch (error) {
-        return { ok: false, error };
-      }
-    }
-
-    function writeUnauthenticated(data) {
-      const owner = ownerUid();
-      if (owner) return writeScoped(owner, data);
-      try {
-        setItem(KEYS.save, serialized(data));
-        return { ok: true };
-      } catch (error) {
-        return { ok: false, error };
+    function clearLegacyGameplayKeys() {
+      for (const key of [KEYS.save, ...KEYS.legacy, KEYS.owner, KEYS.legacyCache]) removeItem(key);
+      for (const key of storageKeys()) {
+        if (key.startsWith(KEYS.cachePrefix)) removeItem(key);
       }
     }
 
@@ -193,27 +95,29 @@
 
     function writeCloudPayload(uid, payload) {
       cloudWrite = cloudWrite.then(async () => {
-        if (!activeUid || activeUid !== uid || !cloudReady) return { skipped: true };
-        let result;
-        if (!cloudExists) {
-          result = await cloud.createIfAbsent(uid, payload);
-          cloudExists = true;
-          if (!result.created && result.data) {
+        if (!activeUid || activeUid !== uid || !cloudReady) return { saved: false, skipped: true };
+        try {
+          let result;
+          if (cloudExists) result = await cloud.save(uid, payload);
+          else result = await cloud.createIfAbsent(uid, payload);
+
+          if (!cloudExists && !result.created && result.data) {
+            cloudData = clone(result.data);
+            cloudExists = true;
             applySaveData(result.data, { silent: true, source: "cloud" });
-            promotePrimary(result.data, uid);
+            setStatus("cloud-ready");
             return { ...result, authoritative: true };
           }
-        } else {
-          result = await cloud.save(uid, payload);
+
+          cloudData = clone(result.data || payload);
+          cloudExists = true;
+          setStatus("cloud-ready");
+          return result;
+        } catch (error) {
+          pendingPayload = clone(payload);
+          setStatus("cloud-error", error);
+          return { saved: false, error };
         }
-        const localResult = promotePrimary(result.data || payload, uid);
-        if (!localResult.ok) onStatus("local-error", localResult.error);
-        setStatus("cloud-ready");
-        return result;
-      }).catch((error) => {
-        pendingPayload = clone(payload);
-        setStatus("cloud-error", error);
-        return { saved: false, error };
       });
       return cloudWrite;
     }
@@ -225,7 +129,11 @@
       }
       const payload = pendingPayload;
       pendingPayload = null;
-      if (!payload || !activeUid || !cloudReady) return cloudWrite;
+      if (!payload) return cloudWrite;
+      if (!activeUid || !cloudReady) {
+        pendingPayload = payload;
+        return { saved: false, error: new Error("An authenticated Firestore session is required to save.") };
+      }
       return writeCloudPayload(activeUid, payload);
     }
 
@@ -236,12 +144,14 @@
       activeUid = safeUid;
       cloudReady = false;
       cloudExists = false;
+      cloudData = null;
       pendingPayload = null;
+      legacyDeclined = false;
       setStatus("syncing");
       if (!cloud) {
-        cloudReady = true;
-        setStatus("offline");
-        return { status: "offline" };
+        const error = new Error("Firebase Firestore is unavailable.");
+        setStatus("cloud-error", error);
+        return { status: "error", error };
       }
 
       let remote;
@@ -254,45 +164,18 @@
       if (token !== resolutionToken || activeUid !== safeUid) return { status: "stale" };
 
       if (remote.exists && remote.data) {
-        applySaveData(remote.data, { silent: true, source: "cloud" });
+        cloudData = clone(remote.data);
         cloudExists = true;
         cloudReady = true;
-        const localResult = promotePrimary(remote.data, safeUid);
-        if (!localResult.ok) setStatus("local-error", localResult.error);
-        else setStatus("cloud-ready");
-        return { status: "cloud-loaded", data: remote.data, localResult };
+        applySaveData(remote.data, { silent: true, source: "cloud" });
+        setStatus("cloud-ready");
+        return { status: "cloud-loaded", data: remote.data };
       }
 
-      const local = readLocal({ uid: safeUid });
-      if (local?.data && local.source === "legacy" && !local.ownerUid) {
-        cloudReady = false;
+      const legacy = readLegacySave();
+      if (legacy && !legacyDeclined) {
         setStatus("legacy-claim");
-        return { status: "legacy-claim", data: local.data };
-      }
-
-      if (local?.data && ["primary", "scoped"].includes(local.source)) {
-        try {
-          const migration = await cloud.createIfAbsent(safeUid, local.data);
-          if (token !== resolutionToken || activeUid !== safeUid) return { status: "stale" };
-          if (!migration.created && migration.data) {
-            applySaveData(migration.data, { silent: true, source: "cloud" });
-            cloudExists = true;
-            const localResult = promotePrimary(migration.data, safeUid);
-            cloudReady = true;
-            setStatus(localResult.ok ? "cloud-ready" : "local-error", localResult.error);
-            return { status: "cloud-loaded", data: migration.data, localResult };
-          }
-          applySaveData(local.data, { silent: true, source: "migration" });
-          cloudExists = true;
-          const localResult = promotePrimary(local.data, safeUid);
-          cloudReady = true;
-          setStatus(localResult.ok ? "cloud-ready" : "local-error", localResult.error);
-          return { status: "local-migrated", data: local.data, localResult };
-        } catch (error) {
-          cloudReady = false;
-          setStatus("cloud-error", error);
-          return { status: "error", error };
-        }
+        return { status: "legacy-claim", data: legacy.data };
       }
 
       cloudReady = true;
@@ -302,75 +185,81 @@
 
     async function claimLegacySave(uid) {
       const safeUid = String(uid || activeUid || "").trim();
-      if (!safeUid || activeUid !== safeUid) throw new Error("The authenticated account changed before migration.");
-      const local = readLocal();
-      if (!local?.data || local.ownerUid) throw new Error("The legacy local save is no longer available to claim.");
-      const migration = await cloud.createIfAbsent(safeUid, local.data);
-      if (migration.created) applySaveData(local.data, { silent: true, source: "migration" });
-      else if (migration.data) applySaveData(migration.data, { silent: true, source: "cloud" });
-      const data = migration.data || local.data;
+      if (!safeUid || activeUid !== safeUid || !cloud || cloudStatus === "signed-out") {
+        throw new Error("The authenticated account changed before migration.");
+      }
+      const local = readLegacySave();
+      if (!local) throw new Error("The legacy local save is no longer available to claim.");
+      let migration;
+      try {
+        migration = await cloud.createIfAbsent(safeUid, local.data);
+      } catch (error) {
+        setStatus("cloud-error", error);
+        throw error;
+      }
+      if (!migration.created && migration.data) {
+        cloudData = clone(migration.data);
+        cloudExists = true;
+        cloudReady = true;
+        applySaveData(migration.data, { silent: true, source: "cloud" });
+        setStatus("cloud-ready");
+        return { status: "cloud-loaded", data: migration.data, legacyPreserved: true };
+      }
+      cloudData = clone(migration.data || local.data);
       cloudExists = true;
       cloudReady = true;
-      const localResult = promotePrimary(data, safeUid);
-      setStatus(localResult.ok ? "cloud-ready" : "local-error", localResult.error);
-      return { status: migration.created ? "local-migrated" : "cloud-loaded", data, localResult };
+      applySaveData(migration.data || local.data, { silent: true, source: "migration" });
+      clearLegacyGameplayKeys();
+      setStatus("cloud-ready");
+      return { status: "local-migrated", data: migration.data || local.data };
     }
 
     function declineLegacySave() {
+      legacyDeclined = true;
       cloudReady = true;
       setStatus("cloud-ready");
       return { status: "new-account" };
     }
 
     function save(data, { uid = activeUid } = {}) {
-      generation += 1;
-      const payload = clone(data);
       const safeUid = String(uid || "").trim();
-      let localResult;
-      if (safeUid) {
-        const owner = ownerUid();
-        const preserveOtherOwner = Boolean(owner && owner !== safeUid);
-        const preserveLegacy = !owner && Boolean(readPrimary()?.data);
-        localResult = preserveOtherOwner || preserveLegacy
-          ? writeScoped(safeUid, payload)
-          : promotePrimary(payload, safeUid);
-      } else {
-        localResult = writeUnauthenticated(payload);
+      if (!activeUid || !safeUid || safeUid !== activeUid || !cloudReady) {
+        return { ok: false, error: new Error("An authenticated Firestore session is required to save.") };
       }
-      if (!localResult.ok) return { ok: false, localResult };
-      if (safeUid && cloud && cloudReady) {
-        pendingPayload = payload;
-        scheduleCloudWrite();
-      }
-      return { ok: true, localResult, generation };
+      pendingPayload = clone(data);
+      scheduleCloudWrite();
+      return { ok: true, queued: true };
     }
 
     function deactivateUser() {
       ++resolutionToken;
       activeUid = null;
-      cloudReady = !cloud;
+      cloudReady = false;
       cloudExists = false;
+      cloudData = null;
       pendingPayload = null;
+      legacyDeclined = false;
       if (pendingTimer != null) clearTimeout(pendingTimer);
       pendingTimer = null;
-      setStatus(cloud ? "signed-out" : "offline");
+      setStatus("signed-out");
     }
 
     return Object.freeze({
       KEYS,
-      readLocal,
-      hasLocalSave,
+      readLegacySave,
+      hasLegacySave: () => Boolean(readLegacySave()?.data),
+      clearLegacyGameplayKeys,
       save,
       resolveUser,
       claimLegacySave,
       declineLegacySave,
       flushCloud,
       deactivateUser,
-      ownerUid,
       getActiveUid: () => activeUid,
+      getCloudData: () => clone(cloudData),
+      hasCloudSave: () => cloudExists,
       getCloudStatus: () => cloudStatus,
       isCloudReady: () => cloudReady,
-      getGeneration: () => generation,
     });
   }
 

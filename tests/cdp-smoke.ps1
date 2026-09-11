@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'auth-ui', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -18,7 +18,7 @@ $profilePath = Join-Path $tempRoot ("codex-everrealm-cdp-" + [Guid]::NewGuid().T
 $port = Get-Random -Minimum 9400 -Maximum 9900
 if (-not $ScreenshotName) { $ScreenshotName = "smoke-$Scenario-$ViewportWidth.png" }
 $screenshotPath = Join-Path $runtimeOutputPath ([IO.Path]::GetFileName($ScreenshotName))
-$query = if ($Scenario -eq 'autoplay') { '?autoplay=1' } else { '?smoke=1' }
+$query = if ($Scenario -eq 'autoplay') { '?autoplay=1' } elseif ($Scenario -eq 'account-flow') { '?smoke=1&firebase-emulator=1' } else { '?smoke=1' }
 $pageUrl = 'file:///' + ($projectRoot -replace '\\', '/') + '/index.html' + $query
 $edgeProcess = $null
 $socket = $null
@@ -172,6 +172,7 @@ try {
   $guildHelpScreenshotPath = $null
   $guildActiveScreenshotPath = $null
   $serviceReachResults = @()
+  $accountFlow = $null
   $monsterFacingRuntime = $null
   $movementEvidence = $null
   $movementBeforeScreenshotPath = $null
@@ -180,16 +181,117 @@ try {
       if ($before.mode -ne 'title') { throw "Expected title mode, got $($before.mode)." }
     }
     'auth-ui' {
-      Start-Sleep -Milliseconds 250
-      Invoke-GameExpression -Expression "document.getElementById('accountButton').click(); true" | Out-Null
+      $authReady = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $authReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $authReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && !document.getElementById("authPanel").hidden)')
+      }
       $loginUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("authPanel").hidden,title:document.getElementById("authTitle").textContent,hasEmail:!!document.getElementById("authEmail"),hasPassword:!!document.getElementById("authPassword"),hasConfirm:!!document.getElementById("authConfirmPassword"),confirmHidden:document.getElementById("authConfirmRow").hidden})') | ConvertFrom-Json
-      if ($loginUi.hidden -or -not $loginUi.hasEmail -or -not $loginUi.hasPassword -or -not $loginUi.hasConfirm -or -not $loginUi.confirmHidden) { throw 'Login UI did not open with Email and Password fields.' }
+      if (-not $authReady -or $loginUi.hidden -or -not $loginUi.hasEmail -or -not $loginUi.hasPassword -or -not $loginUi.hasConfirm -or -not $loginUi.confirmHidden) { throw 'Login UI did not open with Email and Password fields.' }
       Invoke-GameExpression -Expression "document.getElementById('authSwitchButton').click(); true" | Out-Null
-      $registerUi = (Invoke-GameExpression -Expression 'JSON.stringify({title:document.getElementById("authTitle").textContent,confirmHidden:document.getElementById("authConfirmRow").hidden,confirmRequired:document.getElementById("authConfirmPassword").required})') | ConvertFrom-Json
-      if ($registerUi.confirmHidden -or -not $registerUi.confirmRequired) { throw 'Create Account UI did not reveal Confirm Password.' }
-      Invoke-GameExpression -Expression "document.getElementById('authCloseButton').click(); true" | Out-Null
-      $closedUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("authPanel").hidden,mode:window.__RPG_DEBUG__.snapshot().mode})') | ConvertFrom-Json
-      if (-not $closedUi.hidden -or $closedUi.mode -ne 'title') { throw 'Auth modal did not close cleanly back to the title screen.' }
+      $registerUi = (Invoke-GameExpression -Expression 'JSON.stringify({title:document.getElementById("authTitle").textContent,confirmHidden:document.getElementById("authConfirmRow").hidden,confirmRequired:document.getElementById("authConfirmPassword").required,closeHidden:document.getElementById("authCloseButton").hidden})') | ConvertFrom-Json
+      if ($registerUi.confirmHidden -or -not $registerUi.confirmRequired -or -not $registerUi.closeHidden) { throw "Required Create Account UI did not reveal Confirm Password or keep the modal non-dismissible: $($registerUi | ConvertTo-Json -Compress)" }
+    }
+    'account-flow' {
+      $accountEmail = "phase4-a-$([Guid]::NewGuid().ToString('N'))@example.test"
+      $accountPassword = 'phase4-password'
+      $secondEmail = "phase4-b-$([Guid]::NewGuid().ToString('N'))@example.test"
+      $secondPassword = 'phase4-password'
+      $signedOutReady = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $signedOutReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $signedOutReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && !document.getElementById("accountButton").hidden && !document.getElementById("authPanel").hidden)')
+      }
+      $signedOutUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,authHidden:document.getElementById("authPanel").hidden,titleActionsHidden:document.getElementById("titleActions").hidden,continueHidden:document.getElementById("continueButton").hidden})') | ConvertFrom-Json
+      if (-not $signedOutReady -or $signedOutUi.mode -ne 'title' -or $signedOutUi.authHidden -or -not $signedOutUi.titleActionsHidden -or -not $signedOutUi.continueHidden) { throw 'Signed-out startup exposed gameplay controls or did not show the login experience.' }
+      $blockedByAuth = (Invoke-GameExpression -Expression 'JSON.stringify({newGame:window.__RPG_DEBUG__.newGame(),save:window.__RPG_DEBUG__.save(),mode:window.__RPG_DEBUG__.snapshot().mode})') | ConvertFrom-Json
+      if ($blockedByAuth.newGame -or $blockedByAuth.save -or $blockedByAuth.mode -ne 'title') { throw 'Signed-out debug/API calls bypassed the gameplay authorization gate.' }
+      $unauthenticatedFirestore = Invoke-GameExpression -Expression '(async()=>{try{const {db,sdk}=await window.EverrealmFirebase.firestore();await sdk.getDoc(sdk.doc(db,"players","signed-out-probe"));return "allowed";}catch(error){return error.code||error.message||"failed";}})()'
+      if ($unauthenticatedFirestore -notmatch 'permission-denied') { throw "Signed-out Firestore probe was not rejected by rules: $unauthenticatedFirestore" }
+
+      $registerExpression = @'
+(()=>{const email=document.getElementById("authEmail"),password=document.getElementById("authPassword"),confirm=document.getElementById("authConfirmPassword");email.value="__EMAIL__";password.value="__PASSWORD__";document.getElementById("authSwitchButton").click();confirm.value="__PASSWORD__";document.getElementById("authSubmitButton").click();return true})()
+'@
+      $registerExpression = $registerExpression.Replace('__EMAIL__', $accountEmail).Replace('__PASSWORD__', $accountPassword)
+      Invoke-GameExpression -Expression $registerExpression | Out-Null
+      $accountReady = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $accountReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $accountReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.EverrealmFirebase.currentUser()?.uid && !document.getElementById("titleActions").hidden && document.getElementById("authPanel").hidden)')
+      }
+      if (-not $accountReady) {
+        $accountDiagnostic = Invoke-GameExpression -Expression 'JSON.stringify({authMessage:document.getElementById("authMessage").textContent,authPanelHidden:document.getElementById("authPanel").hidden,titleActionsHidden:document.getElementById("titleActions").hidden,authUid:window.EverrealmFirebase.currentUser()?.uid||null,cloudStatus:window.__RPG_DEBUG__.snapshot().persistence})'
+        throw "New emulator account did not become gameplay-ready: $accountDiagnostic"
+      }
+      $uidA = Invoke-GameExpression -Expression 'window.EverrealmFirebase.currentUser().uid'
+      Invoke-GameExpression -Expression "document.getElementById('newGameButton').click(); document.querySelector('[data-class-choice]').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 180
+      $newCharacter = Get-GameSnapshot
+      if ($newCharacter.mode -ne 'playing') { throw 'Authenticated new account could not start a new character.' }
+      $cloudSaveEvidence = (Invoke-GameExpression -Expression @'
+(async()=>{const api=window.__RPG_DEBUG__,wait=(ms)=>new Promise(resolve=>setTimeout(resolve,ms)),saveResult=api.save();await wait(900);const {db,sdk}=await window.EverrealmFirebase.firestore(),uid=window.EverrealmFirebase.currentUser().uid,snapshot=await sdk.getDoc(sdk.doc(db,"players",uid)),data=snapshot.exists()?snapshot.data():null;return JSON.stringify({exists:snapshot.exists(),uid,dataUid:uid,version:data?.version||null,saveResult,mode:api.snapshot().mode,status:document.getElementById("titleAccountText").textContent,localKeys:Object.keys(localStorage).filter((key)=>/everrealm-save|lanternbound-save/.test(key))});})()
+'@) | ConvertFrom-Json
+      if (-not $cloudSaveEvidence.exists -or $cloudSaveEvidence.version -ne 1 -or $cloudSaveEvidence.localKeys.Count -ne 0) { throw "Authenticated save did not write only Firestore players/{uid} ($($cloudSaveEvidence | ConvertTo-Json -Compress))." }
+
+      Invoke-Cdp -Method 'Page.reload' | Out-Null
+      $reopened = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $reopened; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $reopened = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && window.EverrealmFirebase.currentUser()?.uid && window.__RPG_DEBUG__.snapshot().mode === "playing")')
+      }
+      if (-not $reopened) { throw 'Refresh while authenticated did not restore the Firestore character.' }
+
+      Invoke-GameExpression -Expression "document.getElementById('titleLogoutButton').click(); true" | Out-Null
+      $loggedOut = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $loggedOut; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $loggedOut = [bool](Invoke-GameExpression -Expression 'Boolean(!window.EverrealmFirebase.currentUser() && window.__RPG_DEBUG__.snapshot().mode === "title" && !document.getElementById("authPanel").hidden && document.getElementById("titleActions").hidden)')
+      }
+      if (-not $loggedOut) { throw 'Successful logout did not return to the signed-out login screen.' }
+      $logoutKeys = Invoke-GameExpression -Expression 'Object.keys(localStorage).filter((key)=>/everrealm-save|lanternbound-save/.test(key))'
+      if ($logoutKeys.Count -ne 0) { throw 'Logout left gameplay localStorage keys behind.' }
+
+      Invoke-Cdp -Method 'Page.reload' | Out-Null
+      $signedOutAgain = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $signedOutAgain; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $signedOutAgain = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && !window.EverrealmFirebase.currentUser() && window.__RPG_DEBUG__.snapshot().mode === "title" && !document.getElementById("authPanel").hidden && document.getElementById("titleActions").hidden)')
+      }
+      if (-not $signedOutAgain) { throw 'Refresh after logout exposed the previous character.' }
+
+      $loginExpression = @'
+(()=>{const email=document.getElementById("authEmail"),password=document.getElementById("authPassword");email.value="__EMAIL__";password.value="__PASSWORD__";document.getElementById("authSubmitButton").click();return true})()
+'@
+      $loginExpression = $loginExpression.Replace('__EMAIL__', $accountEmail).Replace('__PASSWORD__', $accountPassword)
+      Invoke-GameExpression -Expression $loginExpression | Out-Null
+      $restored = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $restored; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $restored = [bool](Invoke-GameExpression -Expression 'Boolean(window.EverrealmFirebase.currentUser()?.uid && window.__RPG_DEBUG__.snapshot().mode === "playing")')
+      }
+      if (-not $restored) { throw 'Logging in again did not restore the same Firestore character.' }
+      $uidAfterLogin = Invoke-GameExpression -Expression 'window.EverrealmFirebase.currentUser().uid'
+      if ($uidAfterLogin -ne $uidA) { throw 'Logging in again resolved a different Firebase UID.' }
+
+      Invoke-GameExpression -Expression "document.getElementById('titleLogoutButton').click(); true" | Out-Null
+      $signedOutForSecond = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $signedOutForSecond; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $signedOutForSecond = [bool](Invoke-GameExpression -Expression 'Boolean(!window.EverrealmFirebase.currentUser() && !document.getElementById("authPanel").hidden)')
+      }
+      if (-not $signedOutForSecond) { throw 'Could not sign out before second-account isolation check.' }
+      $secondRegisterExpression = $registerExpression.Replace($accountEmail, $secondEmail)
+      Invoke-GameExpression -Expression $secondRegisterExpression | Out-Null
+      $secondReady = $false
+      for ($attempt = 0; $attempt -lt 60 -and -not $secondReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 200
+        $secondReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.EverrealmFirebase.currentUser()?.uid && !document.getElementById("titleActions").hidden && window.__RPG_DEBUG__.snapshot().mode === "title")')
+      }
+      if (-not $secondReady) { throw 'Second emulator account did not reach a clean new-character title state.' }
+      $uidB = Invoke-GameExpression -Expression 'window.EverrealmFirebase.currentUser().uid'
+      $secondSnapshot = Get-GameSnapshot
+      if ($uidB -eq $uidA -or $secondSnapshot.level -ne 1 -or -not $secondSnapshot.coins -eq 12) { throw 'Second Firebase account saw the previous account character.' }
+      $accountFlow = [PSCustomObject]@{ firstUid = $uidA; restoredUid = $uidAfterLogin; secondUid = $uidB; firestoreVersion = $cloudSaveEvidence.version; gameplayLocalKeysAfterLogout = @($logoutKeys); runtimeChecks = 'signed-out gate, register, Firestore save, auth restore, logout, signed-out refresh, second-account isolation' }
     }
     'movement' {
       Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.newGame(); true' | Out-Null
@@ -1384,7 +1486,10 @@ try {
   if ($Scenario -eq 'savelevel' -and ($after.mode -ne 'playing' -or $after.pendingLevelUps -ne 0 -or $after.level -lt 2)) {
     throw "Automatic level growth did not survive save/load (mode=$($after.mode), pending=$($after.pendingLevelUps))."
   }
-  if ($Scenario -eq 'autoplay' -and $after.mode -eq 'title') { throw 'Autoplay did not start the game.' }
+  if ($Scenario -eq 'autoplay') {
+    $accountGate = (Invoke-GameExpression -Expression 'JSON.stringify({titleActionsHidden:document.getElementById("titleActions").hidden,authHidden:document.getElementById("authPanel").hidden})') | ConvertFrom-Json
+    if ($after.mode -ne 'title' -or -not $accountGate.titleActionsHidden -or $accountGate.authHidden) { throw 'Unauthenticated autoplay bypassed the account-required startup gate.' }
+  }
   if ($Scenario -eq 'battle') {
     $battleUiAfter = (Invoke-GameExpression -Expression 'JSON.stringify({hudHidden:document.getElementById("battleHud").hidden,state:document.getElementById("gameStage").dataset.gameState})') | ConvertFrom-Json
     if ($after.mode -ne 'playing' -or $null -ne $after.battle -or -not $battleUiAfter.hudHidden -or $battleUiAfter.state -ne 'playing' -or $after.aliveEnemies -ge $roundOne.aliveEnemies) {
@@ -1442,6 +1547,7 @@ try {
     serviceReach = $serviceReachResults
     movementEvidence = $movementEvidence
     movementBeforeScreenshot = $movementBeforeScreenshotPath
+    accountFlow = $accountFlow
     screenshot = $screenshotPath
     runtimeErrors = $script:runtimeErrors.Count
   } | ConvertTo-Json -Depth 8 -Compress

@@ -2,9 +2,9 @@
 
 Player data is runtime/persistent state, not fixed Game Data. It must reference the canonical IDs in `data/` instead of copying equipment, item, monster, skill or quest definitions.
 
-## Current local save boundary
+## Current save boundary
 
-The local save keeps the existing version-1 envelope for compatibility. Permanent state is split into:
+The Firestore player document keeps the existing version-1 envelope for compatibility. Permanent state is split into:
 
 - `player`: name, position, HP, level, XP, coins, potions and existing upgrade fields;
 - `expansion.classId`;
@@ -33,6 +33,6 @@ players/{uid}
   updatedAt: server timestamp (cloud metadata; never applied as gameplay state)
 ```
 
-The browser never accepts a cloud document for another `uid`; Firestore rules enforce the same ownership check server-side. Existing cloud state is authoritative on account load. A local save without an owner marker is offered for explicit migration, and declined migration remains local. Authenticated saves are written to the matching scoped cache and queued for Firestore; a failed cloud write remains retryable without replacing another account's primary local save.
+The browser never accepts a cloud document for another `uid`; Firestore rules enforce the same ownership check server-side. Gameplay requires a resolved Firebase Auth session, and the authenticated UID is the only identity used for `players/{uid}`. Existing cloud state is authoritative on account load. A historical local save is offered only for explicit migration when the cloud document is absent; a declined migration remains untouched until the player either retries migration or logs out. Successful migration deletes the historical gameplay keys after `createIfAbsent` succeeds. Normal authenticated saves are queued directly to Firestore with no local gameplay mirror or fallback; a failed cloud write remains retryable in memory and never pretends to have been persisted locally.
 
 Fixed catalogs under `data/` remain version-controlled Game Data and are referenced only by stable IDs. Realtime Database, presence, rooms and server-authoritative reward validation are future work, not part of this client-only phase.
