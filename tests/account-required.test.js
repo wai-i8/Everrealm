@@ -9,14 +9,18 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const persistence = fs.readFileSync(path.join(root, "save-persistence.js"), "utf8");
 const firebaseClient = fs.readFileSync(path.join(root, "firebase-client.js"), "utf8");
 const cloudSave = fs.readFileSync(path.join(root, "cloud-save.js"), "utf8");
+const responsiveCss = fs.readFileSync(path.join(root, "responsive-ui-redesign.css"), "utf8");
 const rules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 
 test("startup keeps gameplay controls hidden until Firebase Auth and Firestore resolve", () => {
+  assert.match(html, /id="exploreSidebar"[^>]*hidden/);
   assert.match(html, /id="titleActions"[^>]*hidden/);
   assert.match(html, /id="continueButton"[^>]*hidden/);
   assert.match(game, /let authStateResolved = false/);
   assert.match(game, /titleActions\.hidden = !canPlay/);
   assert.match(game, /continueButton\.hidden = !canPlay \|\| !savePersistence\?\.hasCloudSave/);
+  assert.match(game, /exploreSidebar\.hidden = !\(canPlay && mode !== "title"\)/);
+  assert.match(responsiveCss, /#gameStage > #exploreSidebar\[hidden\]\s*\{[\s\S]*?display: none !important;/);
   assert.doesNotMatch(game, /const savedGameAvailable = hasSave/);
 });
 

@@ -908,6 +908,7 @@
     titleScreen.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
+    syncAccountStatus(savePersistence?.getCloudStatus?.());
     bgm.setMap(currentMapId);
     sound.start();
     showLocation("米克雷帝國", true);
@@ -970,6 +971,8 @@
     hideAllOverlays();
     titleScreen.hidden = true;
     mode = "playing";
+    stage.dataset.gameState = mode;
+    syncAccountStatus(savePersistence?.getCloudStatus?.());
     player.invulnerable = 1;
     persistence?.markLoaded(getPersistenceFingerprint());
     sound.start();
@@ -1078,6 +1081,7 @@
     systemAccountText.textContent = signedIn ? statusLabel : "需要登入才可以開始遊戲";
     systemLogoutButton.hidden = !signedIn;
     continueButton.hidden = !canPlay || !savePersistence?.hasCloudSave?.();
+    exploreSidebar.hidden = !(canPlay && mode !== "title");
     stage.dataset.authState = canPlay ? "signed-in" : "signed-out";
   }
 

@@ -5,6 +5,10 @@
 /* ---------------------------------------------------------------------
    Exploration HUD: phone/tablet uses a clean vertical icon rail.
    --------------------------------------------------------------------- */
+#gameStage > #exploreSidebar[hidden] {
+  display: none !important;
+}
+
 @media (hover: none), (pointer: coarse), (display-mode: standalone), (display-mode: fullscreen), (max-width: 820px) {
   #exploreSidebar,
   #exploreSidebar.is-collapsed {
