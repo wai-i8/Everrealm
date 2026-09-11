@@ -338,10 +338,7 @@ Inventory 左側 canonical equipment paperdoll 係固定區域；右側物品 gr
 
 ### Bottom-left system / battle log
 
-探索與戰鬥共用左下角半透明 system log。預設顯示最近訊息，新訊息由底部加入、舊訊息向上推；
-訊息唔因 timeout 自動消失，runtime 保留較長 history。普通文字區必須 pointer-through，唔阻地圖點擊／
-touch 操作；只有 filter controls 同細小 drag handle 可以攔截 pointer。drag handle 支援 mouse／touch，位置保存於
-localStorage，下一次進入遊戲沿用。
+探索與戰鬥共用半透明 persistent system log，預設擺喺左側探索功能列右邊，避免遮住角色／狀態 controls。新訊息由底部加入、舊訊息向上推；訊息唔因 timeout 自動消失，runtime 保留較長 history。展開狀態可直接 scroll 完整 history，並提供縮細／展開 control；縮細時只顯示最新少量訊息。drag handle 支援 mouse／touch，位置保存於 localStorage，下一次進入遊戲沿用。
 
 filter 固定為：`全部`、`戰鬥`、`獎勵`、`任務`、`物品`、`系統`。訊息格式使用
 `[分類] 內容`，例如 `[戰鬥] 正拳對山野小雞造成 38 傷害`。tag 以低噪音顏色區分：戰鬥橙紅、
@@ -351,7 +348,7 @@ filter 固定為：`全部`、`戰鬥`、`獎勵`、`任務`、`物品`、`系�
 ### Authentication shell
 
 Firebase 帳戶未通過登入／授權前，左側主功能 launcher 必須完全隱藏；登入成功並正式進入可玩狀態後先顯示。
-登入畫面唔可以露出角色、物品、面板、技能、任務或系統 icon，避免未登入已出現 gameplay controls。
+登入畫面唔可以露出角色、物品、面板、技能、任務或系統 icon，避免未登入已出現 gameplay controls。登入／註冊視窗保持 compact，只保留必要欄位與操作，不顯示「使用 Firebase 帳戶保存你的角色」等冗餘說明。
 
 ### NPC dialogue simplification
 

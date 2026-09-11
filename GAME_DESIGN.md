@@ -121,7 +121,7 @@
 
 - 等級上限為 `45`。玩家升級本身**不提供 Base ATK / Base DEF**；`data/classes.js` 由 Lv1–45 全部固定 `attack: 0`、`defence: 0`。ATK／DEF 由裝備、PSV、buff/debuff 及暫時戰鬥效果建立，令攻防成長直接反映玩家實際著咩裝。
 - 等級主要增加 Max HP、解鎖技能／裝備及推進內容。現行 deterministic HP curve：格鬥士 `MaxHP = 88 + 7×(Lv-1) + 3×floor((Lv-1)/5)`；戰士 `MaxHP = 88 + 8×(Lv-1) + 4×floor((Lv-1)/5)`。無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，裝備只用 explicit Move modifier 改變可走格數。
-- 升級時按新舊最大 HP 差額回復生命，確保成長立即生效但不免費全補滿。所有舊存檔的待選升級數歸零。
+- 升級時 HP 立即回復到新上限，並寫入「等級提升」系統訊息；所有舊存檔的待選升級數歸零。
 - 主職業每級所需 EXP 跟《幸福 Online／STRUGARDEN》必要經驗表；Everrealm 只使用至 Lv45：
 
 | Lv | 升下一級所需 EXP | Lv | 升下一級所需 EXP | Lv | 升下一級所需 EXP |
@@ -195,7 +195,7 @@
 - Fighter battle movement displays remaining movement power numerically (starts at 6.0 in the current fighter tuning). Walking costs 1.0, a quarter-turn costs 0.5, and a 180° turn costs 1.0. One point is reserved from route extension for final facing; unused reserve expires when movement is committed.
 - Battle AP uses a yellow progress bar, starts at 10, gains 10 each round, and caps at 200.
 - The sequential turn-order panel is removed because Everrealm uses simultaneous planning/resolution. Timers remain unlimited for the single-player build.
-- The player-facing hero name is 時光之光.
+- The player-facing hero name always comes from the canonical saved `player.name`; battle, HUD, status and equipment UI must not hard-code a second display name.
 - Mountain high-tree and low-scrub obstacle art now use clean transparent-alpha battle assets with no white matte/halo; the tree is visually tall and the scrub visibly low.
 - Battle BGM loops from assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3 and temporarily replaces map BGM during battle.
 

@@ -459,6 +459,7 @@
     return {
       version: 1,
       player: {
+        name: String(player.name || "").trim().slice(0, 24) || "阿巡",
         x: clamp(player.x, 40, 2760),
         y: clamp(player.y, 40, 1800),
         hp: Math.max(1, Number(player.hp) || 1),

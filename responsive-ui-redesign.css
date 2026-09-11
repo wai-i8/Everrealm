@@ -2484,3 +2484,133 @@
   .guild-detail-grid { grid-template-columns: 1fr; }
   .general-store-grid { grid-template-columns: 1fr !important; }
 }
+
+/* === 2026-09-11 account / guild / persistent-log compactness follow-up === */
+/* Keep the persistent log clear of the exploration rail instead of covering
+   character/status controls. Expanded history is deliberately scrollable. */
+.system-log {
+  left: clamp(9.65rem, 12vw, 10.5rem) !important;
+  bottom: clamp(.65rem, 1.8vh, 1.1rem) !important;
+  width: min(36rem, calc(100vw - 21rem)) !important;
+  min-width: 16rem;
+}
+.system-log-toolbar { justify-content: flex-start; }
+.system-log-toggle,
+.system-log-drag-handle {
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,200,87,.48);
+  border-radius: .4rem;
+  background: rgba(5,11,24,.78);
+  color: #ffc857;
+  font: 850 .78rem/1 system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+.system-log-toggle:hover,
+.system-log-toggle:focus-visible,
+.system-log-drag-handle:hover,
+.system-log-drag-handle:focus-visible { border-color: rgba(255,200,87,.86); color: #fff1bf; }
+.system-log-messages {
+  max-height: min(10rem, 28vh) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,200,87,.5) rgba(5,11,24,.28);
+  touch-action: pan-y;
+  pointer-events: auto !important;
+  user-select: text;
+}
+.system-log.is-collapsed { width: min(30rem, calc(100vw - 21rem)) !important; }
+.system-log.is-collapsed .system-log-tabs { display: none; }
+.system-log.is-collapsed .system-log-messages {
+  max-height: 2.8rem !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  user-select: none;
+}
+.system-log.is-collapsed .system-log-toolbar { margin-bottom: .18rem; }
+
+/* Guild rows are intentionally one-line summaries. Detail is a compact popup
+   that sits above the guild window and fits a landscape phone without a long scroll. */
+.guild-commission-detail-panel { z-index: 280 !important; }
+.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window {
+  width: min(31rem, calc(100vw - 1rem)) !important;
+}
+.guild-simple-list { gap: .2rem !important; padding: .08rem !important; }
+.guild-simple-row {
+  min-height: 1.75rem !important;
+  gap: .38rem !important;
+  padding: .25rem .48rem !important;
+  border-radius: .42rem !important;
+  line-height: 1.05 !important;
+}
+.guild-simple-stars { font-size: .61rem !important; }
+.guild-simple-row strong { font-size: .7rem !important; line-height: 1.1 !important; }
+.guild-simple-row em { font-size: .56rem !important; }
+.guild-commission-detail-window {
+  width: min(29rem, calc(100vw - .75rem)) !important;
+  max-height: calc(100vh - .75rem) !important;
+  padding: .72rem .82rem .68rem !important;
+  overflow: auto !important;
+}
+.guild-commission-detail-window > .modal-kicker { margin: 0 0 .22rem !important; font-size: .5rem !important; }
+.guild-commission-detail-window h2 { margin: .08rem 0 .28rem !important; font-size: 1.05rem !important; line-height: 1.08 !important; }
+.guild-detail-description { margin: 0 !important; font-size: .66rem !important; line-height: 1.35 !important; }
+.guild-detail-grid {
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap: .28rem !important;
+  margin: .42rem 0 .48rem !important;
+}
+.guild-detail-grid > div { padding: .34rem .4rem !important; border-radius: .38rem !important; }
+.guild-detail-grid dt { font-size: .5rem !important; }
+.guild-detail-grid dd { margin-top: .1rem !important; font-size: .63rem !important; line-height: 1.25 !important; }
+.guild-detail-actions { gap: .3rem !important; }
+.guild-detail-actions .facility-action-button { min-height: 2rem !important; padding: .38rem .58rem !important; font-size: .64rem !important; }
+
+/* Login / register is a small utility dialog, not a feature panel. */
+.auth-panel .auth-window {
+  width: min(21rem, calc(100vw - 1rem)) !important;
+  min-height: 0 !important;
+  padding: .78rem .9rem .72rem !important;
+}
+.auth-window > .modal-kicker { margin: 0 0 .22rem !important; font-size: .5rem !important; }
+.auth-window h2 { margin: .05rem 0 .38rem !important; font-size: 1.25rem !important; line-height: 1.05 !important; }
+.auth-form { gap: .46rem !important; }
+.auth-form label { gap: .2rem !important; font-size: .6rem !important; }
+.auth-form input { padding: .44rem .52rem !important; font-size: .74rem !important; }
+.auth-message { min-height: .9rem !important; margin: 0 !important; font-size: .58rem !important; }
+.auth-actions { gap: .38rem !important; margin-top: .05rem !important; }
+.auth-actions .primary-button,
+.auth-actions .secondary-button {
+  min-height: 2rem !important;
+  padding: .42rem .52rem !important;
+  font-size: .68rem !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,.48) !important;
+}
+.auth-form > .account-link-button { padding: .15rem !important; font-size: .58rem !important; }
+
+@media (max-width: 760px) {
+  .system-log {
+    left: 8.8rem !important;
+    right: .45rem !important;
+    width: auto !important;
+    min-width: 0 !important;
+    bottom: .45rem !important;
+  }
+  .system-log.is-collapsed { width: auto !important; }
+  .system-log-messages { max-height: min(7.2rem, 30vh) !important; }
+  .guild-commission-detail-window { width: min(27rem, calc(100vw - .5rem)) !important; }
+}
+
+@media (max-width: 530px) {
+  .system-log { left: 8.15rem !important; right: .35rem !important; }
+  .system-log-tabs { gap: .08rem !important; padding: .12rem !important; }
+  .system-log-tabs button { min-height: 1.25rem !important; padding: .08rem .18rem !important; font-size: .49rem !important; }
+  .system-log-toggle,
+  .system-log-drag-handle { width: 1.35rem; height: 1.35rem; }
+  .guild-detail-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}

@@ -2627,7 +2627,7 @@ Automated tests pass 後仍然必須實際 run game。
 - Fighter battle movement displays remaining movement power numerically (starts at 6.0 in the current fighter tuning). Walking costs 1.0, a quarter-turn costs 0.5, and a 180° turn costs 1.0. One point is reserved from route extension for final facing; unused reserve expires when movement is committed.
 - Battle AP uses a yellow progress bar, starts at 10, gains 10 each round, and caps at 200.
 - The sequential turn-order panel is removed because Everrealm uses simultaneous planning/resolution. Timers remain unlimited for the single-player build.
-- The player-facing hero name is 時光之光.
+- The player-facing hero name is the canonical saved `player.name`; every battle label/message must use that same value rather than a battle-only hard-coded name.
 - Mountain high-tree and low-scrub obstacle art now use clean transparent-alpha battle assets with no white matte/halo; the tree is visually tall and the scrub visibly low.
 - Battle BGM loops from assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3 and temporarily replaces map BGM during battle.
 

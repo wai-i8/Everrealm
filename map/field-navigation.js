@@ -129,7 +129,38 @@
     }
 
     function interactionHitTest(region, position, padding = SERVICE_INTERACTION_HIT_PADDING_PX) {
-      return distanceToRegion(region, position) <= Math.max(0, Number(padding) || 0);
+      const mask = maskFor(region);
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      const reach = Math.max(0, Number(padding) || 0);
+      if (!ready || !mask || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const reachSquared = reach * reach;
+      // Hot click path: only inspect pixels near the pointer. The previous
+      // implementation searched every authored region pixel just to answer a
+      // small hit-test, which caused visible pointerdown stalls on the 10k map.
+      for (const entry of regionEntries(region)) {
+        const bbox = entry?.bbox;
+        if (!bbox) continue;
+        const left = Number(bbox.x);
+        const top = Number(bbox.y);
+        const right = left + Number(bbox.width);
+        const bottom = top + Number(bbox.height);
+        if (![left, top, right, bottom].every(Number.isFinite)) continue;
+        if (x < left - reach || x > right + reach || y < top - reach || y > bottom + reach) continue;
+        const minX = Math.max(0, Math.floor(x - reach), Math.floor(left));
+        const maxX = Math.min(expectedWidth - 1, Math.ceil(x + reach), Math.ceil(right) - 1);
+        const minY = Math.max(0, Math.floor(y - reach), Math.floor(top));
+        const maxY = Math.min(expectedHeight - 1, Math.ceil(y + reach), Math.ceil(bottom) - 1);
+        for (let py = minY; py <= maxY; py += 1) {
+          const dy = py - y;
+          for (let px = minX; px <= maxX; px += 1) {
+            const dx = px - x;
+            if (dx * dx + dy * dy > reachSquared) continue;
+            if (mask[py * expectedWidth + px]) return true;
+          }
+        }
+      }
+      return false;
     }
 
     function interactionAtWorldPoint(position) {

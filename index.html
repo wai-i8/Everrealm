@@ -150,6 +150,7 @@
               <button type="button" data-log-filter="item" aria-pressed="false">物品</button>
               <button type="button" data-log-filter="system" aria-pressed="false">系統</button>
             </nav>
+            <button id="systemLogToggleButton" class="system-log-toggle" type="button" aria-label="縮細系統資訊欄" aria-expanded="true" title="縮細資訊欄">−</button>
             <button id="systemLogDragHandle" class="system-log-drag-handle" type="button" aria-label="拖動系統資訊欄" title="拖動資訊欄">✥</button>
           </div>
           <div id="systemLogMessages" class="system-log-messages" aria-live="polite" aria-relevant="additions text"></div>
@@ -249,7 +250,6 @@
             <button id="authCloseButton" class="ui-close-button modal-close-button" type="button" aria-label="關閉帳戶視窗" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
             <p id="authKicker" class="modal-kicker">ACCOUNT</p>
             <h2 id="authTitle">登入旅程</h2>
-            <p id="authDescription">使用 Firebase 帳戶保存你的永恆國度角色。</p>
             <p id="authMessage" class="auth-message" aria-live="polite"></p>
             <form id="authForm" class="auth-form">
               <label for="authEmail">Email<input id="authEmail" name="email" type="email" autocomplete="username" required /></label>

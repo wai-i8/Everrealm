@@ -13,5 +13,5 @@
 
 ## 護士服務
 
-玩家點擊／接近 `clinic-healer-siu-moon` 後，護士使用簡化 NPC dialogue「辛苦了，讓我替你治療吧。」並免費把 HP 回復到目前上限；完成後顯示／記錄「HP 已完全恢復」。
+玩家點擊／接近 `clinic-healer-siu-moon` 後，如 HP 未滿，護士先以簡化 NPC dialogue 詢問是否治療；只有玩家確認後先免費把 HP 回復到目前上限並記錄「HP 已完全恢復」。如 HP 已滿，只提示目前毋須治療並繼續旅程，不能在點擊護士的一刻先偷偷回血。
 醫院服務唔收金幣。護士 semantic hit target 要對準 master art 可見護士，並提供可行走 `approachPoint`；點擊護士不可落入普通 blocked-ground click，避免顯示「嗰邊行唔到」。

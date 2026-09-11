@@ -61,7 +61,8 @@
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
-  const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v1";
+  const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
+  const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
   const INVENTORY_PAGE_SIZE = 15;
   const WEAK_POTION_TOTAL_STEPS = 500;
   const WEAK_POTION_WORLD_UNITS_PER_STEP = 32;
@@ -112,7 +113,6 @@
   const authForm = document.getElementById("authForm");
   const authKicker = document.getElementById("authKicker");
   const authTitle = document.getElementById("authTitle");
-  const authDescription = document.getElementById("authDescription");
   const authMessage = document.getElementById("authMessage");
   const authEmail = document.getElementById("authEmail");
   const authPassword = document.getElementById("authPassword");
@@ -134,6 +134,7 @@
   const saveToast = document.getElementById("saveToast");
   const systemLog = document.getElementById("systemLog");
   const systemLogTabs = document.getElementById("systemLogTabs");
+  const systemLogToggleButton = document.getElementById("systemLogToggleButton");
   const systemLogDragHandle = document.getElementById("systemLogDragHandle");
   const systemLogMessages = document.getElementById("systemLogMessages");
   const guildCommissionDetailPanel = document.getElementById("guildCommissionDetailPanel");
@@ -170,6 +171,7 @@
   };
 
   const hud = {
+    name: document.querySelector("#playerHud .name-row strong"),
     level: document.getElementById("levelValue"),
     hpFill: document.getElementById("hpFill"),
     hpText: document.getElementById("hpText"),
@@ -281,6 +283,10 @@
   let systemLogEntries = [];
   let systemLogSerial = 0;
   let systemLogDragGesture = null;
+  let systemLogCollapsed = false;
+  try { systemLogCollapsed = localStorage.getItem(SYSTEM_LOG_COLLAPSED_KEY) === "1"; } catch (_) {}
+  let remoteSessionKickMessage = "";
+  let sessionKickInProgress = false;
   let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
@@ -602,10 +608,7 @@
   }
 
   function playerDisplayName() {
-    const value = String(player?.name || "").trim();
-    if (value) return value.slice(0, 24);
-    const hudName = document.querySelector("#playerHud .name-row strong")?.textContent?.trim();
-    return hudName || "阿巡";
+    return String(player?.name || "").trim().slice(0, 24) || "阿巡";
   }
 
   function playerStats() {
@@ -949,7 +952,7 @@
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
-    player.name = String(rawSave?.player?.name || player.name || "阿巡").trim().slice(0, 24) || "阿巡";
+    player.name = String(save.player?.name || "阿巡").trim().slice(0, 24) || "阿巡";
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
     playTime = save.playTime;
@@ -1038,9 +1041,6 @@
     const registering = authMode === "register";
     authKicker.textContent = registering ? "CREATE ACCOUNT" : "ACCOUNT";
     authTitle.textContent = registering ? "建立旅程帳戶" : "登入旅程";
-    authDescription.textContent = registering
-      ? "建立帳戶後，你可以跨裝置保存永恆國度角色。"
-      : "使用 Firebase 帳戶保存你的永恆國度角色。";
     authConfirmRow.hidden = !registering;
     authConfirmPassword.required = registering;
     authSubmitButton.querySelector("span").textContent = registering ? "建立帳戶" : "登入";
@@ -1115,6 +1115,28 @@
     updateHud(true);
   }
 
+  async function handleRemoteSessionInvalidated(reason = null) {
+    if (sessionKickInProgress) return;
+    sessionKickInProgress = true;
+    remoteSessionKickMessage = typeof reason === "string" && reason.trim()
+      ? reason.trim()
+      : "帳號已於其他裝置登入，你已被登出。";
+    savePersistence?.deactivateUser();
+    clearGameplayState();
+    try {
+      await Firebase?.signOut?.();
+    } catch (error) {
+      console.warn("Everrealm forced session sign-out failed.", error);
+      authUser = null;
+      syncAccountStatus();
+      openAuthPanel("login", true);
+      setAuthMessage(remoteSessionKickMessage, "error");
+      remoteSessionKickMessage = "";
+    } finally {
+      sessionKickInProgress = false;
+    }
+  }
+
   async function syncAuthenticatedUser(user) {
     const token = ++authSyncToken;
     authUser = user || null;
@@ -1125,8 +1147,28 @@
       clearGameplayState();
       syncAccountStatus();
       openAuthPanel("login", true);
+      if (remoteSessionKickMessage) {
+        setAuthMessage(remoteSessionKickMessage, "error");
+        remoteSessionKickMessage = "";
+      }
       return;
     }
+
+    try {
+      const session = await Firebase?.activateSingleSession?.(user.uid, handleRemoteSessionInvalidated);
+      if (token !== authSyncToken || authUser?.uid !== user.uid) return;
+      if (session && session.active === false) {
+        await handleRemoteSessionInvalidated();
+        return;
+      }
+    } catch (error) {
+      if (token !== authSyncToken || authUser?.uid !== user.uid) return;
+      setAuthMessage(`已登入，但未能建立裝置登入狀態：${authErrorMessage(error)}`, "error");
+      showToast("未能確認裝置登入狀態，請重新登入。", "danger");
+      await handleRemoteSessionInvalidated("未能確認裝置登入狀態，請重新登入。");
+      return;
+    }
+
     if (mode !== "title") returnToTitleWithoutSave();
     const result = await savePersistence?.resolveUser(authenticatedUid());
     if (token !== authSyncToken || authUser?.uid !== user.uid) return;
@@ -1501,6 +1543,10 @@
     const navigationRadius = authoritativeNavigation
       ? Number(world.navigation?.feetRadiusPx) || (currentMapId === "world" ? MainTownNavigation?.feetRadiusPx : 3) || 3
       : player.radius;
+    // Invalid clicks on large authored maps used to run both coarse and fine A*
+    // searches before failing. Reject a blocked destination with the cheap local
+    // feet-disk lookup first; valid clicks keep the exact same path resolver.
+    if (authoritativeNavigation && isBlocked({ x: goal.x, y: goal.y, radius: navigationRadius })) return false;
     const baseOptions = {
       bounds: { x: 0, y: 0, w: world.pixelWidth, h: world.pixelHeight },
       sampleStep: authoritativeNavigation ? 1 : undefined,
@@ -1879,11 +1925,12 @@
     if (result.levelsGained > 0) {
       pendingLevelUps = 0;
       const newStats = playerStats();
-      player.hp = Math.min(newStats.maxHp, player.hp + Math.max(0, newStats.maxHp - oldStats.maxHp));
+      player.hp = newStats.maxHp;
       sound.level();
       const hpGain = newStats.maxHp - oldStats.maxHp;
-      showToast(`升到 LV.${player.level} · 生命 +${hpGain}`, "good");
-      announce(`升到 ${player.level} 級。生命上限提升。`);
+      addSystemMessage("system", `等級提升！LV.${player.level} · HP 已完全恢復`, "good");
+      showToast(`升到 LV.${player.level} · HP 回滿 · 生命上限 +${hpGain}`, "good");
+      announce(`升到 ${player.level} 級。生命已完全恢復。`);
       saveImportant(false);
     }
     updateHud();
@@ -2445,22 +2492,35 @@
 
   function interactHealer(npc) {
     const maxHp = playerStats().maxHp;
-    const healed = Math.max(0, maxHp - player.hp);
-    player.hp = maxHp;
-    if (healed > 0) {
-      markPersistenceDirty();
-      sound.heal();
-      showToast("HP 已完全恢復", "good");
-      addSystemMessage("system", "HP 已完全恢復");
-      saveImportant(false);
-      updateHud(true);
-    } else {
-      addSystemMessage("system", "HP 已經全滿");
+    const missingHp = Math.max(0, maxHp - player.hp);
+    if (missingHp <= 0) {
+      startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: ["你而家狀態好好，HP 已經全滿，唔需要治療。繼續旅程吧。"],
+      });
+      return;
     }
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: ["辛苦了，讓我替你治療吧。"],
+      lines: [`你而家仲差 ${Math.ceil(missingHp)} HP，要我幫你完全恢復嗎？`],
+      choices: [
+        {
+          label: "請幫我治療",
+          action: () => {
+            const healTo = playerStats().maxHp;
+            player.hp = healTo;
+            markPersistenceDirty();
+            sound.heal();
+            showToast("HP 已完全恢復", "good");
+            addSystemMessage("system", "護士治療完成 · HP 已完全恢復", "good");
+            saveImportant(false);
+            updateHud(true);
+          },
+        },
+        { label: "暫時唔使", action: () => {} },
+      ],
     });
   }
 
@@ -3103,14 +3163,14 @@
         </article>`;
       }).join("");
     facilityContent.innerHTML = `
-      <div class="facility-section-heading equipment-overview-heading"><div><small>PAPER DOLL</small><h3>目前裝備</h3></div><span>LV.${player.level} 時光之光</span></div>
+      <div class="facility-section-heading equipment-overview-heading"><div><small>PAPER DOLL</small><h3>目前裝備</h3></div><span>LV.${player.level} ${playerDisplayName()}</span></div>
       <section class="paperdoll-layout" aria-label="角色裝備槽位">
         <div class="paperdoll-board">
           ${paperdollSlotHtml("head", "頭部", "head")}
           ${paperdollSlotHtml("upperBody", "上身", "upperBody")}
           ${paperdollSlotHtml("lowerBody", "下身", "lowerBody")}
           ${paperdollSlotHtml("feet", "腳部", "feet")}
-          <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="280" aria-hidden="true"></canvas><strong>時光之光</strong><span>LV.${player.level}</span></div>
+          <div class="paperdoll-avatar"><canvas id="equipmentPaperdoll" width="180" height="280" aria-hidden="true"></canvas><strong>${playerDisplayName()}</strong><span>LV.${player.level}</span></div>
           ${paperdollSlotHtml("charm", "飾物", "charm")}
           ${paperdollSlotHtml("hands", "手部", "hands")}
           ${paperdollSlotHtml("weapon", "武器", "weapon")}
@@ -3292,7 +3352,7 @@
       <section class="status-compact" aria-label="角色狀態">
         <div class="status-compact-identity">
           <div>
-            <strong class="status-compact-name">時光之光</strong>
+            <strong class="status-compact-name">${playerDisplayName()}</strong>
             <span class="status-compact-class">${className}</span>
           </div>
           <b class="status-compact-level">Lv.${player.level}</b>
@@ -4402,7 +4462,7 @@
       id: "battle-player",
       side: "ally",
       type: "player",
-      name: "時光之光",
+      name: playerDisplayName(),
       level: player.level,
       cell: { ...heroSpawn },
       hp: Math.ceil(player.hp),
@@ -5144,7 +5204,7 @@
     };
     battle.movementResolution = { ...movement, finalHeroFacing: finalFacing, elapsed: 0, stepDuration: BATTLE_MOVE_STEP_SECONDS };
     battle.actingUnitIds = movement.actors.filter((id) => movement.unitResults[id]?.elapsedCost > 0 || movement.unitResults[id]?.blocked);
-    battle.message = heroPath.length > 1 ? "路線確認——時光之光同霧獸同步移動！" : "時光之光留喺原位；霧獸開始行動。";
+    battle.message = heroPath.length > 1 ? `路線確認——${battle.hero.name}同霧獸同步移動！` : `${battle.hero.name}留喺原位；霧獸開始行動。`;
     battle.messageDanger = false;
     updateBattleUi();
     sound.tone(360, .09, { to: 620, gain: .025 });
@@ -5508,13 +5568,13 @@
       const validation = pending ? revalidateBattlePendingAction(pending) : { ok: true };
       if (!validation.ok) {
         pending && (pending.status = "cancelled");
-        cancelledActions.push(action.kind === "hero" ? "時光之光" : action.hit?.enemy?.name || action.actorId);
+        cancelledActions.push(action.kind === "hero" ? battle.hero.name : action.hit?.enemy?.name || action.actorId);
         continue;
       }
       pending && (pending.status = "executing");
       if (action.kind === "hero") {
         if (!battle.hero.alive || battle.hero.hp <= 0 || FighterEffects?.isDisabled(battle.hero, battle.round)) {
-          cancelledActions.push("時光之光");
+          cancelledActions.push(battle.hero.name);
           continue;
         }
         heroExecuted = true;
@@ -5691,7 +5751,8 @@
     if (specialEffectsApplied) skillResults.push("技能效果生效");
     if (guardReduction) skillResults.push(`減傷 ${Math.round(guardReduction * 100)}%`);
     if (battle.moveBonusNext) skillResults.push(`下輪移動 +${battle.moveBonusNext}`);
-    const heroResult = !heroExecuted ? "時光之光未及出招，行動取消" : heroAction.type === "wait" ? "時光之光待機（不附帶減傷）" : heroAction.type === "potion" ? `時光之光回復 ${heroHeal} HP` : skill ? `時光之光施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}` : "時光之光完成行動";
+    const heroName = battle.hero.name || playerDisplayName();
+    const heroResult = !heroExecuted ? `${heroName}未及出招，行動取消` : heroAction.type === "wait" ? `${heroName}待機（不附帶減傷）` : heroAction.type === "potion" ? `${heroName}回復 ${heroHeal} HP` : skill ? `${heroName}施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}` : `${heroName}完成行動`;
     const usedSkills = [...new Set(executedEnemyHits.map((hit) => hit.skillName).filter(Boolean))];
     const enemyPosition = executedEnemyHits.some((hit) => hit.position === "rear") ? "（背擊 +35%）" : executedEnemyHits.some((hit) => hit.position === "side") ? "（側擊 +15%）" : "";
     const cancelledCopy = cancelledActions.length ? `；${cancelledActions.join("、")}因倒下或異常狀態取消行動` : "";
@@ -5706,6 +5767,7 @@
     battle.phase = "victory";
     battle.message = "霧散開咗——戰鬥勝利！";
     battle.messageDanger = false;
+    addSystemMessage("combat", "戰鬥獲勝！", "good");
     const token = battle.token;
     sound.level();
     updateBattleUi();
@@ -5739,6 +5801,7 @@
     battle.phase = "defeat";
     battle.message = "你倒下了……";
     battle.messageDanger = true;
+    addSystemMessage("combat", "戰鬥失敗。", "danger");
     updateBattleUi();
     scheduleBattle(() => {
       if (!battle || battle.token !== token) return;
@@ -5943,7 +6006,7 @@
     battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "戰鬥";
     battleUi.phase.textContent = phaseCopy[battle.phase]?.[1] || "";
         battleUi.unitLevel.textContent = `LV. ${battle.hero.level}`;
-    battleUi.unitName.textContent = "時光之光";
+    battleUi.unitName.textContent = battle.hero.name || playerDisplayName();
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
     battleUi.hpText.textContent = `${Math.ceil(battle.hero.hp)} / ${battle.hero.maxHp}`;
     battleUi.apFill.style.width = `${Core.clamp(battle.ap / BATTLE_AP_MAX, 0, 1) * 100}%`;
@@ -6229,6 +6292,7 @@
     const xpNeeded = Expansion.xpRequired(player.level);
     const atCap = player.level >= Expansion.LEVEL_CAP;
     const xpRatio = atCap ? 1 : Core.clamp(player.xp / xpNeeded, 0, 1);
+    setTextIfChanged(hud.name, playerDisplayName());
     setTextIfChanged(hud.level, `LV. ${player.level}`);
     setStyleWidthIfChanged(hud.hpFill, `${hpRatio * 100}%`);
     setTextIfChanged(hud.hpText, `${Math.ceil(player.hp)} / ${stats.maxHp}`);
@@ -6306,17 +6370,38 @@
     })[char]);
   }
 
+  function syncSystemLogCollapsed() {
+    if (!systemLog) return;
+    systemLog.classList.toggle("is-collapsed", systemLogCollapsed);
+    systemLog.dataset.collapsed = String(systemLogCollapsed);
+    if (systemLogToggleButton) {
+      systemLogToggleButton.textContent = systemLogCollapsed ? "+" : "−";
+      systemLogToggleButton.setAttribute("aria-expanded", String(!systemLogCollapsed));
+      systemLogToggleButton.setAttribute("aria-label", systemLogCollapsed ? "展開系統資訊欄" : "縮細系統資訊欄");
+      systemLogToggleButton.title = systemLogCollapsed ? "展開資訊欄" : "縮細資訊欄";
+    }
+  }
+
+  function toggleSystemLogCollapsed() {
+    systemLogCollapsed = !systemLogCollapsed;
+    try { localStorage.setItem(SYSTEM_LOG_COLLAPSED_KEY, systemLogCollapsed ? "1" : "0"); } catch (_) {}
+    syncSystemLogCollapsed();
+    renderSystemLog();
+  }
+
   function renderSystemLog() {
     if (!systemLogMessages) return;
     const entries = systemLogFilter === "all" ? systemLogEntries : systemLogEntries.filter((entry) => entry.type === systemLogFilter);
     systemLog.dataset.filter = systemLogFilter;
-    systemLogMessages.innerHTML = entries.slice(-120).map((entry) => `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}"><span class="system-log-tag">[${SYSTEM_LOG_LABELS[entry.type] || "系統"}]</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`).join("");
+    const visibleEntries = systemLogCollapsed ? entries.slice(-2) : entries;
+    systemLogMessages.innerHTML = visibleEntries.map((entry) => `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}"><span class="system-log-tag">[${SYSTEM_LOG_LABELS[entry.type] || "系統"}]</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`).join("");
     systemLogMessages.scrollTop = systemLogMessages.scrollHeight;
     for (const tab of systemLogTabs?.querySelectorAll?.("[data-log-filter]") || []) {
       const selected = tab.dataset.logFilter === systemLogFilter;
       tab.setAttribute("aria-pressed", String(selected));
       tab.classList.toggle("is-active", selected);
     }
+    syncSystemLogCollapsed();
   }
 
   function addSystemMessage(type, text, tone = "") {
@@ -9899,6 +9984,7 @@
     systemLogFilter = ["all", "combat", "reward", "quest", "item", "system"].includes(next) ? next : "all";
     renderSystemLog();
   });
+  systemLogToggleButton?.addEventListener("click", toggleSystemLogCollapsed);
   systemLogDragHandle?.addEventListener("pointerdown", beginSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointermove", moveSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointerup", finishSystemLogDrag);
@@ -10062,6 +10148,7 @@
   titleActions.hidden = true;
   continueButton.hidden = true;
   restoreSystemLogPosition();
+  syncSystemLogCollapsed();
   renderSystemLog();
   syncAccountStatus();
   syncSystemSoundControl();
