@@ -401,7 +401,7 @@ Biome data 最低：
 
 ## 9. Interaction Point
 
-NPC、門、工作台、委託板、寶箱等都使用 interaction point／range。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
+NPC、門、工作台、委託板等都使用 interaction point／range。現行地圖暫停使用 runtime 寶箱。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
 
 ```js
 {
@@ -1010,7 +1010,6 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 
 需要持久化嘅 map state，例如：
 
-- 已開寶箱
 - 已解鎖入口
 - 一次性 obstacle
 - quest scene state

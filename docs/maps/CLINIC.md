@@ -9,3 +9,9 @@
 精確 NPC/service、transition metadata 與 scene wiring 由 `maps/interiors/clinic.js` 定義；像素 walkability 由 `map/hospital-navigation.generated.js`／共用 resolver 提供。
 
 護士服務使用共用 authored-region interaction：由 NPC magenta region 最近點計算 `160 px` reach，點擊命中再加 `18 px` padding。
+
+
+## 護士服務
+
+玩家點擊／接近 `clinic-healer-siu-moon` 後，護士使用簡化 NPC dialogue「辛苦了，讓我替你治療吧。」並免費把 HP 回復到目前上限；完成後顯示／記錄「HP 已完全恢復」。
+醫院服務唔收金幣。護士 semantic hit target 要對準 master art 可見護士，並提供可行走 `approachPoint`；點擊護士不可落入普通 blocked-ground click，避免顯示「嗰邊行唔到」。

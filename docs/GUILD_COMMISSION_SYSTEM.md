@@ -4,15 +4,15 @@
 
 ## 委託身份與 V1 目錄
 
-每份委託以穩定 `id` 識別；`star`、`type`、`recommendedLevel`、`repeatable`、`objective` 與 `reward.skill_envelope_star` 由 `data/quests.js` 的中央目錄擁有；`guild-commission-core.js` 只負責 state／accept／progress／report logic。V1 必須而且只可以有以下五份，沒有 4★ 或 6★：
+每份委託以穩定 `id` 識別；`star`、`type`、`recommendedLevel`、`repeatable`、`objective` 與 `reward.skill_envelope_star`、`reward.coins` 由 `data/quests.js` 的中央目錄擁有；`guild-commission-core.js` 只負責 state／accept／progress／report logic。V1 必須而且只可以有以下五份，沒有 4★ 或 6★：
 
 | 星級 | ID | 類型 | 目標 | 推薦等級 | 報酬 |
 | --- | --- | --- | --- | --- | --- |
-| 1★ | `guild_hunt_chick_1star` | hunt | `monster_id: chick` × 5 | Lv.1 | 1★ 技能書信封 |
-| 2★ | `guild_wish_pool_2star` | wish | `interaction_id: mountain-wish-pool` × 1 | Lv.3 | 2★ 技能書信封 |
-| 3★ | `guild_hunt_raccoon_3star` | hunt | `monster_id: raccoon` × 5 | Lv.10 | 3★ 技能書信封 |
-| 5★ | `guild_hunt_frog_5star` | hunt | `monster_id: frog` × 5 | Lv.21 | 5★ 技能書信封 |
-| 7★ | `guild_hunt_turtle_7star` | hunt | `monster_id: turtle` × 5 | Lv.33 | 7★ 技能書信封 |
+| 1★ | `guild_hunt_chick_1star` | hunt | `monster_id: chick` × 5 | Lv.1 | 1★ 技能書信封 + 160 金幣 |
+| 2★ | `guild_wish_pool_2star` | wish | `interaction_id: mountain-wish-pool` × 1 | Lv.3 | 2★ 技能書信封 + 560 金幣 |
+| 3★ | `guild_hunt_raccoon_3star` | hunt | `monster_id: raccoon` × 5 | Lv.10 | 3★ 技能書信封 + 1,040 金幣 |
+| 5★ | `guild_hunt_frog_5star` | hunt | `monster_id: frog` × 5 | Lv.21 | 5★ 技能書信封 + 2,000 金幣 |
+| 7★ | `guild_hunt_turtle_7star` | hunt | `monster_id: turtle` × 5 | Lv.33 | 7★ 技能書信封 + 3,000 金幣 |
 
 推薦等級只作玩家指引，不是額外的接任門檻。其他現有魔物不會因為存在於圖鑑而自動變成委託。
 
@@ -30,7 +30,7 @@
 
 `available → active → ready_to_report → available`
 
-`objectiveCompleted` 與 `interactionCompleted` 是現行 objective state 旗標；討伐進度達標或許願互動成功後只會變成 `ready_to_report`，玩家仍要回到 `guild` 向公會回報。回報是一次性、原子操作，會清除活躍委託、增加 cycle，並把一個與委託星級相同的技能書信封加入 state。重複回報不能重複領獎；同一份委託完成回報後會再次出現在固定目錄中。
+`objectiveCompleted` 與 `interactionCompleted` 是現行 objective state 旗標；討伐進度達標或許願互動成功後只會變成 `ready_to_report`，玩家仍要回到 `guild` 向公會回報。回報是一次性、原子操作，會清除活躍委託、增加 cycle，把一個與委託星級相同的技能書信封加入 state，並把該委託固定 `reward.coins` 加到玩家金幣。重複回報不能重複領獎；同一份委託完成回報後會再次出現在固定目錄中。
 
 接受後的委託可在尚未領取報酬前放棄：`active` 或 `ready_to_report` 都可從公會委託卡按下「放棄委託」，並必須先通過遊戲內確認視窗。放棄會清除進度、objective／interaction 完成旗標及擊殺實例，增加 cycle 使舊卡片失效，回到 `available`；不扣金幣、聲望、階級，也不設 cooldown。重新接受必須從 0 開始。已經回報並領取信封的 cycle 沒有可放棄內容。
 
@@ -54,11 +54,11 @@
 
 ## Guild UI 與互動
 
-公會委託頁的正式身份是「公會委託」。頁面及接受後委託卡遵守 summary-first：卡片先讓玩家看見狀態與任務標題，再顯示目標、推薦等級、進度、技能書信封報酬及當下可用的接受／放棄／回報操作；不把長篇教學塞入每張卡片。接受後只顯示當前一份委託，卡片高度由內容決定，不用固定大框製造多餘留白。
+公會委託頁的正式身份是「公會委託」。主畫面只顯示五份固定委託的一行式 summary list：星級、任務名，以及目前活躍任務必要時顯示「進行中／待回報」。唔喺主頁永久顯示「可接委託 N 份／揀一份開始」、目標、推薦等級、進度、報酬等詳細 card。
 
-委託列表使用深色/navy content card、克制暖金邊框與 cream 文字；action button 不使用大面積金色填滿配黑字。放棄委託確認視窗保持 compact，清楚顯示會失去目前進度，但不放巨型裝飾 icon 或無用途空白。所有 shared major popup／modal 都遵守 UI System 的 mouse／touch draggable contract，而且 overlay 不 blur 遊戲背景。
+玩家點其中一行先開獨立可拖 detail popup；detail 先顯示描述、目標、推薦等級、進度、技能書信封 + 金幣報酬，以及接受／放棄／回報 contextual action。主頁及 detail 使用深色/navy content card、克制暖金邊框與 cream 文字；action button 不使用大面積金色填滿配黑字。放棄委託確認視窗保持 compact，清楚顯示會失去目前進度，但不放巨型裝飾 icon 或無用途空白。所有 shared major popup／modal 都遵守 UI System 的 mouse／touch draggable contract，而且 overlay 不 blur 遊戲背景。
 
-同一時間只可進行一份委託；目標完成後仍須返公會回報；五份固定委託都可重複接受。這些次要規則由頁首 shared `[i]` 說明入口提供，不在主要委託內容下永久佔位。
+同一時間只可進行一份委託；目標完成後仍須返公會回報；五份固定委託都可重複接受。Guild 目前冇額外 help content，因此右上角不顯示 `[i]`；規則亦唔以永久 intro strip 佔位。
 
 接受、放棄及回報只能在 `guild` 進行；2★ objective 只能在山地 `mountain-wish-pool` 完成；討伐 objective 則由戰鬥擊殺事件更新。放棄確認使用現有 shared modal/window skin，不使用 browser alert。
 

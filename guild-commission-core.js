@@ -68,7 +68,7 @@
           : type === "delivery"
             ? { recipient_npc_id: String(objective.recipient_npc_id || "").trim(), count: 1 }
             : { interaction_id: String(objective.interaction_id || "").trim(), count: 1 },
-        reward: { skill_envelope_star: skillEnvelopeStar },
+        reward: { skill_envelope_star: skillEnvelopeStar, coins: wholeNumber(reward.coins, 0, 0, 999999) },
       }));
     }
     return Object.freeze(result);
@@ -268,7 +268,7 @@
       rewardClaimed: true,
       envelopes: { ...current.envelopes, [star]: current.envelopes[star] + 1 },
     });
-    return { ok: true, reason: null, state: next, commission, reward: { skill_envelope_star: star, quantity: 1 } };
+    return { ok: true, reason: null, state: next, commission, reward: { skill_envelope_star: star, quantity: 1, coins: wholeNumber(commission.reward.coins, 0, 0, 999999) } };
   }
 
   function consumeEnvelope(state, star) {

@@ -31,6 +31,7 @@
     if (context === "deck" && mapId === "world") return ["deck"];
     if (context === "guild" && mapId === "guild") return ["guild"];
     if (context === "shop" && mapId === "shop") return ["shop"];
+    if (context === "general-store" && mapId === "general-store") return ["shop"];
     const tabs = ["status", "bag", "equipment"];
     tabs.push("skills", "codex");
     return tabs;

@@ -46,12 +46,7 @@
     // Road signs are intentionally omitted. The authored mountain artwork is
     // allowed to stand on its own without extra sign props layered on top.
     const signs = [];
-
-    const chests = [
-      { id: "grove-cache", kind: "chest", x: 990, y: 2590, radius: 13, reward: { coins: 38, potions: 1 }, name: "樹根木箱" },
-      { id: "river-cache", kind: "chest", x: 2270, y: 1344, radius: 13, reward: { coins: 55, potions: 1 }, name: "山路鐵箱" },
-      { id: "ruin-cache", kind: "chest", x: 3470, y: 150, radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
-    ];
+    const chests = [];
 
     // The old purple authored service region is now the strange wishing pool.
     // It is already visible in the flattened map, so only its interaction

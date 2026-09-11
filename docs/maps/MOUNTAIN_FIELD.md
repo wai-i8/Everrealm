@@ -10,7 +10,7 @@
 
 山地敵人配置在 authored route 與 clearings，避免遮蔽主要導航。山地遭遇沿用既有 `mountain` battlefield context；同一張圖的森林密度與道路可讀性是固定 layout 規則。
 
-入口／出口為 `field-to-world`、`field-to-dungeon`；兩者都是正常可達 physical passage。精確 route、forest mass、enemy spawn、chest 由 `maps/mountain-field.js` 定義。
+入口／出口為 `field-to-world`、`field-to-dungeon`；兩者都是正常可達 physical passage。精確 route、forest mass、enemy spawn 由 `maps/mountain-field.js` 定義；現階段不設寶箱。
 
 ## 古怪水池互動
 

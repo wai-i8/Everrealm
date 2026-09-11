@@ -86,6 +86,11 @@ Encounter 數量倍率：
 
 例：Lv10 玩家打 Lv10 浣熊 = `100 EXP`；Lv15 玩家打一場 3 隻 Lv15 野豬 = `200 EXP`；Lv10 玩家打 Lv15 怪 = `150 EXP`；Lv20 玩家打 Lv15 怪 = `90 EXP`。
 
+### Current battle reward policy
+
+現階段怪物戰鬥結算 **只發 EXP**。`data/monsters.js -> rewards.coins` 固定為 `0`、`rewards.drops` 固定為空陣列；
+擊殺唔會掉金幣、小型回復藥、素材或其他物品，探索亦唔生成可拾取 monster drop。掉寶／素材經濟留待之後重新設計。
+
 ## Monster record
 
 `data/monsters.js` 每隻怪以同一 schema 保存：

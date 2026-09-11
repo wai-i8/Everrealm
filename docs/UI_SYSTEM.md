@@ -87,10 +87,10 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 ### Header
 
 每個 major window 只有一個主標題。header 以 compact token 保持約 56–72px
-usable height，主標題放左側，右上角放 shared bitmap-backed 說明入口及 close
-button；English taxonomy eyebrow 只在真正增加辨識價值時保留，唔可以同中文
-頁名形成第二個 headline。長說明放入可
-點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
+usable height，主標題放左側，右上角以 close button 為必要控制；只有真正有可用說明內容
+嘅頁面先顯示 shared bitmap-backed info 入口，Inventory、Guild 等冇額外說明內容嘅頁面
+唔保留空殼 `[i]`。English taxonomy eyebrow 只在真正增加辨識價值時保留，唔可以同中文
+頁名形成第二個 headline。長說明如存在先放入可點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
 `ui-close-button`/`facility-close-button` 共用，使用 `assets/ui/ui-close-v2.png`；
 info 使用 `assets/ui/ui-info-v1.png`，兩者保持約 40px hit target，但 info visible
 art 約 21–25px，close visible art 約 30–34px；X 永遠係 primary action。裝飾 bitmap 與可
@@ -325,3 +325,36 @@ tests alone are insufficient.
 
 任何新增 major popup 先套用 standard `ui-window`，只有明確 gameplay domain
 需要時先加 Guild 或 Skill variant；不可複製一張固定尺寸背景解決單一畫面。
+
+
+## 6. Current inventory, log and authentication contracts
+
+### Inventory pagination / currency
+
+Inventory 左側 canonical equipment paperdoll 係固定區域；右側物品 grid 固定每頁 `5 × 3 = 15` 件。
+超過 15 件先顯示上一頁／下一頁及 `current / total`，切頁只更新右側物品 grid，左側裝備區唔移位、
+唔重新變成另一頁。分類切換後由該分類第 1 頁開始。Inventory toolbar 同時顯示玩家現有「金幣」，
+全 game player-facing currency 一律叫「金幣」。Inventory 冇額外 help copy，因此 header 唔顯示 `[i]`。
+
+### Bottom-left system / battle log
+
+探索與戰鬥共用左下角半透明 system log。預設顯示最近訊息，新訊息由底部加入、舊訊息向上推；
+訊息唔因 timeout 自動消失，runtime 保留較長 history。普通文字區必須 pointer-through，唔阻地圖點擊／
+touch 操作；只有 filter controls 同細小 drag handle 可以攔截 pointer。drag handle 支援 mouse／touch，位置保存於
+localStorage，下一次進入遊戲沿用。
+
+filter 固定為：`全部`、`戰鬥`、`獎勵`、`任務`、`物品`、`系統`。訊息格式使用
+`[分類] 內容`，例如 `[戰鬥] 正拳對山野小雞造成 38 傷害`。tag 以低噪音顏色區分：戰鬥橙紅、
+敵方傷害淺紅、獎勵金黃、物品青綠、任務淺藍、系統灰白／淡藍；正文保持較淺 neutral 色。
+戰鬥每次傷害、EXP、委託進度、物品使用、療癒、藥效完結等都可流入同一 log。重要中央 toast 可同時存在。
+
+### Authentication shell
+
+Firebase 帳戶未通過登入／授權前，左側主功能 launcher 必須完全隱藏；登入成功並正式進入可玩狀態後先顯示。
+登入畫面唔可以露出角色、物品、面板、技能、任務或系統 icon，避免未登入已出現 gameplay controls。
+
+### NPC dialogue simplification
+
+普通旅館、醫院等 NPC 對話使用單一乾淨 anchored frame：speaker 置頂、正文自然左對齊、留白按內容決定。
+單向對話唔硬塞選項；如有 choices，唔顯示 `1.`／`2.` 或其他無意義括號數字，亦唔用拉長金色 bitmap
+再疊第二層底框。選項只係真正 branching/service action 時先出現。

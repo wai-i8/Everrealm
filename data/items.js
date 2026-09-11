@@ -6,7 +6,8 @@
   "use strict";
 
   const ACTIVE_ITEMS = Object.freeze([
-    { id: "healing_potion", name: "回復藥水", description: "回復部分生命。", iconIndex: 0, kind: "consumable" },
+    { id: "healing_potion", name: "小型回復藥", description: "回復 30 HP。", iconIndex: 0, kind: "consumable" },
+    { id: "weak_potion", name: "弱氣之藥", description: "令低等級霧獸更容易出現；效果持續 500 虛擬步。", iconIndex: 0, kind: "consumable" },
     { id: "bright_feather", name: "亮羽", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "fox_fang", name: "霧狐尖牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "lantern_pelt", name: "燈紋毛皮", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
@@ -36,7 +37,7 @@
     { id: "skill_book_1", name: "一星技能書", iconIndex: 1, kind: "ui" },
     { id: "skill_book_2", name: "二星技能書", iconIndex: 2, kind: "ui" },
     { id: "skill_book_3", name: "三星技能書", iconIndex: 3, kind: "ui" },
-    { id: "coins", name: "燈幣", iconIndex: 15, kind: "currency" },
+    { id: "coins", name: "金幣", iconIndex: 15, kind: "currency" },
   ].map(Object.freeze));
 
   const ITEM_ID_ALIASES = Object.freeze({

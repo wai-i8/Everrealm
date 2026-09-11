@@ -71,12 +71,7 @@
       decorations.push({ id: `dungeon-detail-${decorations.length}`, kind: random() > .62 ? "glowMushroom" : random() > .35 ? "rubble" : "crackedTile", x: p.x + (random() - .5) * 22, y: p.y + (random() - .5) * 22, seed: random(), color: random() > .5 ? "#65ceb7" : "#91a9ef", solid: false });
     }
     [[5, 14], [17, 17], [21, 10], [29, 15], [23, 4], [31, 7], [38, 7]].forEach(([tx, ty], index) => decorations.push({ id: `dungeon-lamp-${index}`, kind: "ancientLamp", ...point(tx, ty), radius: 8, glow: "#75dbc7", solid: false }));
-    const chests = [
-      { id: "moss-cave-chest", kind: "chest", name: "長苔補給箱", ...point(3, 9), radius: 13, reward: { coins: 95, potions: 2, itemId: "mistguard-boots" } },
-      { id: "sealed-relic-chest", kind: "chest", name: "封存庫寶箱", ...point(22, 3), radius: 13, lockedBy: "turtle-vault-1", reward: { coins: 145, itemId: "echo-blade" } },
-      { id: "gallery-chest", kind: "chest", name: "迴廊鐵箱", ...point(37, 16), radius: 13, reward: { coins: 120, potions: 2, itemId: "fogweave-coat" } },
-      { id: "warden-chest", kind: "chest", name: "深霧秘藏", ...point(35, 3), radius: 14, lockedBy: "bear-deep-2", reward: { coins: 260, potions: 3, itemId: "warden-lantern" } },
-    ];
+    const chests = [];
     const shrine = { id: "echo-lantern-shrine", kind: "shrine", name: "回音燈龕", ...point(18, 24), radius: 19, prompt: "E　點亮回音燈", waypointId: "dungeon-echo-lantern", services: ["heal", "save", "waypoint"] };
     const exit = makeExit("dungeon-to-field", 10.5, 29, MAP_IDS.FIELD, "dungeonFront", "返回霧梅爾山地", point(37, 2.6), { interactionMode: "passage", transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE });
     const enemySpawns = [
@@ -85,7 +80,7 @@
       monsterSpawn("coyote-entry-1", "coyote", 15, 26),
       monsterSpawn("coyote-gallery-1", "coyote", 21, 21),
       monsterSpawn("turtle-court-1", "turtle", 16, 15),
-      monsterSpawn("turtle-vault-1", "turtle", 23, 11, { guardsChest: "sealed-relic-chest" }),
+      monsterSpawn("turtle-vault-1", "turtle", 23, 11),
       monsterSpawn("coyote-west-1", "coyote", 4, 15),
       monsterSpawn("turtle-west-1", "turtle", 4, 10),
       monsterSpawn("snake-gallery-1", "snake", 31, 16),
@@ -94,7 +89,7 @@
       monsterSpawn("turtle-relic-1", "turtle", 16, 4),
       monsterSpawn("snake-deep-1", "snake", 32, 7),
       monsterSpawn("bear-deep-1", "bear", 38, 7),
-      monsterSpawn("bear-deep-2", "bear", 35, 5, { guardsChest: "warden-chest" }),
+      monsterSpawn("bear-deep-2", "bear", 35, 5),
     ];
     const npcs = [{
       id: "lost-explorer-kai",

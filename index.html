@@ -52,7 +52,7 @@
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
           ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
-          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260910-12"],
+          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260911-14"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -138,7 +138,22 @@
         </div>
 
         <div id="gameToast" class="game-toast" aria-live="assertive" aria-atomic="true"></div>
-        <div id="saveToast" class="save-toast" aria-live="polite"><span aria-hidden="true">✦</span> 燈火已記低</div>
+        <div id="saveToast" class="save-toast" aria-live="polite"><span aria-hidden="true">✦</span> 進度已儲存</div>
+
+        <section id="systemLog" class="system-log" aria-label="系統資訊欄" data-filter="all">
+          <div class="system-log-toolbar">
+            <nav id="systemLogTabs" class="system-log-tabs" aria-label="資訊分類">
+              <button type="button" data-log-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-log-filter="combat" aria-pressed="false">戰鬥</button>
+              <button type="button" data-log-filter="reward" aria-pressed="false">獎勵</button>
+              <button type="button" data-log-filter="quest" aria-pressed="false">任務</button>
+              <button type="button" data-log-filter="item" aria-pressed="false">物品</button>
+              <button type="button" data-log-filter="system" aria-pressed="false">系統</button>
+            </nav>
+            <button id="systemLogDragHandle" class="system-log-drag-handle" type="button" aria-label="拖動系統資訊欄" title="拖動資訊欄">✥</button>
+          </div>
+          <div id="systemLogMessages" class="system-log-messages" aria-live="polite" aria-relevant="additions text"></div>
+        </section>
 
         <div id="interactionPrompt" class="interaction-prompt" hidden>
           <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
@@ -336,6 +351,13 @@
           </div>
         </section>
 
+        <section id="guildCommissionDetailPanel" class="overlay modal-overlay guild-commission-detail-panel" role="dialog" aria-modal="true" aria-labelledby="guildCommissionDetailTitle" hidden>
+          <div class="ui-modal-window guild-commission-detail-window">
+            <button id="guildCommissionDetailCloseButton" class="ui-close-button modal-close-button" type="button" aria-label="關閉委託詳情" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
+            <div id="guildCommissionDetailContent"></div>
+          </div>
+        </section>
+
         <section id="dialoguePanel" class="dialogue-panel" aria-live="polite" hidden>
           <div class="dialogue-body">
             <div class="dialogue-speaker" aria-label="對話角色">
@@ -501,7 +523,7 @@
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260911-01",
+          "game.js?v=20260911-03",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);
@@ -527,7 +549,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260911-15", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260911-17", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

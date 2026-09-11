@@ -2200,3 +2200,283 @@
 .battle-single-command-row > button {
   width: 100% !important;
 }
+
+/* === 2026-09-11 inventory / guild / dialogue / system-log follow-up === */
+.game-stage[data-game-state="title"] .explore-sidebar,
+.game-stage[data-auth-state="signed-out"] .explore-sidebar {
+  display: none !important;
+}
+
+/* Persistent, click-through system / battle log. Only the tabs and drag handle intercept input. */
+.system-log {
+  --system-log-x: 0px;
+  --system-log-y: 0px;
+  position: absolute;
+  left: clamp(.65rem, 1.5vw, 1.25rem);
+  bottom: clamp(.75rem, 2.2vh, 1.5rem);
+  z-index: 26;
+  width: min(34rem, 54vw);
+  transform: translate3d(var(--system-log-x), var(--system-log-y), 0);
+  pointer-events: none;
+  user-select: none;
+  color: #edf3ff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+}
+.game-stage[data-game-state="title"] .system-log,
+.game-stage[data-auth-state="signed-out"] .system-log { display: none !important; }
+.system-log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .25rem;
+  pointer-events: none;
+}
+.system-log-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .18rem;
+  padding: .18rem .22rem;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: .45rem;
+  background: rgba(5, 11, 24, .58);
+  box-shadow: 0 3px 14px rgba(0,0,0,.2);
+  pointer-events: auto;
+}
+.system-log-tabs button {
+  min-height: 1.45rem;
+  padding: .12rem .38rem;
+  border: 0;
+  border-radius: .3rem;
+  background: transparent;
+  color: rgba(235,242,255,.66);
+  font: 700 .62rem/1.1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.system-log-tabs button.is-active,
+.system-log-tabs button[aria-pressed="true"] {
+  background: rgba(255,255,255,.11);
+  color: #fff7dc;
+}
+.system-log-drag-handle {
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,200,87,.48);
+  border-radius: .4rem;
+  background: rgba(5,11,24,.72);
+  color: #ffc857;
+  font-size: .76rem;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+}
+.system-log-drag-handle:active { cursor: grabbing; }
+.system-log-messages {
+  max-height: 7.9rem;
+  overflow: hidden;
+  padding: .35rem .5rem;
+  border-radius: .42rem;
+  background: linear-gradient(90deg, rgba(5,11,24,.58), rgba(5,11,24,.28) 76%, transparent);
+  box-shadow: inset 2px 0 0 rgba(255,255,255,.05);
+  pointer-events: none;
+}
+.system-log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: .38rem;
+  min-height: 1.22rem;
+  font: 650 .72rem/1.35 system-ui, sans-serif;
+  white-space: normal;
+}
+.system-log-tag { flex: 0 0 auto; font-weight: 850; }
+.system-log-text { color: rgba(238,244,255,.86); }
+.system-log-entry.is-combat .system-log-tag { color: #ff9f63; }
+.system-log-entry.is-combat.is-incoming .system-log-tag,
+.system-log-entry.is-combat.is-incoming .system-log-text { color: #ff8a8a; }
+.system-log-entry.is-reward .system-log-tag { color: #ffd36a; }
+.system-log-entry.is-item .system-log-tag { color: #65e0ca; }
+.system-log-entry.is-quest .system-log-tag { color: #8fc8ff; }
+.system-log-entry.is-system .system-log-tag { color: #b8c7db; }
+.system-log-entry.is-danger .system-log-text { color: #ffaaaa; }
+
+/* Inventory: equipment column is stable; right side is exactly 5 x 3 per page. */
+.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
+  width: min(70rem, calc(100vw - 2rem)) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+  grid-template-columns: minmax(15rem, 24%) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+.inventory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  margin-bottom: .7rem;
+}
+.inventory-toolbar .inventory-filter-bar { margin: 0 !important; }
+.inventory-money {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .42rem;
+  flex: 0 0 auto;
+  padding: .42rem .62rem;
+  border: 1px solid rgba(255,200,87,.42);
+  border-radius: .55rem;
+  background: rgba(8,16,32,.66);
+  color: #ffc857;
+}
+.inventory-money span { font-size: .66rem; color: rgba(255,238,194,.78); }
+.inventory-money strong { font: 850 .88rem/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(7rem, auto)) !important;
+  grid-auto-rows: minmax(7rem, auto) !important;
+  gap: .55rem !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  min-width: 0 !important;
+  min-height: 7rem !important;
+}
+.inventory-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: .55rem;
+  margin-top: .7rem;
+}
+.inventory-pager button {
+  width: 2rem;
+  height: 1.75rem;
+  border: 1px solid rgba(255,200,87,.4);
+  border-radius: .4rem;
+  background: rgba(9,17,34,.78);
+  color: #ffe8ae;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.inventory-pager button:disabled { opacity: .28; cursor: default; }
+.inventory-pager span { min-width: 3.5rem; text-align: center; color: #dbe5f5; font: 750 .72rem/1 ui-monospace, monospace; }
+
+/* Guild main screen is summary-first: one row per commission. */
+.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window {
+  width: min(42rem, calc(100vw - 2rem)) !important;
+  min-height: 0 !important;
+}
+.guild-simple-list {
+  display: grid;
+  gap: .48rem;
+  padding: .2rem;
+}
+.guild-simple-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .7rem;
+  width: 100%;
+  min-height: 3.15rem;
+  padding: .72rem .85rem;
+  border: 1px solid rgba(255,200,87,.27);
+  border-radius: .65rem;
+  background: linear-gradient(180deg, rgba(26,41,69,.9), rgba(12,23,43,.9));
+  color: #f5eedc;
+  text-align: left;
+  cursor: pointer;
+}
+.guild-simple-row:hover,
+.guild-simple-row:focus-visible { border-color: rgba(255,200,87,.72); transform: translateY(-1px); }
+.guild-simple-row.is-active { border-color: rgba(82,220,203,.56); box-shadow: inset 3px 0 0 rgba(82,220,203,.7); }
+.guild-simple-stars { color: #ffc857; font: 800 .75rem/1 ui-monospace, monospace; }
+.guild-simple-row strong { font-size: .88rem; }
+.guild-simple-row em { color: #64d9cb; font-size: .68rem; font-style: normal; }
+.guild-commission-detail-panel { backdrop-filter: none !important; background: rgba(3,8,18,.16) !important; }
+.guild-commission-detail-window {
+  width: min(39rem, calc(100vw - 1.5rem));
+  min-height: 0 !important;
+  padding: 1.35rem 1.35rem 1.2rem;
+}
+.guild-commission-detail-window h2 { margin: .25rem 0 .65rem; color: #f5ecd3; }
+.guild-detail-description { color: #c6cfdd; line-height: 1.55; }
+.guild-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .55rem;
+  margin: .9rem 0 1rem;
+}
+.guild-detail-grid > div { padding: .65rem .72rem; border: 1px solid rgba(255,255,255,.1); border-radius: .55rem; background: rgba(6,13,28,.58); }
+.guild-detail-grid dt { color: #8f9db1; font-size: .64rem; }
+.guild-detail-grid dd { margin: .22rem 0 0; color: #f3ead2; font-size: .8rem; font-weight: 750; }
+.guild-detail-actions { display: flex; justify-content: flex-end; gap: .55rem; }
+
+/* General store reuses the equipment-shop visual language without category tabs. */
+.facility-overlay[data-facility-context="general-store"] .facility-window.ui-window { width: min(48rem, calc(100vw - 2rem)) !important; min-height: 0 !important; }
+.general-store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.general-store-card { min-height: 12rem; }
+.general-store-card .equipment-shop-art { min-height: 5.4rem; }
+
+/* Cleaner NPC dialogue: one frame, natural left alignment, compact optional choices. */
+.dialogue-panel {
+  left: 50% !important;
+  right: auto !important;
+  bottom: clamp(.8rem, 2.2vh, 1.5rem) !important;
+  width: min(52rem, calc(100% - 1.25rem)) !important;
+  transform: translateX(-50%) !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255,200,87,.28) !important;
+  border-radius: .85rem !important;
+  background: rgba(8,17,34,.94) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,.38) !important;
+}
+.dialogue-panel::before,
+.dialogue-panel::after,
+.dialogue-body::before,
+.dialogue-body::after { display: none !important; }
+.dialogue-body { min-height: 0 !important; padding: .95rem 1.05rem .9rem !important; }
+.dialogue-speaker { margin: 0 0 .5rem !important; padding: 0 0 .42rem !important; border-bottom: 1px solid rgba(82,220,203,.26); }
+.speaker-name { color: #ffc857 !important; font-size: .82rem !important; }
+.dialogue-body > p { margin: 0 !important; color: #efe7d1 !important; font-size: .88rem !important; line-height: 1.55 !important; text-align: left !important; }
+.dialogue-choices { display: grid !important; gap: .42rem !important; margin-top: .75rem !important; }
+.dialogue-choices[hidden] { display: none !important; }
+.dialogue-choice {
+  width: 100% !important;
+  min-height: 2.4rem !important;
+  padding: .55rem .75rem !important;
+  border: 1px solid rgba(255,200,87,.3) !important;
+  border-radius: .5rem !important;
+  background: rgba(14,28,50,.78) !important;
+  color: #f2ead7 !important;
+  text-align: left !important;
+  box-shadow: none !important;
+  font-size: .8rem !important;
+}
+.dialogue-choice:hover,
+.dialogue-choice:focus-visible,
+.dialogue-choice.selected { border-color: rgba(255,200,87,.75) !important; background: rgba(36,48,68,.86) !important; }
+.dialogue-next {
+  margin: .75rem 0 0 auto !important;
+  min-width: 6.5rem !important;
+  min-height: 2.25rem !important;
+  border-radius: .5rem !important;
+}
+
+@media (max-width: 760px) {
+  .system-log { width: min(25rem, 78vw); left: .45rem; bottom: .55rem; }
+  .system-log-messages { max-height: 5.5rem; }
+  .system-log-entry { font-size: .62rem; min-height: 1.05rem; }
+  .system-log-tabs button { font-size: .55rem; padding-inline: .28rem; }
+  .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout { grid-template-columns: minmax(8rem, 30%) minmax(0,1fr) !important; }
+  .facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+    grid-template-columns: repeat(5, minmax(0,1fr)) !important;
+    grid-template-rows: repeat(3, minmax(4.6rem, auto)) !important;
+    gap: .28rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item { min-height: 4.6rem !important; padding: .2rem !important; }
+  .facility-overlay[data-facility-tab="bag"] .inventory-item-copy strong { font-size: .55rem !important; }
+  .inventory-toolbar { gap: .35rem; align-items: flex-start; }
+  .inventory-money { padding: .32rem .42rem; }
+  .guild-detail-grid { grid-template-columns: 1fr; }
+  .general-store-grid { grid-template-columns: 1fr !important; }
+}

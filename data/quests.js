@@ -18,7 +18,8 @@
       "count": 5
     },
     "reward": {
-      "skill_envelope_star": 1
+      "skill_envelope_star": 1,
+      "coins": 160
     }
   },
   {
@@ -34,7 +35,8 @@
       "count": 1
     },
     "reward": {
-      "skill_envelope_star": 2
+      "skill_envelope_star": 2,
+      "coins": 560
     }
   },
   {
@@ -50,7 +52,8 @@
       "count": 5
     },
     "reward": {
-      "skill_envelope_star": 3
+      "skill_envelope_star": 3,
+      "coins": 1040
     }
   },
   {
@@ -66,7 +69,8 @@
       "count": 5
     },
     "reward": {
-      "skill_envelope_star": 5
+      "skill_envelope_star": 5,
+      "coins": 2000
     }
   },
   {
@@ -82,7 +86,8 @@
       "count": 5
     },
     "reward": {
-      "skill_envelope_star": 7
+      "skill_envelope_star": 7,
+      "coins": 3000
     }
   }
 ].map((entry) => Object.freeze({ ...entry, objective: Object.freeze({ ...(entry.objective || {}) }), reward: Object.freeze({ ...(entry.reward || {}) }) })));
