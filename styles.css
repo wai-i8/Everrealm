@@ -744,6 +744,54 @@ h1 span:last-child { color: transparent; -webkit-text-stroke: 1.5px var(--cream)
 .english-title { margin: .8rem 0 0; color: var(--gold); font: 800 .62rem/1 ui-monospace, monospace; letter-spacing: .52em; }
 .title-copy { margin: 1rem 0 1.3rem; color: #d0ccbf; font-size: .82rem; letter-spacing: .08em; }
 .title-actions, .modal-actions { display: flex; gap: .65rem; justify-content: center; }
+.account-status {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin-top: 1.15rem;
+  color: var(--muted);
+  font-size: .68rem;
+}
+.account-status[data-auth-state="signed-in"] { color: var(--teal); }
+.account-status[data-auth-state="error"] { color: var(--red); }
+.account-link-button {
+  border: 0;
+  padding: .25rem .15rem;
+  color: var(--gold);
+  background: transparent;
+  font-size: .68rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+.account-link-button:hover,
+.account-link-button:focus-visible { color: var(--cream); }
+.auth-panel { z-index: 25; }
+.auth-window { text-align: left; }
+.auth-window h2,
+.auth-window > .modal-kicker,
+.auth-window > .auth-message,
+.auth-window > p:not(.modal-kicker) { text-align: center; }
+.auth-form { display: grid; gap: .8rem; }
+.auth-form label { display: grid; gap: .32rem; color: var(--muted); font-size: .72rem; }
+.auth-form input {
+  width: 100%;
+  border: 1px solid rgba(245,233,202,.28);
+  border-radius: .35rem;
+  padding: .62rem .7rem;
+  color: var(--cream);
+  background: rgba(5,10,21,.72);
+  font-size: .82rem;
+}
+.auth-form input:focus { border-color: var(--teal); outline: 2px solid rgba(82,220,203,.25); }
+.auth-actions { margin-top: .2rem; }
+.auth-actions .primary-button,
+.auth-actions .secondary-button { min-width: 0; flex: 1; }
+.auth-message { min-height: 1.2em; color: var(--muted); font-size: .7rem; line-height: 1.45; }
+.auth-message[data-kind="error"] { color: var(--red); }
+.auth-message[data-kind="good"] { color: var(--green); }
+.legacy-save-window { max-width: 38rem; }
+.system-account-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; color: var(--muted); font-size: .64rem; }
 .primary-button, .secondary-button {
   min-width: 11.5rem; border: 1px solid var(--cream); padding: .72rem .85rem; display: flex; align-items: center; justify-content: center; gap: .7rem;
   cursor: pointer; box-shadow: 3px 3px 0 rgba(0,0,0,.55); transition: transform .14s ease, box-shadow .14s ease;

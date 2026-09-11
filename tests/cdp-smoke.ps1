@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -178,6 +178,18 @@ try {
   switch ($Scenario) {
     'title' {
       if ($before.mode -ne 'title') { throw "Expected title mode, got $($before.mode)." }
+    }
+    'auth-ui' {
+      Start-Sleep -Milliseconds 250
+      Invoke-GameExpression -Expression "document.getElementById('accountButton').click(); true" | Out-Null
+      $loginUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("authPanel").hidden,title:document.getElementById("authTitle").textContent,hasEmail:!!document.getElementById("authEmail"),hasPassword:!!document.getElementById("authPassword"),hasConfirm:!!document.getElementById("authConfirmPassword"),confirmHidden:document.getElementById("authConfirmRow").hidden})') | ConvertFrom-Json
+      if ($loginUi.hidden -or -not $loginUi.hasEmail -or -not $loginUi.hasPassword -or -not $loginUi.hasConfirm -or -not $loginUi.confirmHidden) { throw 'Login UI did not open with Email and Password fields.' }
+      Invoke-GameExpression -Expression "document.getElementById('authSwitchButton').click(); true" | Out-Null
+      $registerUi = (Invoke-GameExpression -Expression 'JSON.stringify({title:document.getElementById("authTitle").textContent,confirmHidden:document.getElementById("authConfirmRow").hidden,confirmRequired:document.getElementById("authConfirmPassword").required})') | ConvertFrom-Json
+      if ($registerUi.confirmHidden -or -not $registerUi.confirmRequired) { throw 'Create Account UI did not reveal Confirm Password.' }
+      Invoke-GameExpression -Expression "document.getElementById('authCloseButton').click(); true" | Out-Null
+      $closedUi = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("authPanel").hidden,mode:window.__RPG_DEBUG__.snapshot().mode})') | ConvertFrom-Json
+      if (-not $closedUi.hidden -or $closedUi.mode -ne 'title') { throw 'Auth modal did not close cleanly back to the title screen.' }
     }
     'movement' {
       Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.newGame(); true' | Out-Null
@@ -887,15 +899,18 @@ try {
     'resume' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setPlayer({level:7,xp:31,coins:77}); window.__RPG_DEBUG__.save(); true" | Out-Null
       Invoke-Cdp -Method 'Page.reload' | Out-Null
-      Start-Sleep -Milliseconds 180
       $resumeReady = $false
       for ($attempt = 0; $attempt -lt 50 -and -not $resumeReady; $attempt += 1) {
         Start-Sleep -Milliseconds 100
         $resumeReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && window.__RPG_DEBUG__)')
       }
       if (-not $resumeReady) { throw 'Resume reload did not restore the RPG debug hooks.' }
-      $resumeSnapshot = Get-GameSnapshot
-      if ($resumeSnapshot.mode -ne 'playing' -or $resumeSnapshot.level -ne 7 -or $resumeSnapshot.coins -ne 77) { throw "Valid save did not auto-resume (mode=$($resumeSnapshot.mode), level=$($resumeSnapshot.level), coins=$($resumeSnapshot.coins))." }
+      $resumeSnapshot = $null
+      for ($attempt = 0; $attempt -lt 50 -and (-not $resumeSnapshot -or $resumeSnapshot.mode -ne 'playing'); $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $resumeSnapshot = Get-GameSnapshot
+      }
+      if (-not $resumeSnapshot -or $resumeSnapshot.mode -ne 'playing' -or $resumeSnapshot.level -ne 7 -or $resumeSnapshot.coins -ne 77) { throw "Valid save did not auto-resume (mode=$($resumeSnapshot.mode), level=$($resumeSnapshot.level), coins=$($resumeSnapshot.coins))." }
     }
     'battle' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('field'); window.__RPG_DEBUG__.startBattle('slime-1'); true" | Out-Null

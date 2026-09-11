@@ -21,4 +21,10 @@ Existing stable equipment, monster, skill and quest IDs are not renamed merely f
 
 ## Save/Firebase boundary
 
-Fixed Game Data should remain version-controlled with the client/server build. A future Firebase player record should save only player-owned state and stable references such as equipment IDs, item IDs, skill IDs and quest progress. Firestore/Realtime Database must not become a second copy of these fixed catalogs.
+Fixed Game Data remains version-controlled with the build. Firebase Auth supplies the account identity and Firestore stores only the existing player-owned version-1 save payload at `players/{uid}`; it does not copy the fixed catalogs. The client removes persistence metadata before reading a cloud payload and the cloud writer adds only the server-managed `updatedAt` field.
+
+`firebase-client.js` is the small browser SDK boundary, `cloud-save.js` owns the Firestore document contract, and `save-persistence.js` owns local compatibility, migration and write ordering. `game.js` owns gameplay serialization/application but does not define a second cloud schema.
+
+The local keys are `everrealm-save-v1`, the readable legacy key `lanternbound-save-v1`, an ownership marker `everrealm-save-owner-v1`, and per-account caches under `everrealm-save-cache-v1:{uid}`. An unauthenticated save stays local. On first sign-in, an existing unclaimed local save requires an explicit claim choice; an existing cloud document is authoritative and is never overwritten by stale local state. Account promotion archives the previous primary before writing the new scoped save and writes the owner marker last, with rollback on failure.
+
+Firestore rules allow a user to read or write only their own `players/{uid}` document. Realtime Database and Hosting are intentionally not part of this phase; transient presence/room state remains a future system boundary.

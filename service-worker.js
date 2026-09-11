@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260911-15";
+const CACHE_VERSION = "everrealm-pwa-v2-20260911-16";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -60,6 +60,10 @@ const PRECACHE_URLS = [
   `${APP_BASE}audio-core.js`,
   `${APP_BASE}main-town-bgm-loop.js`,
   `${APP_BASE}save-system.js`,
+  `${APP_BASE}firebase-config.js`,
+  `${APP_BASE}firebase-client.js`,
+  `${APP_BASE}cloud-save.js`,
+  `${APP_BASE}save-persistence.js`,
   `${APP_BASE}fighter-effects.js`,
   `${APP_BASE}locomotion.js`,
   `${APP_BASE}character-art.js`,

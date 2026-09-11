@@ -18,6 +18,21 @@ Historical `activeContracts` and `contractRotation` fields are accepted only by 
 
 ## Firebase boundary
 
-When Firebase is added, Firebase Auth `uid` should become the player/account identity. Long-lived player progression belongs in Firestore; transient room/presence/X/Y data belongs in Realtime Database. Fixed catalogs under `data/` remain version-controlled Game Data and are referenced only by stable IDs.
+Firebase Auth email/password accounts use `uid` as the player identity. The current Phase 3 Firestore document is deliberately the same sanitized version-1 payload as the local save, stored at `players/{uid}`:
 
-A future Firestore split can use documents/subcollections such as `players/{uid}/profile`, progression, inventory/equipment, skills and quests. Server-authoritative rewards should validate writes before changing coins, XP, inventory or rare equipment.
+```text
+players/{uid}
+  version: 1
+  player: { name, x, y, hp, level, xp, coins, potions, weaponLevel, upgrades }
+  pendingLevelUps
+  openedChests[]
+  playTime
+  expansion: { classId, ownedEquipment[], equipped, inventory, skills,
+               guildCommission, guildMarks, guildRenown, monsterKills,
+               dungeonClears, defeatedDungeonBosses[], checkpoint, currentMapId }
+  updatedAt: server timestamp (cloud metadata; never applied as gameplay state)
+```
+
+The browser never accepts a cloud document for another `uid`; Firestore rules enforce the same ownership check server-side. Existing cloud state is authoritative on account load. A local save without an owner marker is offered for explicit migration, and declined migration remains local. Authenticated saves are written to the matching scoped cache and queued for Firestore; a failed cloud write remains retryable without replacing another account's primary local save.
+
+Fixed catalogs under `data/` remain version-controlled Game Data and are referenced only by stable IDs. Realtime Database, presence, rooms and server-authoritative reward validation are future work, not part of this client-only phase.

@@ -48,7 +48,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["", "styles.css?v=20260910-06"],
+          ["", "styles.css?v=20260911-01"],
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
           ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
@@ -222,6 +222,44 @@
             <button id="newGameButton" class="primary-button" type="button"><span>開始夜巡</span></button>
             <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span></button>
           </div>
+          <div id="titleAccountStatus" class="account-status" data-auth-state="signed-out" aria-live="polite">
+            <span id="titleAccountText">本機旅程 · 未登入</span>
+            <button id="accountButton" class="account-link-button" type="button">登入／註冊</button>
+            <button id="titleLogoutButton" class="account-link-button" type="button" hidden>登出</button>
+          </div>
+        </section>
+
+        <section id="authPanel" class="overlay modal-overlay auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden>
+          <div class="ui-modal-window auth-window">
+            <button id="authCloseButton" class="ui-close-button modal-close-button" type="button" aria-label="關閉帳戶視窗" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
+            <p id="authKicker" class="modal-kicker">ACCOUNT</p>
+            <h2 id="authTitle">登入旅程</h2>
+            <p id="authDescription">使用 Firebase 帳戶保存你的永恆國度角色。</p>
+            <p id="authMessage" class="auth-message" aria-live="polite"></p>
+            <form id="authForm" class="auth-form">
+              <label for="authEmail">Email<input id="authEmail" name="email" type="email" autocomplete="username" required /></label>
+              <label for="authPassword">密碼<input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="6" required /></label>
+              <label id="authConfirmRow" for="authConfirmPassword" hidden>確認密碼<input id="authConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" /></label>
+              <div class="modal-actions auth-actions">
+                <button id="authSubmitButton" class="primary-button" type="submit"><span>登入</span></button>
+                <button id="authSwitchButton" class="secondary-button" type="button"><span>建立帳戶</span></button>
+              </div>
+              <button id="authForgotButton" class="account-link-button" type="button">忘記密碼？寄出重設電郵</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="legacySavePanel" class="overlay modal-overlay auth-panel" role="dialog" aria-modal="true" aria-labelledby="legacySaveTitle" hidden>
+          <div class="ui-modal-window auth-window legacy-save-window">
+            <p class="modal-kicker">LOCAL CHARACTER FOUND</p>
+            <h2 id="legacySaveTitle">發現本機角色</h2>
+            <p id="legacySaveDescription">這個裝置有一份尚未連結 Firebase 的本機存檔。要將它連結到目前帳戶嗎？</p>
+            <p id="legacySaveMessage" class="auth-message" aria-live="polite"></p>
+            <div class="modal-actions auth-actions">
+              <button id="legacyUseButton" class="primary-button" type="button"><span>使用現有存檔</span></button>
+              <button id="legacyStartButton" class="secondary-button" type="button"><span>唔使用</span></button>
+            </div>
+          </div>
         </section>
 
         <section id="classSelectPanel" class="overlay modal-overlay class-select-panel" aria-labelledby="classSelectTitle" hidden>
@@ -342,6 +380,10 @@
             <span>音樂</span>
             <span class="system-toggle-track" aria-hidden="true"><i></i></span>
           </button>
+          <div class="system-account-row">
+            <span id="systemAccountText">未登入 · 本機保存</span>
+            <button id="systemLogoutButton" class="account-link-button" type="button" hidden>登出</button>
+          </div>
         </section>
 
         <section id="deathPanel" class="overlay modal-overlay death-panel" role="dialog" aria-modal="true" aria-labelledby="deathTitle" hidden>
@@ -452,10 +494,14 @@
           "audio-core.js?v=20260910-04",
           "main-town-bgm-loop.js?v=20260910-04",
           "save-system.js",
+          "firebase-config.js",
+          "firebase-client.js",
+          "cloud-save.js",
+          "save-persistence.js",
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260910-14",
+          "game.js?v=20260911-01",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);

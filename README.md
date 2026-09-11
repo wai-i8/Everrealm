@@ -26,6 +26,17 @@ npm start
 npm test
 ```
 
+Firebase Phase 3 uses public Web App configuration only. Firebase Auth handles
+email/password accounts and Firestore stores each player's sanitized save at
+`players/{uid}`; `firestore.rules` restricts that document to its authenticated
+owner. This phase intentionally does not configure or deploy Hosting, Realtime
+Database, Cloud Functions or Admin credentials. After reviewing the rules, a
+maintainer may deploy only the Firestore configuration with:
+
+```powershell
+firebase deploy --only firestore:rules,firestore:indexes --project everrealm-f5a7d
+```
+
 ## Project structure
 
 - `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。
@@ -37,6 +48,7 @@ npm test
 - `docs/`：大型獨立系統嘅詳細規格。
 - `docs/DATA_ARCHITECTURE.md`：固定 Game Data ownership、stable ID／legacy migration 同 Firebase boundary。
 - `docs/PLAYER_DATA_SCHEMA.md`：玩家永久 state／save boundary，同日後 Firestore／RTDB 分工。
+- `firebase-config.js`、`firebase-client.js`、`cloud-save.js`、`save-persistence.js`：Firebase Auth、`players/{uid}` Firestore 存檔，以及本機 legacy／帳戶 ownership-safe migration。
 - `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `data/skills/fighter.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
 - `maps/`：每張地圖唯一 owning JS definition；`maps/interiors/` 放主城室內地圖。

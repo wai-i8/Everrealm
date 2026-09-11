@@ -44,6 +44,9 @@
   const Art = window.LanternArt;
   const Locomotion = window.LanternLocomotion;
   const SaveSystem = window.EverrealmSaveSystem;
+  const Firebase = window.EverrealmFirebase;
+  const CloudSave = window.EverrealmCloudSave?.create?.({ firebase: Firebase });
+  const SavePersistence = window.EverrealmSavePersistence;
   const maps = MapRegistry.createMapRegistry();
   if (!MainTownNavigation?.ready) {
     console.error("Main Town navigation failed closed", MainTownNavigation?.failure || "generated runtime data unavailable");
@@ -99,6 +102,30 @@
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
   const continueButton = document.getElementById("continueButton");
+  const titleAccountStatus = document.getElementById("titleAccountStatus");
+  const titleAccountText = document.getElementById("titleAccountText");
+  const accountButton = document.getElementById("accountButton");
+  const titleLogoutButton = document.getElementById("titleLogoutButton");
+  const authPanel = document.getElementById("authPanel");
+  const authForm = document.getElementById("authForm");
+  const authKicker = document.getElementById("authKicker");
+  const authTitle = document.getElementById("authTitle");
+  const authDescription = document.getElementById("authDescription");
+  const authMessage = document.getElementById("authMessage");
+  const authEmail = document.getElementById("authEmail");
+  const authPassword = document.getElementById("authPassword");
+  const authConfirmRow = document.getElementById("authConfirmRow");
+  const authConfirmPassword = document.getElementById("authConfirmPassword");
+  const authSubmitButton = document.getElementById("authSubmitButton");
+  const authSwitchButton = document.getElementById("authSwitchButton");
+  const authForgotButton = document.getElementById("authForgotButton");
+  const authCloseButton = document.getElementById("authCloseButton");
+  const legacySavePanel = document.getElementById("legacySavePanel");
+  const legacySaveMessage = document.getElementById("legacySaveMessage");
+  const legacyUseButton = document.getElementById("legacyUseButton");
+  const legacyStartButton = document.getElementById("legacyStartButton");
+  const systemAccountText = document.getElementById("systemAccountText");
+  const systemLogoutButton = document.getElementById("systemLogoutButton");
   const interactionPrompt = document.getElementById("interactionPrompt");
   const interactionText = document.getElementById("interactionText");
   const toastElement = document.getElementById("gameToast");
@@ -191,6 +218,12 @@
   let playTime = 0;
   let persistenceFingerprint = "";
   let persistence = null;
+  let savePersistence = null;
+  let authUser = null;
+  let authMode = "login";
+  let authSyncToken = 0;
+  let authStateResolved = !Firebase?.onAuthStateChanged;
+  let legacyClaimUid = null;
   let openedChests = new Set();
   let ownedEquipment = ["novice_blade", "traveller_coat"];
   let equipped = { head: null, weapon: "novice_blade", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
@@ -685,7 +718,8 @@
     try { return localStorage.getItem(key) || (legacyKey ? localStorage.getItem(legacyKey) : null) || fallback; } catch (_) { return fallback; }
   }
 
-  function readSaveRaw() {
+  function readSaveRaw(uid = null) {
+    if (savePersistence) return savePersistence.readLocal({ uid })?.data || null;
     for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
       try {
         const raw = JSON.parse(localStorage.getItem(key));
@@ -695,8 +729,9 @@
     return null;
   }
 
-  function hasSave() {
-    return Boolean(Core.sanitizeSave(readSaveRaw()));
+  function hasSave(uid = null) {
+    if (savePersistence) return savePersistence.hasLocalSave(uid);
+    return Boolean(Core.sanitizeSave(readSaveRaw(uid)));
   }
 
   function resetExpansionProgress(classId = playerClassId) {
@@ -763,6 +798,42 @@
       : checkpointCandidate;
   }
 
+  function buildSaveData() {
+    return {
+      version: 1,
+      player: {
+        name: playerDisplayName(),
+        x: player.x,
+        y: player.y,
+        hp: player.hp,
+        level: player.level,
+        xp: player.xp,
+        coins: player.coins,
+        potions: player.potions,
+        weaponLevel: player.weaponLevel,
+        upgrades: { ...player.upgrades },
+      },
+      pendingLevelUps,
+      openedChests: [...openedChests],
+      playTime,
+      expansion: {
+        currentMapId,
+        classId: playerClassId,
+        ownedEquipment: [...ownedEquipment],
+        equipped: { ...equipped },
+        guildCommission: Guild.normalizeState(guildCommissionState),
+        guildMarks,
+        guildRenown,
+        inventory: { ...inventory },
+        monsterKills: { ...monsterKills },
+        dungeonClears,
+        defeatedDungeonBosses: [...defeatedDungeonBosses],
+        skills: Skills.normalizeSkillState(skillState),
+        checkpoint: { ...checkpoint },
+      },
+    };
+  }
+
   function grantDeckCapacityMilestone(milestoneId, { silent = false } = {}) {
     const result = Skills.awardDeckCapacityMilestone(skillState, milestoneId);
     if (!result.ok) return result;
@@ -813,7 +884,7 @@
   }
 
   function requestNewGame() {
-    if (!testingMode && hasSave() && !window.confirm("開始新旅程會覆蓋而家嘅存檔。確定重新出發？")) return;
+    if (!testingMode && hasSave(authUser?.uid || null) && !window.confirm("開始新旅程會覆蓋而家嘅存檔。確定重新出發？")) return;
     classSelectPanel.hidden = false;
     drawClassSelectionPreviews();
     classSelectPanel.querySelector("[data-class-choice]")?.focus({ preventScroll: true });
@@ -824,12 +895,10 @@
     newGame(false, classId);
   }
 
-  function loadGame() {
-    let save = null;
-    const rawSave = readSaveRaw();
-    save = Core.sanitizeSave(rawSave);
+  function applySaveData(rawSave, options = {}) {
+    const save = Core.sanitizeSave(rawSave);
     if (!save) {
-      showToast("搵唔到可用嘅存檔", "danger");
+      if (!options.silent) showToast("搵唔到可用嘅存檔", "danger");
       return false;
     }
     closeBattleHud();
@@ -868,50 +937,29 @@
     persistence?.markLoaded(getPersistenceFingerprint());
     sound.start();
     showLocation(zoneForPosition(player), true);
-    showToast(`歡迎返嚟，${playerDisplayName()}。`, "good");
+    if (!options.silent) showToast(`歡迎返嚟，${playerDisplayName()}。`, "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
     return true;
   }
 
+  function loadGame(rawSave = null, options = {}) {
+    if (rawSave && typeof rawSave.preventDefault === "function") rawSave = null;
+    return applySaveData(rawSave || readSaveRaw(authUser?.uid || null), options);
+  }
+
   function saveGame(showNotice = true, force = false) {
     if (testingMode && !force) return true;
     if (!force && persistence && !persistence.needsSave()) return true;
-    const payload = {
-      version: 1,
-      player: {
-        name: playerDisplayName(),
-        x: player.x,
-        y: player.y,
-        hp: player.hp,
-        level: player.level,
-        xp: player.xp,
-        coins: player.coins,
-        potions: player.potions,
-        weaponLevel: player.weaponLevel,
-        upgrades: { ...player.upgrades },
-      },
-      pendingLevelUps,
-      openedChests: [...openedChests],
-      playTime,
-      expansion: {
-        currentMapId,
-        classId: playerClassId,
-        ownedEquipment: [...ownedEquipment],
-        equipped: { ...equipped },
-        guildCommission: Guild.normalizeState(guildCommissionState),
-        guildMarks,
-        guildRenown,
-        inventory: { ...inventory },
-        monsterKills: { ...monsterKills },
-        dungeonClears,
-        defeatedDungeonBosses: [...defeatedDungeonBosses],
-        skills: Skills.normalizeSkillState(skillState),
-        checkpoint: { ...checkpoint },
-      },
-    };
+    const payload = buildSaveData();
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+      const result = savePersistence
+        ? savePersistence.save(payload, { uid: authUser?.uid || null })
+        : (() => {
+          localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+          return { ok: true };
+        })();
+      if (!result?.ok) throw result?.localResult?.error || new Error("local save failed");
       persistenceFingerprint = getPersistenceFingerprint();
       persistence?.markSaved(persistenceFingerprint);
       continueButton.hidden = false;
@@ -927,8 +975,197 @@
     }
   }
 
+  function authErrorMessage(error) {
+    const code = String(error?.code || "");
+    const messages = {
+      "auth/invalid-credential": "Email 或密碼不正確。",
+      "auth/invalid-email": "請輸入有效嘅 Email。",
+      "auth/email-already-in-use": "呢個 Email 已經有帳戶。",
+      "auth/weak-password": "密碼至少需要 6 個字元。",
+      "auth/too-many-requests": "嘗試次數太多，請稍後再試。",
+      "auth/network-request-failed": "網絡連線失敗；本機存檔仍然可用。",
+    };
+    return messages[code] || error?.message || "帳戶操作未能完成。";
+  }
+
+  function setAuthMessage(message = "", kind = "") {
+    if (!authMessage) return;
+    authMessage.textContent = message;
+    authMessage.dataset.kind = kind;
+  }
+
+  function setAuthMode(modeName = "login") {
+    authMode = modeName === "register" ? "register" : "login";
+    const registering = authMode === "register";
+    authKicker.textContent = registering ? "CREATE ACCOUNT" : "ACCOUNT";
+    authTitle.textContent = registering ? "建立旅程帳戶" : "登入旅程";
+    authDescription.textContent = registering
+      ? "建立帳戶後，你可以跨裝置保存永恆國度角色。"
+      : "使用 Firebase 帳戶保存你的永恆國度角色。";
+    authConfirmRow.hidden = !registering;
+    authConfirmPassword.required = registering;
+    authSubmitButton.querySelector("span").textContent = registering ? "建立帳戶" : "登入";
+    authSwitchButton.querySelector("span").textContent = registering ? "返回登入" : "建立帳戶";
+    authPassword.autocomplete = registering ? "new-password" : "current-password";
+    setAuthMessage("");
+  }
+
+  function openAuthPanel(modeName = "login") {
+    if (authUser) return;
+    setAuthMode(modeName);
+    authPanel.hidden = false;
+    authEmail.focus({ preventScroll: true });
+  }
+
+  function closeAuthPanel() {
+    authPanel.hidden = true;
+    setAuthMessage("");
+  }
+
+  function syncAccountStatus(status = savePersistence?.getCloudStatus?.()) {
+    const email = authUser?.email || "";
+    const signedIn = Boolean(authUser);
+    const statusLabel = signedIn
+      ? `${email} · ${status === "cloud-error" ? "雲端同步有問題" : status === "syncing" ? "同步中" : "已同步"}`
+      : "本機旅程 · 未登入";
+    titleAccountStatus.dataset.authState = signedIn ? (status === "cloud-error" ? "error" : "signed-in") : "signed-out";
+    titleAccountText.textContent = statusLabel;
+    accountButton.hidden = signedIn;
+    titleLogoutButton.hidden = !signedIn;
+    systemAccountText.textContent = signedIn ? statusLabel : "本機存檔（未登入）";
+    systemLogoutButton.hidden = !signedIn;
+    const uid = authUser?.uid || null;
+    continueButton.hidden = !hasSave(uid);
+  }
+
+  function returnToTitleWithoutSave() {
+    closeBattleHud();
+    hideAllOverlays();
+    mode = "title";
+    stage.dataset.gameState = mode;
+    titleScreen.hidden = false;
+    continueButton.hidden = !hasSave(authUser?.uid || null);
+    updateHud(true);
+  }
+
+  async function syncAuthenticatedUser(user) {
+    const token = ++authSyncToken;
+    authUser = user || null;
+    legacyClaimUid = null;
+    syncAccountStatus(user ? "syncing" : undefined);
+    if (!user) {
+      savePersistence?.deactivateUser();
+      closeAuthPanel();
+      syncAccountStatus();
+      if (!autoplay && mode === "title" && hasSave()) loadGame();
+      return;
+    }
+    if (mode !== "title") returnToTitleWithoutSave();
+    const result = await savePersistence?.resolveUser(user.uid);
+    if (token !== authSyncToken || authUser?.uid !== user.uid) return;
+    syncAccountStatus(savePersistence?.getCloudStatus());
+    if (result?.status === "legacy-claim") {
+      legacyClaimUid = user.uid;
+      legacySaveMessage.textContent = "你可以只喺呢個帳戶使用，或者將本機角色安全連結到雲端。";
+      legacySavePanel.hidden = false;
+      legacyUseButton.focus({ preventScroll: true });
+    } else if (result?.status === "error") {
+      setAuthMessage(`已登入，但未能同步雲端存檔：${authErrorMessage(result.error)}`, "error");
+      if (!hasSave(user.uid)) showToast("雲端暫時未能連線；可以稍後再試。", "danger");
+    }
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    if (authMode === "register" && password !== authConfirmPassword.value) {
+      setAuthMessage("兩次輸入嘅密碼唔一致。", "error");
+      return;
+    }
+    authSubmitButton.disabled = true;
+    setAuthMessage("處理中…");
+    try {
+      if (authMode === "register") await Firebase.createAccount(email, password);
+      else await Firebase.signIn(email, password);
+      closeAuthPanel();
+    } catch (error) {
+      setAuthMessage(authErrorMessage(error), "error");
+    } finally {
+      authSubmitButton.disabled = false;
+    }
+  }
+
+  async function sendPasswordReset() {
+    const email = authEmail.value.trim();
+    if (!email) {
+      setAuthMessage("先輸入 Email，再寄出重設電郵。", "error");
+      authEmail.focus({ preventScroll: true });
+      return;
+    }
+    authForgotButton.disabled = true;
+    try {
+      await Firebase.sendPasswordReset(email);
+      setAuthMessage("重設密碼電郵已寄出，請檢查收件匣。", "good");
+    } catch (error) {
+      setAuthMessage(authErrorMessage(error), "error");
+    } finally {
+      authForgotButton.disabled = false;
+    }
+  }
+
+  async function signOutAccount() {
+    if (!Firebase || !authUser) return;
+    titleLogoutButton.disabled = true;
+    systemLogoutButton.disabled = true;
+    try {
+      await savePersistence?.flushCloud();
+      await Firebase.signOut();
+      returnToTitleWithoutSave();
+    } catch (error) {
+      showToast(`未能登出：${authErrorMessage(error)}`, "danger");
+    } finally {
+      titleLogoutButton.disabled = false;
+      systemLogoutButton.disabled = false;
+    }
+  }
+
+  async function useLegacySave() {
+    if (!legacyClaimUid || !savePersistence) return;
+    legacyUseButton.disabled = true;
+    legacyStartButton.disabled = true;
+    legacySaveMessage.textContent = "正在安全連結本機存檔…";
+    try {
+      const result = await savePersistence.claimLegacySave(legacyClaimUid);
+      legacySavePanel.hidden = true;
+      syncAccountStatus(savePersistence.getCloudStatus());
+      if (result.status === "local-migrated") showToast("本機角色已連結到雲端。", "good");
+    } catch (error) {
+      legacySaveMessage.textContent = `未能連結：${authErrorMessage(error)}`;
+    } finally {
+      legacyUseButton.disabled = false;
+      legacyStartButton.disabled = false;
+    }
+  }
+
+  function declineLegacySave() {
+    savePersistence?.declineLegacySave();
+    legacyClaimUid = null;
+    legacySavePanel.hidden = true;
+    syncAccountStatus(savePersistence?.getCloudStatus());
+  }
+
+  savePersistence = SavePersistence?.create({
+    cloud: CloudSave,
+    sanitize: (value) => Core.sanitizeSave(value),
+    applySaveData,
+    onStatus: (status) => syncAccountStatus(status),
+  }) || null;
+
   function hideAllOverlays() {
     setSystemSettingsOpen(false);
+    authPanel.hidden = true;
+    legacySavePanel.hidden = true;
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
     deathPanel.hidden = true;
@@ -3781,13 +4018,7 @@
   function returnToTitle() {
     if (!["playing", "facility", "battle"].includes(mode)) return;
     if (mode !== "battle") saveGame(false, true);
-    closeBattleHud();
-    hideAllOverlays();
-    mode = "title";
-    stage.dataset.gameState = mode;
-    titleScreen.hidden = false;
-    continueButton.hidden = !hasSave();
-    updateHud(true);
+    returnToTitleWithoutSave();
   }
 
   function openDeckFromSidebar() {
@@ -9477,6 +9708,18 @@
     advanceDialogue();
   });
   continueButton.addEventListener("click", loadGame);
+  accountButton?.addEventListener("click", () => openAuthPanel("login"));
+  titleLogoutButton?.addEventListener("click", signOutAccount);
+  systemLogoutButton?.addEventListener("click", signOutAccount);
+  authForm?.addEventListener("submit", handleAuthSubmit);
+  authSwitchButton?.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
+  authForgotButton?.addEventListener("click", sendPasswordReset);
+  authCloseButton?.addEventListener("click", closeAuthPanel);
+  authPanel?.addEventListener("click", (event) => {
+    if (event.target === authPanel) closeAuthPanel();
+  });
+  legacyUseButton?.addEventListener("click", useLegacySave);
+  legacyStartButton?.addEventListener("click", declineLegacySave);
   const openStatusFromHud = () => openFacility("status");
   statusButton.addEventListener("click", openStatusFromHud);
   playerHud.addEventListener("click", openStatusFromHud);
@@ -9597,6 +9840,7 @@
 
   const savedGameAvailable = hasSave();
   continueButton.hidden = !savedGameAvailable;
+  syncAccountStatus();
   syncSystemSoundControl();
   syncExploreZoomControls();
   syncHudCollapse();
@@ -9608,7 +9852,20 @@
   resize();
   updateHud(true);
   installDebugHooks();
-  if (savedGameAvailable && !autoplay) loadGame();
+  if (Firebase?.onAuthStateChanged) {
+    Firebase.onAuthStateChanged((user, error) => {
+      authStateResolved = true;
+      if (error) {
+        savePersistence?.deactivateUser();
+        syncAccountStatus();
+        if (!autoplay && mode === "title" && savedGameAvailable) loadGame();
+        return;
+      }
+      void syncAuthenticatedUser(user);
+    });
+  } else if (savedGameAvailable && !autoplay) {
+    loadGame();
+  }
   if (autoplay) {
     window.setTimeout(() => {
       newGame(true);
@@ -9622,4 +9879,3 @@
   }
   requestAnimationFrame(frame);
 })();
-
