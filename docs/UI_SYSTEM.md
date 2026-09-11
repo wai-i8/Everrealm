@@ -78,6 +78,10 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 `facility-window` 係現有 major-window base；`ui-window` class 係新 skin hook。
 兩者可以同時存在以維持既有 JS 行為，視覺不可再退回 flat Canvas rectangle。
 
+所有 `ui-window` major popup 與 shared modal 預設可拖動：desktop 用 pointer/mouse，mobile 用 touch；標題、文字及非互動空白位可以作 drag surface，button、link、input、select、textarea、技能 drag source 等 interactive control 不可劫持成 window drag。拖動位置要限制到 viewport 仍保留可操作部分。Overlay 只作輕微 dim，禁止 `backdrop-filter: blur(...)`，玩家仍應清楚睇到正常遊戲背景。
+
+探索左側六個主功能（狀態、物品、面板、技能、任務、系統）採 desktop-style multi-window contract：開啟 major window 後左側 launcher 保持可用；不同功能可以同時存在，同一功能再次開啟只 focus 現有 instance，唔建立 duplicate。新開或被點擊嘅 window 升到最高 z-layer；各 window 可獨立拖動。功能 window 自身嘅 full-stage positioning layer 必須 transparent 並讓 pointer 穿透到未被 window 覆蓋嘅遊戲／launcher 區域。系統設定亦係同一種可拖 major window，唔再依附喺 sidebar icon 旁邊。
+
 ## 4. Hierarchy and components
 
 ### Header
@@ -98,8 +102,7 @@ top-level page header。Info/X sizing 由 shared component 統一，唔按頁分
 
 ### Buttons and tabs
 
-- primary action 使用 gold bitmap-backed button，文字為 HTML，hover 只提高亮度／
-  少量上移，focus 使用明顯 teal/gold outline。
+- primary action 可以使用 gold bitmap-backed button，但文字必須保持高對比淺色／cream；禁止金色底配黑色或近黑文字。hover 只提高亮度／少量上移，focus 使用明顯 teal/gold outline。
 - secondary action 使用 dark inset button；danger action 使用低飽和紅。
 - tab 只喺同一窗口內有多個同級內容時使用；active tab 以 gold underline 和 inset
   glow 表達，唔靠顏色以外嘅符號。
@@ -213,7 +216,7 @@ Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及
 直向列表、slot number、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示
 已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。真正技能配置
 只喺主城東門戰技面板台管理。可出戰指令標示 `CMD`，被動技能標示 `PSV`，PSV
-永遠唔提供裝入動作。
+永遠唔提供裝入動作。 配置畫面嘅 drag-and-drop 若落到已佔用 slot，必須交換 source／target 兩格；只有落到空槽先係純移動，任何情況都唔可以因 drop 覆蓋而遺失原技能。
 
 ### Guild variant
 
@@ -221,7 +224,8 @@ Guild window 可以有非常克制嘅金色 guild accent、委託星級同 progr
 但仍然使用相同 base frame、字級、padding、button 和 scroll rules。正式頁面身份
 為「公會委託」；接受後卡片必須用內容驅動的緊湊 layout 完整容納 status、objective、
 recommendation、progress、reward 同 contextual action。卡片不可因 decorative frame
-或固定高度令操作被裁切，窄屏則自然堆疊。
+或固定高度令操作被裁切，窄屏則自然堆疊。Guild action 採深色 inset surface 配暖金細框／hover，
+唔使用大面積金色填滿；文字一律保持 cream／white 高對比。視窗高度由內容決定，唔為短內容保留大幅空白。放棄委託確認框同樣使用 compact content-driven layout。
 
 ### Skill variant
 
@@ -283,6 +287,9 @@ generic popup background。
 - close、cancel、primary action 永遠留喺 frame 內並可 keyboard focus；
 - modal 背景、標題、controls 保持既有 `aria-labelledby` / `aria-modal` contract；
 - focus ring 不可被 bitmap pseudo-element 蓋住；
+- game-stage 內一般 HUD、button、label、popup copy 預設禁止 browser text
+  selection／touch callout，避免拖動時出現藍色反白；真正文字輸入 control
+  (`input` / `textarea` / `contenteditable`) 例外並保留正常選取；
 - reduced-motion 使用者只保留必要狀態轉換，唔依賴動畫傳遞資訊。
 
 ## 9. Ownership and production

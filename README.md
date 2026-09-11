@@ -29,7 +29,8 @@ npm test
 ## Project structure
 
 - `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。
-- 怪物本體資料：`data/monsters.js`；怪物技能：`data/skills/monster.js`；戰場技能驅動 AI：`monster-ai.js`。
+- 玩家 progression：`data/classes.js` 擁有 Lv45 cap、Lv1–45 HP／Base ATK-DEF=0 及《幸福 Online／STRUGARDEN》升級 EXP 表；`rpg-core.js` 保留相同 runtime fallback／grant logic。
+- 怪物本體資料：`data/monsters.js`；怪物技能：`data/skills/monster.js`；戰場技能驅動 AI：`monster-ai.js`；同級攻防校準、encounter HP／EXP 規則見 `docs/MONSTER_SYSTEM.md`。
 - `assets/`：正式 runtime 美術資產，包括角色、NPC、怪物、動畫、terrain、battlefield、場景物件、UI、物品及裝備圖示。
 - `tests/`：自動 regression / gameplay tests。
 - `tools/`：資產清理、atlas 重排、透明 alpha audit 等開發工具。
@@ -51,11 +52,11 @@ npm test
 - 戰棋戰鬥、同步移動、戰鬥行走動畫狀態、碰撞、面向基準正交攻擊路線、Projectile、AP、技能高低差、AI、高低差戰鬥規則：`docs/BATTLE_SYSTEM.md`
 - 地圖、場景、入口、傳送、探索碰撞、Biome、遭遇及探索 → 戰場生成：`docs/MAP_SYSTEM.md`
 - 寵物／Familiar、捕獲、育成、同行及戰鬥／生產接口：`docs/PET_SYSTEM.md`
-- 怪物 canonical roster、棲地、等級／獎勵、戰鬥技能、遷移及 Codex：`docs/MONSTER_SYSTEM.md`
+- 怪物 canonical roster、同級攻防校準、1/2/3 隻 HP／EXP scaling、棲地、戰鬥技能、遷移及 Codex：`docs/MONSTER_SYSTEM.md`
 - Guild 委託目錄、討伐／送信流程、技能書信封與保存契約：`docs/GUILD_COMMISSION_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - Shared Everrealm bitmap-backed windows、popups、responsive layout 同 UI states：`docs/UI_SYSTEM.md`
-- 裝備 schema、canonical slots、ATK／DEF／Accuracy／Evasion／Weight／Move modifiers：`docs/EQUIPMENT_SYSTEM.md`
+- 裝備 schema、格鬥士 STRUGARDEN 衝攻／衝防轉換、canonical slots、ATK／DEF／Accuracy／Evasion／Weight／Move modifiers：`docs/EQUIPMENT_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`
 - 幸福 Online / STRUGARDEN 原版資料、來源證據及研究 provenance：`docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`

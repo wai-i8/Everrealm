@@ -133,7 +133,7 @@
     }
 
     function interactionAtWorldPoint(position) {
-      return isRegionAt("npc", position) ? "mountain_delivery_recipient" : null;
+      return isRegionAt("npc", position) ? "mountain-wish-pool" : null;
     }
 
     return Object.freeze({

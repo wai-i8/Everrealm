@@ -6,6 +6,19 @@
   "use strict";
 
   const TAU = Math.PI * 2;
+  const LEVEL_CAP = 45;
+  const LEVEL_EXP_REQUIREMENTS = Object.freeze({
+    1: 250, 2: 260, 3: 270, 4: 290, 5: 310,
+    6: 340, 7: 370, 8: 410, 9: 450, 10: 500,
+    11: 550, 12: 610, 13: 670, 14: 2000, 15: 2050,
+    16: 2100, 17: 2150, 18: 2200, 19: 4000, 20: 4050,
+    21: 4100, 22: 4150, 23: 4200, 24: 6000, 25: 6050,
+    26: 6100, 27: 6150, 28: 6200, 29: 8000, 30: 8050,
+    31: 8100, 32: 8150, 33: 8200, 34: 10000, 35: 12000,
+    36: 14500, 37: 17000, 38: 19000, 39: 20500, 40: 21500,
+    41: 22200, 42: 22900, 43: 23600, 44: 24300, 45: 25000,
+  });
+
   const EXPLORATION_MOVEMENT = Object.freeze({
     baseWorldUnitsPerSecond: 330,
     equipmentPointWorldUnitsPerSecond: 2.5,
@@ -63,19 +76,20 @@
   }
 
   function xpRequired(level) {
-    const safeLevel = Math.max(1, Math.floor(level));
-    return Math.floor(45 + safeLevel * 32 + Math.pow(safeLevel, 1.35) * 7);
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, LEVEL_CAP);
+    return LEVEL_EXP_REQUIREMENTS[safeLevel] || LEVEL_EXP_REQUIREMENTS[LEVEL_CAP];
   }
 
   function grantExperience(level, xp, amount) {
     let nextLevel = Math.max(1, Math.floor(level));
     let nextXp = Math.max(0, Number(xp) || 0) + Math.max(0, Number(amount) || 0);
     let levelsGained = 0;
-    while (nextXp >= xpRequired(nextLevel) && nextLevel < 40) {
+    while (nextXp >= xpRequired(nextLevel) && nextLevel < LEVEL_CAP) {
       nextXp -= xpRequired(nextLevel);
       nextLevel += 1;
       levelsGained += 1;
     }
+    if (nextLevel >= LEVEL_CAP) nextXp = 0;
     return { level: nextLevel, xp: Math.floor(nextXp), levelsGained };
   }
 
@@ -88,9 +102,9 @@
     const weaponLevel = clamp(Math.floor(player.weaponLevel || 1), 1, 4);
     return {
       maxHp: 88 + (level - 1) * 10 + vigor * 18,
-      // Level controls HP/progression; generic ATK comes from equipment and
-      // explicit upgrades, never from an automatic per-level bonus.
-      attack: 14 + (weaponLevel - 1) * 2 + edge * 4,
+      // Level controls HP/progression only. Combat ATK/DEF are supplied by
+      // the equipment system rather than hidden class/level base values.
+      attack: 0,
       speed: EXPLORATION_MOVEMENT.baseWorldUnitsPerSecond * (1 + swift * 0.075),
       dashCooldown: Math.max(0.58, 1.05 - swift * 0.07),
       critChance: clamp(0.1 + edge * 0.025, 0.1, 0.28),
@@ -431,7 +445,7 @@
     if (!raw || typeof raw !== "object" || raw.version !== 1) return null;
     const player = raw.player;
     if (!player || !Number.isFinite(player.x) || !Number.isFinite(player.y)) return null;
-    const level = clamp(Math.floor(Number(player.level) || 1), 1, 40);
+    const level = clamp(Math.floor(Number(player.level) || 1), 1, LEVEL_CAP);
     const upgrades = player.upgrades && typeof player.upgrades === "object" ? player.upgrades : {};
     const crystals = Array.isArray(raw.crystals)
       ? [...new Set(raw.crystals.filter((value) => ["north", "west", "hollow"].includes(value)))]
@@ -449,7 +463,7 @@
         y: clamp(player.y, 40, 1800),
         hp: Math.max(1, Number(player.hp) || 1),
         level,
-        xp: clamp(Math.floor(Number(player.xp) || 0), 0, xpRequired(level) - 1),
+        xp: level >= LEVEL_CAP ? 0 : clamp(Math.floor(Number(player.xp) || 0), 0, xpRequired(level) - 1),
         coins: clamp(Math.floor(Number(player.coins) || 0), 0, 99999),
         potions: clamp(Math.floor(Number(player.potions) || 0), 0, 9),
         weaponLevel: clamp(Math.floor(Number(player.weaponLevel) || 1), 1, 4),

@@ -166,32 +166,33 @@
 每格最多 1 個單位
 ```
 
-禁止：
+敵對單位禁止重疊或互相穿過。同隊單位可以由 shared resolver 作 temporal pass／讓路，但任何 timeline snapshot 同最終停位仍然不可出現兩個單位佔同一 logical cell。
 
-- 重疊
-- 穿過另一單位
-- 交換位置
-- 同時停喺同一格
+### 6.2 Timeline / locked route
 
-### 6.2 Timeline
+所有單位沿**回合開始時已鎖定**嘅計劃路線按相同 movement timeline 執行。Movement phase 中途只可以 `WAIT / STOP / CONTINUE` 原 route；唔可以因為見到另一方實際點行而重新 pathfinding 或改方向。
 
-所有單位沿計劃路線按相同 movement timeline 執行。
+成本：
 
-轉向 `0.5` 步期間：
+- 行 1 格 = `1.0`。
+- 90° 轉向 = `0.5`。
+- 180° 轉向 = `1.0`。
 
-- 單位仍佔用原格。
-- 唔視為已進入下一格。
+轉向期間單位仍然佔用原格，直到該 move step 真正完成先算 `vacate` 原格。
 
-### 6.3 爭格
+### 6.3 敵對爭格：arrival / vacate
 
-如果兩個或以上單位同一時間嘗試進入同一格：
+敵對 collision 用 movement timeline 嘅 **arrival time / vacate time** 決定，唔可以只睇某一刻嘅靜態 occupancy。
 
-- 該格唔會畀任何一方穿過。
-- 受阻單位取消之後未完成路線。
-- 顯示 `STOP!`
-- 單位停留喺最後合法格。
+- 兩邊想入同一個原本空格：較早 arrival 嘅一方先取得該格。
+- arrival time 完全相同：現階段**玩家優先**；怪物 STOP。
+- 想行入敵人目前格，而敵人喺自己 arrival 之前已完成 vacate：可以照原 route 入格。
+- 想行入敵人目前格，而自己 arrival **早過**對方 vacate：雙方形成卡位；入格者停喺上一個合法格，而原 occupant 亦被 pin，唔可以之後再完成原本嗰一步。
+- arrival 同 vacate 同時，而且 occupant 係向前離開而唔係迎頭交換：容許 follower 踏入對方剛 vacate 嘅舊格。
 
-### 6.4 迎頭／交換
+任何 hard block 都只取消該單位**尚未完成**嘅 route；已完成步數／轉向成本保留，顯示 `STOP!`。
+
+### 6.4 敵對迎頭／交換
 
 例如：
 
@@ -200,20 +201,24 @@ A → B 原本格
 B → A 原本格
 ```
 
-不可直接交換。
+敵對單位不可直接交換或穿身；雙方停喺各自最後合法格。
 
-兩邊未完成移動取消，停喺合法相鄰位置。
+### 6.5 同隊讓路
 
-### 6.5 連鎖阻塞
+同隊 collision 唔應因短暫 crossing 而永久取消 route：
 
-如果 A 被 B 阻擋，而 C 又準備行入 A 仍然佔用嘅格：
+- 同一格／交叉交通以 movement priority 決定；現階段以 `weight` 較輕者優先。
+- 較重／低 priority 單位只作短暫 `friendly-wait`，之後 retry **同一 movement step**。
+- 前面隊友清開後，等待者繼續原本 locked route。
+- 只有隊友最後真正停喺必經格，先變成 `friendly-route-blocked`。
+- 同隊 reciprocal/head-on crossing 可以由 resolver 作 pass；唔需要 Monster AI 預先避開 crossing route。
 
-resolver 必須按 timeline 重新判斷 occupancy。
+### 6.6 連鎖阻塞
 
-禁止只根據「最初計劃終點」判斷。
+如果 A 被 B 阻擋，而 C 又準備行入 A 仍然佔用嘅格，resolver 必須沿同一 timeline 傳播 occupancy / pin 結果。禁止只根據「最初計劃終點」判斷。
 
 
-### 6.6 戰鬥移動動畫
+### 6.7 戰鬥移動動畫
 
 戰鬥 movement resolver 決定：
 
@@ -308,7 +313,7 @@ Right Walk
 
 - 每隻怪嘅 battle movement 由 `data/monsters.js -> combat.moveRange` 決定；唔設共同最少 4 格（例如苔甲龜正式為 2）。
 - 怪物移動由技能有效攻擊格驅動：AI 應搵「今輪可出最佳技能」或「下輪高 AP 技能可用」嘅合法企位，而唔係一律貼住玩家。
-- Range-1 近戰追蹤嘅 pathfinding goal 係**玩家實際被佔用的 cell**，並容許 occupied goal 參與尋路；真正 movement route 剔除最後玩家 cell，再由 shared occupancy/collision 阻止疊格。呢個做法容許多隻同種近戰怪由其他方向繞過已被佔用嘅相鄰格，形成包圍。
+- Range-1 近戰追蹤嘅 pathfinding goal 係**玩家實際被佔用的 cell**，並容許 occupied goal 參與尋路；完整 movement intent / route **保留玩家 cell**，真正執行時由 shared arrival/vacate collision resolver 阻止敵對重疊。玩家同一輪移走時，怪可以按原本 locked route 踏入玩家舊格；AI 不可中途重算去追玩家新格。
 - Range 2+ 技能應按技能 authored exact range cells 尋找企位，唔應先追到 Range 1 再決定出招。
 - AI movement 使用同玩家完全相同：
   - movement cost
@@ -1497,12 +1502,32 @@ critical and authored effect rolls consume that stream rather than ad-hoc
 ### Equipment, Weight and Move
 
 Equipment is the primary source of ATK, DEF, Accuracy, Evasion and Weight.
-Total Weight is the sum of currently equipped item records, with full-body
-items counted once by stable item ID. Weight primarily affects timing; Move is
-the actual grid traversal allowance. Existing explicit equipment `moveRange`
-modifiers are the one owner of equipment mobility changes, so light gear can
-grant `+1 Move` without introducing a second Weight threshold formula. See
-[`docs/EQUIPMENT_SYSTEM.md`](EQUIPMENT_SYSTEM.md) for the item schema.
+Player class levels contribute **0 Base ATK and 0 Base DEF at every current
+level**; visible ATK/DEF therefore come from equipment plus explicit
+passives/buffs/debuffs, not hidden per-level stat inflation. Total Weight is the
+sum of currently equipped item records, with full-body items counted once by
+stable item ID. Weight primarily affects timing; Move is the actual grid
+traversal allowance. Existing explicit equipment `moveRange` modifiers are the
+one owner of equipment mobility changes, so light gear can grant `+1 Move`
+without introducing a second Weight threshold formula. See
+[`docs/EQUIPMENT_SYSTEM.md`](EQUIPMENT_SYSTEM.md) for the item schema and Fighter
+STRUGARDEN conversion rules.
+
+### Shared direct-damage floor
+
+Player and monster standard direct attacks use the same `Tactics.calculateDamage()`
+resolver. Unless an explicit damage model overrides it, normal direct damage is:
+
+```text
+raw = floor((ATK + bonus) × skillMultiplier × criticalMultiplier × guardMultiplier - DEF)
+finalDirectDamage = max(5, raw)
+```
+
+Positional side/rear multipliers are folded into `skillMultiplier` by the battle
+caller before this resolver runs. The `5`-damage floor applies to ordinary
+direct hit resolution for both player and monsters. Poison/status DoT and other
+explicit fixed-HP damage models use their own resolver and **do not inherit this
+minimum-5 floor**.
 
 ### Pending actions, Interrupt and Durability
 
@@ -1636,7 +1661,7 @@ dealsDamage: true
 正拳總傷害倍率 = 1.00×
 ```
 
-普通造成傷害嘅技能：
+普通造成傷害嘅技能（玩家同怪物共用同一條 curve）：
 
 ```text
 rawSkillDamageMultiplier = sqrt(AP / 3)
@@ -1665,7 +1690,7 @@ rawSkillDamageMultiplier = sqrt(AP / 3)
 dealsDamage: true
 ```
 
-而技能說明明確包含**傷害以外嘅額外戰鬥效果**，就套用：
+而技能本身係**真正 AoE / multi-cell area**，或者包含傷害以外嘅額外戰鬥效果，就套用：
 
 ```text
 utilityMultiplier = 0.8
@@ -1673,12 +1698,15 @@ utilityMultiplier = 0.8
 
 例如：
 
+- 自身周圍／前方多格同時生效嘅 AoE；
 - 擊退／吹飛；
 - 轉倒；
 - 中毒；
 - 麻痺；
 - 暗闇；
-- 其他明確非傷害控制／狀態效果。
+- Move Down 等其他明確非傷害控制／狀態效果。
+
+同一招即使同時有 AoE + knockback + poison，都只套**一次** `×0.8`，唔會逐個 utility 疊乘。
 
 最終：
 
@@ -2024,12 +2052,11 @@ Preview 必須同實際 resolver 共用同一函數。
 ### 25.5 Floating command menu
 
 - 戰鬥指令使用 Canvas 上方嘅 compact DOM overlay。
-- PC 預設位置固定喺主角**左下外側**：以主角所在 tile 為基準，menu 嘅右上角貼近主角 tile 嘅左下角（亦即左下對角相鄰格嘅右上角），避免遮住由左下向右上延伸嘅主要戰場。
-- 玩家可用 mouse／touch pointer events 拖動；手動拖動後停止自動跟隨。
-- 提供細型「跟隨／重置位置」控制，將 menu 重新吸回上述主角左下 anchor。
-- 每次定位都要 clamp 喺 game viewport 內；如果主角太近 viewport 邊緣，只可因 clamp 而偏移，唔應預設跳返去右側遮住敵方戰場。
+- 指令窗**唔跟隨玩家**。第一次使用時按當前 viewport／棋盤 geometry 揀一個唔遮棋盤嘅固定預設位置，優先放棋盤左側並保留合理邊距；如果左側空間不足先按候選位置避讓。
+- 玩家可用 mouse／touch pointer events 拖動；最後位置以 viewport 可用範圍內嘅 normalized X/Y 儲存，之後每場戰鬥都沿用，resize 後亦按新 viewport clamp。
+- 每次定位都要 clamp 喺 game viewport 內，至少保留足夠可操作部分；唔再提供「跟隨／重置位置」控制。
 - 戰鬥主選單採用「資訊簡潔、美術精緻」原則：技能主列表只顯示技能名；唔長駐顯示技能 AP、快捷鍵、前置圓點或說明句。AP 不足時直接灰化技能，詳細 AP／射程／delivery 只喺選中技能後嘅 target context 顯示。
-- `待機` 同 `撤退` 屬於 utility action，固定放喺技能清單底部左右兩格；戰鬥中暫時唔提供獨立飲藥按鈕。
+- 行動 phase 嘅 `待機` 使用同技能列表一致嘅全闊按鈕；移動 phase 嘅 `撤退` 保留於 movement utility row。戰鬥中暫時唔提供獨立飲藥按鈕。
 - 移動 phase 只顯示剩餘移動力 pips（full／half／empty）同 `重新移動`／`結束移動`／`撤退`；唔顯示 `0/5`、轉向成本公式、快捷鍵或「返回探索」等說明。玩家以「路點」逐段排路：直線多格可一次點終點，舊格重訪係新增回程而照扣成本；只有 `重新移動` 先會清除草稿。
 - AP 只需喺既有角色狀態位置顯示，唔用全寬底 tray 重複，亦唔喺角色身邊畫常駐 AP orbit dots。
 - 單位名稱必須跟 rendered sprite 嘅 semantic `nameAnchor`，唔可以用 logical tile 頂部做名稱 Y anchor；不同角色比例、攻擊 frame 或 monster species 都要保持名稱喺實際頭頂上方。

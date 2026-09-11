@@ -60,6 +60,7 @@
   const ZOOM_KEY = "everrealm-zoom";
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
+  const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const FIXED_STEP = 1 / 60;
   const query = new URLSearchParams(window.location.search);
   const testingMode = query.has("smoke") || query.has("autoplay");
@@ -75,13 +76,14 @@
   const dialoguePanel = document.getElementById("dialoguePanel");
   const levelUpPanel = document.getElementById("levelUpPanel");
   const deathPanel = document.getElementById("deathPanel");
-  const facilityPanel = document.getElementById("facilityPanel");
-  const facilityContent = document.getElementById("facilityContent");
-  const facilityTabs = document.getElementById("facilityTabs");
-  const facilityFooter = document.getElementById("facilityFooter");
-  const facilityHelpButton = document.getElementById("facilityHelpButton");
-  const facilityHelpPopover = document.getElementById("facilityHelpPopover");
-  const facilityHelpText = document.getElementById("facilityHelpText");
+  const facilityPanelTemplate = document.getElementById("facilityPanel");
+  let facilityPanel = facilityPanelTemplate;
+  let facilityContent = document.getElementById("facilityContent");
+  let facilityTabs = document.getElementById("facilityTabs");
+  let facilityFooter = document.getElementById("facilityFooter");
+  let facilityHelpButton = document.getElementById("facilityHelpButton");
+  let facilityHelpPopover = document.getElementById("facilityHelpPopover");
+  let facilityHelpText = document.getElementById("facilityHelpText");
   const exploreSidebar = document.getElementById("exploreSidebar");
   const sidebarToggle = document.getElementById("sidebarToggle");
   const statusButton = document.getElementById("statusButton");
@@ -108,7 +110,6 @@
   const battleEncounterIntro = document.getElementById("battleEncounterIntro");
   const battleFacingPicker = document.getElementById("battleFacingPicker");
   const battleActionDock = document.getElementById("battleActionDock");
-  const battleCommandFollowButton = document.getElementById("battleCommandFollowButton");
   const classSelectPanel = document.getElementById("classSelectPanel");
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
@@ -225,6 +226,7 @@
   let skillDetailReturnTarget = null;
   let deckDragGesture = null;
   let skillTreePanGesture = null;
+  let draggableWindowGesture = null;
   let suppressSkillTreeClickUntil = 0;
   let selectedInventoryItemId = null;
   let inventoryCategory = "all";
@@ -237,8 +239,12 @@
   // unit conversion, not a runtime map/migration scale.
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
   const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
+  const EXPLORE_ZOOM_ORDER = Object.freeze(["far", "mid", "near"]);
   const MOBILE_EXPLORE_ZOOM_MIN = .26;
   const MOBILE_EXPLORE_ZOOM_MAX = .82;
+  // Temporary development tuning: retreat always succeeds until the normal
+  // level-difference formula is re-enabled.
+  const RETREAT_CHANCE_OVERRIDE = 1;
   const MOBILE_EXPLORE_ZOOM_DEFAULTS = Object.freeze({
     world: .34,
     field: .38,
@@ -276,6 +282,9 @@
 
   let facilityTab = "bag";
   let facilityContext = "portable";
+  const facilityWindows = new Map();
+  let activeFacilityWindow = null;
+  let uiWindowZCounter = 40;
   let pendingLevelUps = 0;
   let dialogue = null;
   let dialogueChoiceIndex = 0;
@@ -293,7 +302,17 @@
   let enemySerial = 100;
   let autoTarget = null;
   let battle = null;
-  const battleCommandPosition = { manual: false, x: 0, y: 0, pointerId: null, offsetX: 0, offsetY: 0 };
+  const battleCommandPosition = { manual: false, x: 0, y: 0, xRatio: null, yRatio: null, pointerId: null, offsetX: 0, offsetY: 0 };
+  try {
+    const savedBattleCommandPosition = JSON.parse(localStorage.getItem(BATTLE_COMMAND_POSITION_KEY));
+    const xRatio = Number(savedBattleCommandPosition?.xRatio);
+    const yRatio = Number(savedBattleCommandPosition?.yRatio);
+    if (Number.isFinite(xRatio) && Number.isFinite(yRatio)) {
+      battleCommandPosition.manual = true;
+      battleCommandPosition.xRatio = Core.clamp(xRatio, 0, 1);
+      battleCommandPosition.yRatio = Core.clamp(yRatio, 0, 1);
+    }
+  } catch (_) {}
   let encounterGrace = 1;
   let automaticPortalReady = false;
   let battleToken = 0;
@@ -322,6 +341,7 @@
     battleBgmAudio.volume = .66;
   }
   let pageAudioSuspended = document.visibilityState !== "visible";
+  let audioGestureUnlocked = false;
 
   function suspendGameAudio() {
     pageAudioSuspended = true;
@@ -344,6 +364,15 @@
     battleBgmAudio?.pause();
     bgm.resume?.();
     bgm.setMap(currentMapId);
+  }
+
+  function unlockGameAudioFromGesture() {
+    if (!soundEnabled || document.visibilityState !== "visible") return;
+    const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
+    const mapPlaying = mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
+    if (audioGestureUnlocked && (battlePlaying || mapPlaying)) return;
+    resumeGameAudio();
+    audioGestureUnlocked = true;
   }
 
   function startBattleBgm() {
@@ -536,7 +565,7 @@
     return {
       ...base,
       maxHp: Math.max(1, Math.round(base.maxHp + gear.maxHp)),
-      attack: Math.max(1, Math.round((base.attack + gear.attack) * (passives.attackMultiplier || 1))),
+      attack: Math.max(0, Math.round((base.attack + gear.attack) * (passives.attackMultiplier || 1))),
       defence: Math.max(0, Math.round((base.defence + gear.defense) * (passives.defenceMultiplier || 1))),
       speed: Math.max(
         Core.EXPLORATION_MOVEMENT.minimumWorldUnitsPerSecond,
@@ -903,7 +932,7 @@
     dialoguePanel.hidden = true;
     levelUpPanel.hidden = true;
     deathPanel.hidden = true;
-    facilityPanel.hidden = true;
+    clearAllFacilityWindows();
     classSelectPanel.hidden = true;
     skillBookConfirmPanel.hidden = true;
     skillDetailPanel.hidden = true;
@@ -922,13 +951,7 @@
   }
 
   function mobileZoomBounds() {
-    const mapWidth = Math.max(1, Number(world?.pixelWidth) || 1);
-    const mapHeight = Math.max(1, Number(world?.pixelHeight) || 1);
-    const coverZoom = width > 0 && height > 0
-      ? Math.max(width / mapWidth, height / mapHeight)
-      : MOBILE_EXPLORE_ZOOM_MIN;
-    const min = Math.max(MOBILE_EXPLORE_ZOOM_MIN, coverZoom);
-    return { min, max: Math.max(min, MOBILE_EXPLORE_ZOOM_MAX) };
+    return { min: MOBILE_EXPLORE_ZOOM_MIN, max: MOBILE_EXPLORE_ZOOM_MAX };
   }
 
   function mobileExploreZoom(mapId = currentMapId) {
@@ -956,8 +979,9 @@
   }
 
   function targetZoom() {
-    // Touch / coarse-pointer layouts use pinch zoom with a wider phone default.
-    // Desktop keeps the authored Near / Mid / Far presets unchanged.
+    // Camera zoom is global authored presentation scale. Map dimensions only
+    // constrain camera position; small interiors must never be auto-enlarged
+    // merely to cover the viewport.
     return usesMobileExploreControls() ? mobileExploreZoom() : EXPLORE_ZOOM_SCALES[exploreZoomLevel];
   }
 
@@ -979,10 +1003,17 @@
 
   function setSystemSettingsOpen(open) {
     if (!systemSettingsPopover || !systemButton) return;
-    const next = Boolean(open) && mode === "playing";
+    const next = Boolean(open) && ["playing", "facility"].includes(mode);
+    const wasHidden = systemSettingsPopover.hidden;
     systemSettingsPopover.hidden = !next;
     systemButton.setAttribute("aria-expanded", String(next));
-    if (next) syncSystemSoundControl();
+    if (next) {
+      if (wasHidden) resetDraggableWindowPosition(systemSettingsPopover);
+      syncSystemSoundControl();
+      focusUiWindow(systemSettingsPopover);
+    } else {
+      systemSettingsPopover.classList.remove("is-ui-window-active");
+    }
   }
 
   function syncHudCollapse() {
@@ -1013,6 +1044,16 @@
       announce(`地圖視角切換到${EXPLORE_ZOOM_LABELS[level]}。`);
     }
     return true;
+  }
+
+  function handleExploreWheelZoom(event) {
+    if (mode !== "playing" || usesMobileExploreControls() || event.ctrlKey || !event.deltaY) return;
+    const currentIndex = Math.max(0, EXPLORE_ZOOM_ORDER.indexOf(exploreZoomLevel));
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextIndex = Core.clamp(currentIndex + direction, 0, EXPLORE_ZOOM_ORDER.length - 1);
+    if (nextIndex === currentIndex) return;
+    event.preventDefault();
+    setExploreZoomLevel(EXPLORE_ZOOM_ORDER[nextIndex], { announceChange: false });
   }
 
   function resize() {
@@ -1446,15 +1487,17 @@
     return result;
   }
 
-  function killEnemy(enemy) {
+  function killEnemy(enemy, options = {}) {
     if (!enemy.alive) return;
     enemy.alive = false;
     enemy.respawnTimer = 11 + Math.random() * 5;
     enemy.windup = 0;
     spawnBurst(enemy.x, enemy.y, enemy.color, 24, 90);
     recordDefeatedMonster(enemy);
-    const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
-    gainXp(rewardXp);
+    if (options.grantXp !== false) {
+      const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
+      gainXp(rewardXp);
+    }
     drops.push({ id: `drop-${Date.now()}-${Math.random()}`, kind: "coin", x: enemy.x, y: enemy.y, value: enemy.coins, radius: 8, life: 22, phase: Math.random() * Core.TAU });
     if (Math.random() < .12) drops.push({ id: `potion-${Date.now()}-${Math.random()}`, kind: "potion", x: enemy.x + 12, y: enemy.y - 5, value: 1, radius: 9, life: 22, phase: 0 });
     if (enemy.dropInfo && Math.random() < enemy.dropInfo.chance) {
@@ -1480,10 +1523,8 @@
       player.hp = Math.min(newStats.maxHp, player.hp + Math.max(0, newStats.maxHp - oldStats.maxHp));
       sound.level();
       const hpGain = newStats.maxHp - oldStats.maxHp;
-      const attackGain = newStats.attack - oldStats.attack;
-      const defenceGain = newStats.defence - oldStats.defence;
-      showToast(`升到 LV.${player.level} · 生命 +${hpGain} · 攻擊 +${attackGain} · 防禦 +${defenceGain}`, "good");
-      announce(`升到 ${player.level} 級。職業能力已自動成長。`);
+      showToast(`升到 LV.${player.level} · 生命 +${hpGain}`, "good");
+      announce(`升到 ${player.level} 級。生命上限提升。`);
       saveImportant(false);
     }
     updateHud();
@@ -1522,41 +1563,87 @@
     updateHud();
   }
 
+  function deathExpPenaltyAmount() {
+    return Math.max(1, Math.round(Expansion.xpRequired(player.level) * .05));
+  }
+
+  function applyDeathExpPenalty() {
+    const penalty = deathExpPenaltyAmount();
+    const result = Expansion.loseExperience(player.level, player.xp, penalty);
+    const previousLevel = player.level;
+    player.level = result.level;
+    player.xp = result.xp;
+    const equipmentResult = Expansion.unequipIneligibleEquipment({
+      coins: player.coins,
+      level: player.level,
+      classId: playerClassId,
+      ownedEquipment,
+      equipped,
+    });
+    equipped = equipmentResult.state.equipped;
+    markPersistenceDirty();
+    return {
+      penalty,
+      deducted: result.deducted,
+      levelsLost: previousLevel - player.level,
+      removedItems: equipmentResult.removedItems,
+    };
+  }
+
   function playerDeath() {
     mode = "dead";
     player.deathStartedAt = elapsed;
     stage.dataset.gameState = mode;
     keys.clear();
     sound.death();
-    const deathCopy = deathPanel.querySelector("p:not(.modal-kicker)");
-    if (deathCopy) deathCopy.innerHTML = checkpoint.mapId === "dungeon" ? "回音燈仲記得你嘅腳步。<br />喺坑道落腳點醒返，再行一次。" : "唔緊要，港口盞燈仲記得你。<br />返去抖一抖，再嚟過。";
+    battleHud.hidden = true;
+    battleFacingPicker.hidden = true;
     deathPanel.hidden = false;
-    document.getElementById("respawnButton").focus({ preventScroll: true });
-    announce(checkpoint.mapId === "dungeon" ? "你倒下了。可以在坑道回音燈重新出發。" : "你倒下了。可以在港口燈龕重新出發。");
+    resetDraggableWindowPosition(deathPanel.querySelector(".ui-modal-window"));
+    document.getElementById("reviveHereButton").focus({ preventScroll: true });
+    announce("你倒下了。");
   }
 
-  function respawn() {
+  function finishDeathRevive({ returnToTown = false } = {}) {
+    if (mode !== "dead") return;
     closeBattleHud();
-    encounterGrace = 1.2;
-    currentMapId = hasMap(checkpoint.mapId) ? checkpoint.mapId : "world";
-    world = maps[currentMapId];
-    player.x = checkpoint.x;
-    player.y = checkpoint.y;
-    player.hp = playerStats().maxHp;
-    player.coins = Math.floor(player.coins * .9);
-    player.invulnerable = 1.2;
+    encounterGrace = 1.8;
+    const { deducted, levelsLost, removedItems } = applyDeathExpPenalty();
+    player.hp = returnToTown ? playerStats().maxHp : 1;
+    player.invulnerable = 1.8;
     player.knockback = { x: 0, y: 0 };
     player.deathStartedAt = null;
-    resetEnemies();
     deathPanel.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
-    camera.x = player.x;
-    camera.y = player.y;
-    showLocation(zoneForPosition(player), true);
-    showToast(currentMapId === "dungeon" ? "回音燈將你帶返坑道落腳點。" : "跌咗少少燈幣，但你仲有成身本領。", "good");
-    saveImportant(false);
-    canvas.focus({ preventScroll: true });
+
+    if (returnToTown) {
+      // Use the normal map-transition path so BGM, pathing, portal state,
+      // particles and camera all reset exactly as they do on any other return.
+      transitionMap("world", overworld.start);
+      player.invulnerable = 1.8;
+    } else {
+      resetEnemies();
+      camera.x = player.x;
+      camera.y = player.y;
+      camera.zoom = targetZoom();
+      showLocation(zoneForPosition(player), true);
+      updateHud(true);
+      saveImportant(false);
+      canvas.focus({ preventScroll: true });
+    }
+
+    const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
+    const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
+    showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+  }
+
+  function reviveHere() {
+    finishDeathRevive({ returnToTown: false });
+  }
+
+  function respawn() {
+    finishDeathRevive({ returnToTown: true });
   }
 
   function updateEnemies(dt) {
@@ -1743,16 +1830,28 @@
     }
   }
 
+  function authoritativeInteractionRegion(entity) {
+    if (!entity || !world.navigation?.authoritative) return null;
+    if (entity.navigationRegion) return entity.navigationRegion;
+    // Flattened interiors author the service counter as a single `npc` region.
+    // Older map objects did not copy that region id onto the NPC itself, which
+    // made canvas clicks fall back to the NPC feet behind the counter and then
+    // fail pathfinding. Treat that authored region as the NPC's source of truth.
+    if (entity.kind === "npc" && world.navigation.data?.regions?.npc?.length && typeof world.navigation.interactionHitTest === "function") return "npc";
+    return null;
+  }
+
   function interactionDistanceToEntity(entity) {
-    if (entity?.kind === "npc" && world.navigation?.authoritative && typeof world.navigation.distanceToRegion === "function") {
-      return world.navigation.distanceToRegion("npc", player);
+    const region = authoritativeInteractionRegion(entity);
+    if (region && typeof world.navigation.distanceToRegion === "function") {
+      return world.navigation.distanceToRegion(region, player);
     }
     return Core.distance(player, entity);
   }
 
   function interactionReachForEntity(entity) {
-    if (entity?.kind === "npc" && world.navigation?.authoritative) {
-      return Number(world.navigation.serviceInteractionReachPx) || 112;
+    if (authoritativeInteractionRegion(entity)) {
+      return Number(entity.interactionRadius) || Number(world.navigation.serviceInteractionReachPx) || 112;
     }
     return ["gate", "portal", "questBoard"].includes(entity?.kind)
       ? 82
@@ -1818,7 +1917,8 @@
       ? (entity.prompt || `進入${entity.name}`)
       : (entity.prompt || `前往${entity.name}`);
     if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "面板配置" : "查看公會委託";
-    return "睇下寫咩";
+    if (entity.kind === "wishPool") return "喺古怪水池許願";
+    return "睇下";
   }
 
   function interact() {
@@ -1830,6 +1930,7 @@
     else if (entity.kind === "shrine") restAtShrine();
     else if (entity.kind === "portal") usePortal(entity);
     else if (entity.kind === "questBoard") entity.boardId === "deck-loadout" ? openFacility("deck", "deck") : openFacility("guild");
+    else if (entity.kind === "wishPool") interactWishPool(entity);
     else if (entity.kind === "sign") startDialogue({ speaker: entity.name, color: "#9a7653", lines: [entity.text] });
   }
 
@@ -1837,7 +1938,6 @@
     if (npc.id === "clinic-healer-siu-moon") interactHealer(npc);
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
-    else if (npc.id === "mountain_delivery_recipient") interactDeliveryRecipient(npc);
     else if (["guildmaster-yin", "guild-clerk-po"].includes(npc.id)) openFacility("guild");
     else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) openFacility("shop");
     else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "米克雷帝國今晚比平時熱鬧，多得你周圍探索。"] });
@@ -1867,6 +1967,38 @@
       speaker: npc.name,
       color: npc.color,
       lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返公會向接待員回報，就可以領取技能書信封。"],
+    });
+  }
+
+  function interactWishPool(pool) {
+    const commission = activeGuildCommission();
+    if (!commission || commission.type !== "wish") {
+      return startDialogue({
+        speaker: pool.name || "古怪水池",
+        color: "#a88cff",
+        lines: ["水面靜得有啲可疑。唔知點解，總覺得真係有人會特登走到嚟許願。"],
+      });
+    }
+    if (guildCommissionState.status === "ready_to_report" && guildCommissionState.interactionCompleted) {
+      return startDialogue({
+        speaker: pool.name || "古怪水池",
+        color: "#a88cff",
+        lines: ["你已經替委託人許過願。至於靈唔靈……返公會回報先啦。"],
+      });
+    }
+    const result = Guild.recordInteraction(guildCommissionState, pool.id);
+    if (!result.changed) {
+      return startDialogue({ speaker: pool.name || "古怪水池", color: "#a88cff", lines: ["而家似乎冇需要喺呢度代人許願。"] });
+    }
+    guildCommissionState = result.state;
+    sound.crystal();
+    showToast(`委託完成：${commission.title} · 返公會回報`, "good");
+    updateHud(true);
+    saveImportant(false);
+    startDialogue({
+      speaker: pool.name || "古怪水池",
+      color: "#a88cff",
+      lines: ["你替委託人認真許咗個願。", "至於靈唔靈……交畀個水池自己負責。返公會回報啦。"],
     });
   }
 
@@ -2275,16 +2407,23 @@
 
   function guildCommissionObjectiveText(commission) {
     if (!commission) return "";
-    return commission.type === "hunt"
-      ? `討伐${contractTargetName(commission.objective.monster_id)}`
-      : `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
+    if (commission.type === "hunt") return `討伐${contractTargetName(commission.objective.monster_id)} × ${commission.objective.count}`;
+    if (commission.type === "wish") return "前往山地深處嘅古怪水池許願";
+    return `將公會信件送給：${contractTargetName(commission.objective.recipient_npc_id)}`;
   }
 
   function guildCommissionProgressText(commission, state = guildCommissionState) {
     if (!commission) return "";
-    return commission.type === "hunt"
-      ? `${state.progress} / ${commission.objective.count}`
-      : state.deliveryCompleted ? "已送達" : "尚未送達";
+    if (commission.type === "hunt") return `${state.progress} / ${commission.objective.count}`;
+    if (commission.type === "wish") return state.interactionCompleted ? "已許願" : "尚未許願";
+    return state.deliveryCompleted ? "已送達" : "尚未送達";
+  }
+
+  function guildCommissionProgressValue(commission, state = guildCommissionState) {
+    if (!commission) return 0;
+    if (commission.type === "hunt") return Math.min(commission.objective.count, state.progress);
+    if (commission.type === "wish") return state.interactionCompleted ? 1 : 0;
+    return state.deliveryCompleted ? 1 : 0;
   }
 
   function renderMissionFacility() {
@@ -2301,9 +2440,7 @@
     const ready = guildCommissionState.status === "ready_to_report";
     const progressText = guildCommissionProgressText(active);
     const progressMax = active.type === "hunt" ? active.objective.count : 1;
-    const progressValue = active.type === "hunt"
-      ? Math.min(progressMax, guildCommissionState.progress)
-      : guildCommissionState.deliveryCompleted ? 1 : 0;
+    const progressValue = guildCommissionProgressValue(active);
     const progressPercent = Math.min(100, progressValue / Math.max(1, progressMax) * 100);
     facilityContent.innerHTML = `
       <section class="mission-view" aria-label="目前任務">
@@ -2330,6 +2467,8 @@
     const active = activeGuildCommission();
     const offers = currentContractOffers();
     const activeStatus = guildCommissionState.status === "ready_to_report" ? "待回報" : "進行中";
+    const activeProgressMax = active?.type === "hunt" ? active.objective.count : 1;
+    const activeProgressValue = active ? guildCommissionProgressValue(active) : 0;
     const activeAction = active && guildCommissionState.status === "ready_to_report"
       ? `<button class="facility-action-button" type="button" data-facility-action="claim" data-contract-id="${guildCommissionState.cycle}:${active.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "回報並領取信封" : "要親身返公會回報"}</button>`
       : `<button class="facility-action-button" type="button" disabled>完成目標後返公會回報</button>`;
@@ -2344,28 +2483,33 @@
         </div>
         <dl class="guild-commission-details">
           <div data-field="objective"><dt>目標</dt><dd>${guildCommissionObjectiveText(active)}</dd></div>
-          <div data-field="recommendation"><dt>建議等級</dt><dd>Lv.${active.recommendedLevel}</dd></div>
           <div data-field="progress"><dt>進度</dt><dd>${guildCommissionProgressText(active, guildCommissionState)}</dd></div>
+          <div data-field="recommendation"><dt>建議等級</dt><dd>Lv.${active.recommendedLevel}</dd></div>
           <div data-field="reward"><dt>獎勵</dt><dd>${skillBookRewardText(active)}</dd></div>
         </dl>
-        <div class="contract-progress" role="progressbar" aria-label="委託進度" aria-valuemin="0" aria-valuemax="${active.objective.count}" aria-valuenow="${Math.min(active.objective.count, guildCommissionState.progress)}"><i style="width:${Math.min(100, guildCommissionState.progress / Math.max(1, active.objective.count) * 100)}%"></i></div>
+        <div class="contract-progress" role="progressbar" aria-label="委託進度" aria-valuemin="0" aria-valuemax="${activeProgressMax}" aria-valuenow="${activeProgressValue}"><i style="width:${Math.min(100, activeProgressValue / Math.max(1, activeProgressMax) * 100)}%"></i></div>
         <div class="facility-action-row guild-commission-actions">${activeAction}${abandonAction}</div>
       </article>` : "";
-    const offersHtml = active ? "" : offers.map((offer) => `
-      <article class="facility-list-card">
+    const offersHtml = active ? "" : offers.map((offer) => {
+      const typeLabel = offer.type === "hunt" ? "討伐" : offer.type === "wish" ? "許願" : "送信";
+      const progressLabel = offer.type === "hunt" ? `0 / ${offer.objective.count}` : offer.type === "wish" ? "尚未許願" : "尚未送達";
+      return `
+      <article class="facility-list-card guild-offer-card">
         <div class="facility-card-heading"><span class="facility-chip">${Skills.formatSkillBookRank(offer.star)}</span><strong>${offer.title}</strong></div>
         <p>${offer.description}</p>
-        <div class="facility-card-meta"><span>類型</span><b>${offer.type === "hunt" ? "討伐" : "送信"}</b></div>
-        <div class="facility-card-meta"><span>推薦等級</span><b>Lv.${offer.recommendedLevel}</b></div>
-        <div class="facility-card-meta"><span>${guildCommissionObjectiveText(offer)}</span><b>${offer.type === "hunt" ? `0 / ${offer.objective.count}` : "尚未送達"}</b></div>
-        <div class="facility-card-meta"><span>報酬</span><b>${skillBookRewardText(offer)}</b></div>
+        <dl class="guild-offer-details">
+          <div><dt>類型</dt><dd>${typeLabel}</dd></div>
+          <div><dt>建議</dt><dd>Lv.${offer.recommendedLevel}</dd></div>
+          <div class="is-wide"><dt>目標</dt><dd>${guildCommissionObjectiveText(offer)} · ${progressLabel}</dd></div>
+          <div class="is-wide"><dt>報酬</dt><dd>${skillBookRewardText(offer)}</dd></div>
+        </dl>
         <button class="facility-action-button" type="button" data-facility-action="accept" data-offer-id="${offer.id}" ${atGuild ? "" : "disabled"}>${atGuild ? "接受委託" : "要返公會接受"}</button>
-      </article>`).join("");
+      </article>`;
+    }).join("");
     facilityContent.innerHTML = `
-      <div class="guild-commission-state-line" aria-live="polite"><span>${active ? "進行中" : "可接委託"}</span><strong>${active ? "1 / 1" : `${offers.length} 份`}</strong><small>${active ? "完成目標後返公會回報" : "選擇一份開始今晚工作"}</small></div>
-      ${!atGuild ? '<div class="facility-note is-warning"><b>公會紀錄副本</b><span>查看可以喺任何地方；接受同回報要親身返公會，送信要去山地收件員處。</span></div>' : ""}
-      ${activeHtml || `<div class="facility-card-grid">${offersHtml}</div>`}`;
-    setFacilityFooter(`<span aria-hidden="true">✦</span> 完成目標後返公會回報；技能書信封可以喺物品欄開封。`);
+      <div class="guild-commission-state-line" aria-live="polite"><span>${active ? "進行中" : "可接委託"}</span><strong>${active ? "1 / 1" : `${offers.length} 份`}</strong><small>${active ? "完成目標後返公會回報" : "揀一份委託開始"}</small></div>
+      ${activeHtml || `<div class="facility-card-grid guild-offer-grid">${offersHtml}</div>`}`;
+    setFacilityFooter("");
   }
 
   function totalOwnedSkillBooks() {
@@ -3067,6 +3211,7 @@
         ? `先學：${missingNames.join("、")}`
         : `學習 ×${manualCount}`;
     skillDetailPanel.hidden = false;
+    resetDraggableWindowPosition(skillDetailPanel.querySelector(".ui-modal-window"));
     (learnButton.hidden || learnButton.disabled ? document.getElementById("skillDetailDismissButton") : learnButton).focus({ preventScroll: true });
   }
 
@@ -3139,6 +3284,7 @@
         ? `先學：${missingNames.join("、")}`
         : "確認學習";
     skillBookConfirmPanel.hidden = false;
+    resetDraggableWindowPosition(skillBookConfirmPanel.querySelector(".ui-modal-window"));
     (learnButton.disabled ? document.getElementById("skillBookCancelButton") : learnButton).focus({ preventScroll: true });
   }
 
@@ -3374,6 +3520,118 @@
     return facilityTabsForContext(facilityContext, currentMapId);
   }
 
+  function facilityWindowKey(tab, context) {
+    return `${context}:${tab}`;
+  }
+
+  function focusUiWindow(windowElement) {
+    if (!windowElement) return;
+    const layer = windowElement.closest?.(".facility-overlay[data-facility-window-key]") || windowElement;
+    uiWindowZCounter += 1;
+    layer.style.zIndex = String(uiWindowZCounter);
+    for (const candidate of document.querySelectorAll(".facility-window.ui-window.is-ui-window-active, .system-settings-window.is-ui-window-active")) {
+      candidate.classList.remove("is-ui-window-active");
+    }
+    windowElement.classList.add("is-ui-window-active");
+  }
+
+  function facilityStateForNode(node) {
+    const panel = node?.closest?.(".facility-overlay[data-facility-window-key]");
+    if (!panel) return null;
+    return facilityWindows.get(panel.dataset.facilityWindowKey) || null;
+  }
+
+  function activateFacilityWindow(state, { bringToFront = true } = {}) {
+    if (!state || !facilityWindows.has(state.key)) return false;
+    activeFacilityWindow = state;
+    facilityPanel = state.panel;
+    facilityContent = state.content;
+    facilityTabs = state.tabs;
+    facilityFooter = state.footer;
+    facilityHelpButton = state.helpButton;
+    facilityHelpPopover = state.helpPopover;
+    facilityHelpText = state.helpText;
+    facilityTab = state.tab;
+    facilityContext = state.context;
+    stage.dataset.facilityTab = facilityTab;
+    stage.dataset.facilityContext = facilityContext;
+    if (bringToFront) focusUiWindow(state.windowElement);
+    return true;
+  }
+
+  function syncActiveFacilityWindowState() {
+    if (!activeFacilityWindow) return;
+    activeFacilityWindow.tab = facilityTab;
+    activeFacilityWindow.context = facilityContext;
+  }
+
+  function remapFacilityCloneIds(panel, key) {
+    const slug = key.replace(/[^a-z0-9_-]+/gi, "-");
+    const idMap = new Map();
+    for (const element of [panel, ...panel.querySelectorAll("[id]")]) {
+      const oldId = element.id;
+      if (!oldId) continue;
+      const nextId = `${oldId}-${slug}`;
+      idMap.set(oldId, nextId);
+      element.id = nextId;
+    }
+    const idRefAttributes = ["aria-labelledby", "aria-describedby", "aria-controls", "for"];
+    for (const element of [panel, ...panel.querySelectorAll("*")]) {
+      for (const attribute of idRefAttributes) {
+        const value = element.getAttribute?.(attribute);
+        if (!value) continue;
+        const next = value.split(/\s+/).map((id) => idMap.get(id) || id).join(" ");
+        element.setAttribute(attribute, next);
+      }
+    }
+  }
+
+  function createFacilityWindow(tab, context) {
+    const key = facilityWindowKey(tab, context);
+    const panel = facilityPanelTemplate.cloneNode(true);
+    panel.hidden = false;
+    panel.dataset.facilityWindowKey = key;
+    panel.classList.add("is-floating-facility-layer");
+    panel.setAttribute("aria-modal", "false");
+    remapFacilityCloneIds(panel, key);
+    stage.appendChild(panel);
+    const state = {
+      key,
+      tab,
+      context,
+      panel,
+      windowElement: panel.querySelector(".facility-window.ui-window"),
+      content: panel.querySelector(".facility-content"),
+      tabs: panel.querySelector(".facility-tabs"),
+      footer: panel.querySelector(".facility-footer"),
+      helpButton: panel.querySelector(".ui-info-button"),
+      helpPopover: panel.querySelector(".facility-help-popover"),
+      helpText: panel.querySelector(".facility-help-popover p"),
+      closeButton: panel.querySelector(".facility-close-button"),
+    };
+    facilityWindows.set(key, state);
+    wireFacilityWindow(state);
+    return state;
+  }
+
+  function topFacilityWindow() {
+    return [...facilityWindows.values()].sort((a, b) => (Number(b.panel.style.zIndex) || 0) - (Number(a.panel.style.zIndex) || 0))[0] || null;
+  }
+
+  function clearAllFacilityWindows() {
+    for (const state of facilityWindows.values()) state.panel.remove();
+    facilityWindows.clear();
+    activeFacilityWindow = null;
+    facilityPanel = facilityPanelTemplate;
+    facilityContent = facilityPanelTemplate.querySelector(".facility-content");
+    facilityTabs = facilityPanelTemplate.querySelector(".facility-tabs");
+    facilityFooter = facilityPanelTemplate.querySelector(".facility-footer");
+    facilityHelpButton = facilityPanelTemplate.querySelector(".ui-info-button");
+    facilityHelpPopover = facilityPanelTemplate.querySelector(".facility-help-popover");
+    facilityHelpText = facilityPanelTemplate.querySelector(".facility-help-popover p");
+    facilityPanelTemplate.hidden = true;
+  }
+
   function renderFacility() {
     const availableTabs = availableFacilityTabs();
     facilityTab = facilityTab === "missions" && availableTabs.includes("missions")
@@ -3398,14 +3656,16 @@
       ? facilityContext === "deck-view" ? "compact" : "wide"
       : facilityTab === "status" ? "compact"
       : facilityTab === "missions" ? "medium"
+      : facilityTab === "guild" && activeGuildCommission() ? "medium"
       : "wide";
     if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
-    const facilityKicker = document.getElementById("facilityKicker");
+    const facilityKicker = facilityPanel.querySelector(".facility-kicker");
     if (facilityKicker) {
       facilityKicker.textContent = copy[0];
       facilityKicker.hidden = true;
     }
-    document.getElementById("facilityTitle").textContent = copy[1];
+    const facilityTitle = facilityPanel.querySelector(".facility-header h2");
+    if (facilityTitle) facilityTitle.textContent = copy[1];
     if (facilityHelpText) facilityHelpText.textContent = copy[2];
     setFacilityHelpOpen(false);
     for (const tab of facilityTabs?.querySelectorAll("[data-facility-tab]") || []) {
@@ -3427,11 +3687,11 @@
     else if (facilityTab === "shop") renderShopFacility();
     else if (facilityTab === "skills") renderSkillsFacility();
     else renderCodexFacility();
+    syncActiveFacilityWindowState();
   }
 
   function openFacility(tab = "bag", requestedContext) {
     if (!["playing", "facility"].includes(mode)) return false;
-    setSystemSettingsOpen(false);
     const nextContext = requestedContext || (tab === "guild" ? "guild" : tab === "shop" ? "shop" : tab === "deck" ? "deck-view" : "portable");
     const normalizedContext = ["portable", "guild", "shop", "deck", "deck-view"].includes(nextContext) ? nextContext : "portable";
     const availableTabs = facilityTabsForContext(normalizedContext, currentMapId);
@@ -3439,44 +3699,83 @@
       showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入銀火裝備店先用到。" : "面板配置要去舊港城門設定。", "danger");
       return false;
     }
-    facilityContext = normalizedContext;
     const requestedTab = FACILITY_TABS.includes(tab) ? tab : "bag";
-    facilityTab = requestedTab === "missions" && availableTabs.includes("missions")
+    const normalizedTab = requestedTab === "missions" && availableTabs.includes("missions")
       ? "missions"
-      : Expansion.normalizeFacilityTab(requestedTab, facilityContext, currentMapId);
+      : Expansion.normalizeFacilityTab(requestedTab, normalizedContext, currentMapId);
+    const key = facilityWindowKey(normalizedTab, normalizedContext);
+    const existing = facilityWindows.get(key);
+    if (existing) {
+      activateFacilityWindow(existing);
+      mode = "facility";
+      stage.dataset.gameState = mode;
+      renderFacility();
+      existing.closeButton?.focus({ preventScroll: true });
+      return true;
+    }
+
+    const state = createFacilityWindow(normalizedTab, normalizedContext);
+    activateFacilityWindow(state);
     mode = "facility";
     stage.dataset.gameState = mode;
     keys.clear();
     clearExploreMovePath();
     pendingClickInteractionId = null;
     renderFacility();
-    facilityPanel.hidden = false;
-    document.getElementById("facilityCloseButton").focus({ preventScroll: true });
-    announce(`${document.getElementById("facilityTitle").textContent}已打開。`);
+    resetDraggableWindowPosition(state.windowElement);
+    const cascadeIndex = Math.max(0, facilityWindows.size - 1) % 6;
+    state.windowElement.style.setProperty("--ui-drag-x", `${cascadeIndex * 18}px`);
+    state.windowElement.style.setProperty("--ui-drag-y", `${cascadeIndex * 14}px`);
+    focusUiWindow(state.windowElement);
+    state.closeButton?.focus({ preventScroll: true });
+    const title = state.panel.querySelector(".facility-header h2")?.textContent || "視窗";
+    announce(`${title}已打開。`);
     return true;
   }
 
-  function closeFacility() {
-    if (mode !== "facility") return;
-    cancelDeckDrag();
-    setFacilityHelpOpen(false);
-    facilityPanel.hidden = true;
-    mode = "playing";
-    stage.dataset.gameState = mode;
-    updateHud(true);
-    pendingLevelUps = 0;
-    canvas.focus({ preventScroll: true });
+  function closeFacility(state = activeFacilityWindow) {
+    if (!state || !facilityWindows.has(state.key)) return;
+    if (state === activeFacilityWindow) {
+      cancelDeckDrag();
+      setFacilityHelpOpen(false, state);
+    }
+    facilityWindows.delete(state.key);
+    state.panel.remove();
+    if (activeFacilityWindow === state) activeFacilityWindow = null;
+    const next = topFacilityWindow();
+    if (next) {
+      activateFacilityWindow(next, { bringToFront: false });
+      mode = "facility";
+      stage.dataset.gameState = mode;
+    } else {
+      facilityPanel = facilityPanelTemplate;
+      facilityContent = facilityPanelTemplate.querySelector(".facility-content");
+      facilityTabs = facilityPanelTemplate.querySelector(".facility-tabs");
+      facilityFooter = facilityPanelTemplate.querySelector(".facility-footer");
+      facilityHelpButton = facilityPanelTemplate.querySelector(".ui-info-button");
+      facilityHelpPopover = facilityPanelTemplate.querySelector(".facility-help-popover");
+      facilityHelpText = facilityPanelTemplate.querySelector(".facility-help-popover p");
+      mode = "playing";
+      stage.dataset.gameState = mode;
+      updateHud(true);
+      pendingLevelUps = 0;
+      canvas.focus({ preventScroll: true });
+    }
   }
 
-  function setFacilityHelpOpen(open) {
-    if (!facilityHelpPopover || !facilityHelpButton) return;
-    facilityHelpPopover.hidden = !open;
-    facilityHelpButton.setAttribute("aria-expanded", String(open));
+  function setFacilityHelpOpen(open, state = activeFacilityWindow) {
+    const popover = state?.helpPopover || facilityHelpPopover;
+    const button = state?.helpButton || facilityHelpButton;
+    if (!popover || !button) return;
+    popover.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
   }
 
-  function toggleFacilityHelp() {
-    if (!facilityHelpPopover || !facilityHelpButton) return;
-    setFacilityHelpOpen(facilityHelpPopover.hidden);
+  function toggleFacilityHelp(state = activeFacilityWindow) {
+    const popover = state?.helpPopover || facilityHelpPopover;
+    const button = state?.helpButton || facilityHelpButton;
+    if (!popover || !button) return;
+    setFacilityHelpOpen(popover.hidden, state);
   }
 
   function returnToTitle() {
@@ -3528,10 +3827,15 @@
     document.getElementById("abandonCommissionTitle").textContent = `確定放棄「${active.title}」？`;
     document.getElementById("abandonCommissionDescription").textContent = active.type === "hunt"
       ? `目前討伐進度 ${guildCommissionState.progress} / ${active.objective.count} 將會失去；委託會重新開放接受。`
-      : guildCommissionState.status === "ready_to_report"
-        ? "信件已送達但尚未回報；放棄後送件完成狀態與回報資格都會失去。"
-        : "目前送信進度將會失去；委託會重新開放接受。";
+      : active.type === "wish"
+        ? guildCommissionState.status === "ready_to_report"
+          ? "願望已經許完但尚未回報；放棄後完成狀態與回報資格都會失去。"
+          : "目前許願委託會取消，之後可以重新接受。"
+        : guildCommissionState.status === "ready_to_report"
+          ? "信件已送達但尚未回報；放棄後送件完成狀態與回報資格都會失去。"
+          : "目前送信進度將會失去；委託會重新開放接受。";
     abandonCommissionPanel.hidden = false;
+    resetDraggableWindowPosition(abandonCommissionPanel.querySelector(".ui-modal-window"));
     document.getElementById("abandonCommissionConfirmButton").focus({ preventScroll: true });
   }
 
@@ -3706,7 +4010,10 @@
     const blueprint = ExpansionWorld.monsterBlueprint(canonicalType);
     const level = source.level || blueprint?.baseLevel || 1;
     const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(canonicalType, level) : null;
-    const maxHp = Math.max(12, Math.round(primary ? (source.maxHp || stats?.hp || base.hp) : (stats?.hp || base.hp)));
+    const encounterCount = Math.max(1, Math.min(3, Number(blueprint?.encounterCount) || 1));
+    const hpMultiplier = ExpansionWorld.encounterHpMultiplier(encounterCount);
+    const unscaledHp = primary ? (source.maxHp || stats?.hp || base.hp) : (stats?.hp || base.hp);
+    const maxHp = Math.max(1, Math.round(unscaledHp * hpMultiplier));
     const spawnCell = battleDeploymentCell(battlefield, "enemy", index);
     const skill = blueprint?.skills?.[0] || null;
     const attackRange = skill?.range?.max || 1;
@@ -3838,7 +4145,6 @@
     interactionPrompt.hidden = true;
     battleHud.hidden = false;
     battleEncounterIntro.hidden = true;
-    battleCommandPosition.manual = false;
     sound.boss();
     startBattleBgm();
     announce(`遇上${source.name}。進入格仔回合戰。`);
@@ -3922,16 +4228,22 @@
         actual.minAttackRange = selectedSkill.range.min;
       }
 
-      enemy.cell = { ...action.move };
+      // Melee movement may intentionally target the hero's OCCUPIED cell so
+      // the shared collision resolver can create natural surrounds.  For
+      // planning subsequent enemies, keep a legal preview cell instead of
+      // temporarily overlapping the simulated hero.
+      enemy.cell = { ...(action.previewCell || action.move) };
       enemy.facing = action.facing || enemy.facing;
       const willAttack = Boolean(action.attackTargetId && action.skill)
         && (actual.ap || 0) >= (action.skill?.apCost || 0);
+      const previewOrigin = action.attackOrigin || action.move;
+      const previewFacing = action.attackFacing || action.facing || actual.facing;
       const targetCells = willAttack
-        ? Skills.patternCells(action.skill, action.move, hero.cell, {
+        ? Skills.patternCells(action.skill, previewOrigin, hero.cell, {
             grid: battle.grid,
             battlefield: battle.battlefield,
             heightMap: battle.battlefield?.heightMap,
-            facing: action.facing || actual.facing,
+            facing: previewFacing,
           })
         : [];
 
@@ -3939,6 +4251,7 @@
         enemyId: actual.id,
         move: { ...action.move },
         path: action.path,
+        commands: action.commands || [],
         targetId: hero.id,
         targetCells,
         willAttack,
@@ -4483,6 +4796,7 @@
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
       if (enemy?.alive) routes.set(enemy.id, {
         path: (plan.path?.length ? plan.path : [enemy.cell]).map(copyBattleCell),
+        commands: (plan.commands || []).map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined })),
       });
     }
     return Tactics.resolveSimultaneousMovement({
@@ -4781,7 +5095,7 @@
             defence,
             multiplier: authoredMultiplier * positional.multiplier,
             critical: skill.area.shape === "single" && hitIndex === 0 && battleRandom() < playerStats().critChance,
-            minimum: skill.star + 1,
+            minimum: Tactics.MIN_DIRECT_DAMAGE,
           });
           const split = Skills.splitDamageLaterHits(totalDamage, hitCount);
           return {
@@ -4981,11 +5295,17 @@
         multiplier: (hit.plan.skill?.damageModel?.scale || 1) * (hit.position === "rear" ? 1 + BATTLE_REAR_DAMAGE_BONUS : hit.position === "side" ? 1 + BATTLE_SIDE_DAMAGE_BONUS : 1),
         guarded: activeGuard > 0,
         guardMultiplier: 1 - activeGuard,
-        minimum: 2,
+        minimum: Tactics.MIN_DIRECT_DAMAGE,
       });
       hit.damage = Math.max(1, Math.round(hit.damage * (FighterEffects?.damageMultiplier(battle.hero, battle.round) ?? 1)));
       if (FighterEffects) {
-        const counter = FighterEffects.resolveCounter({ defender: battle.hero, attacker: hit.enemy, damage: hit.damage, isProjectile: hit.enemy.attackRange > 1, round: battle.round });
+        const counter = FighterEffects.resolveCounter({
+          defender: battle.hero,
+          attacker: hit.enemy,
+          damage: hit.damage,
+          isProjectile: hit.plan.skill?.isProjectile === true,
+          round: battle.round,
+        });
         hit.damage = counter.damage;
         showFighterEffectEvents(counter);
       }
@@ -5068,19 +5388,20 @@
       if (!battle || battle.token !== token) return;
       const finished = battle;
       const bonusUnits = finished.enemies.filter((unit) => !unit.primary);
-      const primaryXp = ExpansionWorld.xpReward(finished.source.xp, finished.source.level, player.level);
-      const bonusXp = bonusUnits.reduce((sum, unit) => sum + ExpansionWorld.xpReward(unit.xp, unit.level, player.level), 0);
+      const encounterCount = Math.max(1, finished.enemies.length);
+      const rewardLevel = Math.max(finished.source.level || 1, ...finished.enemies.map((unit) => Number(unit.level) || 1));
+      const baseXp = ExpansionWorld.monsterBlueprint(finished.source.type)?.rewards?.baseXp ?? 100;
+      const earnedXp = ExpansionWorld.battleXpReward(rewardLevel, player.level, encounterCount, baseXp);
       const bonusCoins = bonusUnits.reduce((sum, unit) => sum + Math.max(0, Math.round(unit.coins || 0)), 0);
       player.hp = Math.max(1, finished.hero.hp);
       closeBattleHud();
       mode = "playing";
       stage.dataset.gameState = mode;
-      killEnemy(finished.source);
+      killEnemy(finished.source, { grantXp: false });
       for (const unit of bonusUnits) recordDefeatedMonster(unit);
-      if (bonusXp) gainXp(bonusXp);
+      gainXp(earnedXp);
       player.coins += bonusCoins;
       encounterGrace = 1;
-      const earnedXp = primaryXp + bonusXp;
       showToast(`戰鬥勝利 · +${earnedXp} XP${bonusCoins ? `、+${bonusCoins} 燈幣` : ""}`, "good");
       updateHud(true);
       saveImportant(false);
@@ -5092,12 +5413,11 @@
     if (!battle) return;
     const token = battle.token;
     battle.phase = "defeat";
-    battle.message = "時光之光盞燈熄咗……";
+    battle.message = "你倒下了……";
     battle.messageDanger = true;
     updateBattleUi();
     scheduleBattle(() => {
       if (!battle || battle.token !== token) return;
-      closeBattleHud();
       player.hp = 0;
       playerDeath();
     }, 620);
@@ -5105,7 +5425,7 @@
 
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
-    const chance = ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
+    const chance = RETREAT_CHANCE_OVERRIDE ?? ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (battleRandom() >= chance) {
       const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
       setBattleMessage(`${retreatMessage}，霧獸逼近咗！`, true);
@@ -5121,7 +5441,7 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     encounterGrace = 1.4;
-    showToast("成功撤退 · 霧獸暫時追唔上", "good");
+    showToast("撤退成功", "good");
     canvas.focus({ preventScroll: true });
   }
 
@@ -5337,37 +5657,94 @@
     syncBattleCommandMenu();
   }
 
-  function clampBattleCommandPosition(x, y) {
-    const margin = 8;
+  function battleCommandBounds() {
+    const margin = 12;
     const menuWidth = Math.max(1, battleActionDock?.offsetWidth || 1);
     const menuHeight = Math.max(1, battleActionDock?.offsetHeight || 1);
     return {
-      x: Core.clamp(Number(x) || 0, margin, Math.max(margin, width - menuWidth - margin)),
-      y: Core.clamp(Number(y) || 0, margin, Math.max(margin, height - menuHeight - margin)),
+      margin,
+      menuWidth,
+      menuHeight,
+      minX: margin,
+      maxX: Math.max(margin, width - menuWidth - margin),
+      minY: margin,
+      maxY: Math.max(margin, height - menuHeight - margin),
     };
+  }
+
+  function clampBattleCommandPosition(x, y) {
+    const bounds = battleCommandBounds();
+    return {
+      x: Core.clamp(Number(x) || 0, bounds.minX, bounds.maxX),
+      y: Core.clamp(Number(y) || 0, bounds.minY, bounds.maxY),
+    };
+  }
+
+  function defaultBattleCommandPosition() {
+    const bounds = battleCommandBounds();
+    const layout = battleLayout();
+    const gap = Math.max(14, layout.cell * .12);
+    const board = { left: layout.x, top: layout.y, right: layout.x + layout.width, bottom: layout.y + layout.height };
+    const preferredY = board.top + layout.height * .58 - bounds.menuHeight / 2;
+    const candidates = [
+      { x: board.left - bounds.menuWidth - gap, y: preferredY },
+      { x: board.right + gap, y: preferredY },
+      { x: board.left, y: board.bottom + gap },
+      { x: board.right - bounds.menuWidth, y: board.bottom + gap },
+      { x: board.left, y: board.top - bounds.menuHeight - gap },
+    ].map((candidate, index) => {
+      const next = clampBattleCommandPosition(candidate.x, candidate.y);
+      const overlapW = Math.max(0, Math.min(next.x + bounds.menuWidth, board.right) - Math.max(next.x, board.left));
+      const overlapH = Math.max(0, Math.min(next.y + bounds.menuHeight, board.bottom) - Math.max(next.y, board.top));
+      return { ...next, score: overlapW * overlapH * 1000 + index * 100 + Math.abs(next.y - preferredY) };
+    });
+    candidates.sort((a, b) => a.score - b.score);
+    return { x: candidates[0].x, y: candidates[0].y };
+  }
+
+  function updateBattleCommandRatios() {
+    const bounds = battleCommandBounds();
+    const spanX = Math.max(1, bounds.maxX - bounds.minX);
+    const spanY = Math.max(1, bounds.maxY - bounds.minY);
+    battleCommandPosition.xRatio = Core.clamp((battleCommandPosition.x - bounds.minX) / spanX, 0, 1);
+    battleCommandPosition.yRatio = Core.clamp((battleCommandPosition.y - bounds.minY) / spanY, 0, 1);
+  }
+
+  function saveBattleCommandPosition() {
+    if (!battleCommandPosition.manual) return;
+    updateBattleCommandRatios();
+    try {
+      localStorage.setItem(BATTLE_COMMAND_POSITION_KEY, JSON.stringify({
+        xRatio: battleCommandPosition.xRatio,
+        yRatio: battleCommandPosition.yRatio,
+      }));
+    } catch (_) {}
   }
 
   function syncBattleCommandMenu() {
     if (!battleActionDock || battleActionDock.hidden || !battle || mode !== "battle") return;
-    let next = clampBattleCommandPosition(battleCommandPosition.x, battleCommandPosition.y);
-    if (!battleCommandPosition.manual) {
-      const layout = battleLayout();
-      const heroCell = battle.hero.renderCell || battle.hero.cell;
-      const corners = battleCellCorners(heroCell, layout, battleRenderHeight(heroCell));
-      // Default command placement lives outside the player's attack lane.  The
-      // menu's top-right corner follows the hero tile's bottom-left corner,
-      // i.e. the top-right corner of the diagonally lower-left neighbour.
-      const anchor = corners[3];
-      const menuWidth = Math.max(1, battleActionDock.offsetWidth);
-      const gap = Math.max(2, layout.cell * .035);
-      next = clampBattleCommandPosition(anchor.x - menuWidth - gap, anchor.y + gap);
+    const bounds = battleCommandBounds();
+    let next;
+    if (battleCommandPosition.manual) {
+      if (battleCommandPosition.pointerId != null) {
+        next = clampBattleCommandPosition(battleCommandPosition.x, battleCommandPosition.y);
+      } else if (Number.isFinite(battleCommandPosition.xRatio) && Number.isFinite(battleCommandPosition.yRatio)) {
+        next = clampBattleCommandPosition(
+          bounds.minX + battleCommandPosition.xRatio * Math.max(1, bounds.maxX - bounds.minX),
+          bounds.minY + battleCommandPosition.yRatio * Math.max(1, bounds.maxY - bounds.minY),
+        );
+      } else {
+        next = defaultBattleCommandPosition();
+        battleCommandPosition.manual = false;
+      }
+    } else {
+      next = defaultBattleCommandPosition();
     }
     battleCommandPosition.x = next.x;
     battleCommandPosition.y = next.y;
     battleActionDock.style.left = `${Math.round(next.x)}px`;
     battleActionDock.style.top = `${Math.round(next.y)}px`;
-    battleActionDock.dataset.following = String(!battleCommandPosition.manual);
-    battleCommandFollowButton?.setAttribute("aria-pressed", String(!battleCommandPosition.manual));
+    battleActionDock.dataset.positionMode = battleCommandPosition.manual ? "saved" : "default";
   }
 
   function beginBattleCommandDrag(event) {
@@ -5376,6 +5753,7 @@
     battleCommandPosition.pointerId = event.pointerId;
     battleCommandPosition.offsetX = event.clientX - rect.left;
     battleCommandPosition.offsetY = event.clientY - rect.top;
+    battleCommandPosition.manual = true;
     battleActionDock.classList.add("is-dragging");
     try { battleActionDock.setPointerCapture?.(event.pointerId); } catch (_) {}
     event.preventDefault();
@@ -5391,6 +5769,7 @@
     battleCommandPosition.manual = true;
     battleCommandPosition.x = next.x;
     battleCommandPosition.y = next.y;
+    updateBattleCommandRatios();
     syncBattleCommandMenu();
     event.preventDefault();
   }
@@ -5400,10 +5779,7 @@
     try { battleActionDock.releasePointerCapture?.(event.pointerId); } catch (_) {}
     battleCommandPosition.pointerId = null;
     battleActionDock.classList.remove("is-dragging");
-  }
-
-  function followBattleCommandMenu() {
-    battleCommandPosition.manual = false;
+    saveBattleCommandPosition();
     syncBattleCommandMenu();
   }
 
@@ -5425,11 +5801,17 @@
 
   function updateCamera(dt) {
     const zoom = targetZoom();
-    // Exploration is player-locked even at the map boundary. The world
-    // renderer paints the native map and leaves the overflow region black.
-    camera.x = player.x;
-    camera.y = player.y;
     camera.zoom = Core.lerp(camera.zoom, zoom, 1 - Math.exp(-5 * dt));
+    const halfWorldW = width / (2 * Math.max(.001, camera.zoom));
+    const halfWorldH = height / (2 * Math.max(.001, camera.zoom));
+    const minX = Math.min(halfWorldW, world.pixelWidth * .5);
+    const maxX = Math.max(minX, world.pixelWidth - halfWorldW);
+    const minY = Math.min(halfWorldH, world.pixelHeight * .5);
+    const maxY = Math.max(minY, world.pixelHeight - halfWorldH);
+    // Follow the player through the middle of the map. Near an edge, let the
+    // player move off-centre and clamp the camera instead of showing black.
+    camera.x = Core.clamp(player.x, minX, maxX);
+    camera.y = Core.clamp(player.y, minY, maxY);
   }
 
   function currentMapExit() {
@@ -5460,7 +5842,7 @@
   }
 
   function contractTargetMap(target) {
-    return ["bear", "snake"].includes(target) ? "dungeon" : "field";
+    return ["frog", "turtle", "snake", "bear"].includes(target) ? "dungeon" : "field";
   }
 
   function nearestContractEnemy(target) {
@@ -5486,6 +5868,17 @@
       detail: `${contract.title}完成 · 領取${skillBookRewardText(contract)}`,
       target: guildBoard || routeToMap("guild"),
     };
+    if (contract.type === "wish") {
+      const targetMapId = "field";
+      const target = currentMapId === targetMapId
+        ? world.boards.find((board) => board.id === contract.objective.interaction_id)
+        : null;
+      return {
+        title: contract.title,
+        detail: "前往山地深處嘅古怪水池，替委託人許願",
+        target: target || routeToMap(targetMapId),
+      };
+    }
     if (contract.type === "delivery") {
       const targetMapId = "field";
       const target = currentMapId === targetMapId
@@ -5599,7 +5992,7 @@
   function render() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    if (battle && mode === "battle") {
+    if (battle && (mode === "battle" || mode === "dead")) {
       ctx.fillStyle = "#0a1020";
       ctx.fillRect(0, 0, width, height);
       drawBattle();
@@ -5634,13 +6027,16 @@
     }
 
     try {
-      // The map is the only world background. Any screen area outside its
-      // native bounds remains black, including small interiors at the edge.
+      // The camera is clamped inside the authored map. The black clear is only
+      // a safety reset; normal exploration must never reveal it at an edge.
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, width, height);
       const shake = reducedMotion ? 0 : screenShake;
-      const shakeX = (Math.random() - .5) * shake;
-      const shakeY = (Math.random() - .5) * shake;
+      const rawShakeX = (Math.random() - .5) * shake;
+      const rawShakeY = (Math.random() - .5) * shake;
+      const clampedShake = clampExploreShake(rawShakeX, rawShakeY);
+      const shakeX = clampedShake.x;
+      const shakeY = clampedShake.y;
       drawTiles(shakeX, shakeY);
       drawTownWallOverlay(shakeX, shakeY);
       drawGroundDetails(shakeX, shakeY);
@@ -6615,7 +7011,7 @@
         if (authoredInteraction) return authoredInteraction;
       }
       if (typeof world.navigation.interactionHitTest === "function" && world.navigation.interactionHitTest("npc", authoredPoint)) {
-        const paddedInteraction = world.npcs[0];
+        const paddedInteraction = [...world.npcs, ...world.boards].find((entity) => authoritativeInteractionRegion(entity) === "npc");
         if (paddedInteraction) return paddedInteraction;
       }
     }
@@ -6635,6 +7031,34 @@
     }).filter((item) => item.distance <= item.radius).sort((left, right) => left.distance - right.distance);
     if (anchored.length) return anchored[0].entity;
     return null;
+  }
+
+  function authoritativeInteractionApproachPoint(entity) {
+    const navigation = world.navigation;
+    const region = authoritativeInteractionRegion(entity);
+    if (!region || !navigation?.authoritative || typeof navigation.nearestPointInRegion !== "function") return null;
+    const regionPoint = navigation.nearestPointInRegion(region, player);
+    if (!regionPoint) return null;
+    const reach = Math.max(24, interactionReachForEntity(entity) - 8);
+    const baseAngle = Math.atan2(player.y - regionPoint.y, player.x - regionPoint.x);
+    const angleOffsets = [0, Math.PI / 12, -Math.PI / 12, Math.PI / 6, -Math.PI / 6, Math.PI / 4, -Math.PI / 4, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI];
+    const radii = [12, 18, 26, 36, 50, 68, 88, 112, 136, reach].filter((value, index, array) => value <= reach && array.indexOf(value) === index);
+    const navigationRadius = Number(navigation.feetRadiusPx) || 3;
+    const candidates = [];
+    for (const radius of radii) {
+      for (const offset of angleOffsets) {
+        const angle = baseAngle + offset;
+        const candidate = {
+          x: Core.clamp(regionPoint.x + Math.cos(angle) * radius, navigationRadius, world.pixelWidth - navigationRadius),
+          y: Core.clamp(regionPoint.y + Math.sin(angle) * radius, navigationRadius, world.pixelHeight - navigationRadius),
+        };
+        if (isBlocked({ ...candidate, radius: navigationRadius })) continue;
+        if (typeof navigation.distanceToRegion === "function" && navigation.distanceToRegion(region, candidate) > reach) continue;
+        candidates.push({ candidate, playerDistance: Core.distance(player, candidate), regionDistance: Core.distance(regionPoint, candidate) });
+      }
+    }
+    candidates.sort((a, b) => a.playerDistance - b.playerDistance || a.regionDistance - b.regionDistance);
+    return candidates[0]?.candidate || null;
   }
 
   function setExploreClickTarget(target, entity = null) {
@@ -6664,13 +7088,17 @@
       }
       pendingClickInteractionId = null;
     } else if (entity && !entity.type && entity.kind !== "portal") {
-      if (entity.kind === "questBoard" && entity.approachPoint) {
+      if (entity.approachPoint && ["questBoard", "wishPool"].includes(entity.kind)) {
         destination = { x: entity.approachPoint.x, y: entity.approachPoint.y };
         pendingClickInteractionId = entity.id;
       } else {
-      const away = Core.normalize({ x: player.x - entity.x, y: player.y - entity.y });
-      destination = { x: entity.x + away.x * 34, y: entity.y + away.y * 34 };
-      pendingClickInteractionId = entity.id;
+        const authoredApproach = authoritativeInteractionApproachPoint(entity);
+        if (authoredApproach) destination = authoredApproach;
+        else {
+          const away = Core.normalize({ x: player.x - entity.x, y: player.y - entity.y });
+          destination = { x: entity.x + away.x * 34, y: entity.y + away.y * 34 };
+        }
+        pendingClickInteractionId = entity.id;
       }
     } else {
       pendingClickInteractionId = null;
@@ -7035,7 +7463,7 @@
     const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
     // A minimap is a local navigation tool, not a thumbnail of the whole map.
     // Keep the player centred, but show enough nearby roads/buildings to orient the player.
-    const visibleTiles = ["world", "field"].includes(currentMapId) ? 24 : 18;
+    const visibleTiles = ["world", "field"].includes(currentMapId) ? 96 : 72;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
     const originX = centreX - player.x * scale;
     const originY = centreY - player.y * scale;
@@ -7241,6 +7669,20 @@
     return {
       x: (screenX - width * .5) / camera.zoom + camera.x,
       y: (screenY - height * .5) / camera.zoom + camera.y,
+    };
+  }
+
+  function clampExploreShake(shakeX, shakeY) {
+    const zoom = Math.max(.001, camera.zoom);
+    const mapScreenWidth = world.pixelWidth * zoom;
+    const mapScreenHeight = world.pixelHeight * zoom;
+    const leftEdge = (0 - camera.x) * zoom + width * .5;
+    const rightEdge = (world.pixelWidth - camera.x) * zoom + width * .5;
+    const topEdge = (0 - camera.y) * zoom + height * .5;
+    const bottomEdge = (world.pixelHeight - camera.y) * zoom + height * .5;
+    return {
+      x: mapScreenWidth <= width ? 0 : Core.clamp(shakeX, width - rightEdge, -leftEdge),
+      y: mapScreenHeight <= height ? 0 : Core.clamp(shakeY, height - bottomEdge, -topEdge),
     };
   }
 
@@ -7527,18 +7969,38 @@
     const scale = camera.zoom;
     const authoredHeight = Number(prop.authoredRegion?.h) || 0;
     const topY = point.y - authoredHeight * scale / 2;
-    const fontSize = Core.clamp(15 * scale, 10.5, 15);
-    const labelY = topY - Math.max(4, 7 * scale);
+    const fontSize = Core.clamp(18 * scale, 13, 19);
+    const labelY = topY - Math.max(7, 10 * scale);
+    const label = "✦ 面板配置 ✦";
     ctx.save();
     ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.font = `850 ${fontSize}px system-ui, -apple-system, "Noto Sans TC", sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.font = `900 ${fontSize}px system-ui, -apple-system, "Noto Sans TC", sans-serif`;
+    const paddingX = Math.max(10, fontSize * .72);
+    const paddingY = Math.max(5, fontSize * .34);
+    const textWidth = ctx.measureText(label).width;
+    const boxW = textWidth + paddingX * 2;
+    const boxH = fontSize + paddingY * 2;
+    const boxX = point.x - boxW / 2;
+    const boxY = labelY - boxH / 2;
+    const radius = Math.max(7, boxH * .34);
+    ctx.shadowColor = "rgba(0,0,0,.5)";
+    ctx.shadowBlur = Math.max(5, fontSize * .32);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+    else ctx.rect(boxX, boxY, boxW, boxH);
+    ctx.fillStyle = "rgba(8,16,31,.88)";
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = Math.max(1.4, fontSize * .1);
+    ctx.strokeStyle = "rgba(255,200,87,.88)";
+    ctx.stroke();
     ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(2.2, fontSize * .22);
-    ctx.strokeStyle = "rgba(4,8,18,.88)";
-    ctx.strokeText("面板配置", point.x, labelY);
-    ctx.fillStyle = "#f5e9ca";
-    ctx.fillText("面板配置", point.x, labelY);
+    ctx.lineWidth = Math.max(2, fontSize * .16);
+    ctx.strokeStyle = "rgba(4,8,18,.82)";
+    ctx.strokeText(label, point.x, labelY + .5);
+    ctx.fillStyle = "#fff0c8";
+    ctx.fillText(label, point.x, labelY + .5);
     ctx.restore();
   }
 
@@ -7961,7 +8423,7 @@
     const actors = {
       "clinic-healer-siu-moon": "healer", "store-merchant-gin": "merchant", "inn-keeper": "clerk",
       "guildmaster-yin": "guildmaster", "guild-clerk-po": "clerk", "guild-adventurer-nok": "adventurer", "guild-duelist-rhea": "duelist",
-      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer", "mountain_delivery_recipient": "mountainCourier",
+      "merchant-gin": "merchant", "armorer-yuet": "armorer", "shop-tailor-safi": "tailor", "lost-explorer-kai": "explorer",
     };
     const artBox = Art.drawCharacter(ctx, {
       x: point.x,
@@ -8295,12 +8757,25 @@
         if (code === "Escape" || code === "KeyE") closeAbandonCommission();
         return;
       }
+      if (systemSettingsPopover?.hidden === false && code === "Escape") {
+        setSystemSettingsOpen(false);
+        systemButton?.focus({ preventScroll: true });
+        return;
+      }
       if (facilityTab === "bag" && selectedInventoryItemId && (code === "Escape" || code === "KeyE")) {
         selectedInventoryItemId = null;
         renderBagFacility();
         return;
       }
-      if (code === "Escape" || code === "KeyE" || (code === "KeyI" && facilityTab === "bag") || (code === "KeyL" && facilityTab === "skills")) closeFacility();
+      if (code === "KeyI") {
+        openFacility("bag");
+        return;
+      }
+      if (code === "KeyL") {
+        openFacility("skills");
+        return;
+      }
+      if (code === "Escape" || code === "KeyE") closeFacility();
       return;
     }
     if (mode === "battle") {
@@ -8356,10 +8831,7 @@
       else if (code === "Digit3") chooseUpgrade("swift");
       return;
     }
-    if (mode === "dead") {
-      if (code === "Enter" || code === "Space") respawn();
-      return;
-    }
+    if (mode === "dead") return;
     if (mode !== "playing") return;
     if (code === "Escape" && systemSettingsPopover?.hidden === false) {
       setSystemSettingsOpen(false);
@@ -8421,6 +8893,7 @@
         enemyId: plan.enemyId,
         move: { ...plan.move },
         path: plan.path.map((cell) => ({ ...cell })),
+        commands: (plan.commands || []).map((command) => ({ ...command, to: command.to ? { ...command.to } : undefined })),
         targetCells: plan.targetCells.map((cell) => ({ ...cell })),
         willAttack: plan.willAttack,
         skillName: plan.skillName,
@@ -8848,55 +9321,71 @@
   });
   document.getElementById("dialogueNext").addEventListener("click", advanceDialogue);
   sidebarToggle?.addEventListener("click", () => setHudCollapsed(!hudCollapsed));
-  dialoguePanel.addEventListener("click", (event) => {
-    if (event.target.closest("button")) return;
-    advanceDialogue();
-  });
-  continueButton.addEventListener("click", loadGame);
-  const openStatusFromHud = () => openFacility("status");
-  statusButton.addEventListener("click", openStatusFromHud);
-  playerHud.addEventListener("click", openStatusFromHud);
-  playerHud.addEventListener("keydown", (event) => {
-    if (!["Enter", "Space"].includes(event.code)) return;
+  const draggableWindowSelector = ".facility-window.ui-window, .ui-modal-window, .system-settings-window.ui-window";
+  const nonDraggableControlSelector = "button, a, input, select, textarea, [contenteditable], [role=button], [data-no-window-drag], .skill-tree-scroll, [data-deck-drag-source]";
+
+  function resetDraggableWindowPosition(windowElement) {
+    if (!windowElement) return;
+    windowElement.style.setProperty("--ui-drag-x", "0px");
+    windowElement.style.setProperty("--ui-drag-y", "0px");
+    windowElement.classList.remove("is-window-dragging");
+  }
+
+  function beginDraggableWindow(event) {
+    if (event.button !== 0 || draggableWindowGesture) return;
+    const windowElement = event.target.closest?.(draggableWindowSelector);
+    if (!windowElement || windowElement.closest("[hidden]")) return;
+    const facilityState = facilityStateForNode(windowElement);
+    if (facilityState) activateFacilityWindow(facilityState);
+    else if (windowElement === systemSettingsPopover) focusUiWindow(windowElement);
+    if (event.target.closest?.(nonDraggableControlSelector)) return;
+    const style = getComputedStyle(windowElement);
+    const startOffsetX = Number.parseFloat(style.getPropertyValue("--ui-drag-x")) || 0;
+    const startOffsetY = Number.parseFloat(style.getPropertyValue("--ui-drag-y")) || 0;
+    draggableWindowGesture = {
+      pointerId: event.pointerId,
+      windowElement,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffsetX,
+      startOffsetY,
+      moved: false,
+    };
+    try { windowElement.setPointerCapture?.(event.pointerId); } catch (_) {}
+  }
+
+  function moveDraggableWindow(event) {
+    const gesture = draggableWindowGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.moved && Math.hypot(dx, dy) < 4) return;
+    gesture.moved = true;
+    gesture.windowElement.classList.add("is-window-dragging");
+    const rect = gesture.windowElement.getBoundingClientRect();
+    const keepVisibleX = Math.min(72, rect.width * .35);
+    const keepVisibleY = Math.min(56, rect.height * .35);
+    const desiredX = gesture.startOffsetX + dx;
+    const desiredY = gesture.startOffsetY + dy;
+    const minDx = -rect.right + keepVisibleX + (Number.parseFloat(getComputedStyle(gesture.windowElement).getPropertyValue("--ui-drag-x")) || 0);
+    const maxDx = window.innerWidth - rect.left - keepVisibleX + (Number.parseFloat(getComputedStyle(gesture.windowElement).getPropertyValue("--ui-drag-x")) || 0);
+    const minDy = -rect.bottom + keepVisibleY + (Number.parseFloat(getComputedStyle(gesture.windowElement).getPropertyValue("--ui-drag-y")) || 0);
+    const maxDy = window.innerHeight - rect.top - keepVisibleY + (Number.parseFloat(getComputedStyle(gesture.windowElement).getPropertyValue("--ui-drag-y")) || 0);
+    gesture.windowElement.style.setProperty("--ui-drag-x", `${Core.clamp(desiredX, minDx, maxDx)}px`);
+    gesture.windowElement.style.setProperty("--ui-drag-y", `${Core.clamp(desiredY, minDy, maxDy)}px`);
     event.preventDefault();
-    openStatusFromHud();
-  });
-  inventoryButton.addEventListener("click", () => openFacility("bag"));
-  missionButton?.addEventListener("click", () => openFacility("missions"));
-  deckButton.addEventListener("click", openDeckFromSidebar);
-  skillTreeButton.addEventListener("click", () => openFacility("skills"));
-  document.getElementById("skillBookLearnButton").addEventListener("click", confirmSkillManualLearning);
-  document.getElementById("skillBookCancelButton").addEventListener("click", closeSkillManualConfirm);
-  document.getElementById("skillBookConfirmCloseButton").addEventListener("click", closeSkillManualConfirm);
-  skillBookConfirmPanel.addEventListener("click", (event) => {
-    if (event.target === skillBookConfirmPanel) closeSkillManualConfirm();
-  });
-  document.getElementById("skillDetailLearnButton").addEventListener("click", learnFromSkillDetail);
-  document.getElementById("skillDetailDismissButton").addEventListener("click", () => closeSkillDetail());
-  document.getElementById("skillDetailCloseButton").addEventListener("click", () => closeSkillDetail());
-  skillDetailPanel.addEventListener("click", (event) => {
-    if (event.target === skillDetailPanel) closeSkillDetail();
-  });
-  document.getElementById("abandonCommissionConfirmButton").addEventListener("click", confirmAbandonCommission);
-  document.getElementById("abandonCommissionCancelButton").addEventListener("click", () => closeAbandonCommission());
-  document.getElementById("abandonCommissionCloseButton").addEventListener("click", () => closeAbandonCommission());
-  abandonCommissionPanel.addEventListener("click", (event) => {
-    if (event.target === abandonCommissionPanel) closeAbandonCommission();
-  });
-  document.getElementById("respawnButton").addEventListener("click", respawn);
-  document.getElementById("facilityCloseButton").addEventListener("click", closeFacility);
-  facilityHelpButton?.addEventListener("click", toggleFacilityHelp);
-  facilityPanel.addEventListener("click", (event) => {
-    if (event.target === facilityPanel) closeFacility();
-    else if (facilityHelpPopover && !facilityHelpPopover.hidden && !event.target.closest(".facility-help-popover, #facilityHelpButton")) setFacilityHelpOpen(false);
-  });
-  facilityTabs?.addEventListener("click", (event) => {
-    const tab = event.target.closest("[data-facility-tab]");
-    if (!tab || !availableFacilityTabs().includes(tab.dataset.facilityTab)) return;
-    facilityTab = tab.dataset.facilityTab;
-    renderFacility();
-  });
-  facilityContent.addEventListener("click", (event) => {
+  }
+
+  function finishDraggableWindow(event) {
+    const gesture = draggableWindowGesture;
+    if (!gesture || (event && gesture.pointerId !== event.pointerId)) return;
+    draggableWindowGesture = null;
+    gesture.windowElement.classList.remove("is-window-dragging");
+    try { gesture.windowElement.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
+  }
+
+  function handleFacilityContentClick(event, state) {
+    if (!activateFacilityWindow(state)) return;
     if (performance.now() < suppressSkillTreeClickUntil && event.target.closest?.(".skill-tree-scroll")) {
       event.preventDefault();
       return;
@@ -8935,20 +9424,92 @@
     else if (action === "equip-skill") changeSkillLoadout(button.dataset.skillId, true);
     else if (action === "unequip-skill") changeSkillLoadout(button.dataset.skillId, false);
     else if (action === "master-skill") masterSkill(button.dataset.skillId);
+    syncActiveFacilityWindowState();
+  }
+
+  function wireFacilityWindow(state) {
+    state.closeButton?.addEventListener("click", () => closeFacility(state));
+    state.helpButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      activateFacilityWindow(state);
+      toggleFacilityHelp(state);
+    });
+    state.panel.addEventListener("pointerdown", () => activateFacilityWindow(state), true);
+    state.panel.addEventListener("click", (event) => {
+      if (!state.helpPopover?.hidden && !event.target.closest(".facility-help-popover, .ui-info-button")) setFacilityHelpOpen(false, state);
+      const tab = event.target.closest("[data-facility-tab]");
+      if (!tab) return;
+      activateFacilityWindow(state);
+      if (!availableFacilityTabs().includes(tab.dataset.facilityTab)) return;
+      facilityTab = tab.dataset.facilityTab;
+      renderFacility();
+    });
+    state.content.addEventListener("click", (event) => handleFacilityContentClick(event, state));
+    state.content.addEventListener("pointerdown", (event) => {
+      activateFacilityWindow(state);
+      beginSkillTreePan(event);
+      beginDeckDrag(event);
+    });
+    state.content.addEventListener("pointermove", (event) => {
+      if (activeFacilityWindow !== state) return;
+      moveSkillTreePan(event);
+      moveDeckDrag(event);
+    });
+    state.content.addEventListener("pointerup", (event) => {
+      if (activeFacilityWindow !== state) return;
+      finishSkillTreePan(event);
+      finishDeckDrag(event);
+    });
+    state.content.addEventListener("pointercancel", (event) => {
+      if (activeFacilityWindow !== state) return;
+      cancelSkillTreePan(event);
+      cancelDeckDrag(event);
+    });
+  }
+
+  document.addEventListener("pointerdown", beginDraggableWindow);
+  document.addEventListener("pointermove", moveDraggableWindow, { passive: false });
+  document.addEventListener("pointerup", finishDraggableWindow);
+  document.addEventListener("pointercancel", finishDraggableWindow);
+
+  dialoguePanel.addEventListener("click", (event) => {
+    if (event.target.closest("button")) return;
+    advanceDialogue();
   });
-  facilityContent.addEventListener("pointerdown", beginSkillTreePan);
-  facilityContent.addEventListener("pointermove", moveSkillTreePan);
-  facilityContent.addEventListener("pointerup", finishSkillTreePan);
-  facilityContent.addEventListener("pointercancel", cancelSkillTreePan);
-  facilityContent.addEventListener("pointerdown", beginDeckDrag);
-  facilityContent.addEventListener("pointermove", moveDeckDrag);
-  facilityContent.addEventListener("pointerup", finishDeckDrag);
-  facilityContent.addEventListener("pointercancel", cancelDeckDrag);
+  continueButton.addEventListener("click", loadGame);
+  const openStatusFromHud = () => openFacility("status");
+  statusButton.addEventListener("click", openStatusFromHud);
+  playerHud.addEventListener("click", openStatusFromHud);
+  playerHud.addEventListener("keydown", (event) => {
+    if (!["Enter", "Space"].includes(event.code)) return;
+    event.preventDefault();
+    openStatusFromHud();
+  });
+  inventoryButton.addEventListener("click", () => openFacility("bag"));
+  missionButton?.addEventListener("click", () => openFacility("missions"));
+  deckButton.addEventListener("click", openDeckFromSidebar);
+  skillTreeButton.addEventListener("click", () => openFacility("skills"));
+  document.getElementById("skillBookLearnButton").addEventListener("click", confirmSkillManualLearning);
+  document.getElementById("skillBookCancelButton").addEventListener("click", closeSkillManualConfirm);
+  document.getElementById("skillBookConfirmCloseButton").addEventListener("click", closeSkillManualConfirm);
+  skillBookConfirmPanel.addEventListener("click", (event) => {
+    if (event.target === skillBookConfirmPanel) closeSkillManualConfirm();
+  });
+  document.getElementById("skillDetailLearnButton").addEventListener("click", learnFromSkillDetail);
+  document.getElementById("skillDetailDismissButton").addEventListener("click", () => closeSkillDetail());
+  document.getElementById("skillDetailCloseButton").addEventListener("click", () => closeSkillDetail());
+  skillDetailPanel.addEventListener("click", (event) => {
+    if (event.target === skillDetailPanel) closeSkillDetail();
+  });
+  document.getElementById("abandonCommissionConfirmButton").addEventListener("click", confirmAbandonCommission);
+  document.getElementById("abandonCommissionCancelButton").addEventListener("click", () => closeAbandonCommission());
+  document.getElementById("abandonCommissionCloseButton").addEventListener("click", () => closeAbandonCommission());
+  abandonCommissionPanel.addEventListener("click", (event) => {
+    if (event.target === abandonCommissionPanel) closeAbandonCommission();
+  });
+  document.getElementById("reviveHereButton").addEventListener("click", reviveHere);
+  document.getElementById("respawnButton").addEventListener("click", respawn);
   battleHud.addEventListener("click", (event) => {
-    if (event.target.closest("[data-battle-command-follow]")) {
-      followBattleCommandMenu();
-      return;
-    }
     const facingButton = event.target.closest("[data-battle-facing]");
     if (facingButton && !facingButton.disabled) {
       chooseBattleFacing(facingButton.dataset.battleFacing);
@@ -8970,6 +9531,7 @@
   canvas.addEventListener("pointerleave", clearExploreHoverPointer);
   canvas.addEventListener("pointerup", finishCanvasPointer);
   canvas.addEventListener("pointercancel", cancelExploreTouchPointer);
+  canvas.addEventListener("wheel", handleExploreWheelZoom, { passive: false });
   canvas.addEventListener("lostpointercapture", (event) => {
     if (explorePointerGesture?.pressed) cancelExplorePointerTracking(event.pointerId, false);
   });
@@ -8978,15 +9540,16 @@
     if (!button) return;
     setExploreZoomLevel(button.dataset.zoomLevel);
   });
-  systemButton?.addEventListener("click", () => setSystemSettingsOpen(systemSettingsPopover?.hidden !== false));
+  systemButton?.addEventListener("click", () => {
+    if (systemSettingsPopover?.hidden === false) {
+      focusUiWindow(systemSettingsPopover);
+      return;
+    }
+    setSystemSettingsOpen(true);
+  });
   systemSettingsCloseButton?.addEventListener("click", () => {
     setSystemSettingsOpen(false);
     systemButton?.focus({ preventScroll: true });
-  });
-  stage.addEventListener("pointerdown", (event) => {
-    if (systemSettingsPopover?.hidden !== false) return;
-    if (systemSettingsPopover.contains(event.target) || systemButton?.contains(event.target)) return;
-    setSystemSettingsOpen(false);
   });
   soundButton?.addEventListener("click", () => {
     soundEnabled = !soundEnabled;
@@ -9004,6 +9567,8 @@
     if (soundEnabled) sound.tone(520, .1, { to: 760, gain: .03 });
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
+  document.addEventListener("pointerdown", unlockGameAudioFromGesture, { capture: true, passive: true });
+  window.addEventListener("keydown", unlockGameAudioFromGesture, { capture: true });
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("blur", () => {
     keys.clear();

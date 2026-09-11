@@ -24,6 +24,68 @@
 
 呢個 Lv 係 species / authored map progression，唔跟玩家等級或 dungeon clear 次數動態提升。怪物 level cap 獨立為 45。
 
+
+## Canonical combat stats / encounter scaling
+
+普通怪 Base ATK／DEF 以「同 Level 格鬥士著正常對應裝備」做共同校準基準；**encounter 數量唔會再削 ATK／DEF**。只有怪物定位先可作 role adjustment，例如龜偏高 DEF、蛇偏高 ATK／較薄防、熊屬重型高攻防。
+
+| 怪物 | Lv | 數量 | Base HP | 實戰每隻 HP | ATK | DEF | 定位修正 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 山野小雞 | 1 | 1 | 24 | 24 | 19 | 3 | 教學近戰 |
+| 赤尾狐 | 5 | 2 | 60 | 51 | 28 | 10 | 敏捷／雙怪 |
+| 灰紋浣熊 | 10 | 1 | 90 | 90 | 34 | 11 | 平衡近戰 |
+| 荒原野豬 | 15 | 3 | 150 | 105 | 39 | 15 | 三怪＋直線衝鋒 |
+| 霧沼蛙 | 21 | 1 | 160 | 160 | 45 | 16 | 中距離控制 |
+| 灰原郊狼 | 27 | 3 | 200 | 140 | 55 | 21 | 三怪包位／高速 |
+| 苔甲龜 | 33 | 1 | 280 | 280 | 71 | 38 | 坦克，高 DEF |
+| 毒霧蛇 | 39 | 2 | 240 | 204 | 84 | 26 | 高攻、遠程毒 |
+| 岩穴熊 | 45 | 1 | 520 | 520 | 100 | 40 | 重型高攻防 |
+
+`stats.hp` 保存未按 encounter 數量縮放的 Base HP；進戰鬥時才用：
+
+```text
+1 隻：Base HP × 1.00
+2 隻：Base HP × 0.85
+3 隻：Base HP × 0.70
+```
+
+最後四捨五入成整數。呢個倍率只作用於 HP，**唔作用於 ATK / DEF / AP / Move / Skill Speed**。
+
+## Battle EXP
+
+每種 canonical monster 的 `rewards.baseXp` 固定為 `100`，對應《幸福 Online／STRUGARDEN》「玩家與同級怪 1 對 1 = 100 EXP」基準。現行 encounter 只有同 species，因此 reward level 就係該場怪物 Lv；如果將來重新出現混合 encounter，仍以場上最高怪 Lv 做基準。
+
+```text
+battleEXP = round(100 × levelMultiplier × encounterMultiplier)
+```
+
+Level 差倍率：
+
+```text
+怪物 Lv >= 玩家 Lv：
+  levelMultiplier = 1 + min(10, 怪Lv - 玩家Lv) × 0.10
+  → +1 Lv = 1.10，+10 Lv 或以上 = 2.00 cap
+
+怪物低玩家 1–4 Lv：
+  levelMultiplier = 1.00
+
+怪物低玩家 5 Lv 或以上：
+  levelMultiplier = 0.9 ^ (玩家Lv - 怪Lv - 4)
+  → 低5 Lv = 0.90
+  → 低6 Lv = 0.81
+  → 低7 Lv = 0.729
+```
+
+Encounter 數量倍率：
+
+```text
+1 隻 = ×1.0
+2 隻 = ×1.5
+3 隻 = ×2.0
+```
+
+例：Lv10 玩家打 Lv10 浣熊 = `100 EXP`；Lv15 玩家打一場 3 隻 Lv15 野豬 = `200 EXP`；Lv10 玩家打 Lv15 怪 = `150 EXP`；Lv20 玩家打 Lv15 怪 = `90 EXP`。
+
 ## Monster record
 
 `data/monsters.js` 每隻怪以同一 schema 保存：
@@ -78,6 +140,8 @@
 
 每隻怪有獨立 AP pool。AI 可選擇今輪唔攻擊，保留 AP 俾下輪較高 AP 技能。
 
+怪物傷害同玩家使用同一標準 damage contract：`sqrt(AP / 3)`；真正 AoE 或帶 knockback／poison／move-down 等額外 utility 的傷害技統一只套一次 `×0.8`。普通直接傷害經共用 `Tactics.calculateDamage()` 後最低為 `5`；Poison／其他 DoT 按自己 status model 結算，唔套 direct-damage floor。詳細公式由 `docs/BATTLE_SYSTEM.md` 擁有。
+
 ## Battle AI: skill-driven planner
 
 `monster-ai.js` 唔按 species 寫死「狐狸一定繞側／蛇一定逃走」。每輪由以下資料共同決定：
@@ -100,9 +164,21 @@
 
 ### Range-1 pursuit / 卡位
 
-近戰追蹤時，pathfinding **以玩家目前被佔用的 cell 做 goal**，並使用 `allowGoalOccupied`。路徑真正執行前會剔除玩家最後一格，shared occupancy / collision resolver 亦禁止疊格。
+近戰追蹤時，pathfinding **以玩家目前被佔用的 cell 做 goal**，並使用 `allowGoalOccupied`。完整 movement intent / path **保留玩家最後一格**；真正執行時由 shared occupancy / collision resolver 阻止敵對單位重疊。玩家如果同一輪移走，近戰怪因此可以自然踏入玩家舊格繼續追蹤。
 
-呢個設計刻意唔指定「玩家前面嗰一格」做唯一 goal：如果一隻怪已經卡住玩家其中一邊，第二／第三隻近戰怪仍可沿另一條合法路線追向玩家並形成包圍。
+呢個設計刻意唔指定「玩家前面嗰一格」做唯一 goal：如果一隻怪已經卡住玩家其中一邊，第二／第三隻近戰怪仍以玩家格作共同追蹤目標，而唔會因某一個預設鄰格被佔就失去追蹤意圖。
+
+### Shared battle movement collision
+
+同隊／敵對碰撞屬於 `tactics-core.js` 共用 battle movement resolver，**唔屬於 Monster AI**。AI 只提交原本想行嘅 route。
+
+- 敵對單位：不可穿過或重疊；實際 arrival/vacate timing、玩家同時到達優先、pin/STOP 規則全部由 `docs/BATTLE_SYSTEM.md` / shared resolver 擁有。
+- 同隊單位爭同一格：以 movement priority 決定，現階段主要以 `weight` 較輕者優先；另一方只作短暫 `friendly-wait`，唔取消原 route。
+- 前方隊友之後移走：等待者會 retry 同一 movement step，清路後繼續原本路線。
+- 隊友最終停喺必經格：先視為真正 `friendly-route-blocked`。
+- 同隊迎面／互換位置：容許 reciprocal pass；較重／低 priority 一方會短暫讓步後繼續，避免雙方永久卡死。
+
+怪物固定 weight 之後可再獨立設定；目前 resolver 已支援 weight，但今次不新增每種怪的固定重量。
 
 ## Runtime / migration
 

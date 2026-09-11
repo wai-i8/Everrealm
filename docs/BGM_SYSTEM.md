@@ -21,6 +21,6 @@ mountain track, so crossing between those maps does not restart the music.
   playback position and do not create a second audio instance.
 - Disabling sound pauses and mutes the active element; enabling it resumes the
   current zone after the browser permits playback.
-- Autoplay rejection is caught so audio policy cannot break gameplay.
+- Autoplay rejection is caught so audio policy cannot break gameplay. If a refresh/load is restored while music is enabled, the first subsequent pointer/keyboard user gesture retries the active map track immediately; playback must not wait for a later map transition.
 - The debug snapshot reports the selected source, paused/muted state, loop state
   and `activeInstances`; it must never report more than one active instance.

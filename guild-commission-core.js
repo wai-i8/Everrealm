@@ -7,8 +7,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (questData) {
   "use strict";
 
-  const COMMISSION_STARS = Object.freeze([1, 2, 3, 4, 5]);
-  const COMMISSION_TYPES = Object.freeze(["hunt", "delivery"]);
+  const COMMISSION_STARS = Object.freeze([1, 2, 3, 5, 7]);
+  const COMMISSION_TYPES = Object.freeze(["hunt", "delivery", "wish"]);
   const MAX_COUNTED_DEFEATS = 128;
 
   function freeze(value) {
@@ -65,7 +65,9 @@
         repeatable: raw.repeatable !== false,
         objective: type === "hunt"
           ? { monster_id: String(objective.monster_id || "").trim(), count }
-          : { recipient_npc_id: String(objective.recipient_npc_id || "").trim(), count: 1 },
+          : type === "delivery"
+            ? { recipient_npc_id: String(objective.recipient_npc_id || "").trim(), count: 1 }
+            : { interaction_id: String(objective.interaction_id || "").trim(), count: 1 },
         reward: { skill_envelope_star: skillEnvelopeStar },
       }));
     }
@@ -87,10 +89,11 @@
       progress: 0,
       objectiveCompleted: false,
       deliveryCompleted: false,
+      interactionCompleted: false,
       countedDefeatIds: [],
       cycle: 0,
       envelopeDrawSerial: 0,
-      envelopes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      envelopes: { 1: 0, 2: 0, 3: 0, 5: 0, 7: 0 },
       rewardClaimed: false,
     };
   }
@@ -104,6 +107,7 @@
     state.progress = wholeNumber(source.progress, 0, 0, 999);
     state.objectiveCompleted = Boolean(source.objectiveCompleted);
     state.deliveryCompleted = Boolean(source.deliveryCompleted);
+    state.interactionCompleted = Boolean(source.interactionCompleted);
     state.countedDefeatIds = [...new Set((Array.isArray(source.countedDefeatIds) ? source.countedDefeatIds : [])
       .map((id) => String(id || "").trim()).filter(Boolean))].slice(-MAX_COUNTED_DEFEATS);
     state.cycle = wholeNumber(source.cycle, 0, 0, 999999999);
@@ -117,6 +121,7 @@
       state.progress = 0;
       state.objectiveCompleted = false;
       state.deliveryCompleted = false;
+      state.interactionCompleted = false;
       state.countedDefeatIds = [];
     }
     if (!state.activeCommissionId || state.status === "available") {
@@ -125,6 +130,7 @@
       state.progress = 0;
       state.objectiveCompleted = false;
       state.deliveryCompleted = false;
+      state.interactionCompleted = false;
       state.countedDefeatIds = [];
     }
     return state;
@@ -157,6 +163,7 @@
         progress: 0,
         objectiveCompleted: false,
         deliveryCompleted: false,
+        interactionCompleted: false,
         countedDefeatIds: [],
         rewardClaimed: false,
       },
@@ -203,6 +210,21 @@
     };
   }
 
+  function recordInteraction(state, interactionId, catalog = CATALOG) {
+    const current = normalizeState(state, catalog);
+    const commission = activeCommission(current, catalog);
+    const targetId = String(interactionId || "").trim();
+    if (!commission || current.status !== "active" || commission.type !== "wish") return { changed: false, reason: "not-active-wish", state: current, commission };
+    if (targetId !== commission.objective.interaction_id) return { changed: false, reason: "wrong-interaction", state: current, commission };
+    if (current.interactionCompleted) return { changed: false, reason: "already-completed", state: current, commission };
+    return {
+      changed: true,
+      reason: "objective-completed",
+      commission: cloneCommission(commission),
+      state: { ...current, progress: 1, objectiveCompleted: true, interactionCompleted: true, status: "ready_to_report" },
+    };
+  }
+
   function abandon(state, catalog = CATALOG) {
     const current = normalizeState(state, catalog);
     const commission = activeCommission(current, catalog);
@@ -217,6 +239,7 @@
       progress: 0,
       objectiveCompleted: false,
       deliveryCompleted: false,
+      interactionCompleted: false,
       countedDefeatIds: [],
       cycle: current.cycle + 1,
       rewardClaimed: false,
@@ -239,6 +262,7 @@
       progress: 0,
       objectiveCompleted: false,
       deliveryCompleted: false,
+      interactionCompleted: false,
       countedDefeatIds: [],
       cycle: current.cycle + 1,
       rewardClaimed: true,
@@ -277,6 +301,7 @@
     accept,
     recordHuntKill,
     deliver,
+    recordInteraction,
     abandon,
     report,
     consumeEnvelope,

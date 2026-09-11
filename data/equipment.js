@@ -54,7 +54,7 @@
     "classId": "fighter",
     "iconIndex": 0,
     "stats": {
-      "attack": 2,
+      "attack": 19,
       "defense": 0,
       "maxHp": 0,
       "speed": 2,
@@ -178,7 +178,7 @@
     "classId": "fighter",
     "iconIndex": 0,
     "stats": {
-      "attack": 10,
+      "attack": 23,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -208,7 +208,7 @@
     "classId": "fighter",
     "iconIndex": 1,
     "stats": {
-      "attack": 17,
+      "attack": 27,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -238,7 +238,7 @@
     "classId": "fighter",
     "iconIndex": 2,
     "stats": {
-      "attack": 25,
+      "attack": 33,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -268,7 +268,7 @@
     "classId": "fighter",
     "iconIndex": 3,
     "stats": {
-      "attack": 34,
+      "attack": 39,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -299,7 +299,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 1,
+      "defense": 2,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -329,7 +329,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 2,
+      "defense": 3,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -419,7 +419,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 5,
+      "defense": 4,
       "maxHp": 0,
       "speed": 1,
       "critChance": 0,
@@ -759,7 +759,7 @@
     "iconIndex": 6,
     "stats": {
       "attack": 2,
-      "defense": 1,
+      "defense": 2,
       "maxHp": 2,
       "speed": 0,
       "critChance": 0,
@@ -788,8 +788,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 1,
-      "defense": 0,
+      "attack": 2,
+      "defense": 2,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -818,8 +818,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 1,
-      "defense": 0,
+      "attack": 2,
+      "defense": 2,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -849,8 +849,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 1,
-      "defense": 0,
+      "attack": 2,
+      "defense": 2,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -880,8 +880,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 5,
-      "defense": 2,
+      "attack": 3,
+      "defense": 3,
       "maxHp": 5,
       "speed": 0,
       "critChance": 0,
@@ -911,7 +911,7 @@
     "iconIndex": 6,
     "stats": {
       "attack": 3,
-      "defense": 1,
+      "defense": 3,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -940,8 +940,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 2,
-      "defense": 1,
+      "attack": 3,
+      "defense": 3,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -971,8 +971,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 2,
-      "defense": 1,
+      "attack": 3,
+      "defense": 3,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1002,8 +1002,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 9,
-      "defense": 3,
+      "attack": 4,
+      "defense": 4,
       "maxHp": 8,
       "speed": 0,
       "critChance": 0,
@@ -1032,8 +1032,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 5,
-      "defense": 2,
+      "attack": 4,
+      "defense": 4,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1063,7 +1063,7 @@
     "iconIndex": 7,
     "stats": {
       "attack": 4,
-      "defense": 2,
+      "defense": 4,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1094,7 +1094,7 @@
     "iconIndex": 6,
     "stats": {
       "attack": 4,
-      "defense": 2,
+      "defense": 4,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1125,8 +1125,8 @@
     "classId": "fighter",
     "iconIndex": 8,
     "stats": {
-      "attack": 2,
-      "defense": 2,
+      "attack": 0,
+      "defense": 3,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1218,7 +1218,7 @@
     "classId": "fighter",
     "iconIndex": 8,
     "stats": {
-      "attack": 5,
+      "attack": 0,
       "defense": 4,
       "maxHp": 0,
       "speed": 0,

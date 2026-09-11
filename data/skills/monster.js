@@ -16,11 +16,7 @@
   ]);
   const STRAIGHT_TWO = Object.freeze([Object.freeze([0, 1]), Object.freeze([0, 2])]);
   const STRAIGHT_THREE = Object.freeze([Object.freeze([0, 1]), Object.freeze([0, 2]), Object.freeze([0, 3])]);
-  const SNAKE_SPIT = Object.freeze([
-    Object.freeze([-1, 4]), Object.freeze([0, 4]), Object.freeze([1, 4]),
-    Object.freeze([-1, 3]), Object.freeze([0, 3]), Object.freeze([1, 3]),
-    Object.freeze([0, 2]), Object.freeze([0, 1]),
-  ]);
+  const STRAIGHT_FOUR = Object.freeze([Object.freeze([0, 1]), Object.freeze([0, 2]), Object.freeze([0, 3]), Object.freeze([0, 4])]);
   const SURROUND_EIGHT = Object.freeze([
     Object.freeze([-1, -1]), Object.freeze([0, -1]), Object.freeze([1, -1]),
     Object.freeze([-1, 0]), Object.freeze([1, 0]),
@@ -31,10 +27,33 @@
     Object.freeze([-1, 1]), Object.freeze([0, 1]), Object.freeze([1, 1]),
   ]);
 
+  const DAMAGE_AP_DIVISOR = 3;
+  const UTILITY_DAMAGE_MULTIPLIER = 0.8;
+
+  function hasUtilityDamagePenalty(skill, area, effects) {
+    const isAreaAttack = area?.shape && area.shape !== "single";
+    const hasUtilityEffect = Array.isArray(effects) && effects.length > 0;
+    return Boolean(isAreaAttack || hasUtilityEffect);
+  }
+
+  function damageScaleFromAp(apCost, utilityMultiplier = 1) {
+    const ap = Math.max(0, Number(apCost) || 0);
+    return Math.sqrt(ap / DAMAGE_AP_DIVISOR) * Math.max(0, Number(utilityMultiplier) || 0);
+  }
+
   function freezeSkill(skill) {
     const rangeCellsRelative = Object.freeze((skill.rangeCellsRelative || []).map((cell) => Object.freeze([...cell])));
     const area = Object.freeze({ ...(skill.area || { shape: "single" }), ...(skill.area?.relativeCells ? { relativeCells: Object.freeze(skill.area.relativeCells.map((cell) => Object.freeze([...cell]))) } : {}) });
     const effects = Object.freeze((skill.effects || []).map((effect) => Object.freeze({ ...effect })));
+    const utilityMultiplier = hasUtilityDamagePenalty(skill, area, effects) ? UTILITY_DAMAGE_MULTIPLIER : 1;
+    const damageModel = skill.dealsDamage
+      ? Object.freeze({
+        type: "ap_curve",
+        formula: "sqrt(ap / 3)",
+        utilityMultiplier,
+        scale: damageScaleFromAp(skill.apCost, utilityMultiplier),
+      })
+      : null;
     return Object.freeze({
       ...skill,
       range: Object.freeze({ ...(skill.range || {}), rangeCellsRelative, heightDifference: HEIGHT_ONE }),
@@ -45,6 +64,7 @@
       targeting: Object.freeze({ team: "enemy", mode: "unit", lineOfSight: false, ...(skill.targeting || {}) }),
       pathMode: "facingOrthogonalPriority",
       effects,
+      damageModel,
     });
   }
 
@@ -54,8 +74,7 @@
       apCost: 4, speedGrade: "C",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 0.78 }, effects: [], aiValue: 48,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 48,
     }),
 
     quick_bite: freezeSkill({
@@ -63,8 +82,7 @@
       apCost: 5, speedGrade: "B",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 0.9 }, effects: [], aiValue: 56,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 56,
     }),
 
     coyote_bite: freezeSkill({
@@ -72,8 +90,7 @@
       apCost: 6, speedGrade: "B",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.0 }, effects: [], aiValue: 64,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 64,
     }),
 
     fox_pounce: freezeSkill({
@@ -81,8 +98,7 @@
       apCost: 12, speedGrade: "C",
       range: { min: 1, max: 2, type: "relative_cells", sourcePattern: "■■■\n■■■\n口↑口", rangeDescription: "可攻擊前方第1至第2格的三格闊區域，共6格。" },
       rangeCellsRelative: POUNCE_TWO,
-      area: { shape: "single" }, deliveryMode: "leap", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.25 }, effects: [], aiValue: 82,
+      area: { shape: "single" }, deliveryMode: "leap", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 82,
     }),
 
     raccoon_claw: freezeSkill({
@@ -90,8 +106,7 @@
       apCost: 5, speedGrade: "C",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 0.95 }, effects: [], aiValue: 58,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 58,
     }),
 
     flurry_claw: freezeSkill({
@@ -99,8 +114,7 @@
       apCost: 11, speedGrade: "D",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.35 }, effects: [], aiValue: 80,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 80,
     }),
 
     tusk_strike: freezeSkill({
@@ -108,8 +122,7 @@
       apCost: 6, speedGrade: "D",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.0 }, effects: [], aiValue: 60,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 60,
     }),
 
     boar_charge: freezeSkill({
@@ -118,8 +131,7 @@
       range: { min: 1, max: 3, type: "relative_cells", sourcePattern: "口■口\n口■口\n口■口\n口↑口", rangeDescription: "只可攻擊正前方第1、第2、第3格。" },
       rangeCellsRelative: STRAIGHT_THREE,
       area: { shape: "single" }, deliveryMode: "linear", blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
-      actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.55 }, effects: [{ type: "knockback", amount: 1 }], aiValue: 96,
+      actionKind: "attack", dealsDamage: true, effects: [{ type: "knockback", amount: 1 }], aiValue: 96,
     }),
 
     tongue_strike: freezeSkill({
@@ -128,7 +140,7 @@
       range: { min: 1, max: 2, type: "relative_cells", sourcePattern: "口■口\n口■口\n口↑口", rangeDescription: "只可攻擊正前方第1或第2格。" },
       rangeCellsRelative: STRAIGHT_TWO,
       area: { shape: "single" }, deliveryMode: "linear", blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
-      actionKind: "attack", dealsDamage: true, damageModel: { scale: 0.85 }, effects: [], aiValue: 66,
+      actionKind: "attack", dealsDamage: true, effects: [], aiValue: 66,
     }),
 
     slime_shot: freezeSkill({
@@ -136,8 +148,8 @@
       apCost: 15, speedGrade: "D",
       range: { min: 1, max: 3, type: "relative_cells", sourcePattern: "口■口\n口■口\n口■口\n口↑口", rangeDescription: "只可攻擊正前方第1至第3格。" },
       rangeCellsRelative: STRAIGHT_THREE,
-      area: { shape: "single" }, deliveryMode: "linear", blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
-      actionKind: "attack", dealsDamage: true, damageModel: { scale: 1.1 }, effects: [{ type: "move_down", amount: 1, duration: 1 }], aiValue: 94,
+      area: { shape: "single" }, deliveryMode: "linear", isProjectile: true, blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
+      actionKind: "attack", dealsDamage: true, effects: [{ type: "move_down", amount: 1, duration: 1 }], aiValue: 94,
     }),
 
     hunting_pounce: freezeSkill({
@@ -145,8 +157,7 @@
       apCost: 13, speedGrade: "C",
       range: { min: 1, max: 2, type: "relative_cells", sourcePattern: "■■■\n■■■\n口↑口", rangeDescription: "可攻擊前方第1至第2格的三格闊區域，共6格。" },
       rangeCellsRelative: POUNCE_TWO,
-      area: { shape: "single" }, deliveryMode: "leap", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.45 }, effects: [], aiValue: 100,
+      area: { shape: "single" }, deliveryMode: "leap", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 100,
     }),
 
     shell_ram: freezeSkill({
@@ -154,8 +165,7 @@
       apCost: 6, speedGrade: "D",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 0.9 }, effects: [], aiValue: 60,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 60,
     }),
 
     spinning_shell: freezeSkill({
@@ -164,8 +174,7 @@
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■\n■■■", rangeDescription: "以自身為中心，攻擊周圍8格。" },
       rangeCellsRelative: SURROUND_EIGHT,
       area: { shape: "relative_cells", relativeCells: SURROUND_EIGHT, sourcePattern: "■■■\n■↑■\n■■■", areaDescription: "自身周圍8格全部屬於攻擊區。" },
-      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.35 }, effects: [{ type: "knockback", amount: 1 }], aiValue: 104,
+      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true, effects: [{ type: "knockback", amount: 1 }], aiValue: 104,
     }),
 
     venom_fang: freezeSkill({
@@ -173,17 +182,16 @@
       apCost: 8, speedGrade: "B",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 0.9 }, effects: [{ type: "poison", duration: 2, maxHpRatio: 0.05 }], aiValue: 92,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [{ type: "poison", duration: 2, maxHpRatio: 0.05 }], aiValue: 92,
     }),
 
     venom_spit: freezeSkill({
-      id: "venom_spit", name: "毒液噴吐", description: "在遠距離噴出毒液並施加較持久中毒。",
+      id: "venom_spit", name: "毒液噴吐", description: "沿正前方噴出毒液並施加較持久中毒。",
       apCost: 18, speedGrade: "D",
-      range: { min: 1, max: 4, type: "relative_cells", sourcePattern: "■■■\n■■■\n口■口\n口■口\n口↑口", rangeDescription: "可選8格：前4左/中/右、前3左/中/右、前2、前1。" },
-      rangeCellsRelative: SNAKE_SPIT,
-      area: { shape: "single" }, deliveryMode: "linear", blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
-      actionKind: "attack", dealsDamage: true, damageModel: { scale: 0.8 }, effects: [{ type: "poison", duration: 3, maxHpRatio: 0.05 }], aiValue: 122,
+      range: { min: 1, max: 4, type: "relative_cells", sourcePattern: "口■口\n口■口\n口■口\n口■口\n口↑口", rangeDescription: "只可攻擊正前方第1至第4格，共4格。" },
+      rangeCellsRelative: STRAIGHT_FOUR,
+      area: { shape: "single" }, deliveryMode: "linear", isProjectile: true, blocksByTerrain: true, blocksByUnits: true, stopOnFirstUnit: true,
+      actionKind: "attack", dealsDamage: true, effects: [{ type: "poison", duration: 3, maxHpRatio: 0.05 }], aiValue: 122,
     }),
 
     heavy_palm: freezeSkill({
@@ -191,8 +199,7 @@
       apCost: 7, speedGrade: "C",
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■", rangeDescription: "可攻擊前左、前、前右、左、右，共5格。" },
       rangeCellsRelative: MELEE_FIVE,
-      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.1 }, effects: [], aiValue: 70,
+      area: { shape: "single" }, deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 70,
     }),
 
     quake_palm: freezeSkill({
@@ -201,11 +208,10 @@
       range: { min: 1, max: 2, type: "relative_cells", sourcePattern: "口■口\n■■■\n口↑口", rangeDescription: "攻擊前左、前、前右，以及正前方第2格，共4格。" },
       rangeCellsRelative: BEAR_QUAKE,
       area: { shape: "relative_cells", relativeCells: BEAR_QUAKE, sourcePattern: "口■口\n■■■\n口↑口", areaDescription: "前方4格震擊區。" },
-      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true,
-      damageModel: { scale: 1.6 }, effects: [], aiValue: 128,
+      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 128,
     }),
   });
 
   function getSkill(id) { return SKILLS[String(id || "").trim()] || null; }
-  return { SKILLS, getSkill };
+  return { SKILLS, getSkill, damageScaleFromAp, UTILITY_DAMAGE_MULTIPLIER };
 });

@@ -18,13 +18,21 @@
     return route.length > 1 ? Tactics.facingFromStep(route[route.length - 2], route[route.length - 1], fallback) : fallback;
   }
 
+  function commandsFor(path, initialFacing, desiredFacing) {
+    const route = Array.isArray(path) && path.length ? path : [];
+    const commands = route.slice(1).map((to) => ({ type: "move", to: copyCell(to) }));
+    const travelFacing = finalFacing(route, initialFacing) || initialFacing;
+    if (desiredFacing && desiredFacing !== travelFacing) commands.push({ type: "face", facing: desiredFacing });
+    return commands;
+  }
+
   function validateSkillFrom(skill, enemy, origin, facing, target, grid, units) {
     if (!skill || !origin || !target?.cell) return false;
     const validation = Skills.validateSkillTarget(skill, origin, target.cell, {
       grid,
       heightMap: grid?.heightMap,
       facing,
-      actorTeam: enemy.side || "enemy",
+      actorTeam: enemy.side || enemy.team || "enemy",
       actorId: enemy.id,
       targetUnit: { ...target, team: target.side || target.team || "ally" },
     });
@@ -59,11 +67,64 @@
     return value;
   }
 
-  function skillValue(skill) {
-    return finite(skill?.aiValue, 50)
-      + finite(skill?.damageModel?.scale, 1) * 18
-      + effectValue(skill)
-      - finite(skill?.apCost, 0) * .45;
+  function speedValue(skill) {
+    const index = typeof Skills?.speedGradeIndex === "function" ? Skills.speedGradeIndex(skill?.speedGrade) : 6;
+    return Math.max(0, 7 - Math.min(7, index)) * 3;
+  }
+
+  function estimateSkillDamage(skill, enemy, target) {
+    if (!skill?.dealsDamage) return 0;
+    return Tactics.calculateDamage(enemy, target, {
+      multiplier: finite(skill?.damageModel?.scale, 1),
+      minimum: Tactics.MIN_DIRECT_DAMAGE,
+    });
+  }
+
+  function skillValue(skill, enemy = null, target = null) {
+    const cost = Math.max(1, finite(skill?.apCost, 0));
+    const authored = finite(skill?.aiValue, 50) * .35;
+    const effects = effectValue(skill);
+    const speed = speedValue(skill);
+    if (!enemy || !target) {
+      return authored + finite(skill?.damageModel?.scale, 1) * 18 + effects + speed - cost * .35;
+    }
+    const rawDamage = estimateSkillDamage(skill, enemy, target);
+    const hp = Math.max(1, finite(target.hp, rawDamage));
+    const usefulDamage = Math.min(rawDamage, hp);
+    const overkill = Math.max(0, rawDamage - hp);
+    const killBonus = rawDamage >= hp ? 42 + Math.max(0, 20 - cost) * 1.5 : 0;
+    const efficiency = usefulDamage / cost;
+    return authored
+      + usefulDamage * 1.6
+      + efficiency * 5
+      + effects
+      + speed
+      + killBonus
+      - overkill * .65
+      - cost * .25;
+  }
+
+  function facingStatesForTile(tile, enemy) {
+    const moveLimit = Math.max(0, finite(enemy.moveRange, 0));
+    const turnCost = Math.max(0, finite(enemy.turnCost, .5));
+    const path = tile.path?.length ? tile.path.map(copyCell) : [copyCell(enemy.cell)];
+    const baseFacing = finalFacing(path, enemy.facing) || enemy.facing || "down";
+    const baseCost = finite(tile.cost, 0);
+    const states = [];
+    for (const facing of FACING_ORDER) {
+      const faceCost = Tactics.facingTurnCost(baseFacing, facing, turnCost);
+      const totalCost = baseCost + faceCost;
+      if (totalCost > moveLimit + 1e-9) continue;
+      states.push({
+        cell: { x: tile.x, y: tile.y },
+        path,
+        commands: commandsFor(path, enemy.facing, facing),
+        cost: totalCost,
+        facing,
+        turnCost: faceCost,
+      });
+    }
+    return states;
   }
 
   function reachableStates(grid, enemy, units) {
@@ -74,31 +135,117 @@
       turnCost,
       initialFacing: enemy.facing,
     });
-    return tiles.map((tile) => ({
-      cell: { x: tile.x, y: tile.y },
-      path: tile.path?.length ? tile.path.map(copyCell) : [copyCell(enemy.cell)],
-      cost: finite(tile.cost, 0),
-      facing: finalFacing(tile.path, enemy.facing),
-    }));
+    const states = [];
+    const seen = new Set();
+    for (const tile of tiles) {
+      for (const state of facingStatesForTile(tile, enemy)) {
+        const key = `${state.cell.x},${state.cell.y}:${state.facing}`;
+        const previous = seen.has(key);
+        if (previous) continue;
+        seen.add(key);
+        states.push(state);
+      }
+    }
+    return states;
+  }
+
+  function meleePursuitRoute({ grid, enemy, target, units }) {
+    const turnCost = Math.max(0, finite(enemy.turnCost, .5));
+    const fullPath = Tactics.findPath(grid, enemy.cell, target.cell, units, {
+      ignoreUnitId: enemy.id,
+      allowGoalOccupied: true,
+      turnCost,
+      initialFacing: enemy.facing,
+    });
+    if (!fullPath.length) return null;
+    const approach = fullPath.slice(0, -1);
+    const attackCost = Tactics.movementPathCost(approach, { turnCost, initialFacing: enemy.facing });
+    const route = Tactics.truncatePathByCost(fullPath, Math.max(0, finite(enemy.moveRange, 0)), {
+      turnCost,
+      initialFacing: enemy.facing,
+    });
+    const safeRoute = route.length ? route : [copyCell(enemy.cell)];
+    const intendedFacing = fullPath.length > 1
+      ? Tactics.facingFromStep(fullPath[fullPath.length - 2], fullPath[fullPath.length - 1], enemy.facing)
+      : enemy.facing;
+    const attackOrigin = approach.length ? approach[approach.length - 1] : enemy.cell;
+    return {
+      fullPath,
+      approach,
+      attackCost,
+      path: safeRoute,
+      commands: commandsFor(safeRoute, enemy.facing, finalFacing(safeRoute, enemy.facing)),
+      cell: copyCell(safeRoute[safeRoute.length - 1]),
+      facing: intendedFacing || finalFacing(safeRoute, enemy.facing) || enemy.facing,
+      attackOrigin: copyCell(attackOrigin),
+      attackFacing: intendedFacing || enemy.facing,
+      previewCell: sameCell(safeRoute[safeRoute.length - 1], target.cell) ? copyCell(attackOrigin) : copyCell(safeRoute[safeRoute.length - 1]),
+      cost: Tactics.movementPathCost(safeRoute, { turnCost, initialFacing: enemy.facing }),
+    };
+  }
+
+  function isPureMelee(skill) {
+    return finite(skill?.range?.max, 1) === 1 && finite(skill?.range?.min, 1) === 1 && skill?.deliveryMode === "contact";
   }
 
   function attackCandidates({ grid, enemy, target, units, skills }) {
     const currentAp = Math.max(0, finite(enemy.ap, 0));
     const states = reachableStates(grid, enemy, units);
     const candidates = [];
+    let sharedMeleeRoute = null;
+
     for (const skill of skills) {
       if (!skill || skill.dealsDamage === false || skill.actionKind === "guard" || currentAp < finite(skill.apCost, 0)) continue;
+
+      // Happiness-style pure melee ALWAYS pursues the TARGET'S OCCUPIED CELL,
+      // even when the monster can already hit from its current square.  This
+      // preserves pressure/pinning: if the player stays put, enemy collision
+      // stops the monster adjacent and it attacks; if the player moves away in
+      // the simultaneous movement phase, the monster can step into the vacated
+      // square and keep following instead of standing still once in range.
+      if (isPureMelee(skill)) {
+        sharedMeleeRoute ||= meleePursuitRoute({ grid, enemy, target, units });
+        const route = sharedMeleeRoute;
+        if (route && route.attackCost <= Math.max(0, finite(enemy.moveRange, 0)) + 1e-9
+          && validateSkillFrom(skill, enemy, route.attackOrigin, route.attackFacing, target, grid, units)) {
+          candidates.push({
+            kind: "attack",
+            skill,
+            target,
+            cell: route.cell,
+            path: route.path,
+            commands: route.commands,
+            facing: route.facing,
+            attackOrigin: route.attackOrigin,
+            attackFacing: route.attackFacing,
+            previewCell: route.previewCell,
+            cost: route.cost,
+            score: 100 + skillValue(skill, enemy, target) - route.attackCost * 2.2,
+          });
+          continue;
+        }
+        // Only fall back to an in-place facing attack when no occupied-goal
+        // route can legally be built (for example, pathological blocked maps).
+      }
+
       for (const state of states) {
         if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units)) continue;
+        if (isPureMelee(skill) && !sameCell(state.cell, enemy.cell)) continue;
         const distance = Tactics.manhattan(state.cell, target.cell);
-        const rangeBonus = finite(skill.range?.max, 1) > 1 ? distance * 2.5 : 0;
-        const noMoveBonus = state.cost <= 1e-9 ? 36 : 0;
+        const maxRange = Math.max(1, finite(skill.range?.max, 1));
+        // A skill with reach should actually USE that reach. This is not a
+        // species-specific kite rule: the preferred spacing comes directly
+        // from the selected skill's authored maximum range.
+        const rangeBonus = maxRange > 1 ? (distance / maxRange) * 18 : 0;
+        const noMoveBonus = state.cost <= 1e-9 ? 5 : 0;
         candidates.push({
           kind: "attack",
           skill,
           ...state,
           target,
-          score: 100 + skillValue(skill) + noMoveBonus + rangeBonus - state.cost * 2.5,
+          attackOrigin: copyCell(state.cell),
+          attackFacing: state.facing,
+          score: 100 + skillValue(skill, enemy, target) + noMoveBonus + rangeBonus - state.cost * 1.4,
         });
       }
     }
@@ -113,21 +260,21 @@
     for (const skill of skills) {
       const cost = Math.max(0, finite(skill?.apCost, 0));
       if (!skill || skill.dealsDamage === false || cost <= currentAp || cost > nextAp) continue;
-      const preferred = Math.max(1, finite(skill.range?.max, 1));
       for (const state of states) {
+        // Setup is based on the AUTHORED attack cells, not a generic Manhattan
+        // range band.  A boar stages on a real charge line; a snake stages on
+        // a real venom-spit cell/facing.
+        if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units)) continue;
         const distance = Tactics.manhattan(state.cell, target.cell);
-        // Setup does not predict a free final-facing turn. It only chooses a
-        // useful range band; next round's normal movement/facing resolver still
-        // decides whether the authored skill geometry is actually legal.
-        const rangeError = Math.abs(distance - preferred);
-        const tooClosePenalty = distance < Math.max(1, finite(skill.range?.min, 1)) ? 18 : 0;
-        const currentCellBonus = state.cost <= 1e-9 && rangeError === 0 ? 14 : 0;
+        const maxRange = Math.max(1, finite(skill.range?.max, 1));
+        const distanceBonus = maxRange > 1 ? Math.min(distance, maxRange) * 2 : 0;
+        const currentCellBonus = state.cost <= 1e-9 ? 8 : 0;
         candidates.push({
           kind: "setup",
           skill,
           ...state,
           target,
-          score: 54 + skillValue(skill) * .58 + currentCellBonus - rangeError * 10 - tooClosePenalty - state.cost * .8,
+          score: 62 + skillValue(skill, enemy, target) * .58 + distanceBonus + currentCellBonus - state.cost * 1.15,
         });
       }
     }
@@ -135,31 +282,18 @@
   }
 
   function meleePursuit({ grid, enemy, target, units }) {
-    const turnCost = Math.max(0, finite(enemy.turnCost, .5));
-    const fullPath = Tactics.findPath(grid, enemy.cell, target.cell, units, {
-      ignoreUnitId: enemy.id,
-      allowGoalOccupied: true,
-      turnCost,
-      initialFacing: enemy.facing,
-    });
-    if (!fullPath.length) return null;
-    // The target's occupied cell is the pursuit goal. Truncation plus the
-    // shared occupancy resolver prevents overlap while allowing another route
-    // around a monster already standing on one adjacent side of the player.
-    const pathWithoutTarget = fullPath.slice(0, -1);
-    const path = Tactics.truncatePathByCost(pathWithoutTarget, Math.max(0, finite(enemy.moveRange, 0)), {
-      turnCost,
-      initialFacing: enemy.facing,
-    });
-    const route = path.length ? path : [copyCell(enemy.cell)];
+    const route = meleePursuitRoute({ grid, enemy, target, units });
+    if (!route) return null;
     return {
       kind: "pursue",
       skill: null,
       target,
-      cell: copyCell(route[route.length - 1]),
-      path: route,
-      cost: Tactics.movementPathCost(route, { turnCost, initialFacing: enemy.facing }),
-      facing: finalFacing(route, enemy.facing),
+      cell: route.cell,
+      path: route.path,
+      commands: route.commands,
+      cost: route.cost,
+      facing: route.facing,
+      previewCell: route.previewCell,
       score: 1,
     };
   }
@@ -177,49 +311,43 @@
     if (!grid || !alive(enemy)) return null;
     const livingTargets = targets.filter(alive);
     if (!livingTargets.length) return {
-      type: "wait", move: copyCell(enemy.cell), path: [copyCell(enemy.cell)], facing: enemy.facing,
+      type: "wait", move: copyCell(enemy.cell), path: [copyCell(enemy.cell)], commands: [], facing: enemy.facing,
       targetId: null, attackTargetId: null, skill: null, reason: "no-target",
     };
     const target = [...livingTargets].sort((a, b) => Tactics.manhattan(enemy.cell, a.cell) - Tactics.manhattan(enemy.cell, b.cell) || String(a.id).localeCompare(String(b.id)))[0];
     const allUnits = [...new Map([enemy, ...units, ...livingTargets].filter(Boolean).map((unit) => [unit.id, unit])).values()];
     const usableSkills = (skills || []).filter(Boolean);
 
-    const attacks = attackCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills });
-    const currentCellAttacks = attacks.filter((candidate) => sameCell(candidate.cell, enemy.cell)).sort(comparePlan);
-    let chosen = currentCellAttacks[0] || null;
+    const attacks = attackCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills }).sort(comparePlan);
+    const setup = setupCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills, apGain }).sort(comparePlan)[0] || null;
+    const bestAttack = attacks[0] || null;
 
-    if (!chosen) {
-      const attackAfterMove = attacks.sort(comparePlan)[0] || null;
-      const setup = setupCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills, apGain }).sort(comparePlan)[0] || null;
-
-      // If a stronger, longer-range skill becomes affordable next round, a
-      // monster should not burn most of this turn's movement just to force a
-      // cheap Range-1 hit.  It may stage at the premium skill's useful range
-      // band and bank AP instead.  This is deliberately geometry/AP-driven,
-      // not a species-specific "kite" or "charge" branch.
-      const setupIsRangedUpgrade = Boolean(attackAfterMove && setup
-        && finite(setup.skill?.range?.max, 1) > finite(attackAfterMove.skill?.range?.max, 1)
-        && finite(setup.skill?.apCost, 0) > finite(attackAfterMove.skill?.apCost, 0));
-      const longMeleeCommit = Boolean(attackAfterMove
-        && finite(attackAfterMove.skill?.range?.max, 1) <= 1
-        && attackAfterMove.cost >= Math.max(2, finite(enemy.moveRange, 0) * .45));
-
-      chosen = setupIsRangedUpgrade && longMeleeCommit ? setup : (attackAfterMove || setup);
-    }
+    let chosen = bestAttack;
+    if (bestAttack && setup) {
+      const setupIsRangedUpgrade = finite(setup.skill?.range?.max, 1) > finite(bestAttack.skill?.range?.max, 1)
+        && finite(setup.skill?.apCost, 0) > finite(bestAttack.skill?.apCost, 0);
+      const longMeleeCommit = isPureMelee(bestAttack.skill)
+        && finite(bestAttack.cost, 0) >= Math.max(2, finite(enemy.moveRange, 0) * .45);
+      if (setupIsRangedUpgrade && longMeleeCommit) chosen = setup;
+    } else if (!chosen) chosen = setup;
 
     if (!chosen) chosen = meleePursuit({ grid, enemy, target, units: allUnits });
     if (!chosen) return {
-      type: "wait", move: copyCell(enemy.cell), path: [copyCell(enemy.cell)], facing: enemy.facing,
+      type: "wait", move: copyCell(enemy.cell), path: [copyCell(enemy.cell)], commands: [], facing: enemy.facing,
       targetId: target.id, attackTargetId: null, skill: null, reason: "blocked",
     };
 
     const attacking = chosen.kind === "attack";
-    const moved = !sameCell(chosen.cell, enemy.cell);
+    const moved = !sameCell(chosen.cell, enemy.cell) || (chosen.commands || []).some((command) => command.type === "move");
     return {
-      type: attacking ? (moved ? "move-attack" : "attack") : moved ? "move" : "wait",
+      type: attacking ? (moved ? "move-attack" : "attack") : moved ? "move" : (chosen.commands || []).length ? "turn" : "wait",
       move: copyCell(chosen.cell),
       path: chosen.path.map(copyCell),
+      commands: (chosen.commands || []).map((command) => ({ ...command, to: command.to ? copyCell(command.to) : undefined })),
       facing: chosen.facing || enemy.facing,
+      attackOrigin: chosen.attackOrigin ? copyCell(chosen.attackOrigin) : null,
+      attackFacing: chosen.attackFacing || chosen.facing || enemy.facing,
+      previewCell: chosen.previewCell ? copyCell(chosen.previewCell) : copyCell(chosen.cell),
       targetId: target.id,
       attackTargetId: attacking ? target.id : null,
       skill: attacking ? chosen.skill : null,
@@ -230,5 +358,5 @@
     };
   }
 
-  return { planEnemyAction, validateSkillFrom, skillValue };
+  return { planEnemyAction, validateSkillFrom, skillValue, estimateSkillDamage, reachableStates };
 });

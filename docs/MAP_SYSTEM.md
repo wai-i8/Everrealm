@@ -1,4 +1,4 @@
-﻿# 地圖與場景系統 · MAP_SYSTEM
+# 地圖與場景系統 · MAP_SYSTEM
 
 ## 1. 文件定位
 
@@ -90,11 +90,11 @@ Every supplied scene image is its own gameplay world: native master width and he
 
 One native scene pixel is one world unit. Every authored scene therefore keeps its own native dimensions as world bounds; there is no common logical size, old-world projection, resolution compensation, fit-to-map transform or automatic upscaling. Paired navigation data must use the same native dimensions and coordinates as the visible scene.
 
-Player, NPC and monster authored render dimensions, the base exploration movement speed (`330` world units per second), and the global Far/Mid/Near camera presets (`0.46176` / `0.592` / `0.72224`) are independent contracts. They do not read map dimensions, scene identity or source resolution. Map dimensions affect world bounds and camera cropping only; changing Main Town artwork dimensions cannot change any entity size, movement speed, camera preset, battle actor or skill effect. When a camera viewport is larger than a small map, the renderer leaves the area outside the native map black; it never stretches the map, changes the selected camera preset or enlarges its units to fill the screen. Camera and movement constants are expressed directly in the canonical native-world coordinate system.
+Player, NPC and monster authored render dimensions, the base exploration movement speed (`330` world units per second), and the global Far/Mid/Near camera presets (`0.46176` / `0.592` / `0.72224`) are independent contracts. They do not read map dimensions, scene identity or source resolution. Map dimensions affect world bounds and camera cropping only; changing Main Town artwork dimensions cannot change any entity size, movement speed, battle actor or skill effect. Runtime uses the selected camera preset directly and must **not** introduce a cover-zoom floor for small scenes: an interior never auto-enlarges merely because the viewport is larger than the native map. The camera follows the player at centre while possible, then clamps its centre to native world bounds near each edge. On an axis where the native scene is smaller than the viewport at the chosen zoom, the map stays centred at its authored scale and camera shake on that axis is suppressed rather than shifting the scene. Background, semantic NPC/portal coordinates, collision and screen-to-world click conversion must all use this same transform. Camera and movement constants are expressed directly in the canonical native-world coordinate system.
 
 所有 flattened scene 共享 `feet_radius_px: 3`。feet disk 必須完全落喺 compiled authored allowlist；室內係 white／cyan 並避開 magenta，Main Town 係 white／cyan／pink 及 compiler 只在 painted region 邊界做有限 JPEG seam normalization。越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。Main Town click-to-move 使用 1px line-clear sampling 同四向 waypoints，配合 runtime X→Y collision substeps，避免跨過 authoring mask 嘅單像素 blocked edge。Path search 本身採兩階段 node spacing：先用 40px coarse grid，但每條 edge 仍逐 1px 以 authoritative resolver 驗證；只有 coarse grid 無法到達 exact goal 時先退回 12px fine grid／nearest-reachable。呢個只係 A* 搜尋粒度，唔係 navigation resolution 或 world scale。每張 interior 只保留一個最重要嘅核心服務／接待 NPC；家具同裝飾只保留語意 zone metadata，若已烘焙入 master art 就 `render: false`、`solid: false`。
 
-門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。
+門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。 山地／主城亦唔再放置 runtime 道路指示牌；導航由地形、路徑同 semantic interaction 本身表達。
 
 ---
 
@@ -401,7 +401,7 @@ Biome data 最低：
 
 ## 9. Interaction Point
 
-NPC、門、工作台、委託板、寶箱等都使用 interaction point／range。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。
+NPC、門、工作台、委託板、寶箱等都使用 interaction point／range。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
 
 ```js
 {

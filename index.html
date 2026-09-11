@@ -118,17 +118,6 @@
             </button>
           </nav>
 
-          <section id="systemSettingsPopover" class="system-settings-popover" aria-labelledby="systemSettingsTitle" hidden>
-            <header class="system-settings-header">
-              <strong id="systemSettingsTitle">系統</strong>
-              <button id="systemSettingsCloseButton" class="system-settings-close" type="button" aria-label="關閉系統設定">×</button>
-            </header>
-            <button id="soundButton" class="system-setting-row" type="button" aria-label="關閉音樂" aria-pressed="true">
-              <span>音樂</span>
-              <span class="system-toggle-track" aria-hidden="true"><i></i></span>
-            </button>
-          </section>
-
           <section id="commissionHud" class="sidebar-zone sidebar-quest quest-hud" aria-label="公會委託">
             <div class="quest-heading"><span>公會委託</span><i aria-hidden="true"></i></div>
             <strong id="commissionTitle">未接公會委託</strong>
@@ -229,16 +218,9 @@
           <p class="eyebrow">A SHORT NIGHT-TIME ADVENTURE</p>
           <h1 id="gameTitle"><span>永恆</span><span>國度</span></h1>
           <p class="english-title">EVERREALM</p>
-          <p class="title-copy">霧散之前，點亮返呢座城。</p>
           <div class="title-actions">
-            <button id="newGameButton" class="primary-button" type="button"><span>開始夜巡</span><small>NEW GAME</small></button>
-            <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span><small>CONTINUE</small></button>
-          </div>
-          <div class="control-strip">
-            <span><b>撳地面</b> 移動</span>
-            <span><b>撳角色</b> 互動</span>
-            <span><b>滑鼠 / ENTER</b> 戰鬥揀格</span>
-            <span><b>ESC</b> 戰鬥撤退</span>
+            <button id="newGameButton" class="primary-button" type="button"><span>開始夜巡</span></button>
+            <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span></button>
           </div>
         </section>
 
@@ -304,14 +286,13 @@
         </section>
 
         <section id="abandonCommissionPanel" class="overlay modal-overlay skill-book-confirm-panel abandon-commission-panel" role="dialog" aria-modal="true" aria-labelledby="abandonCommissionTitle" data-modal-backdrop-dismiss="abandon-commission" hidden>
-          <div class="ui-modal-window ui-window--skill">
+          <div class="ui-modal-window ui-window--confirm abandon-commission-window">
             <button id="abandonCommissionCloseButton" class="ui-close-button modal-close-button" type="button" data-modal-dismiss="abandon-commission" aria-label="關閉放棄委託視窗" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
-            <div class="skill-book-confirm-icon abandon-commission-icon" aria-hidden="true">⚑</div>
-            <p class="modal-kicker danger">COMMISSION RESET</p>
+            <p class="modal-kicker danger">放棄委託</p>
             <h2 id="abandonCommissionTitle">確定放棄此委託？</h2>
-            <p id="abandonCommissionDescription">目前進度將會失去，之後可以重新接受一份全新委託。</p>
-            <div class="modal-actions">
-              <button id="abandonCommissionConfirmButton" class="primary-button" type="button">放棄委託</button>
+            <p id="abandonCommissionDescription">目前進度將會失去，之後可以重新接受。</p>
+            <div class="modal-actions abandon-commission-actions">
+              <button id="abandonCommissionConfirmButton" class="danger-button" type="button">確定放棄</button>
               <button id="abandonCommissionCancelButton" class="secondary-button" type="button">取消</button>
             </div>
           </div>
@@ -352,11 +333,25 @@
           </div>
         </section>
 
-        <section id="deathPanel" class="overlay modal-overlay death-panel" aria-labelledby="deathTitle" hidden>
-          <p class="modal-kicker danger">YOUR LIGHT WENT OUT</p>
-          <h2 id="deathTitle">盞燈熄咗。</h2>
-          <p>唔緊要，港口盞燈仲記得你。<br />返去抖一抖，再嚟過。</p>
-          <button id="respawnButton" class="primary-button" type="button"><span>喺燈龕醒返</span><small>ENTER</small></button>
+        <section id="systemSettingsPopover" class="system-settings-popover system-settings-window ui-window" role="dialog" aria-modal="false" aria-labelledby="systemSettingsTitle" hidden>
+          <header class="system-settings-header">
+            <strong id="systemSettingsTitle">系統</strong>
+            <button id="systemSettingsCloseButton" class="system-settings-close" type="button" aria-label="關閉系統設定">×</button>
+          </header>
+          <button id="soundButton" class="system-setting-row" type="button" aria-label="關閉音樂" aria-pressed="true">
+            <span>音樂</span>
+            <span class="system-toggle-track" aria-hidden="true"><i></i></span>
+          </button>
+        </section>
+
+        <section id="deathPanel" class="overlay modal-overlay death-panel" role="dialog" aria-modal="true" aria-labelledby="deathTitle" hidden>
+          <div class="ui-modal-window death-window">
+            <h2 id="deathTitle">你倒下了</h2>
+            <div class="modal-actions death-actions">
+              <button id="reviveHereButton" class="primary-button death-choice-button" type="button"><span>原地復活</span></button>
+              <button id="respawnButton" class="secondary-button death-choice-button" type="button"><span>返回主城</span></button>
+            </div>
+          </div>
         </section>
 
         <section
@@ -486,7 +481,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260910-11", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260911-15", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

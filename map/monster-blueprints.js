@@ -94,8 +94,41 @@
   }
 
   function monsterStatsAtLevel(id, level, options) { return levelStats(id, level, options); }
+
+  function levelXpMultiplier(monsterLevel, playerLevel) {
+    const monster = Math.max(1, Math.floor(Number(monsterLevel) || 1));
+    const player = Math.max(1, Math.floor(Number(playerLevel) || 1));
+    const delta = monster - player;
+    if (delta >= 0) return 1 + Math.min(10, delta) * .1;
+    const levelsBelow = -delta;
+    if (levelsBelow <= 4) return 1;
+    return Math.pow(.9, levelsBelow - 4);
+  }
+
+  function encounterXpMultiplier(count) {
+    const size = Math.max(1, Math.floor(Number(count) || 1));
+    if (size === 1) return 1;
+    if (size === 2) return 1.5;
+    return 2;
+  }
+
+  function encounterHpMultiplier(count) {
+    const size = Math.max(1, Math.floor(Number(count) || 1));
+    if (size === 1) return 1;
+    if (size === 2) return .85;
+    return .7;
+  }
+
   function xpReward(baseXp, monsterLevel, playerLevel) {
-    return Math.max(0, Math.round((Number(baseXp) || 0) * clamp(1 + .2 * ((Number(monsterLevel) || 1) - (Number(playerLevel) || 1)), .1, 1.6)));
+    return Math.max(0, Math.round((Number(baseXp) || 0) * levelXpMultiplier(monsterLevel, playerLevel)));
+  }
+
+  function battleXpReward(monsterLevel, playerLevel, count = 1, baseXp = 100) {
+    return Math.max(0, Math.round(
+      (Number(baseXp) || 0)
+      * levelXpMultiplier(monsterLevel, playerLevel)
+      * encounterXpMultiplier(count),
+    ));
   }
   function highestLivingEnemyLevel(enemies) {
     return Math.max(0, ...(Array.isArray(enemies) ? enemies : []).filter((enemy) => enemy && enemy.alive !== false && (enemy.hp ?? 1) > 0).map((enemy) => Number(enemy.level) || 0));
@@ -173,7 +206,11 @@
     hydrateMonsterSpawn,
     levelStats,
     monsterStatsAtLevel,
+    levelXpMultiplier,
+    encounterXpMultiplier,
+    encounterHpMultiplier,
     xpReward,
+    battleXpReward,
     highestLivingEnemyLevel,
     retreatChance,
     selectMonsterSkill,

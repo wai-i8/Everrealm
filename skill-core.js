@@ -519,7 +519,7 @@
   // one-to-three-star runtime book rarity used by the original skill-book UI.
   function getFighterGuildBookPool(star) {
     const safeStar = Math.trunc(Number(star));
-    if (safeStar < 1 || safeStar > 5) return [];
+    if (safeStar < 1 || safeStar > 14) return [];
     return SKILL_CATALOG.filter((skill) => skill.classId === "fighter" && skill.guildBookStars.includes(safeStar));
   }
 
@@ -1000,7 +1000,10 @@
       if (!Number.isFinite(index) || index < 0 || index >= state.deckCapacity) {
         return { ok: false, reason: "invalid-slot", state };
       }
-      if (existingIndex >= 0 && existingIndex !== index) slots[existingIndex] = null;
+      if (existingIndex >= 0 && existingIndex !== index) {
+        const displacedSkillId = slots[index] || null;
+        slots[existingIndex] = displacedSkillId;
+      }
       slots[index] = id;
     }
     return {

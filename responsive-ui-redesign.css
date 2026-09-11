@@ -187,11 +187,8 @@
   }
 }
 
-/* Any facility/menu takes focus. The exploration controls disappear until it
-   closes, so they never sit on top of the status/inventory/mission screens. */
-#gameStage[data-game-state="facility"] #exploreSidebar {
-  display: none !important;
-}
+/* Major function windows coexist with the exploration launcher. The left rail
+   stays available so players can open/focus several windows at once. */
 
 /* ---------------------------------------------------------------------
    Shared portable-panel shell: less empty chrome, more useful content.
@@ -1761,4 +1758,445 @@
   line-height: 1 !important;
   white-space: nowrap !important;
   text-align: center !important;
+}
+
+/* ========================================================================== 
+   2026-09-11 interaction / popup / guild commission polish
+   ========================================================================== */
+
+/* Popup backdrops keep the live game scene visible. The window itself carries
+   the contrast; the background is no longer blurred into an opaque wash. */
+.modal-overlay:not(.class-select-panel),
+.facility-overlay {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: rgba(4, 8, 18, .16) !important;
+}
+.skill-book-confirm-panel:not(.class-select-panel) {
+  background: rgba(4, 8, 18, .16) !important;
+}
+
+/* Every framed popup/facility can be repositioned with pointer drag. */
+.ui-modal-window,
+.facility-window.ui-window {
+  --ui-drag-x: 0px;
+  --ui-drag-y: 0px;
+  transform: translate3d(var(--ui-drag-x), var(--ui-drag-y), 0);
+  will-change: transform;
+}
+.ui-modal-window.is-window-dragging,
+.facility-window.ui-window.is-window-dragging {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.facility-header,
+.ui-modal-window > .modal-kicker,
+.ui-modal-window > h2 {
+  touch-action: none;
+}
+
+/* Gold-framed controls use high-contrast light copy rather than near-black
+   text. This is global because the old dark-on-gold treatment was difficult
+   to read anywhere it appeared. */
+.primary-button,
+.facility-action-button:not(.is-quiet) {
+  color: var(--cream) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .72) !important;
+}
+
+/* Title screen: keep the logo and the actual choice, remove tutorial clutter. */
+.title-actions {
+  margin-top: clamp(1rem, 4vh, 2.2rem);
+}
+.title-actions .primary-button,
+.title-actions .secondary-button {
+  min-width: min(21rem, 78vw);
+  min-height: 4.2rem;
+  color: var(--cream) !important;
+  font-size: clamp(1.05rem, 2.6vw, 1.45rem);
+  letter-spacing: .03em;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, .82) !important;
+}
+
+/* Death choice: compact, literal, and readable. */
+.death-panel .death-window {
+  width: min(31rem, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  padding: clamp(1.2rem, 3.4vw, 1.9rem);
+  border: 1px solid rgba(255, 200, 87, .38);
+  border-radius: .9rem;
+  color: var(--cream);
+  background: linear-gradient(155deg, rgba(19, 32, 57, .98), rgba(6, 13, 27, .98));
+  box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, .48), inset 0 1px rgba(255,255,255,.04);
+}
+.death-panel .death-window h2 {
+  margin: .22rem 0 .55rem;
+  font-size: clamp(1.6rem, 5vw, 2.35rem);
+  letter-spacing: -.025em;
+}
+.death-panel .death-window > p:not(.modal-kicker) {
+  margin: 0 auto .72rem;
+  max-width: 27rem;
+  color: var(--ui-text-secondary);
+  font-size: .82rem;
+  line-height: 1.65;
+}
+.death-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem !important;
+  width: 100%;
+  margin-top: 1rem;
+}
+.death-choice-button {
+  min-height: 3.55rem;
+  color: var(--cream) !important;
+  font-size: .86rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,.75) !important;
+}
+.death-choice-button small {
+  display: block;
+  margin-top: .18rem;
+  color: rgba(245, 233, 202, .72) !important;
+}
+
+/* Abandon commission confirmation: no oversized flag or giant title. */
+.abandon-commission-window {
+  width: min(29rem, calc(100vw - 1.5rem));
+  padding: 1.35rem 1.25rem 1.2rem;
+  border: 1px solid rgba(255, 107, 107, .3);
+  border-radius: .85rem;
+  background: linear-gradient(155deg, rgba(26, 31, 49, .99), rgba(8, 14, 27, .99));
+  box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, .46);
+}
+.abandon-commission-window .modal-kicker {
+  margin: 0 0 .3rem;
+  font-size: .62rem;
+  letter-spacing: .13em;
+}
+.abandon-commission-window h2 {
+  margin: .15rem 2rem .55rem;
+  font-size: clamp(1.22rem, 4vw, 1.65rem) !important;
+  letter-spacing: -.015em !important;
+}
+.abandon-commission-window > p:not(.modal-kicker) {
+  margin: 0 auto .95rem !important;
+  max-width: 25rem;
+  color: var(--ui-text-secondary) !important;
+  font-size: .76rem !important;
+  line-height: 1.58;
+}
+.abandon-commission-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: .55rem !important;
+  width: 100%;
+}
+.danger-button {
+  min-height: 2.75rem;
+  padding: .48rem .8rem;
+  border: 1px solid rgba(255, 107, 107, .58);
+  border-radius: .55rem;
+  color: #ffe5df;
+  background: linear-gradient(180deg, rgba(126, 39, 47, .88), rgba(82, 25, 34, .94));
+  box-shadow: 0 .3rem .8rem rgba(0,0,0,.32);
+  font: 850 .76rem/1 inherit;
+  cursor: pointer;
+}
+.danger-button:hover,
+.danger-button:focus-visible {
+  border-color: #ff8e82;
+  filter: brightness(1.08);
+}
+
+/* Guild windows size to their content instead of reserving a large blank
+   lower half. Available commissions still use a broad desktop grid. */
+.facility-overlay[data-facility-tab="guild"] {
+  padding: clamp(.55rem, 2vw, 1.15rem) !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: calc(100vh - 1.1rem) !important;
+}
+.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window {
+  width: min(51rem, calc(100vw - 1.2rem)) !important;
+}
+.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
+  width: min(74rem, calc(100vw - 1.2rem)) !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-header.ui-header {
+  min-height: 3.35rem;
+  padding: .42rem .7rem .42rem .9rem;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-header h2 {
+  font-size: clamp(1rem, 2vw, 1.32rem) !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-tabs,
+.facility-overlay[data-facility-tab="guild"] .facility-summary,
+.facility-overlay[data-facility-tab="guild"] .facility-footer {
+  display: none !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-content {
+  min-height: 0 !important;
+  padding: .78rem !important;
+  overflow: auto;
+  background: rgba(5, 10, 21, .9) !important;
+}
+.guild-commission-state-line {
+  display: flex;
+  align-items: center;
+  gap: .48rem;
+  width: min(38rem, 100%);
+  margin: 0 auto .72rem;
+  padding: .52rem .68rem;
+  border: 1px solid rgba(255, 200, 87, .2);
+  border-left: 3px solid rgba(255, 200, 87, .78);
+  border-radius: .48rem;
+  color: var(--ui-text-secondary);
+  background: rgba(245, 233, 202, .055);
+  font-size: .67rem;
+}
+.guild-commission-state-line > span {
+  color: var(--gold);
+  font-weight: 900;
+}
+.guild-commission-state-line > strong {
+  color: var(--cream);
+  font: 850 .68rem/1 ui-monospace, monospace;
+}
+.guild-commission-state-line > small {
+  margin-left: .08rem;
+  color: var(--ui-text-secondary);
+  font-size: .61rem;
+}
+.guild-offer-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  align-items: stretch;
+  gap: .62rem !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-list-card,
+.facility-overlay[data-facility-tab="guild"] .facility-feature-card {
+  border: 1px solid rgba(255, 200, 87, .28) !important;
+  border-radius: .62rem !important;
+  background: linear-gradient(150deg, rgba(27, 42, 70, .94), rgba(8, 16, 32, .98)) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 .4rem .9rem rgba(0,0,0,.18) !important;
+}
+.guild-offer-card {
+  grid-template-rows: auto minmax(3.15rem, auto) auto auto;
+  gap: .52rem !important;
+  padding: .72rem !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-card-heading {
+  display: flex;
+  align-items: center;
+  gap: .48rem;
+  min-width: 0;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-card-heading strong {
+  color: var(--cream);
+  font-size: .78rem;
+  line-height: 1.3;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-chip {
+  flex: 0 0 auto;
+  padding: .18rem .34rem;
+  border: 1px solid rgba(255,200,87,.52);
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(255,200,87,.07);
+  font: 850 .58rem/1 ui-monospace, monospace;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-list-card p,
+.facility-overlay[data-facility-tab="guild"] .facility-feature-card p {
+  color: var(--ui-text-secondary) !important;
+  font-size: .66rem !important;
+  line-height: 1.58 !important;
+}
+.guild-offer-details,
+.guild-commission-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .38rem;
+  margin: 0;
+}
+.guild-offer-details > div,
+.guild-commission-details > div {
+  min-width: 0;
+  padding: .42rem .5rem;
+  border: 1px solid rgba(245, 233, 202, .11);
+  border-radius: .42rem;
+  background: rgba(4, 9, 20, .3);
+}
+.guild-offer-details .is-wide {
+  grid-column: 1 / -1;
+}
+.guild-offer-details dt,
+.guild-commission-details dt {
+  margin: 0 0 .18rem;
+  color: var(--ui-text-secondary);
+  font-size: .55rem;
+}
+.guild-offer-details dd,
+.guild-commission-details dd {
+  margin: 0;
+  color: var(--cream);
+  font: 760 .63rem/1.42 inherit;
+}
+.guild-commission-card {
+  width: min(42rem, 100%);
+  margin: 0 auto;
+  padding: .82rem !important;
+  gap: .62rem !important;
+}
+.guild-commission-card.is-ready {
+  border-color: rgba(82, 220, 203, .58) !important;
+}
+.guild-commission-card-summary {
+  display: grid;
+  gap: .4rem;
+}
+.guild-commission-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-action-button {
+  min-height: 2.45rem !important;
+  padding: .42rem .62rem !important;
+  border: 1px solid rgba(255, 200, 87, .45) !important;
+  border-image: none !important;
+  border-radius: .48rem !important;
+  color: var(--cream) !important;
+  background: linear-gradient(180deg, rgba(34, 49, 78, .98), rgba(13, 24, 45, .98)) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 .22rem .55rem rgba(0,0,0,.24) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.72) !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-action-button:hover:not(:disabled),
+.facility-overlay[data-facility-tab="guild"] .facility-action-button:focus-visible {
+  border-color: rgba(82, 220, 203, .72) !important;
+  color: #fff9df !important;
+  filter: brightness(1.08);
+}
+.facility-overlay[data-facility-tab="guild"] .facility-action-button.is-quiet {
+  border-color: rgba(255, 107, 107, .32) !important;
+  color: #ffd8d2 !important;
+  background: rgba(96, 31, 39, .18) !important;
+}
+.facility-overlay[data-facility-tab="guild"] .facility-action-button:disabled {
+  border-color: rgba(245,233,202,.12) !important;
+  color: rgba(245,233,202,.45) !important;
+  background: rgba(245,233,202,.035) !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 900px) {
+  .guild-offer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .death-actions,
+  .abandon-commission-actions,
+  .guild-commission-actions,
+  .guild-offer-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .facility-overlay[data-facility-tab="guild"] .facility-content {
+    padding: .52rem !important;
+  }
+  .guild-commission-state-line {
+    flex-wrap: wrap;
+    margin-bottom: .5rem;
+  }
+  .guild-commission-state-line > small {
+    width: 100%;
+    margin-left: 0;
+  }
+  .guild-offer-details,
+  .guild-commission-details {
+    grid-template-columns: 1fr;
+  }
+  .guild-offer-details .is-wide {
+    grid-column: auto;
+  }
+}
+
+
+/* ========================================================================== 
+   2026-09-11 desktop-style multi-window / battle command follow-up
+   ========================================================================== */
+
+/* Portable windows now coexist like desktop windows. Their full-screen layer
+   is only a positioning surface; it must not dim or steal clicks from the game
+   or the persistent left-side launcher. */
+.facility-overlay.is-floating-facility-layer {
+  background: transparent !important;
+  pointer-events: none !important;
+  text-align: left !important;
+}
+.facility-overlay.is-floating-facility-layer > .facility-window.ui-window {
+  pointer-events: auto !important;
+}
+.facility-window.ui-window.is-ui-window-active,
+.system-settings-window.ui-window.is-ui-window-active {
+  box-shadow:
+    0 1rem 2.6rem rgba(0,0,0,.58),
+    0 0 0 1px rgba(82,220,203,.34),
+    inset 0 1px rgba(255,255,255,.05) !important;
+}
+
+/* System is a normal draggable window now, not a sidebar-attached popover. */
+#gameStage > #systemSettingsPopover:not([hidden]) {
+  --ui-drag-x: 0px;
+  --ui-drag-y: 0px;
+  position: absolute !important;
+  z-index: 40;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: min(15rem, calc(100% - 2rem)) !important;
+  min-width: min(11rem, calc(100% - 2rem)) !important;
+  display: grid !important;
+  gap: .58rem !important;
+  padding: .72rem !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255,200,87,.54) !important;
+  border-radius: .82rem !important;
+  color: var(--cream) !important;
+  background:
+    radial-gradient(circle at 50% 0, rgba(82,220,203,.08), transparent 9rem),
+    linear-gradient(155deg, rgba(20,35,62,.985), rgba(6,14,29,.99)) !important;
+  box-shadow: 0 .7rem 2rem rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,.035) !important;
+  transform: translate3d(calc(-50% + var(--ui-drag-x)), calc(-50% + var(--ui-drag-y)), 0) !important;
+  will-change: transform;
+  pointer-events: auto !important;
+}
+#gameStage > #systemSettingsPopover.is-window-dragging {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* Facility-owned confirmations/details must always sit above floating windows. */
+.skill-book-confirm-panel,
+.skill-detail-panel,
+.abandon-commission-panel {
+  z-index: 260 !important;
+}
+
+/* Death keeps the battlefield artwork, but none of the tactical HUD should
+   show through the choice dialog. */
+#gameStage[data-game-state="dead"] #battleHud,
+#gameStage[data-game-state="dead"] #battleFacingPicker {
+  display: none !important;
+}
+
+/* The one-command row (待機) is intentionally the same full width as a skill. */
+.battle-single-command-row {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.battle-single-command-row > button {
+  width: 100% !important;
 }

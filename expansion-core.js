@@ -9,16 +9,17 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (classData, equipmentData) {
   "use strict";
 
-  const LEVEL_CAP = classData?.LEVEL_CAP || 40;
+  const LEVEL_CAP = classData?.LEVEL_CAP || 45;
   const EQUIPMENT_SLOTS = Object.freeze([...(equipmentData?.EQUIPMENT_SLOTS || ["head", "weapon", "upperBody", "lowerBody", "hands", "feet", "charm"])]);
   const EQUIPMENT_SHOP_SLOTS = Object.freeze([...(equipmentData?.EQUIPMENT_SHOP_SLOTS || ["weapon", "head", "upperBody", "lowerBody"])]);
   const LEGACY_EQUIPMENT_SLOT_ALIASES = Object.freeze({ ...(equipmentData?.LEGACY_EQUIPMENT_SLOT_ALIASES || { body: "upperBody", armor: "upperBody" }) });
   const EQUIPMENT_STAT_KEYS = Object.freeze([...(equipmentData?.EQUIPMENT_STAT_KEYS || ["attack", "defense", "maxHp", "speed", "critChance", "moveRange", "accuracy", "evasion", "weight"])]);
   const PORTABLE_FACILITY_TABS = Object.freeze(["status", "bag", "equipment", "skills", "codex"]);
   const CLASS_LEVEL_TABLES = classData?.CLASS_LEVEL_TABLES || Object.freeze({});
+  const LEVEL_EXP_REQUIREMENTS = classData?.LEVEL_EXP_REQUIREMENTS || Object.freeze({});
 
   function classStatsAtLevel(classId, level) {
-    return classData?.classStatsAtLevel?.(classId, level) || { level: 1, maxHp: 88, attack: 14, defence: 2, moveRange: 3 };
+    return classData?.classStatsAtLevel?.(classId, level) || { level: 1, maxHp: 88, attack: 0, defence: 0, moveRange: 3 };
   }
 
   function starterEquipmentForClass(classId) {
@@ -240,7 +241,7 @@
 
   function xpRequired(level) {
     const safeLevel = Math.max(1, Math.min(LEVEL_CAP, wholeNumber(level, 1, 1)));
-    return Math.floor(45 + safeLevel * 32 + Math.pow(safeLevel, 1.35) * 7);
+    return LEVEL_EXP_REQUIREMENTS[safeLevel] || LEVEL_EXP_REQUIREMENTS[LEVEL_CAP] || 25000;
   }
 
   function grantExperience(level, xp, amount) {
@@ -254,6 +255,71 @@
     }
     if (nextLevel >= LEVEL_CAP) nextXp = 0;
     return { level: nextLevel, xp: nextXp, levelsGained, capped: nextLevel >= LEVEL_CAP };
+  }
+
+  function loseExperience(level, xp, amount) {
+    let nextLevel = Math.max(1, Math.min(LEVEL_CAP, wholeNumber(level, 1, 1)));
+    let nextXp = wholeNumber(xp);
+    let remaining = wholeNumber(amount);
+    let deducted = 0;
+    let levelsLost = 0;
+
+    while (remaining > 0) {
+      if (nextXp >= remaining) {
+        nextXp -= remaining;
+        deducted += remaining;
+        remaining = 0;
+        break;
+      }
+
+      deducted += nextXp;
+      remaining -= nextXp;
+      nextXp = 0;
+
+      if (nextLevel <= 1) break;
+
+      nextLevel -= 1;
+      levelsLost += 1;
+      const previousLevelRequirement = xpRequired(nextLevel);
+      const fromPreviousLevel = Math.min(previousLevelRequirement, remaining);
+      nextXp = previousLevelRequirement - fromPreviousLevel;
+      deducted += fromPreviousLevel;
+      remaining -= fromPreviousLevel;
+    }
+
+    return {
+      level: nextLevel,
+      xp: nextXp,
+      deducted,
+      levelsLost,
+      requested: wholeNumber(amount),
+      floored: remaining > 0 && nextLevel <= 1 && nextXp <= 0,
+    };
+  }
+
+  function unequipIneligibleEquipment(state, catalog = DEFAULT_EQUIPMENT_CATALOG) {
+    const base = normalizeEquipmentState(state, catalog);
+    const items = catalog === DEFAULT_EQUIPMENT_CATALOG ? catalog : normalizeEquipmentCatalog(catalog);
+    const equipped = { ...base.equipped };
+    const removedItems = [];
+    const seen = new Set();
+
+    for (const slot of EQUIPMENT_SLOTS) {
+      const id = equipped[slot];
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const item = items.find((candidate) => candidate.id === id);
+      if (!item || item.requiredLevel <= base.level) continue;
+      removedItems.push(item);
+      for (const occupiedSlot of item.occupiesSlots) {
+        if (equipped[occupiedSlot] === item.id) equipped[occupiedSlot] = null;
+      }
+    }
+
+    return {
+      state: { ...base, equipped },
+      removedItems,
+    };
   }
 
   return {
@@ -281,5 +347,7 @@
     isEquipmentEquipped,
     xpRequired,
     grantExperience,
+    loseExperience,
+    unequipIneligibleEquipment,
   };
 });

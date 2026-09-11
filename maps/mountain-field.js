@@ -43,10 +43,9 @@
   const northSpawn = data.derived?.north_spawn || { x: 3470, y: 144 };
 
   function createMountainFieldMap() {
-    const signs = [
-      { id: "field-west-sign", kind: "sign", name: "城外路牌", x: 740, y: 2525, radius: 10, text: "← 米克雷帝國　　沉燈坑道 ↑" },
-      { id: "field-bend-sign", kind: "sign", name: "山道路牌", x: 2575, y: 1465, radius: 10, text: "沿山路向北可達沉燈坑道。樹海內無路可行。" },
-    ];
+    // Road signs are intentionally omitted. The authored mountain artwork is
+    // allowed to stand on its own without extra sign props layered on top.
+    const signs = [];
 
     const chests = [
       { id: "grove-cache", kind: "chest", x: 990, y: 2590, radius: 13, reward: { coins: 38, potions: 1 }, name: "樹根木箱" },
@@ -54,26 +53,25 @@
       { id: "ruin-cache", kind: "chest", x: 3470, y: 150, radius: 13, reward: { coins: 90, potions: 2 }, name: "坑道口寶箱" },
     ];
 
-    const npcs = [{
-      id: "mountain_delivery_recipient",
-      name: "洛安",
-      displayName: "山地收件員",
-      role: "山地收件員／公會送信",
-      kind: "npc",
+    // The old purple authored service region is now the strange wishing pool.
+    // It is already visible in the flattened map, so only its interaction
+    // region is kept here and no extra NPC/prop is painted over the scene.
+    const wishPool = {
+      id: "mountain-wish-pool",
+      kind: "wishPool",
+      name: "古怪水池",
       x: npcRegion.centroid?.x || 1781,
       y: npcRegion.centroid?.y || 997,
       radius: 12,
       approachPoint: { x: npcRegion.anchor?.x || 1770, y: npcRegion.anchor?.y || 938 },
-      color: "#8ac9c0",
-      facing: "down",
-      actor: "mountainCourier",
-      gender: "male",
-      age: 38,
-      appearance: "穿著灰綠旅行斗篷、背住防水信袋與登山杖的山地信使",
+      interactionRadius: navigation?.serviceInteractionReachPx || 160,
+      navigationRegion: "npc",
       zone: "far-field-clearing",
-      services: ["guild-delivery"],
-      chatter: "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。",
-    }];
+      render: false,
+    };
+
+    const npcs = [];
+    const boards = [wishPool];
 
     // Exploration placement only. Battle level and party size come from the
     // canonical monster catalog; these spawns are ordered roughly from the
@@ -200,13 +198,13 @@
         entrance: start,
         westGate: { x: westSpawn.x, y: westSpawn.y },
         dungeonFront: { x: northSpawn.x, y: northSpawn.y },
-        courierApproach: { x: npcRegion.anchor?.x || 1770, y: npcRegion.anchor?.y || 938 },
+        wishPoolApproach: { x: npcRegion.anchor?.x || 1770, y: npcRegion.anchor?.y || 938 },
       },
       spawnFacings: {
         entrance: "right",
         westGate: "right",
         dungeonFront: "down",
-        courierApproach: "down",
+        wishPoolApproach: "down",
       },
       exits: [westExit, dungeonExit],
       houses: [],
@@ -218,7 +216,7 @@
       solidRects: [],
       furniture: [],
       decorations: [],
-      boards: [],
+      boards,
       npcs,
       enemySpawns,
       chests,

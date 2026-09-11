@@ -5,6 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const MIN_DIRECT_DAMAGE = 5;
+
   const DIRECTIONS = Object.freeze([
     Object.freeze({ x: 0, y: -1, name: "up" }),
     Object.freeze({ x: -1, y: 0, name: "left" }),
@@ -842,11 +844,13 @@
     priorityUnitId = null,
     turnCost = .5,
     finalFacings = {},
+    friendlyRetryDelay = .25,
   } = {}) {
     const actors = (Array.isArray(units) ? units : []).filter(unitIsAlive).filter((unit) => cellOf(unit));
     const valueFor = (collection, id) => collection instanceof Map ? collection.get(id) : collection && collection[id];
     const cancelled = new Set();
     const states = new Map();
+    const retryDelay = Math.max(.05, finiteStat(friendlyRetryDelay, .25));
 
     for (const actor of actors) {
       const start = cellOf(actor);
@@ -862,6 +866,10 @@
       const requestedFinalFacing = normalizeFacing(routeValue?.finalFacing || valueFor(finalFacings, actor.id));
       states.set(actor.id, {
         id: actor.id,
+        actor,
+        team: String(actor.side ?? actor.team ?? ""),
+        weight: finiteStat(actor.weight, 0),
+        initiative: finiteStat(actor.initiative, finiteStat(actor.speed, 0)),
         position: copyCell(start),
         renderCell: copyCell(start),
         facing: schedule.initialFacing || normalizeFacing(actor.facing) || "down",
@@ -876,6 +884,7 @@
         blockedBy: new Set(),
         routeCancelled: false,
         completed: false,
+        friendlyWaits: 0,
       });
     }
 
@@ -883,9 +892,31 @@
     const addLog = (time, state, type, details = {}) => {
       log.push({ time, unitId: state.id, type, ...details });
     };
+    const sameTeam = (first, second) => Boolean(first && second && first.team && second.team && first.team === second.team);
+    const hasRouteRemaining = (state) => Boolean(state && !state.blocked && !state.routeCancelled && !state.completed
+      && (state.active || state.eventIndex < state.schedule.events.length));
+    const pendingMoveEvent = (state) => {
+      if (!state || state.blocked || state.routeCancelled) return null;
+      if (state.active?.type === "move") return state.active;
+      // A friendly traffic wait retries the SAME scheduled move.  Peek through
+      // that temporary wait so a teammate approaching from the other side can
+      // still recognise a reciprocal head-on pass and break the wait cycle.
+      if (state.active && state.active.type !== "friendly-wait") return null;
+      const event = state.schedule.events[state.eventIndex];
+      return event?.type === "move" ? event : null;
+    };
+    const friendlyPriority = (ids) => [...ids].sort((leftId, rightId) => {
+      const left = states.get(leftId);
+      const right = states.get(rightId);
+      return finiteStat(left?.weight, 0) - finiteStat(right?.weight, 0)
+        || (String(leftId) === String(priorityUnitId) ? -1 : 0)
+        || (String(rightId) === String(priorityUnitId) ? 1 : 0)
+        || finiteStat(right?.initiative, 0) - finiteStat(left?.initiative, 0)
+        || String(leftId).localeCompare(String(rightId));
+    })[0];
 
     const markBlocked = (state, reason, blockers = [], time = 0) => {
-      if (!state) return;
+      if (!state) return false;
       const firstBlock = !state.blocked;
       state.blocked = true;
       state.completed = false;
@@ -896,6 +927,7 @@
       }
       cancelled.add(state.id);
       if (firstBlock) addLog(time, state, "blocked", { reason, blockedBy: [...state.blockedBy] });
+      return firstBlock;
     };
 
     const finishIfDone = (state, time) => {
@@ -956,11 +988,21 @@
       const completedNow = activeStates.filter((state) => Math.abs(state.active.endTime - nextTime) < 1e-9);
       const tickLogStart = log.length;
 
+      // Friendly traffic waits are temporal only: they do not spend movement
+      // budget and, crucially, they do not cancel the remaining route.  Once
+      // the short wait expires the exact same scheduled step is retried.
+      for (const state of completedNow) {
+        const action = state.active;
+        if (action?.type !== "friendly-wait" && action?.type !== "friendly-delay") continue;
+        state.active = null;
+        addLog(nextTime, state, "friendly-resume", { waited: action.duration, blockedBy: action.blockedBy || [], afterPass: action.type === "friendly-delay" });
+      }
+
       // A completed turn changes facing before movement due at this same
       // instant is checked. It still leaves the unit occupying its old cell.
       for (const state of completedNow) {
         const action = state.active;
-        if (action.type !== "turn") continue;
+        if (!action || action.type !== "turn") continue;
         state.facing = action.facing;
         state.elapsedCost += action.duration;
         state.eventIndex += 1;
@@ -978,8 +1020,23 @@
 
       const completingMovers = completedNow.filter((state) => state.active?.type === "move");
       const completingIds = new Set(completingMovers.map((state) => state.id));
+      const forcedFriendlySwaps = new Set();
+      const permittedFriendlySwapPairs = new Set();
+      const friendlySwapParticipants = new Set();
+      const postSwapWaitById = new Map();
+      const friendlyPairKey = (leftId, rightId) => [String(leftId), String(rightId)].sort().join("\u0000");
+      const permitFriendlySwap = (leftId, rightId) => {
+        permittedFriendlySwapPairs.add(friendlyPairKey(leftId, rightId));
+        friendlySwapParticipants.add(leftId);
+        friendlySwapParticipants.add(rightId);
+        const priority = friendlyPriority([leftId, rightId]);
+        const yieldingId = String(priority) === String(leftId) ? rightId : leftId;
+        postSwapWaitById.set(yieldingId, [priority]);
+      };
+      const isPermittedFriendlySwap = (leftId, rightId) => permittedFriendlySwapPairs.has(friendlyPairKey(leftId, rightId));
       const intentions = new Map([...states.values()].map((state) => [state.id, copyCell(state.position)]));
       const collisionPeers = new Map();
+      const friendlyPaused = new Set();
       const rememberPeers = (id, peers) => {
         if (!collisionPeers.has(id)) collisionPeers.set(id, new Set());
         for (const peer of peers) if (String(peer) !== String(id)) collisionPeers.get(id).add(peer);
@@ -998,14 +1055,73 @@
         const state = states.get(id);
         const proposed = intentions.get(id);
         rememberPeers(id, peers);
-        markBlocked(state, reason, peers, nextTime);
+        const newlyBlocked = markBlocked(state, reason, peers, nextTime);
+        intentions.set(id, copyCell(state.position));
+        return newlyBlocked || !sameCell(proposed, state.position);
+      };
+      const pauseAtCurrentCell = (id, peers = []) => {
+        const state = states.get(id);
+        if (!state || state.blocked || state.routeCancelled) return false;
+        const proposed = intentions.get(id);
+        rememberPeers(id, peers);
+        friendlyPaused.add(id);
         intentions.set(id, copyCell(state.position));
         return !sameCell(proposed, state.position);
       };
 
+      // Resolve friendly reciprocal/head-on traffic BEFORE generic target
+      // grouping. Two allies are allowed to exchange cells: this represents
+      // passing one another rather than becoming permanent blockers.  If both
+      // steps finish together, swap them immediately. If timings differ, the
+      // lighter/higher-priority unit controls the pass; the other unit yields
+      // briefly AFTER the exchange and then continues its untouched route.
+      const startOccupants = new Map([...states.values()].map((state) => [cellKey(state.position), state.id]));
+      const inspectedFriendlyPairs = new Set();
+      for (const state of [...completingMovers]) {
+        const proposed = intentions.get(state.id);
+        if (sameCell(proposed, state.position)) continue;
+        const occupantId = startOccupants.get(cellKey(proposed));
+        if (occupantId == null || occupantId === state.id) continue;
+        const occupant = states.get(occupantId);
+        const reciprocalMove = pendingMoveEvent(occupant);
+        if (!sameTeam(state, occupant) || !reciprocalMove || !sameCell(reciprocalMove.to, state.position)) continue;
+        const pairKey = friendlyPairKey(state.id, occupantId);
+        if (inspectedFriendlyPairs.has(pairKey)) continue;
+        inspectedFriendlyPairs.add(pairKey);
+
+        const occupantCompletesNow = completingIds.has(occupantId)
+          && occupant.active?.type === "move"
+          && Math.abs(occupant.active.endTime - nextTime) < 1e-9;
+        if (occupantCompletesNow) {
+          intentions.set(occupantId, copyCell(reciprocalMove.to));
+          permitFriendlySwap(state.id, occupantId);
+          continue;
+        }
+
+        const priority = friendlyPriority([state.id, occupantId]);
+        if (String(priority) !== String(state.id)) {
+          pauseAtCurrentCell(state.id, [occupantId]);
+          continue;
+        }
+
+        // The priority ally arrives first. Complete the reciprocal teammate's
+        // pending step at this instant so the exchange never requires either
+        // unit to occupy the same logical cell. Its remaining route survives.
+        if (!occupant.active || occupant.active.type === "friendly-wait") {
+          occupant.active = { ...reciprocalMove, startTime: nextTime, endTime: nextTime };
+        }
+        intentions.set(occupantId, copyCell(reciprocalMove.to));
+        if (!completingIds.has(occupantId)) {
+          completingIds.add(occupantId);
+          completingMovers.push(occupant);
+          forcedFriendlySwaps.add(occupantId);
+        }
+        permitFriendlySwap(state.id, occupantId);
+      }
+
       let changed = true;
       let collisionPasses = 0;
-      while (changed && collisionPasses < actors.length * 4 + 4) {
+      while (changed && collisionPasses < actors.length * 6 + 8) {
         collisionPasses += 1;
         changed = false;
         const targetGroups = new Map();
@@ -1014,17 +1130,98 @@
           if (!targetGroups.has(key)) targetGroups.set(key, []);
           targetGroups.get(key).push(state.id);
         }
+
         for (const ids of targetGroups.values()) {
           if (ids.length < 2) continue;
+          const groupStates = ids.map((id) => states.get(id));
+          const allFriendly = groupStates.every((state) => sameTeam(groupStates[0], state));
           const stationary = ids.filter((id) => !completingIds.has(id) || sameCell(intentions.get(id), states.get(id).position));
-          const priority = stationary.length === 0
-            ? ids.find((id) => priorityUnitId != null && String(id) === String(priorityUnitId))
-            : null;
+
+          if (allFriendly) {
+            if (stationary.length) {
+              const holderIds = stationary;
+              for (const id of ids) {
+                if (holderIds.includes(id) || friendlyPaused.has(id)) continue;
+                // A permitted reciprocal pass is already resolved as a pair;
+                // do not reinterpret one half as a stationary blocker merely
+                // because the other half was forced to this completion tick.
+                if (holderIds.some((holderId) => isPermittedFriendlySwap(id, holderId))) continue;
+                const holders = holderIds.map((holderId) => states.get(holderId));
+                const willClear = holders.every((holder) => hasRouteRemaining(holder));
+                changed = (willClear
+                  ? pauseAtCurrentCell(id, holderIds)
+                  : stopAtCurrentCell(id, holderIds, "friendly-route-blocked")) || changed;
+              }
+              continue;
+            }
+            // A reciprocal friendly pass reserves both exchange cells for
+            // that tick. A third teammate arriving at one of those cells must
+            // yield, otherwise breaking the swap would strand the other half
+            // and can create a three-unit deadlock.
+            const swapContenders = ids.filter((id) => friendlySwapParticipants.has(id));
+            const winner = swapContenders.length ? friendlyPriority(swapContenders) : friendlyPriority(ids);
+            for (const id of ids) {
+              if (id === winner || friendlyPaused.has(id)) continue;
+              changed = pauseAtCurrentCell(id, ids.filter((other) => other !== id)) || changed;
+            }
+            continue;
+          }
+
+          // Opposing teams use arrival/vacate timing, not a static occupancy
+          // snapshot. At this tick every non-stationary member is ARRIVING at
+          // the grouped cell. A unit which still occupies that cell only owns
+          // it safely when it has no later route to vacate. If it was planning
+          // to leave AFTER the opponent arrives, the earlier claim pins that
+          // occupant as well: neither side may pass through the other.
+          //
+          // When the cell starts empty (stationary.length === 0), the first
+          // arrival already won on an earlier resolver tick. Exact-time ties
+          // are resolved by priorityUnitId (the player in the current battle).
+          if (stationary.length) {
+            for (const holderId of stationary) {
+              const holder = states.get(holderId);
+              const opposingArrivals = ids.filter((id) => id !== holderId
+                && !stationary.includes(id)
+                && !sameTeam(holder, states.get(id)));
+              if (opposingArrivals.length && hasRouteRemaining(holder)) {
+                changed = stopAtCurrentCell(holderId, opposingArrivals, "opponent-pin") || changed;
+              }
+            }
+            for (const id of ids) {
+              if (stationary.includes(id)) continue;
+              changed = stopAtCurrentCell(id, ids.filter((other) => other !== id), "unit-collision") || changed;
+            }
+            continue;
+          }
+
+          const priority = ids.find((id) => priorityUnitId != null && String(id) === String(priorityUnitId));
           for (const id of ids) {
-            cancelled.add(id);
-            states.get(id).routeCancelled = true;
             if (priority != null && id === priority) continue;
-            changed = stopAtCurrentCell(id, ids.filter((other) => other !== id), stationary.length ? "unit-collision" : "contested") || changed;
+            changed = stopAtCurrentCell(id, ids.filter((other) => other !== id), "contested") || changed;
+          }
+        }
+
+        // A permitted friendly exchange is atomic from the occupancy point of
+        // view. If one half is later stopped by a third unit/opponent during
+        // this same collision pass, the partner cannot enter the cell that was
+        // supposed to be vacated. Propagate that failure before finalising the
+        // tick; the outer collision loop will then re-evaluate any followers.
+        for (const pairKey of permittedFriendlySwapPairs) {
+          const [leftId, rightId] = pairKey.split("\u0000");
+          const left = states.get(leftId);
+          const right = states.get(rightId);
+          if (!left || !right) continue;
+          const leftStays = sameCell(intentions.get(leftId), left.position);
+          const rightStays = sameCell(intentions.get(rightId), right.position);
+          if (leftStays && !rightStays && sameCell(intentions.get(rightId), left.position)) {
+            changed = (left.blocked
+              ? stopAtCurrentCell(rightId, [leftId], "friendly-route-blocked")
+              : pauseAtCurrentCell(rightId, [leftId])) || changed;
+          }
+          if (rightStays && !leftStays && sameCell(intentions.get(leftId), right.position)) {
+            changed = (right.blocked
+              ? stopAtCurrentCell(leftId, [rightId], "friendly-route-blocked")
+              : pauseAtCurrentCell(leftId, [rightId])) || changed;
           }
         }
 
@@ -1037,6 +1234,14 @@
               || !sameCell(intentions.get(first.id), second.position)
               || !sameCell(intentions.get(second.id), first.position)
               || sameCell(first.position, second.position)) continue;
+            if (sameTeam(first, second)) {
+              // Friendly head-on traffic may pass through/swap.  End-of-tick
+              // cells remain unique, neither route is cancelled, and the
+              // lower-priority (normally heavier) unit yields briefly after
+              // the exchange before starting its next scheduled action.
+              if (!isPermittedFriendlySwap(first.id, second.id)) permitFriendlySwap(first.id, second.id);
+              continue;
+            }
             changed = stopAtCurrentCell(first.id, [second.id]) || changed;
             changed = stopAtCurrentCell(second.id, [first.id]) || changed;
           }
@@ -1050,6 +1255,37 @@
           if (occupantId == null || occupantId === state.id) continue;
           const occupant = states.get(occupantId);
           if (!sameCell(intentions.get(occupantId), occupant.position)) continue;
+          if (sameTeam(state, occupant)) {
+            if (isPermittedFriendlySwap(state.id, occupantId)) continue;
+            const reciprocalMove = pendingMoveEvent(occupant);
+            const reciprocal = reciprocalMove && sameCell(reciprocalMove.to, state.position);
+            if (reciprocal) {
+              // Any reciprocal exchange that reaches this late collision pass
+              // was not ready in the pre-pass.  Let the higher-priority ally
+              // drive the exchange; otherwise this unit waits and retries.
+              const priority = friendlyPriority([state.id, occupantId]);
+              if (String(priority) === String(state.id)) {
+                if (!occupant.active || occupant.active.type === "friendly-wait") {
+                  occupant.active = { ...reciprocalMove, startTime: nextTime, endTime: nextTime };
+                }
+                intentions.set(occupantId, copyCell(reciprocalMove.to));
+                if (!completingIds.has(occupantId)) {
+                  completingIds.add(occupantId);
+                  completingMovers.push(occupant);
+                  forcedFriendlySwaps.add(occupantId);
+                }
+                permitFriendlySwap(state.id, occupantId);
+                changed = true;
+                continue;
+              }
+              changed = pauseAtCurrentCell(state.id, [occupantId]) || changed;
+              continue;
+            }
+            changed = (hasRouteRemaining(occupant)
+              ? pauseAtCurrentCell(state.id, [occupantId])
+              : stopAtCurrentCell(state.id, [occupantId], "friendly-route-blocked")) || changed;
+            continue;
+          }
           changed = stopAtCurrentCell(state.id, [occupantId]) || changed;
           stopAtCurrentCell(occupantId, [state.id]);
         }
@@ -1065,6 +1301,18 @@
       for (const state of completingMovers) {
         const action = state.active;
         if (!action) continue;
+        if (friendlyPaused.has(state.id) && !state.blocked) {
+          state.friendlyWaits += 1;
+          state.active = {
+            type: "friendly-wait",
+            duration: retryDelay,
+            startTime: nextTime,
+            endTime: nextTime + retryDelay,
+            blockedBy: [...(collisionPeers.get(state.id) || [])],
+          };
+          addLog(nextTime, state, "friendly-wait", { blockedBy: state.active.blockedBy, duration: retryDelay });
+          continue;
+        }
         state.elapsedCost += action.duration;
         if (!state.blocked && sameCell(intentions.get(state.id), action.to)) {
           state.position = copyCell(action.to);
@@ -1073,14 +1321,28 @@
           state.eventIndex += 1;
           addLog(nextTime, state, "move", {
             from: copyCell(action.from), to: copyCell(action.to), facing: state.facing, cost: action.duration,
+            ...(forcedFriendlySwaps.has(state.id) || friendlySwapParticipants.has(state.id) ? { friendlyPass: true } : {}),
           });
         }
         state.active = null;
+        const postSwapBlockers = postSwapWaitById.get(state.id);
+        if (!state.blocked && postSwapBlockers && sameCell(state.position, action.to)) {
+          state.friendlyWaits += 1;
+          state.active = {
+            type: "friendly-delay",
+            duration: retryDelay,
+            startTime: nextTime,
+            endTime: nextTime + retryDelay,
+            blockedBy: postSwapBlockers,
+          };
+          addLog(nextTime, state, "friendly-wait", { blockedBy: postSwapBlockers, duration: retryDelay, afterPass: true });
+        }
       }
 
       // A unit may be hit while it is still turning or half-way through a
       // step. It never vacated its logical source cell, so discard that action
-      // and charge only the elapsed fraction before STOP.
+      // and charge only the elapsed fraction before a HARD STOP. Friendly
+      // traffic waits are deliberately excluded because their route survives.
       for (const state of states.values()) {
         if (!state.blocked || !state.active) continue;
         state.elapsedCost += Math.max(0, nextTime - state.active.startTime);
@@ -1107,6 +1369,7 @@
         blockedBy: [...state.blockedBy],
         completed: state.completed,
         elapsedCost: state.elapsedCost,
+        friendlyWaits: state.friendlyWaits,
       };
     }
     return {
@@ -1428,7 +1691,7 @@
     const multiplier = Math.max(0, finiteStat(options.multiplier, 1));
     const criticalMultiplier = options.critical ? Math.max(1, finiteStat(options.criticalMultiplier, 1.5)) : 1;
     const guardMultiplier = options.guarded ? Math.max(0, finiteStat(options.guardMultiplier, 0.65)) : 1;
-    const minimum = Math.max(0, Math.trunc(finiteStat(options.minimum, 1)));
+    const minimum = Math.max(0, Math.trunc(finiteStat(options.minimum, MIN_DIRECT_DAMAGE)));
     return Math.max(minimum, Math.floor(Math.max(0, attack + bonus) * multiplier * criticalMultiplier * guardMultiplier - defence));
   }
 
@@ -1447,6 +1710,7 @@
   }
 
   return {
+    MIN_DIRECT_DAMAGE,
     DIRECTIONS,
     FACING_VECTORS,
     POSITIONAL_MULTIPLIERS,
