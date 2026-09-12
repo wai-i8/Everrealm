@@ -61,7 +61,9 @@
     "fighter-effects.js",
     "locomotion.js",
     "character-art.js",
-    "game.js?v=20260912-02",
+    "game/ui-dom-helpers.js",
+    "game/ui-presentation-helpers.js",
+    "game.js?v=20260912-03",
   ]);
 
   return Object.freeze({ scripts });

@@ -25,6 +25,32 @@
   const Firebase = window.EverrealmFirebase;
   const CloudSave = window.EverrealmCloudSave?.create?.({ firebase: Firebase });
   const SavePersistence = window.EverrealmSavePersistence;
+  const UiDom = window.EverrealmUiDom;
+  const UiPresentation = window.EverrealmUiPresentation;
+  const {
+    normalizeCharacterName,
+    statText,
+    setTextIfChanged,
+    setStyleWidthIfChanged,
+    setDatasetIfChanged,
+    escapeUiText,
+    formatTime,
+  } = UiDom;
+  const {
+    atlasIconHtml,
+    itemIconHtml,
+    coinAmountHtml,
+    envelopeIconHtml,
+    materialDescription,
+    skillStars,
+    skillIcon,
+    skillBadgeMarkup,
+    skillRangeText,
+    skillTypeText,
+    skillDamageText,
+    skillHeightText,
+  } = UiPresentation;
+  const setFacilityFooter = (message) => UiDom.setFacilityFooter(facilityFooter, message);
   const maps = MapRegistry.createMapRegistry();
   if (!MainTownNavigation?.ready) {
     console.error("Main Town navigation failed closed", MainTownNavigation?.failure || "generated runtime data unavailable");
@@ -592,10 +618,6 @@
   function resetPlayer() {
     const fresh = createPlayer();
     Object.assign(player, fresh);
-  }
-
-  function normalizeCharacterName(value) {
-    return String(value || "").trim().replace(/\s+/g, " ").slice(0, 24);
   }
 
   function playerDisplayName() {
@@ -2900,22 +2922,6 @@
     return guildMarks >= 18 ? .15 : guildMarks >= 10 ? .1 : guildMarks >= 4 ? .05 : 0;
   }
 
-  function statText(stats) {
-    const labels = { attack: "攻擊", defense: "防禦", speed: "速度", critChance: "暴擊", moveRange: "移動", accuracy: "命中", evasion: "迴避" };
-    return Object.entries(stats)
-      .filter(([key, value]) => !["weight", "maxHp"].includes(key) && value)
-      .map(([key, value]) => `${labels[key] || key} ${value > 0 ? "+" : ""}${key === "critChance" ? Math.round(value * 100) + "%" : ["accuracy", "evasion"].includes(key) ? `${value}%` : value}`)
-      .join(" · ");
-  }
-
-  function setFacilityFooter(message) {
-    // Facility explanations belong in the shared header [i] popover. Keep
-    // the footer available for future immediate actions without reserving a
-    // permanent strip for instructional copy.
-    facilityFooter.replaceChildren();
-    facilityFooter.hidden = true;
-  }
-
   function renderFacilitySummary() {
     const rank = guildRankInfo();
     const weapon = equipmentItem(equipped.weapon)?.name || "見習燈刃";
@@ -3038,24 +3044,6 @@
       + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0);
   }
 
-  function setTextIfChanged(element, value) {
-    if (!element) return;
-    const next = String(value);
-    if (element.textContent !== next) element.textContent = next;
-  }
-
-  function setStyleWidthIfChanged(element, value) {
-    if (!element) return;
-    const next = String(value);
-    if (element.style.width !== next) element.style.width = next;
-  }
-
-  function setDatasetIfChanged(element, key, value) {
-    if (!element) return;
-    const next = String(value);
-    if (element.dataset[key] !== next) element.dataset[key] = next;
-  }
-
   function updateMenuBadges() {
     const bookCount = totalOwnedSkillBooks();
     setTextIfChanged(inventoryBookBadge, bookCount > 99 ? "99+" : String(bookCount));
@@ -3075,34 +3063,6 @@
       skillReady = Skills.getSkillsByClass(playerClassId).some((skill) => Skills.skillLearnability(normalized, skill.id) === "canLearn");
     } catch (_) {}
     if (skillMenuBadge && skillMenuBadge.hidden === skillReady) skillMenuBadge.hidden = !skillReady;
-  }
-
-  function atlasIconHtml(atlas, index, label, extraClass = "") {
-    const safeIndex = Math.max(0, Math.min(15, Number(index) || 0));
-    const column = safeIndex % 4;
-    const row = Math.floor(safeIndex / 4);
-    return `<span class="atlas-icon ${atlas}-icon-atlas ${extraClass}" style="--atlas-x:${column * 33.333333}%;--atlas-y:${row * 33.333333}%" role="img" aria-label="${label}"></span>`;
-  }
-
-  function itemIconHtml(itemId, label, extraClass = "", fallbackIndex = 4) {
-    const item = ItemData?.getItem?.(itemId);
-    if (item?.iconSrc) {
-      return `<span class="standalone-item-icon ${extraClass}" style="--item-icon-src:url('${item.iconSrc}')" role="img" aria-label="${label}"></span>`;
-    }
-    return atlasIconHtml("item", Number.isFinite(Number(item?.iconIndex)) ? Number(item.iconIndex) : fallbackIndex, label, extraClass);
-  }
-
-  function coinAmountHtml(amount, extraClass = "") {
-    const value = Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString("zh-HK");
-    return `<span class="currency-amount ${extraClass}" aria-label="${value} 金幣"><i class="coin-icon" aria-hidden="true"></i><strong>${value}</strong></span>`;
-  }
-
-  function envelopeIconHtml(label = "公會委託獎勵信") {
-    return `<span class="standalone-item-icon inventory-envelope-icon" style="--item-icon-src:url('assets/items/skill-envelope-v1.png')" role="img" aria-label="${label}"></span>`;
-  }
-
-  function materialDescription(id) {
-    return ItemData?.getItem?.(id)?.description || "冒險途中取得嘅素材，可以留作交換或製作裝備。";
   }
 
   function renderBagFacility() {
@@ -3559,61 +3519,6 @@
     renderFacility();
     updateHud(true);
     saveImportant(false);
-  }
-
-  function skillStars(star) {
-    return Skills.formatSkillBookRank(star);
-  }
-
-  function skillIcon(skill) {
-    if (skill.tags.includes("heal")) return "♥";
-    if (skill.tags.includes("defense")) return "♢";
-    if (skill.tags.includes("mobility")) return "✣";
-    if (skill.tags.includes("magic")) return "✦";
-    if (skill.tags.includes("ranged")) return "➶";
-    return skill.tags.includes("passive") ? "✦" : "·";
-  }
-
-  function skillBadgeMarkup(skill) {
-    const passive = skill.tags.includes("passive");
-    const label = passive ? "P" : "C";
-    return `<span class="skill-kind-badge ${passive ? "is-psv" : "is-cmd"}" aria-hidden="true"><b>${label}</b></span>`;
-  }
-
-  function skillRangeText(skill) {
-    if (skill.tags.includes("passive")) return "PSV · 自動生效";
-    const range = Array.isArray(skill.rangeCellsRelative)
-      ? `${skill.rangeCellsRelative.length} 格`
-      : skill.range?.min == null || skill.range?.max == null
-        ? "未確定"
-        : skill.range.min === skill.range.max ? `${skill.range.max}` : `${skill.range.min}–${skill.range.max}`;
-    const shapes = { single: "單體", self: "自身", line: "直線", cone: "扇形", cross: "十字", radius: "範圍", relative_cells: "範圍", line_to_target: "直線", impact_area: "爆發範圍" };
-    return `${skill.apCost} AP · ${shapes[skill.area.shape] || skill.area.shape} · 射程 ${range}`;
-  }
-
-  function skillTypeText(skill) {
-    if (skill.tags.includes("passive")) return "PSV 被動";
-    if (skill.actionKind === "cleanse") return "CMD · 淨化";
-    if (skill.dealsDamage && skill.deliveryMode === "linear") return "CMD · 線性攻擊";
-    if (skill.dealsDamage && skill.deliveryMode === "arc") return "CMD · 弧線攻擊";
-    if (skill.dealsDamage) return "CMD · 無路線效果";
-    return "CMD · 輔助／控制";
-  }
-
-  function skillDamageText(skill) {
-    if (skill.damage?.model?.type === "set_remaining_hp_fraction") return "特殊：目標剩餘生命比例";
-    if (skill.damage?.model?.type === "set_remaining_hp_value") return "特殊：目標剩餘生命固定值";
-    if (!skill.dealsDamage) return "無直接傷害";
-    const multiplier = Skills.calculateSkillDamageMultiplier(skill);
-    const utility = Number(skill.damage?.utility_multiplier);
-    return `${multiplier.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}× 總傷害${utility < 1 ? ` · 輔助修正 ${utility}×` : ""}`;
-  }
-
-  function skillHeightText(skill) {
-    const rule = skill.heightDifference;
-    if (!rule || rule.status === "not_applicable") return "不適用";
-    const value = (part) => part === "unlimited" ? "∞" : part == null ? "?" : part;
-    return `上 ${value(rule.up)} · 下 ${value(rule.down)}${rule.status === "uncertain" ? "（來源未確定）" : ""}`;
   }
 
   function skillRangePatternMarkup(skill) {
@@ -6953,16 +6858,6 @@
 
   const SYSTEM_LOG_LABELS = Object.freeze({ combat: "戰鬥", reward: "獎勵", quest: "任務", item: "物品", system: "系統" });
 
-  function escapeUiText(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    })[char]);
-  }
-
   function syncSystemLogCollapsed() {
     if (!systemLog) return;
     systemLog.classList.toggle("is-collapsed", systemLogCollapsed);
@@ -7099,12 +6994,6 @@
   function announce(message) {
     ariaLive.textContent = "";
     window.setTimeout(() => { ariaLive.textContent = message; }, 20);
-  }
-
-  function formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainder = Math.floor(seconds % 60);
-    return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
 
   // Rendering functions are kept together below so the simulation above remains testable.
