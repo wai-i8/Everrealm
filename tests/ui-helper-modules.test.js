@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const UiDom = require("../game/ui-dom-helpers.js");
 const UiPresentation = require("../game/ui-presentation-helpers.js");
+const SystemFeedback = require("../game/system-feedback.js");
 const Skills = require("../skill-core.js");
 
 test("UI DOM helpers preserve normalization, text formatting, and DOM update behavior", () => {
@@ -45,4 +46,108 @@ test("UI presentation helpers preserve icon markup and skill presentation output
   assert.ok(skill);
   assert.equal(UiPresentation.skillStars(skill.star), Skills.formatSkillBookRank(skill.star));
   assert.match(UiPresentation.skillDamageText(skill), /× 總傷害/);
+});
+
+test("system feedback preserves toast, announcement, and system-log state behavior", () => {
+  const scheduled = [];
+  const stored = [];
+  let collapsed = false;
+  let filter = "all";
+  let serial = 0;
+  const entries = [];
+  const classList = () => ({
+    values: new Set(),
+    toggle(name, enabled) { enabled ? this.values.add(name) : this.values.delete(name); },
+    add(name) { this.values.add(name); },
+    contains(name) { return this.values.has(name); },
+  });
+  const systemLog = { classList: classList(), dataset: {} };
+  const toggleButton = {
+    textContent: "",
+    title: "",
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+  };
+  const combatTab = { dataset: { logFilter: "combat" }, classList: classList(), attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+  const allTab = { dataset: { logFilter: "all" }, classList: classList(), attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+  const systemLogMessages = { innerHTML: "", scrollHeight: 120, scrollTop: 0 };
+  const dom = {
+    toastElement: { textContent: "", className: "", offsetWidth: 120, classList: classList() },
+    ariaLive: { textContent: "old" },
+    systemLog,
+    systemLogToggleButton: toggleButton,
+    systemLogTabs: { querySelectorAll() { return [combatTab, allTab]; } },
+    systemLogMessages,
+  };
+  const feedback = SystemFeedback.create({
+    dom,
+    labels: { combat: "戰鬥", system: "系統" },
+    escapeUiText: UiDom.escapeUiText,
+    storage: { setItem(key, value) { stored.push([key, value]); } },
+    storageKey: "collapsed-key",
+    setTimeout(callback, delay) { scheduled.push({ callback, delay }); },
+    state: {
+      getFilter: () => filter,
+      getEntries: () => entries,
+      getCollapsed: () => collapsed,
+      setCollapsed: (value) => { collapsed = value; },
+      nextSerial: () => ++serial,
+    },
+  });
+
+  feedback.showToast("第一個", "good");
+  feedback.showToast("第二個", "danger");
+  assert.equal(dom.toastElement.textContent, "第二個");
+  assert.equal(dom.toastElement.className, "game-toast danger");
+  assert.equal(dom.toastElement.classList.contains("show"), true);
+
+  feedback.announce("回復 10 生命");
+  assert.equal(dom.ariaLive.textContent, "");
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].delay, 20);
+  scheduled[0].callback();
+  assert.equal(dom.ariaLive.textContent, "回復 10 生命");
+
+  feedback.addSystemMessage("combat", "命中 <目標>。", "incoming");
+  assert.deepEqual(entries, [{ id: 1, type: "combat", text: "命中 <目標>", tone: "incoming" }]);
+  assert.match(systemLogMessages.innerHTML, /\[戰鬥\]/);
+  assert.match(systemLogMessages.innerHTML, /命中 &lt;目標&gt;/);
+  assert.equal(systemLogMessages.scrollTop, 120);
+  assert.equal(combatTab.attributes["aria-pressed"], "false");
+  assert.equal(allTab.attributes["aria-pressed"], "true");
+
+  filter = "combat";
+  feedback.addSystemMessage("system", "不應顯示。", "");
+  assert.doesNotMatch(systemLogMessages.innerHTML, /不應顯示/);
+  assert.equal(combatTab.attributes["aria-pressed"], "true");
+
+  feedback.toggleSystemLogCollapsed();
+  assert.equal(collapsed, true);
+  assert.deepEqual(stored, [["collapsed-key", "1"]]);
+  assert.equal(systemLog.dataset.collapsed, "true");
+  assert.equal(toggleButton.textContent, "+");
+  assert.equal(toggleButton.attributes["aria-expanded"], "false");
+
+  const throwingFeedback = SystemFeedback.create({
+    dom,
+    labels: { system: "系統" },
+    escapeUiText: UiDom.escapeUiText,
+    storage: { setItem() { throw new Error("storage unavailable"); } },
+    storageKey: "collapsed-key",
+    state: {
+      getFilter: () => filter,
+      getEntries: () => entries,
+      getCollapsed: () => collapsed,
+      setCollapsed: (value) => { collapsed = value; },
+      nextSerial: () => ++serial,
+    },
+  });
+  assert.doesNotThrow(() => throwingFeedback.toggleSystemLogCollapsed());
+  assert.equal(collapsed, false);
+
+  filter = "all";
+  for (let index = 0; index < 405; index += 1) feedback.addSystemMessage("system", `記錄 ${index}`);
+  assert.equal(entries.length, 400);
+  assert.equal(entries[0].text, "記錄 5");
+  assert.equal(entries.at(-1).text, "記錄 404");
 });

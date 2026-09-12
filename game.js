@@ -27,6 +27,7 @@
   const SavePersistence = window.EverrealmSavePersistence;
   const UiDom = window.EverrealmUiDom;
   const UiPresentation = window.EverrealmUiPresentation;
+  const SystemFeedback = window.EverrealmSystemFeedback;
   const {
     normalizeCharacterName,
     statText,
@@ -6858,48 +6859,29 @@
 
   const SYSTEM_LOG_LABELS = Object.freeze({ combat: "戰鬥", reward: "獎勵", quest: "任務", item: "物品", system: "系統" });
 
-  function syncSystemLogCollapsed() {
-    if (!systemLog) return;
-    systemLog.classList.toggle("is-collapsed", systemLogCollapsed);
-    systemLog.dataset.collapsed = String(systemLogCollapsed);
-    if (systemLogToggleButton) {
-      systemLogToggleButton.textContent = systemLogCollapsed ? "+" : "−";
-      systemLogToggleButton.setAttribute("aria-expanded", String(!systemLogCollapsed));
-      systemLogToggleButton.setAttribute("aria-label", systemLogCollapsed ? "展開系統資訊欄" : "縮細系統資訊欄");
-      systemLogToggleButton.title = systemLogCollapsed ? "展開資訊欄" : "縮細資訊欄";
-    }
-  }
-
-  function toggleSystemLogCollapsed() {
-    systemLogCollapsed = !systemLogCollapsed;
-    try { localStorage.setItem(SYSTEM_LOG_COLLAPSED_KEY, systemLogCollapsed ? "1" : "0"); } catch (_) {}
-    syncSystemLogCollapsed();
-    renderSystemLog();
-  }
-
-  function renderSystemLog() {
-    if (!systemLogMessages) return;
-    const entries = systemLogFilter === "all" ? systemLogEntries : systemLogEntries.filter((entry) => entry.type === systemLogFilter);
-    systemLog.dataset.filter = systemLogFilter;
-    const visibleEntries = systemLogCollapsed ? entries.slice(-2) : entries;
-    systemLogMessages.innerHTML = visibleEntries.map((entry) => `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}"><span class="system-log-tag">[${SYSTEM_LOG_LABELS[entry.type] || "系統"}]</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`).join("");
-    systemLogMessages.scrollTop = systemLogMessages.scrollHeight;
-    for (const tab of systemLogTabs?.querySelectorAll?.("[data-log-filter]") || []) {
-      const selected = tab.dataset.logFilter === systemLogFilter;
-      tab.setAttribute("aria-pressed", String(selected));
-      tab.classList.toggle("is-active", selected);
-    }
-    syncSystemLogCollapsed();
-  }
-
-  function addSystemMessage(type, text, tone = "") {
-    const safeType = Object.hasOwn(SYSTEM_LOG_LABELS, type) ? type : "system";
-    const safeText = String(text || "").trim().replace(/。+$/u, "");
-    if (!safeText) return;
-    systemLogEntries.push({ id: ++systemLogSerial, type: safeType, text: safeText, tone: String(tone || "") });
-    if (systemLogEntries.length > 400) systemLogEntries.splice(0, systemLogEntries.length - 400);
-    renderSystemLog();
-  }
+  const systemFeedback = SystemFeedback.create({
+    dom: { toastElement, ariaLive, systemLog, systemLogMessages, systemLogTabs, systemLogToggleButton },
+    labels: SYSTEM_LOG_LABELS,
+    escapeUiText,
+    storage: { setItem(key, value) { localStorage.setItem(key, value); } },
+    storageKey: SYSTEM_LOG_COLLAPSED_KEY,
+    setTimeout: window.setTimeout.bind(window),
+    state: {
+      getFilter: () => systemLogFilter,
+      getEntries: () => systemLogEntries,
+      getCollapsed: () => systemLogCollapsed,
+      setCollapsed: (value) => { systemLogCollapsed = value; },
+      nextSerial: () => ++systemLogSerial,
+    },
+  });
+  const {
+    showToast,
+    announce,
+    renderSystemLog,
+    addSystemMessage,
+    syncSystemLogCollapsed,
+    toggleSystemLogCollapsed,
+  } = systemFeedback;
 
   function restoreSystemLogPosition() {
     if (!systemLog) return;
@@ -6982,18 +6964,6 @@
     if (!gesture || (event && event.pointerId !== gesture.pointerId)) return;
     systemLogScrollGesture = null;
     try { systemLogScrollZone?.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
-  }
-
-  function showToast(message, style = "") {
-    toastElement.textContent = message;
-    toastElement.className = `game-toast ${style}`.trim();
-    void toastElement.offsetWidth;
-    toastElement.classList.add("show");
-  }
-
-  function announce(message) {
-    ariaLive.textContent = "";
-    window.setTimeout(() => { ariaLive.textContent = message; }, 20);
   }
 
   // Rendering functions are kept together below so the simulation above remains testable.

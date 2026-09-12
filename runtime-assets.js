@@ -63,7 +63,8 @@
     "character-art.js",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
-    "game.js?v=20260912-03",
+    "game/system-feedback.js",
+    "game.js?v=20260912-04",
   ]);
 
   return Object.freeze({ scripts });
