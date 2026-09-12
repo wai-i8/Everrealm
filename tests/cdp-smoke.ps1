@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -179,6 +179,50 @@ try {
   switch ($Scenario) {
     'title' {
       if ($before.mode -ne 'title') { throw "Expected title mode, got $($before.mode)." }
+    }
+    'batch2b-views' {
+      $startupReady = $false
+      for ($attempt = 0; $attempt -lt 30 -and -not $startupReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $startupReady = [bool](Invoke-GameExpression -Expression '!document.getElementById("titleActions").hidden && document.getElementById("authPanel").hidden')
+      }
+      if (-not $startupReady) { throw 'Batch 2B smoke could not finish the startup account gate.' }
+      Invoke-GameExpression -Expression "document.getElementById('newGameButton').click(); true" | Out-Null
+      $classReady = $false
+      for ($attempt = 0; $attempt -lt 30 -and -not $classReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $classReady = [bool](Invoke-GameExpression -Expression '!document.getElementById("classSelectPanel").hidden')
+      }
+      if (-not $classReady) { throw 'Batch 2B smoke could not open class selection after the account gate resolved.' }
+      Invoke-GameExpression -Expression "document.querySelector('[data-class-choice=fighter]').click(); true" | Out-Null
+      $gameStarted = $false
+      for ($attempt = 0; $attempt -lt 20 -and -not $gameStarted; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $gameStarted = [bool](Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.snapshot().mode === "playing"')
+        if (-not $gameStarted -and -not (Invoke-GameExpression -Expression '!document.getElementById("classSelectPanel").hidden')) {
+          Invoke-GameExpression -Expression "document.querySelector('[data-class-choice=fighter]').click(); true" | Out-Null
+        }
+      }
+      if (-not $gameStarted) { throw 'Batch 2B smoke could not start the selected class.' }
+
+      Invoke-GameExpression -Expression "document.getElementById('statusButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $statusUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,tab:window.__RPG_DEBUG__.snapshot().facility?.tab,identity:Boolean(document.querySelector(".status-compact")),name:document.querySelector(".status-compact-name")?.textContent||"",stats:document.querySelectorAll(".status-compact-stats dt").length,hp:document.querySelector(".status-compact-meter .status-compact-meter-heading b")?.textContent||""})') | ConvertFrom-Json
+      if ($statusUi.tab -ne 'status' -or -not $statusUi.identity -or -not $statusUi.name -or $statusUi.stats -ne 3 -or -not $statusUi.hp) { throw "Batch 2B status view did not render its compact presentation: $($statusUi | ConvertTo-Json -Compress)" }
+
+      Invoke-GameExpression -Expression "document.getElementById('missionButton').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      $missionUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,tab:window.__RPG_DEBUG__.snapshot().facility?.tab,empty:Boolean(document.querySelector(".mission-view.is-empty")),content:document.querySelector(".mission-view")?.textContent.trim()||""})') | ConvertFrom-Json
+      if ($missionUi.tab -ne 'missions' -or -not $missionUi.empty -or $missionUi.content -notmatch '目前沒有進行中的任務') { throw "Batch 2B mission view did not render its empty state: $($missionUi | ConvertTo-Json -Compress)" }
+
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.closeFacility(); window.__RPG_DEBUG__.enterMap('dungeon'); window.__RPG_DEBUG__.interactWith('lost-explorer-kai'); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      $dialogueUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,state:document.getElementById("dialogueNext").dataset.dialogueState,label:document.querySelector(".dialogue-next-label").textContent,text:document.getElementById("dialogueText").textContent})') | ConvertFrom-Json
+      if ($dialogueUi.mode -ne 'dialogue' -or $dialogueUi.state -notin @('continue', 'terminal') -or -not $dialogueUi.label -or -not $dialogueUi.text) { throw "Batch 2B dialogue view did not render a normal line: $($dialogueUi | ConvertTo-Json -Compress)" }
+      Invoke-GameExpression -Expression "document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); document.getElementById('dialogueNext').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 60
+      $dialogueEndUi = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,hidden:document.getElementById("dialoguePanel").hidden})') | ConvertFrom-Json
+      if ($dialogueEndUi.mode -ne 'playing' -or -not $dialogueEndUi.hidden) { throw "Batch 2B dialogue did not close cleanly: $($dialogueEndUi | ConvertTo-Json -Compress)" }
     }
     'auth-ui' {
       $authReady = $false

@@ -28,6 +28,8 @@
   const UiDom = window.EverrealmUiDom;
   const UiPresentation = window.EverrealmUiPresentation;
   const SystemFeedback = window.EverrealmSystemFeedback;
+  const DialogueUi = window.EverrealmDialogueUi;
+  const FacilityBasicViews = window.EverrealmFacilityBasicViews;
   const {
     normalizeCharacterName,
     statText,
@@ -366,6 +368,18 @@
   let pendingLevelUps = 0;
   let dialogue = null;
   let dialogueChoiceIndex = 0;
+  const dialogueUi = DialogueUi.create({
+    getDom: () => ({
+      dialogueText: document.getElementById("dialogueText"),
+      dialogueChoices: document.getElementById("dialogueChoices"),
+      dialogueNext: document.getElementById("dialogueNext"),
+    }),
+    getDialogue: () => dialogue,
+    getChoiceIndex: () => dialogueChoiceIndex,
+    createElement: (tagName) => document.createElement(tagName),
+    onChooseDialogueOption: (index) => chooseDialogueOption(index),
+  });
+  const renderDialogue = () => dialogueUi.renderDialogue();
   let enemies = [];
   let projectiles = [];
   let drops = [];
@@ -2818,40 +2832,6 @@
     });
   }
 
-  function renderDialogue() {
-    document.getElementById("dialogueText").textContent = dialogue.lines[dialogue.index];
-    const choices = document.getElementById("dialogueChoices");
-    const next = document.getElementById("dialogueNext");
-    const nextLabel = next.querySelector(".dialogue-next-label");
-    const atEnd = dialogue.index >= dialogue.lines.length - 1;
-    if (nextLabel) nextLabel.textContent = atEnd ? "確定" : "繼續";
-    next.dataset.dialogueState = atEnd ? "terminal" : "continue";
-    next.setAttribute("aria-label", atEnd ? "確定並關閉對話" : "繼續對話");
-    if (atEnd && dialogue.choices?.length) {
-      choices.hidden = false;
-      choices.classList.toggle("is-compact", dialogue.choiceLayout === "compact");
-      next.hidden = true;
-      choices.innerHTML = "";
-      dialogue.choices.forEach((choice, index) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        const choiceStyle = choice.buttonStyle === "primary" ? " is-primary primary-button" : choice.buttonStyle === "secondary" ? " is-secondary secondary-button" : "";
-        button.className = `dialogue-choice${choiceStyle}${index === dialogueChoiceIndex ? " selected" : ""}`;
-        button.setAttribute("role", "listitem");
-        button.setAttribute("aria-pressed", String(index === dialogueChoiceIndex));
-        button.textContent = choice.label;
-        button.addEventListener("click", () => chooseDialogueOption(index));
-        choices.appendChild(button);
-      });
-      choices.children[dialogueChoiceIndex]?.focus({ preventScroll: true });
-    } else {
-      choices.hidden = true;
-      choices.classList.remove("is-compact");
-      choices.innerHTML = "";
-      next.hidden = false;
-    }
-  }
-
   function advanceDialogue() {
     if (!dialogue) return;
     if (dialogue.index < dialogue.lines.length - 1) {
@@ -2959,38 +2939,27 @@
     return state.deliveryCompleted ? 1 : 0;
   }
 
-  function renderMissionFacility() {
+  function getMissionFacilityViewData() {
     const active = activeGuildCommission();
-    if (!active) {
-      facilityContent.innerHTML = `
-        <section class="mission-view is-empty" aria-label="目前任務">
-          <strong>目前沒有進行中的任務</strong>
-        </section>`;
-      setFacilityFooter("");
-      return;
-    }
-    const ready = guildCommissionState.status === "ready_to_report";
-    const progressText = guildCommissionProgressText(active);
+    if (!active) return { active: false };
     const progressMax = active.type === "hunt" ? active.objective.count : 1;
     const progressValue = guildCommissionProgressValue(active);
-    const progressPercent = Math.min(100, progressValue / Math.max(1, progressMax) * 100);
-    facilityContent.innerHTML = `
-      <section class="mission-view" aria-label="目前任務">
-        <article class="mission-card ${ready ? "is-ready" : ""}">
-          <div class="mission-card-heading">
-            <strong>${active.title}</strong>
-            <span>${ready ? "已完成" : "進行中"}</span>
-          </div>
-          <div class="mission-task-row">
-            <div class="mission-objective"><small>目標</small><strong>${guildCommissionObjectiveText(active)}</strong></div>
-            <div class="mission-progress-row"><small>進度</small><strong>${progressText}</strong></div>
-          </div>
-          <div class="mission-progress-bar" role="progressbar" aria-label="任務進度" aria-valuemin="0" aria-valuemax="${progressMax}" aria-valuenow="${progressValue}"><i style="width:${progressPercent}%"></i></div>
-          ${ready ? '<p class="mission-report-note">請返回公會回報任務</p>' : ""}
-        </article>
-      </section>`;
-    setFacilityFooter("");
+    return {
+      active: true,
+      ready: guildCommissionState.status === "ready_to_report",
+      title: active.title,
+      objectiveText: guildCommissionObjectiveText(active),
+      progressText: guildCommissionProgressText(active),
+      progressMax,
+      progressValue,
+      progressPercent: Math.min(100, progressValue / Math.max(1, progressMax) * 100),
+    };
   }
+  const renderMissionFacility = () => FacilityBasicViews.renderMissionFacility({
+    content: facilityContent,
+    setFacilityFooter,
+    view: getMissionFacilityViewData(),
+  });
 
   function guildRewardText(commission) {
     const coins = Math.max(0, Math.floor(Number(commission?.reward?.coins) || 0));
@@ -3545,41 +3514,30 @@
     return `<div class="skill-range-pattern" aria-label="${skill.name}可選範圍"><small>面向基準：↑施術者 · ◆可選</small>${rows.join("")}</div>`;
   }
 
-  function renderStatusFacility() {
+  function getStatusFacilityViewData() {
     const stats = playerStats();
-    const className = playerClassId === "fighter" ? "格鬥士" : "戰士";
-    const hpPercent = Core.clamp((player.hp / stats.maxHp) * 100, 0, 100);
+    const hp = Math.ceil(player.hp);
     const xpNeeded = Core.xpRequired(player.level);
-    const xpPercent = Core.clamp((player.xp / xpNeeded) * 100, 0, 100);
-    facilityContent.innerHTML = `
-      <section class="status-compact" aria-label="角色狀態">
-        <div class="status-compact-identity">
-          <div>
-            <strong class="status-compact-name">${playerDisplayName()}</strong>
-            <span class="status-compact-class">${className}</span>
-          </div>
-          <b class="status-compact-level">Lv.${player.level}</b>
-        </div>
-
-        <div class="status-compact-meters">
-          <div class="status-compact-meter">
-            <div class="status-compact-meter-heading"><span>HP</span><b>${Math.ceil(player.hp)} / ${stats.maxHp}</b></div>
-            <span class="status-compact-progress is-hp" role="progressbar" aria-label="生命 ${Math.ceil(player.hp)} / ${stats.maxHp}" aria-valuemin="0" aria-valuemax="${stats.maxHp}" aria-valuenow="${Math.ceil(player.hp)}"><i style="width:${hpPercent}%"></i></span>
-          </div>
-          <div class="status-compact-meter">
-            <div class="status-compact-meter-heading"><span>EXP</span><b>${player.xp} / ${xpNeeded}</b></div>
-            <span class="status-compact-progress is-exp" role="progressbar" aria-label="經驗值 ${player.xp} / ${xpNeeded}" aria-valuemin="0" aria-valuemax="${xpNeeded}" aria-valuenow="${player.xp}"><i style="width:${xpPercent}%"></i></span>
-          </div>
-        </div>
-
-        <dl class="status-compact-stats">
-          <div><dt>攻擊</dt><dd>${stats.attack}</dd></div>
-          <div><dt>防禦</dt><dd>${stats.defence}</dd></div>
-          <div><dt>移動</dt><dd>${stats.moveRange}</dd></div>
-        </dl>
-      </section>`;
-    setFacilityFooter("");
+    return {
+      displayName: playerDisplayName(),
+      className: playerClassId === "fighter" ? "格鬥士" : "戰士",
+      level: player.level,
+      hp,
+      maxHp: stats.maxHp,
+      hpPercent: Core.clamp((player.hp / stats.maxHp) * 100, 0, 100),
+      xp: player.xp,
+      xpNeeded,
+      xpPercent: Core.clamp((player.xp / xpNeeded) * 100, 0, 100),
+      attack: stats.attack,
+      defence: stats.defence,
+      moveRange: stats.moveRange,
+    };
   }
+  const renderStatusFacility = () => FacilityBasicViews.renderStatusFacility({
+    content: facilityContent,
+    setFacilityFooter,
+    view: getStatusFacilityViewData(),
+  });
 
   function skillTreeDepth(skill, cache = new Map()) {
     if (cache.has(skill.id)) return cache.get(skill.id);

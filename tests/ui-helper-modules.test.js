@@ -4,7 +4,19 @@ const assert = require("node:assert/strict");
 const UiDom = require("../game/ui-dom-helpers.js");
 const UiPresentation = require("../game/ui-presentation-helpers.js");
 const SystemFeedback = require("../game/system-feedback.js");
+const DialogueUi = require("../game/dialogue-ui.js");
+const FacilityBasicViews = require("../game/facility-basic-views.js");
 const Skills = require("../skill-core.js");
+
+function testClassList() {
+  const values = new Set();
+  return {
+    toggle(name, enabled) { enabled ? values.add(name) : values.delete(name); },
+    add(name) { values.add(name); },
+    remove(name) { values.delete(name); },
+    contains(name) { return values.has(name); },
+  };
+}
 
 test("UI DOM helpers preserve normalization, text formatting, and DOM update behavior", () => {
   assert.equal(UiDom.normalizeCharacterName("  阿   巡  "), "阿 巡");
@@ -150,4 +162,158 @@ test("system feedback preserves toast, announcement, and system-log state behavi
   assert.equal(entries.length, 400);
   assert.equal(entries[0].text, "記錄 5");
   assert.equal(entries.at(-1).text, "記錄 404");
+});
+
+test("dialogue UI preserves text, visibility, choice markup, and progression callbacks", () => {
+  const nextLabel = { textContent: "" };
+  const choices = {
+    hidden: true,
+    classList: testClassList(),
+    children: [],
+    _innerHTML: "existing",
+    appendChild(button) { this.children.push(button); },
+  };
+  Object.defineProperty(choices, "innerHTML", {
+    get() { return this._innerHTML; },
+    set(value) { this._innerHTML = value; this.children = []; },
+  });
+  const next = {
+    hidden: false,
+    dataset: {},
+    attributes: {},
+    querySelector() { return nextLabel; },
+    setAttribute(name, value) { this.attributes[name] = value; },
+  };
+  const dialogueText = { textContent: "" };
+  const createdButtons = [];
+  const dom = { dialogueText, dialogueChoices: choices, dialogueNext: next };
+  let dialogue = { lines: ["你好 <冒險者>", "準備好嗎？"], index: 0 };
+  let choiceIndex = 0;
+  const selected = [];
+  const renderer = DialogueUi.create({
+    getDom: () => dom,
+    getDialogue: () => dialogue,
+    getChoiceIndex: () => choiceIndex,
+    createElement: () => {
+      const button = {
+        type: "",
+        className: "",
+        textContent: "",
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        addEventListener(name, callback) { this[name] = callback; },
+        focus() { this.focused = true; },
+      };
+      createdButtons.push(button);
+      return button;
+    },
+    onChooseDialogueOption: (index) => selected.push(index),
+  });
+
+  renderer.renderDialogue();
+  assert.equal(dialogueText.textContent, "你好 <冒險者>");
+  assert.equal(nextLabel.textContent, "繼續");
+  assert.equal(next.dataset.dialogueState, "continue");
+  assert.equal(next.attributes["aria-label"], "繼續對話");
+  assert.equal(choices.hidden, true);
+  assert.equal(next.hidden, false);
+
+  dialogue = {
+    lines: ["完成 <任務>"],
+    index: 0,
+    choiceLayout: "compact",
+    choices: [{ label: "接受 & 出發", buttonStyle: "primary" }],
+  };
+  renderer.renderDialogue();
+  assert.equal(dialogueText.textContent, "完成 <任務>");
+  assert.equal(nextLabel.textContent, "確定");
+  assert.equal(next.dataset.dialogueState, "terminal");
+  assert.equal(next.attributes["aria-label"], "確定並關閉對話");
+  assert.equal(choices.hidden, false);
+  assert.equal(next.hidden, true);
+  assert.equal(choices.classList.contains("is-compact"), true);
+  assert.equal(createdButtons.length, 1);
+  assert.equal(createdButtons[0].textContent, "接受 & 出發");
+  assert.match(createdButtons[0].className, /is-primary primary-button/);
+  assert.equal(createdButtons[0].attributes["aria-pressed"], "true");
+  assert.equal(createdButtons[0].focused, true);
+  createdButtons[0].click();
+  assert.deepEqual(selected, [0]);
+});
+
+test("basic facility views preserve status markup and zero-value presentation", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  FacilityBasicViews.renderStatusFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    view: {
+      displayName: "阿巡",
+      className: "格鬥士",
+      level: 3,
+      hp: 0,
+      maxHp: 42,
+      hpPercent: 0,
+      xp: 0,
+      xpNeeded: 120,
+      xpPercent: 0,
+      attack: 11,
+      defence: 7,
+      moveRange: 4,
+    },
+  });
+  assert.match(content.innerHTML, /class="status-compact" aria-label="角色狀態"/);
+  assert.match(content.innerHTML, /阿巡/);
+  assert.match(content.innerHTML, /生命 0 \/ 42/);
+  assert.match(content.innerHTML, /經驗值 0 \/ 120/);
+  assert.match(content.innerHTML, /<dt>攻擊<\/dt><dd>11<\/dd>/);
+  assert.match(content.innerHTML, /<dt>防禦<\/dt><dd>7<\/dd>/);
+  assert.match(content.innerHTML, /<dt>移動<\/dt><dd>4<\/dd>/);
+  assert.deepEqual(footerMessages, [""]);
+});
+
+test("mission facility view preserves empty, active, and completed states", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const render = (view) => FacilityBasicViews.renderMissionFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    view,
+  });
+
+  render({ active: false });
+  assert.match(content.innerHTML, /mission-view is-empty/);
+  assert.match(content.innerHTML, /目前沒有進行中的任務/);
+
+  render({
+    active: true,
+    ready: false,
+    title: "山雀仔討伐",
+    objectiveText: "討伐山雀仔 × 3",
+    progressText: "1 / 3",
+    progressMax: 3,
+    progressValue: 1,
+    progressPercent: 33.33333333333333,
+  });
+  assert.match(content.innerHTML, /class="mission-card "/);
+  assert.match(content.innerHTML, /山雀仔討伐/);
+  assert.match(content.innerHTML, /討伐山雀仔 × 3/);
+  assert.match(content.innerHTML, /1 \/ 3/);
+  assert.doesNotMatch(content.innerHTML, /mission-report-note/);
+
+  render({
+    active: true,
+    ready: true,
+    title: "山雀仔討伐",
+    objectiveText: "討伐山雀仔 × 3",
+    progressText: "3 / 3",
+    progressMax: 3,
+    progressValue: 3,
+    progressPercent: 100,
+  });
+  assert.match(content.innerHTML, /mission-card is-ready/);
+  assert.match(content.innerHTML, /已完成/);
+  assert.match(content.innerHTML, /mission-report-note/);
+  assert.match(content.innerHTML, /style="width:100%"/);
+  assert.deepEqual(footerMessages, ["", "", ""]);
 });
