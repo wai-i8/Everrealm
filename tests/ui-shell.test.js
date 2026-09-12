@@ -272,6 +272,13 @@ test("skill manual dialog exposes the shared website-style dismissal controls", 
   assert.match(game, /actionLabel:[^\n]*:\s*"學習"/);
 });
 
+test("inventory item detail backdrop dismisses without starting a window drag", () => {
+  const bagRenderer = game.match(/function renderBagFacility\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(bagRenderer, /class="inventory-detail-layer" data-inventory-detail-dismiss data-no-window-drag/);
+  assert.match(game, /clickedDetailBackdrop && !clickedDetailPopup[\s\S]*?selectedInventoryItemId = null;[\s\S]*?renderBagFacility\(\);/);
+  assert.match(game, /const nonDraggableControlSelector = [^\n]*\[data-no-window-drag\]/);
+});
+
 test("battle starts immediately and hides every enemy route or danger-cell preview", () => {
   assert.match(game, /battleEncounterIntro\.hidden = true;[\s\S]*?beginPlayerRound\(\);/);
   assert.doesNotMatch(game, /const danger = new Set\(battle\.enemyPlans/);
@@ -312,4 +319,3 @@ test("battle commands are compact action-select controls with a separate target-
   assert.match(game, /battleCommandPosition\.manual = true/);
   assert.match(game, /function followBattleCommandMenu\(\)/);
 });
-

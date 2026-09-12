@@ -753,6 +753,7 @@
   }
 
   function isGameplayAuthorized() {
+    if (testingMode) return true;
     const current = authenticatedUser();
     return Boolean(
       authStateResolved &&
@@ -1165,6 +1166,12 @@
       savePersistence?.deactivateUser();
       clearGameplayState();
       syncAccountStatus();
+      if (testingMode) {
+        authPanel.hidden = true;
+        titleActions.hidden = false;
+        continueButton.hidden = true;
+        return;
+      }
       openAuthPanel("login", true);
       if (remoteSessionKickMessage) {
         setAuthMessage(remoteSessionKickMessage, "error");
@@ -1675,25 +1682,52 @@
     let path;
     if (authoritativeNavigation) {
       // First search a wider planning grid, but keep exact 1px line-clear
-      // validation on every accepted segment. If a narrow authored approach
-      // cannot be represented on that grid, retry with the legacy 12px grid.
-      // This keeps the same collision contract while avoiding millions of
-      // redundant feet-disk checks on ordinary clicks.
+      // validation on every accepted segment. The search bounds are local to
+      // this click instead of the entire native bitmap: a narrow authored
+      // doorway can still require the fine fallback, but it must not make A*
+      // inspect every unrelated room in a high-resolution interior.
       const coarseCellSize = Math.max(40, navigationRadius * 12);
+      const directDistance = Core.distance(player, goal);
+      const localSearchPadding = Math.min(1200, Math.max(320, directDistance * .35));
       path = Core.findOverworldPath(player, goal, {
         ...baseOptions,
+        bounds: null,
         cellSize: coarseCellSize,
         terminalConnectDistance: coarseCellSize * 4,
+        searchPadding: localSearchPadding,
         nearestReachable: false,
       });
       if (!path.length) {
         const fineCellSize = Math.max(12, navigationRadius * 4);
         path = Core.findOverworldPath(player, goal, {
           ...baseOptions,
+          bounds: null,
           cellSize: fineCellSize,
           terminalConnectDistance: fineCellSize * 4,
+          searchPadding: localSearchPadding,
           nearestReachable: true,
         });
+        const localEndpoint = path[path.length - 1];
+        const localFallbackTooFar = localEndpoint && Core.distance(localEndpoint, goal) > localSearchPadding * .5;
+        if (!path.length || localFallbackTooFar) {
+          // A long detour may genuinely leave the local window. Preserve the
+          // old full-map nearest-reachable behaviour for that case; the common
+          // narrow-door fallback above remains bounded and fast.
+          path = Core.findOverworldPath(player, goal, {
+            ...baseOptions,
+            cellSize: coarseCellSize,
+            terminalConnectDistance: coarseCellSize * 4,
+            nearestReachable: false,
+          });
+          if (!path.length) {
+            path = Core.findOverworldPath(player, goal, {
+              ...baseOptions,
+              cellSize: fineCellSize,
+              terminalConnectDistance: fineCellSize * 4,
+              nearestReachable: true,
+            });
+          }
+        }
       }
     } else {
       const cellSize = Math.max(20, world.tileSize * .6);
@@ -3227,7 +3261,7 @@
       ? [selectedItem.description ? `<p>${selectedItem.description}</p>` : "", selectedItem.detail ? `<span>${selectedItem.detail}</span>` : ""].filter(Boolean).join("")
       : "";
     const detail = selectedItem
-      ? `<div class="inventory-detail-layer" data-inventory-detail-dismiss aria-hidden="false"><section class="inventory-detail-popup" role="dialog" aria-modal="true" aria-label="${selectedItem.name}" aria-live="polite"><div class="inventory-detail-art">${iconMarkup(selectedItem)}${quantityMarkup(selectedItem)}</div>${selectedItem.rankLabel ? `<small class="inventory-detail-rank">${selectedItem.rankLabel}</small>` : ""}<strong class="inventory-detail-name">${selectedItem.name}</strong>${detailCopy ? `<div class="inventory-detail-copy">${detailCopy}</div>` : ""}<div class="inventory-detail-actions">${actionMarkup(selectedItem)}</div></section></div>`
+      ? `<div class="inventory-detail-layer" data-inventory-detail-dismiss data-no-window-drag aria-hidden="false"><section class="inventory-detail-popup" role="dialog" aria-modal="true" aria-label="${selectedItem.name}" aria-live="polite"><div class="inventory-detail-art">${iconMarkup(selectedItem)}${quantityMarkup(selectedItem)}</div>${selectedItem.rankLabel ? `<small class="inventory-detail-rank">${selectedItem.rankLabel}</small>` : ""}<strong class="inventory-detail-name">${selectedItem.name}</strong>${detailCopy ? `<div class="inventory-detail-copy">${detailCopy}</div>` : ""}<div class="inventory-detail-actions">${actionMarkup(selectedItem)}</div></section></div>`
       : "";
     facilityContent.innerHTML = `
       <section class="unified-inventory-layout" aria-label="角色裝備與隨身物品">

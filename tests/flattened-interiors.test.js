@@ -7,6 +7,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const Core = require("../rpg-core.js");
 const Maps = require("../map/map-registry.js").createMapRegistry();
+const MapTransitions = require("../map/map-transitions.js");
 const scenes = [
   { id: "shop", folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", npc: "merchant-gin", generated: "map/weapon-navigation.generated.js" },
   { id: "inn", folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", npc: "inn-keeper", generated: "map/inn-navigation.generated.js" },
@@ -81,6 +82,36 @@ test("each flattened interior uses exact white/magenta/cyan masks and one core N
     assert.equal(map.navigation.isPositionWalkable({ x: 0, y: 0 }, { radius: 3 }), false);
     assert.ok(route(map, exitRegion.centroid).length > 0, `${scene.id} exit should be reachable by the shared resolver`);
   }
+});
+
+test("guild exit remains reachable through the bounded fine-search fallback", () => {
+  const guild = Maps.guild;
+  const goal = guild.exits[0];
+  const base = {
+    bounds: null,
+    sampleStep: 1,
+    radius: guild.navigation.feetRadiusPx,
+    directions: 4,
+    maxVisited: 14000,
+    isWalkable: (point) => guild.navigation.isPositionWalkable(point, { radius: guild.navigation.feetRadiusPx }),
+    searchPadding: 320,
+  };
+  const coarse = Core.findOverworldPath(guild.start, goal, {
+    ...base,
+    cellSize: 40,
+    terminalConnectDistance: 160,
+    nearestReachable: false,
+  });
+  const path = coarse.length ? coarse : Core.findOverworldPath(guild.start, goal, {
+    ...base,
+    cellSize: 12,
+    terminalConnectDistance: 48,
+    nearestReachable: true,
+  });
+  assert.ok(path.length > 0, "bounded fallback should produce an exit route");
+  const last = path[path.length - 1];
+  assert.equal(guild.navigation.isPositionWalkable(last, { radius: guild.navigation.feetRadiusPx }), true);
+  assert.equal(MapTransitions.pointInThreshold(goal, last), true);
 });
 
 test("flattened scenes retain the normal building transition graph and hide visual markers", () => {
