@@ -761,7 +761,7 @@ h1 span { display: block; }
 h1 span:last-child { color: transparent; -webkit-text-stroke: 1.5px var(--cream); transform: translateX(.22em); }
 .english-title { margin: .8rem 0 0; color: var(--gold); font: 800 .62rem/1 ui-monospace, monospace; letter-spacing: .52em; }
 .title-copy { margin: 1rem 0 1.3rem; color: #d0ccbf; font-size: .82rem; letter-spacing: .08em; }
-.title-actions, .modal-actions { display: flex; gap: .65rem; justify-content: center; }
+.title-actions { display: flex; gap: .65rem; justify-content: center; }
 .account-status {
   display: flex;
   align-items: center;
@@ -803,8 +803,6 @@ h1 span:last-child { color: transparent; -webkit-text-stroke: 1.5px var(--cream)
 }
 .auth-form input:focus { border-color: var(--teal); outline: 2px solid rgba(82,220,203,.25); }
 .auth-actions { margin-top: .2rem; }
-.auth-actions .primary-button,
-.auth-actions .secondary-button { min-width: 0; flex: 1; }
 .auth-message { min-height: 1.2em; color: var(--muted); font-size: .7rem; line-height: 1.45; }
 .auth-message[data-kind="error"] { color: var(--red); }
 .auth-message[data-kind="good"] { color: var(--green); }
@@ -3056,6 +3054,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-control-hit: 2.5rem;
   --ui-close-art: 2rem;
   --ui-info-art: 1.45rem;
+  --ui-action-gap: .55rem;
+  --ui-action-gap-compact: .36rem;
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -3138,10 +3138,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .ui-scroll { min-width: 0; min-height: 0; overscroll-behavior: contain; }
 
 /* Action layout contract -------------------------------------------------
-   Buttons own only their skin and intrinsic/content-driven size. Their parent
-   action row owns placement. New UI should use .ui-actions plus one alignment
-   modifier; the legacy semantic action rows below are mapped to the same
-   centred contract so individual buttons do not need margin/width hacks. */
+   Buttons own only skin + intrinsic/content-driven size. Their parent action
+   row owns placement. New UI should use .ui-actions plus exactly one alignment
+   modifier. Existing semantic rows are mapped here so feature CSS does not
+   need button-level margin/width/alignment patches. */
 .ui-actions,
 .modal-actions,
 .auth-actions,
@@ -3153,7 +3153,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: .55rem;
+  gap: var(--ui-action-gap);
 }
 .ui-actions--start { justify-content: flex-start; }
 .ui-actions--center,
@@ -3163,8 +3163,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .abandon-commission-actions,
 .guild-detail-actions,
 .inventory-detail-actions { justify-content: center; }
-.ui-actions--end { justify-content: flex-end; }
+.ui-actions--end,
+.dialogue-choices.is-compact { justify-content: flex-end; }
 .ui-actions--spread { justify-content: space-between; }
+.ui-actions--stack { flex-direction: column; align-items: center; }
 
 /* Modal panels use a content-sized inner window instead of a fixed-height
    pseudo background, so range-heavy skill details remain contained. */
@@ -5995,10 +5997,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   line-height: 1.65;
 }
 .death-actions {
-  display: flex !important;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
   gap: .65rem !important;
   width: 100%;
   margin-top: 1rem;
@@ -6042,11 +6040,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   line-height: 1.58;
 }
 .abandon-commission-actions {
-  display: flex !important;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: .55rem !important;
+  gap: var(--ui-action-gap) !important;
   width: 100%;
 }
 .danger-button {
@@ -6564,7 +6558,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .guild-detail-grid > div { padding: .65rem .72rem; border: 1px solid rgba(255,255,255,.1); border-radius: .55rem; background: rgba(6,13,28,.58); }
 .guild-detail-grid dt { color: #8f9db1; font-size: .64rem; }
 .guild-detail-grid dd { margin: .22rem 0 0; color: #f3ead2; font-size: .8rem; font-weight: 750; }
-.guild-detail-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .55rem; }
 
 /* General store reuses the equipment-shop visual language without category tabs. */
 .facility-overlay[data-facility-context="general-store"] .facility-window.ui-window { width: min(48rem, calc(100vw - 2rem)) !important; min-height: 0 !important; }
@@ -7635,13 +7628,7 @@ html body [aria-disabled="true"] {
   box-shadow: inset 0 0 0 1px rgba(255,200,87,.2), 0 0 .75rem rgba(255,200,87,.08) !important;
   outline: none;
 }
-.inventory-detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: .36rem;
-}
+.inventory-detail-actions { gap: var(--ui-action-gap-compact); }
 .inventory-detail-actions .facility-action-button,
 .inventory-detail-actions .danger-button,
 .inventory-detail-actions .secondary-button {
@@ -7667,8 +7654,7 @@ html body [aria-disabled="true"] {
   display: flex !important;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: .55rem !important;
+  gap: var(--ui-action-gap) !important;
   width: 100%;
   margin-top: .8rem !important;
 }

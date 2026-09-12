@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Everrealm UI QA</title>
+  <script>
+    if (new URLSearchParams(location.search).has("embed")) document.documentElement.classList.add("qa-embed");
+  </script>
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    html { height: auto !important; overflow: auto !important; background: #070b16; }
+    body.qa-page {
+      position: static !important;
+      inset: auto !important;
+      width: auto !important;
+      height: auto !important;
+      min-height: 100vh;
+      overflow: visible !important;
+      padding: 1.25rem !important;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(82,220,203,.08), transparent 24rem),
+        radial-gradient(circle at 92% 12%, rgba(255,200,87,.08), transparent 24rem),
+        #070b16 !important;
+    }
+    .qa-shell { width: min(72rem, 100%); margin: 0 auto; display: grid; gap: 1rem; }
+    .qa-header { display: grid; gap: .35rem; padding-bottom: .8rem; border-bottom: 1px solid rgba(245,233,202,.18); }
+    .qa-header h1 { margin: 0; color: var(--cream); font: 900 clamp(1.4rem, 4vw, 2.3rem)/1.05 inherit; letter-spacing: -.03em; filter: none; }
+    .qa-header p { margin: 0; color: var(--ui-text-secondary); font-size: .72rem; line-height: 1.55; }
+    .qa-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+    .qa-card { min-width: 0; padding: .85rem; border: 1px solid rgba(255,200,87,.22); border-radius: .75rem; background: rgba(11,20,39,.86); }
+    .qa-card.is-wide { grid-column: 1 / -1; }
+    .qa-card h2 { margin: 0 0 .18rem; color: var(--cream); font-size: .88rem; }
+    .qa-card > p { margin: 0 0 .7rem; color: var(--ui-text-secondary); font-size: .62rem; line-height: 1.5; }
+    .qa-action-lab { display: grid; gap: .55rem; }
+    .qa-action-row { min-width: 0; min-height: 4rem; padding: .65rem; border: 1px dashed rgba(82,220,203,.28); border-radius: .55rem; background: rgba(4,9,20,.45); }
+    .qa-row-label { display: block; margin-bottom: .36rem; color: var(--teal); font: 800 .55rem/1.2 ui-monospace, monospace; letter-spacing: .08em; }
+    .qa-button-outline :is(.primary-button,.secondary-button,.facility-action-button,.dialogue-choice) { outline: 1px dashed rgba(255,255,255,.16); outline-offset: 2px; }
+    .qa-semantic-row { width: 100%; min-height: 2.8rem; padding: .35rem; border-radius: .4rem; background: rgba(255,255,255,.025); }
+    .qa-modal-sample.ui-modal-window { position: relative; width: min(32rem, 100%); max-height: none; margin: 0 auto; overflow: visible; }
+    .qa-modal-sample h3 { margin: 0 0 .45rem; color: var(--cream); font-size: 1rem; }
+    .qa-modal-sample p { margin: 0 0 .9rem; color: var(--ui-text-secondary); font-size: .68rem; line-height: 1.5; }
+    .qa-modal-actions { margin-top: .9rem; }
+    .qa-component-row { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+    .qa-component-row .facility-tab { padding: .45rem .7rem; color: var(--cream); }
+    .qa-slot-demo { width: 5rem; min-height: 5rem; display: grid; place-items: center; border: 6px solid transparent; border-image: var(--ui-slot-image) 16 fill / 6px / 0 stretch; color: var(--cream); font-size: .68rem; }
+    .qa-results { display: grid; gap: .3rem; margin: 0; padding: 0; list-style: none; }
+    .qa-results li { display: flex; align-items: center; gap: .45rem; color: var(--ui-text-secondary); font-size: .64rem; }
+    .qa-results li::before { content: "•"; color: var(--muted); }
+    .qa-results li[data-pass="true"]::before { content: "✓"; color: var(--green); }
+    .qa-results li[data-pass="false"]::before { content: "✕"; color: var(--red); }
+    .qa-responsive-frame { width: 390px; max-width: 100%; height: 620px; border: 1px solid rgba(245,233,202,.28); border-radius: .75rem; background: #070b16; }
+    .qa-note { color: var(--gold); font-size: .58rem; }
+    .qa-embed .qa-full-only { display: none !important; }
+    .qa-embed body.qa-page { padding: .45rem !important; }
+    .qa-embed .qa-shell { gap: .55rem; }
+    .qa-embed .qa-grid { grid-template-columns: 1fr; gap: .55rem; }
+    .qa-embed .qa-card { padding: .55rem; }
+    @media (max-width: 760px) {
+      body.qa-page { padding: .65rem !important; }
+      .qa-grid { grid-template-columns: 1fr; }
+      .qa-card.is-wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body class="qa-page qa-button-outline">
+  <main class="qa-shell">
+    <header class="qa-header qa-full-only">
+      <h1>Everrealm UI QA</h1>
+      <p>呢頁直接載入正式 <code>styles.css</code>。用途係每次改 shared UI 後，一次過檢查 bitmap button、內容寬度、action alignment、modal、tab、slot 同窄屏表現。</p>
+    </header>
+
+    <section class="qa-grid">
+      <article class="qa-card is-wide">
+        <h2>Button skin + content width</h2>
+        <p>Button 自己只負責 skin 同內容尺寸；短字唔應該被拉成整行，長字就只延伸中段。</p>
+        <div class="ui-actions ui-actions--center qa-action-row" id="qaSizingRow">
+          <button id="qaGoldShort" class="primary-button" type="button"><span>裝備</span></button>
+          <button id="qaBlueShort" class="secondary-button" type="button"><span>銷毀</span></button>
+          <button id="qaGoldLong" class="facility-action-button" type="button">回報並領取委託獎勵</button>
+          <button id="qaDisabled" class="facility-action-button" type="button" disabled>已有進行中委託</button>
+        </div>
+      </article>
+
+      <article class="qa-card">
+        <h2>Start</h2>
+        <p><code>ui-actions--start</code></p>
+        <div id="qaStart" class="ui-actions ui-actions--start qa-action-row">
+          <button class="secondary-button" type="button">返回</button>
+          <button class="primary-button" type="button">確認</button>
+        </div>
+      </article>
+
+      <article class="qa-card">
+        <h2>Center</h2>
+        <p><code>ui-actions--center</code></p>
+        <div id="qaCenter" class="ui-actions ui-actions--center qa-action-row">
+          <button id="qaCenterButton" class="secondary-button" type="button">銷毀</button>
+        </div>
+      </article>
+
+      <article class="qa-card">
+        <h2>End</h2>
+        <p><code>ui-actions--end</code>，適合對話／右下操作。</p>
+        <div id="qaEnd" class="ui-actions ui-actions--end qa-action-row">
+          <button class="secondary-button" type="button">取消</button>
+          <button id="qaEndButton" class="primary-button" type="button">確定</button>
+        </div>
+      </article>
+
+      <article class="qa-card">
+        <h2>Spread</h2>
+        <p><code>ui-actions--spread</code></p>
+        <div id="qaSpread" class="ui-actions ui-actions--spread qa-action-row">
+          <button id="qaSpreadLeft" class="secondary-button" type="button">上一步</button>
+          <button id="qaSpreadRight" class="primary-button" type="button">下一步</button>
+        </div>
+      </article>
+
+      <article class="qa-card is-wide">
+        <h2>Existing semantic rows</h2>
+        <p>舊 UI 唔需要逐粒 button 加定位；parent semantic class 已映射去 shared action contract。</p>
+        <div class="qa-action-lab">
+          <div>
+            <span class="qa-row-label">modal-actions → center</span>
+            <div class="modal-actions qa-semantic-row">
+              <button class="secondary-button" type="button">取消</button>
+              <button class="primary-button" type="button">確認學習</button>
+            </div>
+          </div>
+          <div>
+            <span class="qa-row-label">inventory-detail-actions → center</span>
+            <div class="inventory-detail-actions qa-semantic-row">
+              <button class="secondary-button" type="button">銷毀</button>
+              <button class="facility-action-button" type="button">裝備</button>
+            </div>
+          </div>
+          <div>
+            <span class="qa-row-label">dialogue-choices.is-compact → end</span>
+            <div class="dialogue-choices is-compact qa-semantic-row">
+              <button class="dialogue-choice secondary-button is-secondary" type="button">離開</button>
+              <button class="dialogue-choice primary-button is-primary" type="button">購買</button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa-card is-wide qa-full-only">
+        <h2>Shared component sample</h2>
+        <p>同一頁順手睇埋 modal frame、tab、slot，避免 button 改動意外撞到其他 shared bitmap component。</p>
+        <div class="qa-modal-sample ui-modal-window">
+          <p class="modal-kicker">UI SYSTEM</p>
+          <h3>確認操作</h3>
+          <p>呢個係 QA 用 modal sample，唔連任何 gameplay state。</p>
+          <div class="qa-component-row" aria-label="Shared component samples">
+            <button class="facility-tab" type="button">一般</button>
+            <button class="facility-tab" type="button" aria-selected="true">已選</button>
+            <div class="qa-slot-demo">SLOT</div>
+          </div>
+          <div class="modal-actions qa-modal-actions">
+            <button class="secondary-button" type="button">取消</button>
+            <button class="primary-button" type="button">確定</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa-card qa-full-only">
+        <h2>Automatic checks</h2>
+        <p>只檢查 layout contract，同 gameplay 無關。</p>
+        <ul id="qaResults" class="qa-results"><li>Running…</li></ul>
+      </article>
+
+      <article class="qa-card qa-full-only">
+        <h2>Narrow viewport</h2>
+        <p>下面 iframe 真正用 390px viewport 載入同一頁，所以 project media queries 都會生效。</p>
+        <iframe class="qa-responsive-frame" title="390px UI QA preview" src="ui-qa.html?embed=1"></iframe>
+        <div class="qa-note">如要驗更窄／橫屏，可以直接 resize browser 或 DevTools device mode。</div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      if (document.documentElement.classList.contains("qa-embed")) return;
+      const $ = (id) => document.getElementById(id);
+      const near = (a, b, tolerance = 4) => Math.abs(a - b) <= tolerance;
+      const skinHas = (el, filename) => getComputedStyle(el).borderImageSource.includes(filename);
+      const centerX = (el) => { const r = el.getBoundingClientRect(); return r.left + r.width / 2; };
+      const tests = [];
+      const add = (name, pass) => tests.push({ name, pass: Boolean(pass) });
+
+      const sizingRow = $("qaSizingRow").getBoundingClientRect();
+      const shortGold = $("qaGoldShort").getBoundingClientRect();
+      const longGold = $("qaGoldLong").getBoundingClientRect();
+      add("短 button 沒有被拉滿 action row", shortGold.width < sizingRow.width * 0.55);
+      add("長 label 會令 bitmap 中段自然增闊", longGold.width > shortGold.width + 24);
+      add("Gold skin 使用 ui-button-gold-v1.png", skinHas($("qaGoldShort"), "ui-button-gold-v1.png"));
+      add("Blue skin 使用 ui-button-default-v1.png", skinHas($("qaBlueShort"), "ui-button-default-v1.png"));
+      add("Disabled skin 使用 ui-button-disabled-v1.png", skinHas($("qaDisabled"), "ui-button-disabled-v1.png"));
+
+      const centerRow = $("qaCenter");
+      add("Center row 由 parent 真正置中", near(centerX(centerRow), centerX($("qaCenterButton"))));
+
+      const endRow = $("qaEnd").getBoundingClientRect();
+      const endButton = $("qaEndButton").getBoundingClientRect();
+      add("End row 將 action group 放到右側", endButton.right <= endRow.right + 1 && endButton.right > endRow.left + endRow.width * 0.65);
+
+      const spreadRow = $("qaSpread").getBoundingClientRect();
+      const spreadLeft = $("qaSpreadLeft").getBoundingClientRect();
+      const spreadRight = $("qaSpreadRight").getBoundingClientRect();
+      add("Spread row 左右兩端分佈", spreadLeft.left < spreadRow.left + spreadRow.width * 0.2 && spreadRight.right > spreadRow.left + spreadRow.width * 0.8);
+
+      const list = $("qaResults");
+      list.innerHTML = tests.map((test) => `<li data-pass="${test.pass}">${test.name}</li>`).join("");
+    })();
+  </script>
+</body>
+</html>

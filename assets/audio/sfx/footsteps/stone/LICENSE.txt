@@ -1,0 +1,16 @@
+Everrealm stone/tile footsteps
+
+Source recording:
+- Kenney RPG Audio 1.0 — footstep00.ogg
+- https://kenney.nl/assets/rpg-audio
+- License: CC0 1.0 Universal
+- Original SHA-256: 6fe61ef1fc3bcf0e253bf2eb64759db6cb69e2fe452f4d88cc597ecf78a3d601
+
+Included files:
+- stone-01.ogg — original Kenney recording, unchanged.
+- stone-02.ogg — derived pitch/timing variation.
+- stone-03.ogg — derived pitch/high-pass variation.
+- stone-04.ogg — derived EQ/gain variation.
+
+CC0 permits copying, modification, commercial use and redistribution without attribution.
+This notice is retained only for provenance.

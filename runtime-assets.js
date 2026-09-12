@@ -60,6 +60,7 @@
     "save-persistence.js",
     "fighter-effects.js",
     "locomotion.js",
+    "footstep-sfx.js?v=20260912-01",
     "character-art.js",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
