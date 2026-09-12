@@ -6,6 +6,7 @@ const UiPresentation = require("../game/ui-presentation-helpers.js");
 const SystemFeedback = require("../game/system-feedback.js");
 const DialogueUi = require("../game/dialogue-ui.js");
 const FacilityBasicViews = require("../game/facility-basic-views.js");
+const FacilityProgressionViews = require("../game/facility-progression-views.js");
 const Skills = require("../skill-core.js");
 
 function testClassList() {
@@ -454,4 +455,87 @@ test("catalog facility codex view preserves hidden and discovered monster presen
   assert.match(content.innerHTML, /苔甲龜/);
   assert.match(content.innerHTML, /？？？/);
   assert.equal(footerMessages[0], '<span aria-hidden="true">◎</span> 每次討伐都會永久記錄；目前戰鬥只會獲得 EXP。');
+});
+
+
+test("progression facility guild view preserves active state and commission-detail action datasets", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  FacilityProgressionViews.renderGuildFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    offers: [
+      { id: "hunt-1", title: "討伐委託", star: 1 },
+      { id: "delivery-1", title: "送信委託", star: 2 },
+    ],
+    activeId: "delivery-1",
+    status: "ready_to_report",
+    formatSkillBookRank: (star) => `${star}★`,
+  });
+
+  assert.match(content.innerHTML, /data-facility-action="commission-detail" data-offer-id="hunt-1"/);
+  assert.match(content.innerHTML, /guild-simple-row is-active[^>]*data-offer-id="delivery-1"/);
+  assert.match(content.innerHTML, /<span class="guild-simple-stars">2★<\/span><em>待回報<\/em>/);
+  assert.deepEqual(footerMessages, [""]);
+});
+
+test("progression facility skill-tree view preserves links, state classes, and skill-detail datasets", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const classSkills = [
+    { id: "jab", name: "直拳" },
+    { id: "hook", name: "勾拳" },
+  ];
+  const layout = {
+    maxDepth: 1,
+    positions: new Map([
+      ["jab", { depth: 0, x: 250 }],
+      ["hook", { depth: 1, x: 750 }],
+    ]),
+    edges: [{ from: "jab", to: "hook" }],
+  };
+  const states = new Map([
+    ["jab", { status: "learned" }],
+    ["hook", { status: "canLearn" }],
+  ]);
+  FacilityProgressionViews.renderSkillsFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    classSkills,
+    layout,
+    states,
+    stateLabel: (status) => status === "learned" ? "已學會" : "可學習",
+  });
+
+  assert.match(content.innerHTML, /class="skill-tree-link" data-from="jab" data-to="hook"/);
+  assert.match(content.innerHTML, /skill-tree-node is-learned/);
+  assert.match(content.innerHTML, /skill-tree-node is-canLearn/);
+  assert.match(content.innerHTML, /data-facility-action="skill-detail" data-skill-id="hook"/);
+  assert.match(content.innerHTML, /aria-label="勾拳，可學習"/);
+  assert.deepEqual(footerMessages, [""]);
+});
+
+test("progression facility deck view preserves editable drag datasets and readonly presentation", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const jab = { id: "jab", name: "直拳" };
+  const hook = { id: "hook", name: "勾拳" };
+  const common = {
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    deckSlots: [jab, null],
+    learnedSkills: [hook],
+    skillBadgeMarkup: (skill) => `<i data-badge="${skill.id}"></i>`,
+  };
+
+  FacilityProgressionViews.renderDeckFacility({ ...common, canEdit: true });
+  assert.match(content.innerHTML, /deck-view-shell is-editable/);
+  assert.match(content.innerHTML, /data-deck-slot-index="0" data-deck-drag-source="slot" data-skill-id="jab"/);
+  assert.match(content.innerHTML, /data-deck-slot-index="1"[^>]*aria-label="面板 2 空白"/);
+  assert.match(content.innerHTML, /data-deck-drag-source="library" data-skill-id="hook"/);
+
+  FacilityProgressionViews.renderDeckFacility({ ...common, canEdit: false, learnedSkills: [] });
+  assert.match(content.innerHTML, /deck-view-shell is-readonly/);
+  assert.doesNotMatch(content.innerHTML, /data-deck-region="learned"/);
+  assert.deepEqual(footerMessages, ["", ""]);
 });

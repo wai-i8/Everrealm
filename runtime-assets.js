@@ -67,7 +67,8 @@
     "game/dialogue-ui.js",
     "game/facility-basic-views.js",
     "game/facility-catalog-views.js",
-    "game.js?v=20260912-06",
+    "game/facility-progression-views.js",
+    "game.js?v=20260912-07",
   ]);
 
   return Object.freeze({ scripts });
