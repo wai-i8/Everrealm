@@ -19,10 +19,17 @@
       "assets/audio/sfx/footsteps/stone/stone-03.ogg",
       "assets/audio/sfx/footsteps/stone/stone-04.ogg",
     ]),
+    grass: Object.freeze([
+      "assets/audio/sfx/footsteps/grass/grass-01.ogg",
+      "assets/audio/sfx/footsteps/grass/grass-02.ogg",
+      "assets/audio/sfx/footsteps/grass/grass-03.ogg",
+      "assets/audio/sfx/footsteps/grass/grass-04.ogg",
+    ]),
   });
 
   const SURFACE_BY_MAP = Object.freeze({
     world: "stone",
+    field: "grass",
     guild: "stone",
     shop: "stone",
     clinic: "stone",
@@ -199,7 +206,6 @@
     const wrappedLocomotion = Object.freeze({
       ...originalLocomotion,
       facingFromDelta(dx, dy, fallback) {
-        // game.js calls this only for the player after collision-resolved movement.
         playerMoveMarker = true;
         return originalFacingFromDelta(dx, dy, fallback);
       },
