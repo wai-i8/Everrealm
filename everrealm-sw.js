@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260911-17";
+const CACHE_VERSION = "everrealm-pwa-v2-20260912-01";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -81,7 +81,8 @@ const PRECACHE_URLS = [
   `${APP_BASE}assets/ui/mobile-menu/inventory-v2.png`,
   `${APP_BASE}assets/ui/mobile-menu/panel-v2.png`,
   `${APP_BASE}assets/ui/mobile-menu/skills-v2.png`,
-  `${APP_BASE}assets/ui/mobile-menu/missions-v2.png`
+  `${APP_BASE}assets/ui/mobile-menu/missions-v2.png`,
+  `${APP_BASE}assets/items/weak-potion-v1.png`
 ];
 
 function isEverrealmUrl(url) {

@@ -61,7 +61,7 @@ DEF, Weight and other stats exactly once.
 `moveRange` is the one owner of equipment movement changes. A light martial
 uniform can therefore grant `moveRange: 1`; no second Weight-to-Move threshold
 formula is inferred. Weight primarily affects action timing together with the
-chosen Skill Speed grade. The detailed ordering and unresolved balance
+chosen Skill Speed grade. It remains an internal combat/timing stat and is **not** shown in the weapon/equipment shop product stat summary; shop-facing copy only surfaces player-useful purchase stats such as ATK/DEF and other intentionally exposed modifiers. The detailed ordering and unresolved balance
 constants are defined in [`docs/BATTLE_SYSTEM.md`](BATTLE_SYSTEM.md).
 
 Legacy saves may still use `body` or `armor` slot aliases; normalization maps

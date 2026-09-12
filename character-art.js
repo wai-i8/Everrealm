@@ -760,6 +760,10 @@
       }
       const standard = drawLocomotion(ctx, settings, settings.classId || "warrior");
       if (standard) return standard;
+      // The legacy hero atlas is not a load-error fallback. If the current
+      // locomotion art is unavailable, leave the player visual empty until the
+      // authored asset is ready instead of flashing the retired appearance.
+      return false;
     }
     const actor = settings.actor || settings.kind || "villager";
     if (spriteAtlases[actor]?.standalone) return drawStandaloneCharacter(ctx, settings, actor);
@@ -1276,60 +1280,9 @@
     if (reaction) return reaction;
     const standard = drawLocomotion(ctx, settings, settings.type);
     if (standard) return standard;
-    const type = settings.type || (settings.boss ? "boss" : "slime");
-    const profile = monsterVisualProfiles[type] || monsterVisualProfiles.slime;
-    const monsterFrame = monsterSpriteIndices[type];
-    if (!monsterFrame) return false;
-    const atlas = spriteAtlases[monsterFrame.atlas];
-    const facingColumns = { down: 0, right: 1, up: 2, left: 3 };
-    const direction = Object.hasOwn(facingColumns, settings.facing) ? settings.facing : "down";
-    const index = monsterFrame.row * 4 + facingColumns[direction];
-    if (!atlas?.ready || !atlas.image) return false;
-    const frame = atlasFrame(atlas, index);
-    const x = Number(settings.x) || 0;
-    const y = Number(settings.y) || 0;
-    const scale = Math.max(.08, Number(settings.scale) || 1);
-    const boss = type === "boss" || type === "deepwarden" || Boolean(settings.boss);
-    const height = (boss ? 104 : type === "lantern-golem" ? 88 : 76) * scale;
-    const width = height * (frame.sw / frame.sh);
-    const phase = Number(settings.phase) || 0;
-    const hurt = settings.state === "hurt" || Boolean(settings.hurt);
-    const attacking = settings.state === "attack";
-    const bob = Math.sin(phase * (type === "mistwing" || type === "wisp" || type === "hollowmage" ? 3.2 : 2.35) + index) * (attacking ? 1.6 : .72) * scale;
-    const drawX = x - width / 2;
-    const drawY = y - height + 4 * scale + bob;
-    ctx.save();
-    try {
-      drawGroundShadow(ctx, x, y, scale, boss ? 29 : type === "cragboar" || type === "hound" ? 18 : 14, .34);
-      ctx.globalAlpha = hurt ? .64 : 1;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      if (hurt) ctx.translate(Math.sin(phase * 35) * 1.5 * scale, 0);
-      ctx.drawImage(atlas.image, frame.sx + 1, frame.sy + 1, frame.sw - 2, frame.sh - 2, drawX, drawY, width, height);
-      if (settings.selected) {
-        ctx.strokeStyle = settings.selectionColor || "#ffc857";
-        ctx.lineWidth = Math.max(1.4, 1.7 * scale);
-        ctx.setLineDash([4 * scale, 2 * scale]);
-        ctx.beginPath(); ctx.ellipse(x, y + 2 * scale, width * .32, height * .085, 0, 0, TAU); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    } finally {
-      ctx.restore();
-    }
-    return {
-      x: drawX,
-      y: drawY,
-      width,
-      height,
-      left: drawX,
-      right: drawX + width,
-      top: drawY,
-      bottom: drawY + height,
-      centerX: x,
-      baselineY: y,
-      nameAnchorX: x + profile.nameOffsetX * scale,
-      nameAnchorY: y - profile.nameLift * scale + bob,
-    };
+    // Old four-facing monster atlases are migration references only. Missing
+    // current locomotion art must not revive the retired static appearance.
+    return false;
   }
 
   function clamp(value, min, max) {
@@ -1541,151 +1494,7 @@
   }
 
   function drawCharacter(ctx, options) {
-    const settings = options || {};
-    if (settings.bitmap !== false) {
-      const bitmapBox = drawBitmapCharacter(ctx, settings);
-      if (bitmapBox) return bitmapBox;
-    }
-    const x = Number(settings.x) || 0;
-    const y = Number(settings.y) || 0;
-    const scale = Math.max(.08, Number(settings.scale) || 1);
-    const actor = settings.actor || settings.kind || "villager";
-    const palette = paletteFor(actor, settings.palette);
-    const facingRaw = settings.facing || "down";
-    const facing = facingRaw === "left" || facingRaw === "right" ? "side" : facingRaw;
-    const mirror = facingRaw === "left" ? -1 : 1;
-    const state = settings.state || (Math.abs(Number(settings.walk)) > .05 ? "walk" : "idle");
-    const phase = Number(settings.phase) || 0;
-    const step = clamp(settings.walk == null ? (state === "walk" ? Math.sin(phase * 8) : 0) : settings.walk, -1, 1);
-    const attackProgress = clamp(settings.progress == null ? .45 : settings.progress, 0, 1);
-    const hurt = state === "hurt" || Boolean(settings.hurt);
-    const blink = Boolean(settings.blink);
-    const mood = settings.expression || (hurt ? "hurt" : state === "attack" ? "determined" : "neutral");
-    const bob = state === "walk" ? Math.abs(Math.sin(phase * 8)) * -1.15 : Math.sin(phase * 2) * .22;
-    const shake = hurt ? Math.sin(phase * 35) * 1.25 : 0;
-
-    const fallbackBox = fitFrameToBaseline({ sw: 24, sh: 38 }, { x, y, height: 38 * scale });
-    ctx.save();
-    try {
-      drawGroundShadow(ctx, x, y, scale, actor === "smith" ? 13.5 : 12, hurt ? .25 : .4);
-      ctx.translate(x + shake * scale, y + bob * scale);
-      ctx.scale(scale * mirror, scale);
-      if (state === "attack") ctx.rotate((mirror * -.05) + (attackProgress - .5) * .08);
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-
-      const frontVisible = facing !== "up";
-      const sideBias = facing === "side" ? 2.2 : 0;
-      const leftStep = step * 2.5;
-      const rightStep = -step * 2.5;
-
-      // Scarf tails and rear arm sit behind the body.
-      if (actor === "player" || palette.scarf) {
-        ctx.fillStyle = palette.scarf;
-        ctx.strokeStyle = palette.outline;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(-5, -17); ctx.quadraticCurveTo(-11 - step * 2, -13, -9 - step * 3, -7); ctx.lineTo(-4, -11); ctx.closePath(); ctx.fill(); ctx.stroke();
-      }
-
-      ctx.strokeStyle = palette.outline;
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(-4.5, -7); ctx.lineTo(-5 + leftStep, .5);
-      ctx.moveTo(4.5, -7); ctx.lineTo(5 + rightStep, .5);
-      ctx.stroke();
-      oval(ctx, -5 + leftStep, .6, 4.2, 2.5, palette.shoe, palette.outline, 1.15);
-      oval(ctx, 5 + rightStep, .6, 4.2, 2.5, palette.shoe, palette.outline, 1.15);
-      ctx.fillStyle = "rgba(255,255,255,.16)";
-      ctx.fillRect(-7.2 + leftStep, -1.2, 3.5, .8);
-      ctx.fillRect(2.8 + rightStep, -1.2, 3.5, .8);
-
-      const rearArmX = facing === "side" ? -7 : -8.7;
-      ctx.strokeStyle = palette.outfitDark;
-      ctx.lineWidth = 5.8;
-      ctx.beginPath(); ctx.moveTo(rearArmX, -15); ctx.lineTo(rearArmX - step * 1.5, -7); ctx.stroke();
-      oval(ctx, rearArmX - step * 1.5, -5.8, 2.5, 2.8, palette.skin, palette.outline, 1);
-
-      // Rounded coat with collar, trim and a little belt.
-      ctx.beginPath();
-      ctx.moveTo(-9.5, -17.2);
-      ctx.quadraticCurveTo(-11, -10.5, -8.1, -4.3);
-      ctx.quadraticCurveTo(0, -1.4, 8.1, -4.3);
-      ctx.quadraticCurveTo(11, -10.5, 9.5, -17.2);
-      ctx.quadraticCurveTo(0, -21, -9.5, -17.2);
-      ctx.closePath(); pathPaint(ctx, palette.outfit, palette.outline, 1.35);
-      ctx.fillStyle = palette.outfitDark;
-      roundedRect(ctx, -8.5, -9, 17, 3.1, 1.2); ctx.fill();
-      ctx.fillStyle = palette.accent;
-      ctx.fillRect(-1, -16, 2, 8);
-      oval(ctx, 0, -12.5, .75, .75, "#fff3bd");
-      ctx.fillStyle = palette.scarf;
-      ctx.beginPath(); ctx.moveTo(-6.8, -18.8); ctx.lineTo(0, -14.2); ctx.lineTo(6.8, -18.8); ctx.lineTo(4.6, -20.5); ctx.lineTo(0, -17.5); ctx.lineTo(-4.6, -20.5); ctx.closePath(); ctx.fill();
-
-      const frontArmX = facing === "side" ? 7.2 : 9;
-      let frontHandY = -6.2 + step * 1.1;
-      let frontHandX = frontArmX + step * 1.2;
-      if (state === "attack") {
-        frontHandX += 4 + attackProgress * 3;
-        frontHandY -= 5 - attackProgress * 2;
-      }
-      ctx.strokeStyle = palette.outfit;
-      ctx.lineWidth = 5.6;
-      ctx.beginPath(); ctx.moveTo(frontArmX - 1, -15.5); ctx.lineTo(frontHandX, frontHandY); ctx.stroke();
-      oval(ctx, frontHandX, frontHandY, 2.6, 2.8, palette.skin, palette.outline, 1);
-
-      drawHairBack(ctx, palette, facing, actor);
-      if (facing !== "up") {
-        const faceX = sideBias;
-        oval(ctx, faceX, -25.2, facing === "side" ? 11.1 : 11.8, 10.4, palette.skin, palette.outline, 1.35);
-        if (facing === "side") oval(ctx, -8.2, -25, 2.2, 3, palette.skinShade, palette.outline, .8);
-        else {
-          oval(ctx, -11, -24.8, 2.1, 3, palette.skin, palette.outline, .8);
-          oval(ctx, 11, -24.8, 2.1, 3, palette.skin, palette.outline, .8);
-        }
-        ctx.globalAlpha = .27;
-        if (facing === "side") oval(ctx, 8.4, -21.8, 2.8, 1.25, "#f06478");
-        else {
-          oval(ctx, -7, -21.8, 2.8, 1.25, "#f06478");
-          oval(ctx, 7, -21.8, 2.8, 1.25, "#f06478");
-        }
-        ctx.globalAlpha = 1;
-      }
-      drawHairFront(ctx, palette, facing, actor);
-
-      if (frontVisible) {
-        if (facing === "side") {
-          drawEye(ctx, 7.3, -25.5, "side", palette, mood, blink, 1);
-          drawMouth(ctx, 10.3, -20.7, mood, palette, .9);
-        } else {
-          drawEye(ctx, -5, -25, "front", palette, mood, blink, 1);
-          drawEye(ctx, 5, -25, "front", palette, mood, blink, 1);
-          drawMouth(ctx, 0, -20.2, mood, palette, 1);
-        }
-      }
-
-      drawHeldAccessory(ctx, actor, palette, facing, state, frontHandX, frontHandY);
-
-      if (hurt) {
-        ctx.globalAlpha = .45;
-        ctx.fillStyle = "#ff7181";
-        oval(ctx, 0, -18, 13.5, 18, "#ff7181");
-        ctx.globalAlpha = 1;
-      }
-      if (settings.selected) {
-        ctx.strokeStyle = settings.selectionColor || "#ffc857";
-        ctx.lineWidth = 1.6;
-        ctx.setLineDash([3, 2]);
-        ctx.beginPath(); ctx.ellipse(0, 1.5, 14, 5.5, 0, 0, TAU); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    } finally {
-      ctx.restore();
-    }
-    return {
-      ...fallbackBox,
-      nameAnchorY: fallbackBox.top - 4 * scale,
-      markerAnchorY: fallbackBox.top - 23 * scale,
-    };
+    return drawBitmapCharacter(ctx, options || {}) || null;
   }
 
   function drawSlime(ctx, palette, phase, state) {
@@ -1810,49 +1619,7 @@
   }
 
   function drawEnemy(ctx, options) {
-    const settings = options || {};
-    if (settings.bitmap !== false) {
-      const bitmapBox = drawBitmapEnemy(ctx, settings);
-      if (bitmapBox) return bitmapBox;
-    }
-    const x = Number(settings.x) || 0;
-    const y = Number(settings.y) || 0;
-    const type = settings.type || (settings.boss ? "boss" : "slime");
-    const scale = Math.max(.08, Number(settings.scale) || 1);
-    const phase = Number(settings.phase) || 0;
-    const state = settings.state || (settings.hurt ? "hurt" : "idle");
-    const palette = enemyPaletteFor(type, settings.palette);
-    ctx.save();
-    try {
-      drawGroundShadow(ctx, x, y, scale, type === "boss" ? 29 : type === "hound" ? 18 : 14, type === "wisp" ? .2 : .42);
-      ctx.translate(x, y);
-      ctx.scale(scale, scale);
-      ctx.lineJoin = "round"; ctx.lineCap = "round";
-      if (state === "hurt") ctx.translate(Math.sin(phase * 35) * 1.5, 0);
-      if (type === "wisp") drawWisp(ctx, palette, phase, state);
-      else if (type === "hound") drawHound(ctx, palette, phase, state, settings.facing);
-      else if (type === "boss") drawBoss(ctx, palette, phase, state);
-      else drawSlime(ctx, palette, phase, state);
-      if (settings.selected) {
-        ctx.strokeStyle = settings.selectionColor || "#ffc857"; ctx.lineWidth = 1.8;
-        ctx.setLineDash([4, 2]); ctx.beginPath(); ctx.ellipse(0, 3, type === "boss" ? 34 : 19, type === "boss" ? 11 : 6, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      }
-    } finally {
-      ctx.restore();
-    }
-    const halfWidth = (type === "boss" ? 38 : type === "hound" ? 25 : 22) * scale;
-    const top = y - (type === "boss" ? 72 : type === "wisp" ? 56 : 44) * scale;
-    const profile = monsterVisualProfiles[type] || monsterVisualProfiles.slime;
-    return {
-      left: x - halfWidth,
-      right: x + halfWidth,
-      top,
-      bottom: y + 5 * scale,
-      centerX: x,
-      baselineY: y,
-      nameAnchorX: x + profile.nameOffsetX * scale,
-      nameAnchorY: y - profile.nameLift * scale,
-    };
+    return drawBitmapEnemy(ctx, options || {}) || null;
   }
 
   function drawPortraitHead(ctx, actor, palette, mood, blink) {
@@ -1893,54 +1660,7 @@
   }
 
   function drawPortrait(ctx, options) {
-    const settings = options || {};
-    if (settings.bitmap !== false && drawBitmapPortrait(ctx, settings)) return;
-    const x = Number(settings.x) || 0;
-    const y = Number(settings.y) || 0;
-    const width = Math.max(24, Number(settings.width) || 144);
-    const height = Math.max(24, Number(settings.height) || width);
-    const actor = settings.actor || settings.kind || "player";
-    const palette = paletteFor(actor, settings.palette);
-    const mood = settings.expression || "happy";
-    const padding = Math.max(2, Number(settings.padding) || 6);
-
-    ctx.save();
-    try {
-      roundedRect(ctx, x, y, width, height, Math.min(width, height) * .12);
-      ctx.clip();
-      const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
-      gradient.addColorStop(0, settings.background || palette.outfitDark);
-      gradient.addColorStop(1, settings.backgroundEnd || "#111a31");
-      ctx.fillStyle = gradient; ctx.fillRect(x, y, width, height);
-
-      ctx.globalAlpha = .13;
-      for (let index = 0; index < 8; index += 1) {
-        oval(ctx, x + width * ((index * .31) % 1), y + height * ((index * .47) % 1), width * .05, width * .05, palette.accent);
-      }
-      ctx.globalAlpha = 1;
-
-      const artScale = Math.min((width - padding * 2) / 112, (height - padding * 2) / 126);
-      ctx.translate(x + width / 2, y + height * .68);
-      ctx.scale(artScale, artScale);
-      // Shoulders, collar and scarf.
-      ctx.fillStyle = palette.outfit; ctx.strokeStyle = palette.outline; ctx.lineWidth = 3.5;
-      ctx.beginPath(); ctx.moveTo(-58, 54); ctx.quadraticCurveTo(-48, 22, -25, 20); ctx.lineTo(25, 20); ctx.quadraticCurveTo(48, 22, 58, 54); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = palette.scarf;
-      ctx.beginPath(); ctx.moveTo(-26, 21); ctx.lineTo(0, 42); ctx.lineTo(26, 21); ctx.lineTo(18, 15); ctx.lineTo(0, 29); ctx.lineTo(-18, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = palette.accent; roundedRect(ctx, -5, 32, 10, 25, 3); ctx.fill();
-      drawPortraitHead(ctx, actor, palette, mood, Boolean(settings.blink));
-    } finally {
-      ctx.restore();
-    }
-
-    if (settings.frame !== false) {
-      ctx.save();
-      roundedRect(ctx, x + .75, y + .75, width - 1.5, height - 1.5, Math.min(width, height) * .12);
-      ctx.strokeStyle = settings.frameColor || palette.accent;
-      ctx.lineWidth = Math.max(1.5, Math.min(width, height) * .018);
-      ctx.stroke();
-      ctx.restore();
-    }
+    return Boolean(drawBitmapPortrait(ctx, options || {}));
   }
 
   return Object.freeze({

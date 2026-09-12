@@ -33,11 +33,13 @@
 - 主城可見 artwork、native gameplay world 同 authored navigation 都固定為 `7680 × 4320`；玩家約 `128 × 192` 嘅可見 sprite body proportion 係以呢個原生尺度 authored，標準玩家 locomotion frame 保持 `256 × 256` world units，唔使用 `worldScale`／`entityScale`／`unitScale` migration factor。camera 係圍繞玩家裁切 viewport 嘅 window，唔係將全張主城 fit 入 gameplay viewport；全局遠／中／近 native-world zoom 固定為 `0.46176`／`0.592`／`0.72224`，8K source 尺寸亦唔會自動改變所選 view mode。background、entity、collision 同 screen／world conversion 共用同一 camera transform，DPR 只提高 Canvas output resolution，唔改變 world viewport。
 - 每張 supplied map image 都係自己嘅 gameplay world：一個 native scene pixel 就係一個 world unit，native image width／height 就係 world bounds。大地圖會真實較耐行，小型 interior 會真實較快行，兩者唔會 normalize 到共同尺寸或舊 logical world。玩家、NPC 同各 monster 嘅 authored render dimensions、`330` world-units/sec 基礎探索移速及遠／中／近 camera preset 全部係 global contract，唔由地圖尺寸、場景身份或解析度推導；細地圖不足以覆蓋 viewport 時亦唔使用 cover-zoom floor，場景保持原有比例並置中／clamp 於 native world bounds，background、entity、collision 同 click conversion 必須繼續共用同一 camera transform。
 - 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；公會、裝備店、療癒所、雜貨舖及旅店等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
-- 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊以緊湊格仔列出藥水、技能書、素材及裝備。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
+- 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊固定每頁 `5 × 3`、最多 15 格列出藥水、技能書、素材及裝備；每件物品只用一層 outer slot frame，icon 上、名稱下，左邊裝備板亦唔再額外加最外層 shell。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。開啟狀態、物品、面板、技能、任務或系統時左側功能列繼續顯示，玩家可以同時開多個不同功能 window；同一功能只維持一個 instance。新開／重新點擊嘅 window 置頂，點擊其他已開 window 會將其帶回前景。系統設定同其他五個主功能使用同一套可拖動、可疊放 window 行為，唔再固定黐住 system icon。
 - 所有一般彈出視窗右上角永遠提供清楚可見、bitmap-backed 的 shared close control。阻塞式 modal／confirmation 可以點半透明背景關閉；可並存嘅主功能 window 則使用 transparent positioning layer，點 window 外唔會自動關閉，並容許玩家繼續操作左側 launcher。Popup backdrop 唔使用 blur；major window／modal 可用滑鼠或觸控由標題、文字或其他非互動區域拖動，button、input、link、可拖技能等 interactive control 本身唔啟動視窗拖動。
 - 玩家長時間無操作不會再開啟阻塞式「停一停／Night Watch Paused」視窗；持久化改用無干擾的 dirty-state autosave checkpoint。狀態有意義地改變時標記 dirty，約每 5 秒只檢查並保存一次有變更的狀態；重要場景轉移、交易、技能取得、裝備或任務狀態轉移會即時保存，保存失敗會保留 dirty 等待重試。這是 client persistence checkpoint，唔預設未來 authoritative server 行為。
-- 五個主城服務 interior 的核心 NPC 共用 `160 px` service reach；互動距離由 NPC authored magenta region 到玩家 feet pivot 的最近點計算，點擊命中區在 region 外再加 `18 px` hit padding。玩家可以由 region 任一側接近，唔需要走到單一 centroid 或 NPC entity point。
+- 五個主城服務 interior 的核心 NPC 使用 resolution-aware authored-region interaction：`1672 × 941` 基準為 `160 px` service reach／`18 px` hit padding，高解析度同尺度場景按 source resolution 等比例放大（`3344 × 1882` 公會為 `320 / 36 px`）。互動距離由 NPC authored magenta region 到玩家 feet pivot 的最近點計算；玩家可以由 region 任一側接近，唔需要走到單一 centroid 或 NPC entity point。
+- 探索 launcher／系統／物品 detail 等非戰鬥 window 可以並存，但一旦 encounter 正式切入戰鬥，所有探索 window 同 popup 必須即時關閉，唔可以帶入 battle scene。門口／transition hotspot 仍可點擊行入，但 hover cursor 保持普通羽毛；手指 cursor 只畀真正 UI／NPC／可操作物件。
+- 系統音量控制只保留 slider 右邊一個 speaker：按一下 mute 到 `0%`，再按恢復 mute 前音量；不再另外提供「音樂」toggle。
 - 正常 refresh 如果有 valid save 會自動載入並直接返回探索；冇 valid save 就停留標題畫面。玩家明確選擇「返回標題」時先保存再返回標題；save load 失敗只顯示錯誤並保留現狀，唔可以靜默覆蓋存檔或開新遊戲。
 - 角色死亡提供兩個清楚選項：「原地復活」與「返回主城」。戰鬥中倒下時直接停留喺戰場畫面彈出「你倒下了」，唔先退回探索地圖；原地復活只回復至 `1 HP`，返回主城按正常主城 spawn 重生。兩者都扣除「死亡當刻目前等級升下一級所需 XP」的 `5%`（四捨五入為整數），選擇前唔顯示預計扣除量，完成選擇後先以 toast 顯示實際失去 EXP。EXP 可以跨級扣減：目前級 EXP 扣至 `0` 後仍有餘額，就跌回上一級並由上一級 EXP bar 尾端繼續扣；最低只可跌至 Lv1 / 0 EXP。降級後任何 `requiredLevel` 高於新等級嘅已裝備物品必須自動卸下並保留喺背包。不再扣金幣。
 - 遊戲畫面文字預設不可被 browser drag-select／highlight；button、popup copy、HUD 等都要保持 app/game interaction feel。真正文字輸入 control（input／textarea／contenteditable）例外，仍可正常選取編輯。
@@ -195,7 +197,7 @@
 - Fighter battle movement displays remaining movement power numerically (starts at 6.0 in the current fighter tuning). Walking costs 1.0, a quarter-turn costs 0.5, and a 180° turn costs 1.0. One point is reserved from route extension for final facing; unused reserve expires when movement is committed.
 - Battle AP uses a yellow progress bar, starts at 10, gains 10 each round, and caps at 200.
 - The sequential turn-order panel is removed because Everrealm uses simultaneous planning/resolution. Timers remain unlimited for the single-player build.
-- The player-facing hero name always comes from the canonical saved `player.name`; battle, HUD, status and equipment UI must not hard-code a second display name.
+- The player-facing hero name always comes from the canonical saved `player.name`; battle, HUD, status and equipment UI must not hard-code a second display name. New account registration asks for the character name up front; Firebase Auth `displayName` keeps the fresh-account identity available before the first journey, and the first canonical cloud save writes the same value to `players/{uid}.player.name`.
 - Mountain high-tree and low-scrub obstacle art now use clean transparent-alpha battle assets with no white matte/halo; the tree is visually tall and the scrub visibly low.
 - Battle BGM loops from assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3 and temporarily replaces map BGM during battle.
 
@@ -206,3 +208,9 @@
 - Base tile outlines are not rendered; only movement/skill/selection overlays reveal the logical grid.
 - Mountain high-tree and low-scrub battle obstacles use the latest transparent user-supplied cutouts.
 - The world skill panel is named 「戰技面板」. Its authored interaction region stays invisible; proximity/hover adds only a subtle warm-gold breathing glow. Desktop exploration uses feather/default and hand/interactive custom cursors.
+
+## UI V11 interaction rules
+
+- The six left exploration launcher windows are overlays, not pauses: Status, Inventory, read-only Deck, Skill Tree, Missions and System may stay open while the hero moves.
+- World-service interaction windows and modal UI are movement locks. Guild service, shops, city-gate editable Deck configuration, NPC dialogue and confirmation/detail modals stop exploration movement until dismissed.
+- Bottom System/Battle history is click-through HUD text with a left-side invisible scroll gesture strip and no visible scrollbar. NPC dialogue has higher layer priority than this HUD.

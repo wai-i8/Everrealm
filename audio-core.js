@@ -26,6 +26,7 @@
       ? options.createAudio
       : (source) => new Audio(source);
     let enabled = options.enabled !== false;
+    let volume = Math.max(0, Math.min(1, Number.isFinite(Number(options.volume)) ? Number(options.volume) : .7));
     let currentKey = null;
     let audio = null;
     let suspended = false;
@@ -49,6 +50,7 @@
       }
       audio.loop = true;
       audio.preload = "auto";
+      audio.volume = volume;
       return audio;
     }
 
@@ -95,10 +97,17 @@
       return snapshot();
     }
 
+    function setVolume(value) {
+      volume = Math.max(0, Math.min(1, Number(value) || 0));
+      if (audio) audio.volume = volume;
+      return snapshot();
+    }
+
     function snapshot() {
       const current = track();
       return {
         enabled,
+        volume,
         key: currentKey,
         source: current?.src || null,
         label: current?.label || null,
@@ -111,7 +120,7 @@
       };
     }
 
-    return { setMap, setEnabled, suspend, resume, snapshot };
+    return { setMap, setEnabled, setVolume, suspend, resume, snapshot };
   }
 
   return { BGM_TRACKS, BGM_ZONE_BY_MAP, createBgmManager };

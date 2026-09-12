@@ -1529,6 +1529,8 @@ direct hit resolution for both player and monsters. Poison/status DoT and other
 explicit fixed-HP damage models use their own resolver and **do not inherit this
 minimum-5 floor**.
 
+Player-facing damage presentation keeps the resolved hit amount separate from the HP amount actually removable from the target. HP still clamps at `0`, but floating damage text and battle log show the resolved/calculated damage **before** remaining-HP clamping. Example: a `22`-damage hit against a target with `2 HP` left displays/logs `22`, while only `2 HP` is actually removed and the target ends at `0 HP`.
+
 ### Pending actions, Interrupt and Durability
 
 Every queued/prepared action stores its accumulated Interrupt and its skill's
@@ -1988,12 +1990,17 @@ Hit 2 → A
 背面 = 1.35×
 ```
 
-以 **受擊者被命中當刻朝向** 判斷。
+以 **受擊者被命中當刻朝向 + 實際攻擊進入受擊格嘅最後一段方向** 判斷。
+
+- Linear / Arc：使用 execution-time `attackPath`，如果途中先撞到另一單位，就用實際 impact 格之前嗰一格作入射方向。
+- Pathless / 召喚／地底／落雷：仍然冇中途 interception path；但為咗判定 Front / Side / Rear，會由施術者當刻位置、當刻 facing 同受擊格建立一條 **virtual positional route**，共用 `facingOrthogonalPriority`（前半面固定先 Forward、再 Left/Right）。只用最後一段判位置倍率，唔會令 Pathless 變成可被中途單位阻擋。
+- 因此任何 delivery mode 都共用同一套「最後一段由邊面入格」位置判定；動畫由地下、天空或原地生成唔會另開一套方向公式。
 
 唔以：
 
 - 回合開始朝向
 - 原本計劃朝向
+- 單純用施術者原本企位相對受擊者位置
 
 判斷。
 

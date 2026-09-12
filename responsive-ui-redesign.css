@@ -807,6 +807,7 @@
   z-index: 30;
   inset: -.48rem;
   display: flex;
+  pointer-events: none;
   align-items: center;
   justify-content: flex-end;
   padding: clamp(.7rem, 2vw, 1.2rem);
@@ -1764,7 +1765,7 @@
   text-align: center !important;
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    2026-09-11 interaction / popup / guild commission polish
    ========================================================================== */
 
@@ -2128,7 +2129,7 @@
 }
 
 
-/* ========================================================================== 
+/* ==========================================================================
    2026-09-11 desktop-style multi-window / battle command follow-up
    ========================================================================== */
 
@@ -2613,4 +2614,853 @@
   .system-log-toggle,
   .system-log-drag-handle { width: 1.35rem; height: 1.35rem; }
   .guild-detail-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}
+
+
+/* === 2026-09-11 guild sizing / general-store compact layout follow-up === */
+/* Match Guild's outer window to the compact Status-window footprint even when
+   renderFacility marks the guild panel as medium/wide. */
+.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
+  width: min(32rem, calc(100vw - 2rem)) !important;
+}
+
+/* General Store is a small two-item utility shop, not a full equipment browser. */
+.facility-overlay[data-facility-context="general-store"] .facility-window.ui-window,
+.facility-overlay[data-facility-context="general-store"][data-panel-size="wide"] .facility-window.ui-window {
+  width: min(32rem, calc(100vw - 2rem)) !important;
+  min-height: 0 !important;
+}
+.facility-overlay[data-facility-context="general-store"] .facility-content {
+  padding: .68rem !important;
+}
+.general-store-browser { min-width: 0; }
+.general-store-browser .equipment-shop-heading {
+  align-items: end;
+  gap: .6rem;
+  margin-bottom: .48rem !important;
+}
+.general-store-grid {
+  grid-template-columns: 1fr !important;
+  gap: .45rem !important;
+}
+.general-store-card {
+  grid-template-columns: 3.4rem minmax(0, 1fr) 5.25rem !important;
+  min-height: 0 !important;
+  gap: .58rem !important;
+  padding: .52rem .58rem !important;
+}
+.general-store-card .equipment-shop-art {
+  width: 3.25rem !important;
+  min-height: 0 !important;
+}
+.general-store-card .equipment-copy { gap: .16rem !important; }
+.general-store-card .equipment-copy strong { font-size: .72rem !important; }
+.general-store-card .equipment-copy p { font-size: .6rem !important; line-height: 1.35 !important; }
+.general-store-card .equipment-copy > small { font-size: .52rem !important; line-height: 1.25 !important; }
+.general-store-card .equipment-shop-purchase {
+  align-self: center !important;
+  gap: .28rem !important;
+}
+.general-store-card .facility-action-button {
+  min-height: 2rem !important;
+  padding: .34rem .42rem !important;
+  font-size: .63rem !important;
+}
+.currency-amount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .28rem;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.currency-amount .coin-icon {
+  flex: 0 0 auto;
+  width: .72rem;
+  height: .72rem;
+}
+.currency-amount strong {
+  color: inherit;
+  font: 850 .72rem/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.inventory-money { gap: 0 !important; }
+.inventory-money .currency-amount strong { font-size: .88rem; }
+.store-balance { margin-left: auto; padding-bottom: .12rem; }
+.equipment-price .currency-amount { width: 100%; }
+.equipment-price .currency-amount strong { font-size: .64rem; }
+
+@media (max-width: 620px) {
+  .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window,
+  .facility-overlay[data-facility-context="general-store"] .facility-window.ui-window,
+  .facility-overlay[data-facility-context="general-store"][data-panel-size="wide"] .facility-window.ui-window {
+    width: min(32rem, calc(100vw - .7rem)) !important;
+  }
+  .general-store-card { grid-template-columns: 3rem minmax(0, 1fr) 4.5rem !important; gap: .42rem !important; }
+  .general-store-card .equipment-shop-art { width: 2.9rem !important; }
+}
+
+/* === 2026-09-11 four-point polish: compact launcher windows + centred Guild rows === */
+/* Left-launcher Mission and read-only Deck windows use the same compact footprint
+   as Character Status.  The authored city-gate Deck configuration stays wide. */
+.facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window {
+  width: min(32rem, calc(100vw - 2rem)) !important;
+}
+
+.guild-simple-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: .38rem !important;
+  text-align: center !important;
+}
+.guild-simple-row strong,
+.guild-simple-row .guild-simple-stars,
+.guild-simple-row em {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 620px) {
+  .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window {
+    width: min(32rem, calc(100vw - .7rem)) !important;
+  }
+  .guild-simple-row {
+    flex-wrap: wrap;
+    row-gap: .16rem !important;
+  }
+}
+
+/* === 2026-09-11 compact-window / audio / inventory / log interaction pass === */
+/* Trial footprint requested for the compact information family: Status, portable
+   Mission, portable read-only Deck and the in-Guild commission list are half
+   the previous ~32rem desktop width. The city-gate Deck configurator is also
+   halved from ~34rem; its two regions stack when that footprint gets too tight. */
+.facility-overlay[data-facility-tab="status"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
+.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
+  width: min(16rem, calc(100vw - .7rem)) !important;
+  min-width: 0 !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
+  width: min(17rem, calc(100vw - .7rem)) !important;
+  min-width: 0 !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .deck-view-shell.is-editable {
+  width: 100% !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .deck-manage-layout {
+  grid-template-columns: 1fr !important;
+  gap: .42rem !important;
+}
+
+/* Keep the compact Guild list visually balanced: title first, star rank second,
+   then optional state, all centred as one group. */
+.guild-simple-row {
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+/* Inventory stays exactly five columns per page. Each item tile is 1:1 instead
+   of a stretched landscape card, and the whole window no longer fills the
+   desktop simply because space is available. */
+.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
+  width: min(48rem, calc(100vw - .7rem)) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+  grid-template-columns: minmax(8.5rem, 11rem) minmax(0, 1fr) !important;
+  gap: .58rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  align-content: start !important;
+  gap: .4rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  align-content: stretch !important;
+  padding: .28rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-item-art {
+  min-height: 0 !important;
+}
+
+/* Standalone item art can coexist with the legacy 4x4 atlas. */
+.standalone-item-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background-image: var(--item-icon-src);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  filter: drop-shadow(0 .18rem .22rem rgba(0,0,0,.42));
+}
+.inventory-item-art > .standalone-item-icon,
+.inventory-detail-art > .standalone-item-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: auto;
+}
+.general-store-card .equipment-shop-art > .standalone-item-icon {
+  width: 3.1rem;
+  height: 3.1rem;
+  margin: auto;
+}
+
+/* System settings: conventional BGM volume slider plus a proper account card
+   instead of a loose e-mail string and text link. */
+.system-volume-row {
+  display: grid;
+  gap: .4rem;
+  padding: .58rem .62rem .62rem;
+  border: 1px solid rgba(245,233,202,.16);
+  border-radius: .62rem;
+  background: rgba(7,16,32,.52);
+}
+.system-volume-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  color: var(--cream);
+  font: 800 .68rem/1 system-ui, sans-serif;
+}
+.system-volume-heading strong {
+  color: var(--gold);
+  font: 850 .64rem/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.system-volume-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .42rem;
+  color: rgba(245,233,202,.75);
+  font-size: .68rem;
+}
+.system-volume-control input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: #ffc857;
+  cursor: pointer;
+}
+.system-account-card {
+  display: grid;
+  grid-template-columns: 2.15rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .58rem .62rem;
+  border: 1px solid rgba(82,220,203,.2);
+  border-radius: .66rem;
+  background: linear-gradient(145deg, rgba(12,27,48,.78), rgba(6,14,29,.72));
+}
+.system-account-avatar {
+  position: relative;
+  width: 2.05rem;
+  height: 2.05rem;
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgba(255,200,87,.42);
+  border-radius: 50%;
+  background: rgba(255,200,87,.08);
+  font-size: 0;
+}
+.system-account-avatar::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: .38rem;
+  width: .58rem;
+  height: .58rem;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #f5e9ca;
+}
+.system-account-avatar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: .3rem;
+  width: 1.12rem;
+  height: .62rem;
+  transform: translateX(-50%);
+  border-radius: .7rem .7rem .35rem .35rem;
+  background: #f5e9ca;
+}
+.system-account-copy {
+  min-width: 0;
+  display: grid;
+  gap: .12rem;
+}
+.system-account-copy small {
+  color: var(--gold);
+  font: 800 .5rem/1 ui-monospace, monospace;
+  letter-spacing: .12em;
+}
+.system-account-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cream);
+  font-size: .62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.system-account-copy > span {
+  color: var(--muted);
+  font-size: .52rem;
+  line-height: 1.25;
+}
+.system-logout-button {
+  min-height: 1.9rem;
+  padding: .35rem .55rem;
+  border: 1px solid rgba(255,107,107,.48);
+  border-radius: .42rem;
+  color: #ffd8d8;
+  background: linear-gradient(180deg, rgba(124,39,45,.88), rgba(80,25,31,.92));
+  box-shadow: 2px 2px 0 rgba(0,0,0,.38);
+  font: 800 .58rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.system-logout-button:hover,
+.system-logout-button:focus-visible {
+  border-color: rgba(255,145,145,.88);
+  color: #fff;
+}
+
+/* The persistent log is HUD text, not a blocking window. The messages have no
+   surface or visible scrollbar; only the tiny controls and the invisible left
+   scroll zone receive pointer input. */
+.system-log {
+  z-index: 26 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.system-log-messages {
+  position: relative;
+  max-height: min(10rem, 28vh) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: .3rem .12rem .3rem .2rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+  touch-action: none !important;
+}
+.system-log-messages::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.system-log-entry {
+  color: #edf3ff;
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000,
+     0 2px 3px rgba(0,0,0,.9) !important;
+}
+.system-log-entry .system-log-tag,
+.system-log-entry .system-log-text { color: inherit !important; }
+.system-log-entry.is-combat { color: #ff9f63 !important; }
+.system-log-entry.is-combat.is-incoming { color: #ff8ea1 !important; }
+.system-log-entry.is-reward { color: #ffd36a !important; }
+.system-log-entry.is-item { color: #65e0ca !important; }
+.system-log-entry.is-quest { color: #8fc8ff !important; }
+.system-log-entry.is-system { color: #b8a8ff !important; }
+.system-log-entry.is-danger { color: #ff9a9a !important; }
+.system-log-tabs {
+  background: rgba(5,11,24,.32) !important;
+  box-shadow: none !important;
+  border-color: rgba(255,255,255,.05) !important;
+}
+.system-log-scroll-zone {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 2rem;
+  bottom: 0;
+  width: min(7.2rem, 38%);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: ns-resize;
+  background: transparent;
+}
+.system-log.is-collapsed .system-log-scroll-zone { display: none; }
+
+/* NPC dialogue is always above the floating log HUD. */
+.dialogue-panel { z-index: 90 !important; }
+
+@media (max-width: 760px) {
+  .facility-overlay[data-facility-tab="status"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
+  .facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
+    width: min(16rem, calc(100vw - .45rem)) !important;
+  }
+  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
+    width: min(17rem, calc(100vw - .45rem)) !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
+    width: min(44rem, calc(100vw - .45rem)) !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+    grid-template-columns: minmax(7.5rem, 9rem) minmax(0, 1fr) !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+    padding: .18rem !important;
+  }
+  .system-log-scroll-zone { width: min(6.4rem, 42%); }
+}
+
+/* === 2026-09-12 class-select / log-cursor correction === */
+.system-log-toggle,
+.system-log-drag-handle,
+.system-log-drag-handle:active {
+  cursor: url("assets/ui/cursor-interact-v1.png") 12 2, pointer !important;
+}
+.system-log-scroll-zone {
+  cursor: url("assets/ui/cursor-feather-v1.png") 3 3, default !important;
+}
+.class-choice-grid--six {
+  width: min(68rem, 96vw) !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: .55rem !important;
+}
+.class-choice-grid--six .class-choice-card {
+  position: relative;
+  min-width: 0;
+  padding: .55rem .4rem .65rem !important;
+  overflow: hidden;
+}
+.class-choice-preview-canvas,
+.class-choice-sprite {
+  display: block;
+  width: 100% !important;
+  height: clamp(8.5rem, 26vh, 13.5rem) !important;
+  object-fit: contain;
+  object-position: center center;
+  image-rendering: auto;
+  filter: drop-shadow(0 .5rem .45rem rgba(0,0,0,.45));
+}
+.class-choice-preview-canvas {
+  max-width: 12.5rem;
+  justify-self: center;
+}
+.class-choice-card.is-default {
+  border-color: rgba(82,220,203,.82);
+  box-shadow: 0 0 0 1px rgba(82,220,203,.28),4px 5px 0 rgba(0,0,0,.42);
+}
+.class-choice-card.is-locked::after {
+  content: "課金解鎖";
+  position: absolute;
+  right: .35rem;
+  top: .35rem;
+  padding: .14rem .28rem;
+  border-radius: .3rem;
+  background: rgba(7,11,22,.78);
+  color: #ffd36a;
+  font: 800 .5rem/1 system-ui,sans-serif;
+  letter-spacing: .04em;
+}
+@media (max-width: 900px) {
+  .class-choice-grid--six { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+  .class-choice-preview-canvas, .class-choice-sprite { height: min(24vh,10rem) !important; }
+}
+@media (max-width: 520px) {
+  .class-choice-grid--six { grid-template-columns: repeat(2,minmax(0,1fr)) !important; width: 100% !important; }
+  .class-choice-preview-canvas, .class-choice-sprite { height: min(22vh,8.5rem) !important; }
+}
+
+/* === 2026-09-12 system-log readability variant: stronger halo shadow (no black outline) === */
+.system-log,
+.system-log-entry,
+.system-log-tag,
+.system-log-text {
+  text-shadow:
+    0 0 1px rgba(0,0,0,1),
+    0 0 4px rgba(0,0,0,.96),
+    0 0 8px rgba(0,0,0,.86),
+    0 0 14px rgba(0,0,0,.68),
+    0 0 20px rgba(0,0,0,.48) !important;
+}
+
+/* === 2026-09-12 global Everrealm cursor normalization ===
+   Browser/default arrow -> feather cursor.
+   Clickable / draggable controls -> Everrealm hand cursor.
+   Text-entry fields keep the native text caret cursor. */
+html,
+body,
+body *,
+body *::before,
+body *::after {
+  cursor: url("assets/ui/cursor-feather-v1.png") 3 3, default !important;
+}
+
+html body :is(
+  a[href],
+  button,
+  [role="button"],
+  [role="link"],
+  summary,
+  select,
+  label[for],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  [onclick],
+  [data-class-choice],
+  [data-deck-drag-source],
+  [draggable="true"],
+  .skill-tree-scroll,
+  .deck-skill-choice,
+  .deck-slot.is-filled,
+  .battle-action-heading,
+  .facility-header,
+  .system-settings-header,
+  .ui-modal-window > .modal-kicker,
+  .ui-modal-window > h2,
+  .system-log-toggle,
+  .system-log-drag-handle,
+  #gameCanvas[data-explore-cursor="interact"]
+) {
+  cursor: url("assets/ui/cursor-interact-v1.png") 12 2, pointer !important;
+}
+
+html body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  [contenteditable="true"]
+) {
+  cursor: text !important;
+}
+
+html body :is(button, input, select, textarea):disabled,
+html body [aria-disabled="true"] {
+  cursor: url("assets/ui/cursor-feather-v1.png") 3 3, default !important;
+}
+
+/* === 2026-09-12 compact interaction cleanup === */
+/* Inventory: one visual frame per item; the left loadout keeps the six-slot
+   board but drops its redundant outer shell. A page is always 5 x 3 max. */
+.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - .7rem) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .facility-content {
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
+  height: auto !important;
+  min-height: 0 !important;
+  align-items: start !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-panel,
+.facility-overlay[data-facility-tab="bag"] .bag-items-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: start !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-loadout-panel {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-paperdoll-board.bag-equipment-grid {
+  height: auto !important;
+  min-height: 0 !important;
+  grid-template-rows: repeat(3, minmax(4.9rem, auto)) !important;
+}
+.facility-overlay[data-facility-tab="bag"] .bag-items-panel {
+  grid-template-rows: auto auto !important;
+  align-content: start !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  align-content: start !important;
+  overflow: visible !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+/* City-gate panel configurator stays narrow but the learned-skill and current
+   panel regions remain side-by-side. */
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
+  width: min(17rem, calc(100vw - .7rem)) !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .deck-manage-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: .3rem !important;
+  align-items: start !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] :is(.deck-management-column, .deck-current-column) {
+  min-width: 0 !important;
+}
+.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] :is(.deck-skill-choice, .deck-slot) {
+  min-width: 0 !important;
+  padding-inline: .22rem !important;
+}
+
+/* System audio: one right-side speaker button; it doubles as mute/unmute. */
+.system-volume-control {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+}
+.system-volume-mute-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: .38rem;
+  background: transparent;
+  color: rgba(245,233,202,.88);
+  font-size: .85rem;
+  line-height: 1;
+}
+.system-volume-mute-button:hover,
+.system-volume-mute-button:focus-visible {
+  background: rgba(82,220,203,.10);
+  outline: 1px solid rgba(82,220,203,.42);
+}
+
+/* ==========================================================================
+   2026-09-12 bitmap-button / mission / inventory polish
+   ========================================================================== */
+
+/* Bitmap-backed controls already contain their own painted fill/shadow.  Do
+   not draw a second navy rectangle beneath them.  Guild's in-window flat
+   action rows are intentionally excluded; their later, non-bitmap styling is
+   part of the compact guild list design. */
+.primary-button,
+.secondary-button,
+.dialogue-next,
+.dialogue-choice,
+.ui-button,
+.modal-overlay .facility-action-button,
+.facility-overlay:not([data-facility-tab="guild"]) .facility-action-button {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The commission-detail bitmap frame grows with its copy.  The 9-slice
+   border-image stretches only the middle strip, so the decorated end caps do
+   not distort when the disabled label is longer than 「接受委託」. */
+.guild-commission-detail-panel .guild-detail-actions .facility-action-button {
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: 100% !important;
+  padding-inline: 1rem !important;
+  white-space: nowrap !important;
+}
+
+/* Accepted missions only need the objective and live progress. */
+.mission-card {
+  grid-template-columns: 1fr !important;
+  grid-template-areas:
+    "heading"
+    "task"
+    "bar"
+    "note" !important;
+  gap: .58rem !important;
+}
+.mission-task-row {
+  grid-area: task;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: .55rem;
+}
+.mission-objective,
+.mission-progress-row {
+  min-width: 0;
+  min-height: 2.55rem;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between;
+  gap: .7rem !important;
+  padding: .48rem .58rem !important;
+}
+.mission-objective strong {
+  min-width: 0;
+  text-align: left !important;
+  font-size: .72rem;
+  line-height: 1.35;
+}
+.mission-progress-row {
+  min-width: 5rem;
+  justify-content: center;
+}
+.mission-progress-row small { margin-right: .25rem; }
+.mission-progress-row strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: .78rem;
+}
+.mission-meta-grid { display: none !important; }
+.mission-report-note {
+  margin: 0;
+  padding-top: .05rem;
+  color: var(--gold);
+  font-size: .67rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .mission-task-row { grid-template-columns: minmax(0, 1fr) auto; gap: .38rem; }
+  .mission-objective,
+  .mission-progress-row { padding: .42rem .46rem !important; }
+  .mission-progress-row small { display: none; }
+}
+
+/* Generated commission-envelope art is a bitmap asset, not the old line SVG. */
+.inventory-envelope-icon.standalone-item-icon {
+  background-size: contain !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+
+
+/* ==========================================================================
+   2026-09-12 round-4 interaction fixes
+   ========================================================================== */
+
+/* A detail layer is visual only; the popup itself remains interactive. This
+   lets clicks on the visible inventory background reach the content handler,
+   which clears the selected-item popup. */
+.inventory-detail-layer { pointer-events: none !important; }
+.inventory-detail-popup { pointer-events: auto !important; }
+
+/* Drag ghosts are appended to <body>, outside the deck facility. Reassert a
+   self-contained centred title instead of inheriting the old slot grid. */
+.deck-drag-ghost > strong {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: calc(100% - 3rem) !important;
+  max-width: calc(100% - 3rem) !important;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  display: block !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+
+/* === 2026-09-12 round-5 fixes: local assets / mission / modal interaction === */
+/* Locked classes without finished artwork keep the authored card spacing but
+   never request a non-existent bitmap. */
+.class-choice-sprite--empty {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* mission-objective/progress used to carry grid-area names from the older
+   two-column markup.  They now live inside mission-task-row, so reset those
+   names or CSS Grid creates implicit tracks and the copy piles on top of itself. */
+.mission-task-row > .mission-objective,
+.mission-task-row > .mission-progress-row {
+  grid-area: auto !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  writing-mode: horizontal-tb !important;
+}
+.mission-task-row {
+  grid-template-columns: minmax(0, 1fr) 5.4rem !important;
+}
+.mission-task-row .mission-objective strong {
+  width: auto !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+}
+.mission-task-row .mission-progress-row {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+/* The blurred inventory backdrop is an intentional close target.  The popup
+   itself remains interactive and stops the backdrop behaviour via hit testing. */
+.inventory-detail-layer {
+  pointer-events: auto !important;
+}
+.inventory-detail-popup {
+  pointer-events: auto !important;
+}
+
+/* Confirm/Cancel in the abandon dialog must be the same visual footprint even
+   though they use different semantic/button skins. */
+.abandon-commission-actions > #abandonCommissionConfirmButton,
+.abandon-commission-actions > #abandonCommissionCancelButton {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  padding: .48rem .8rem !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
 }

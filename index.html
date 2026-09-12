@@ -10,11 +10,30 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Everrealm" />
     <meta name="application-name" content="Everrealm" />
-    <link rel="manifest" href="/Everrealm/everrealm.webmanifest?v=20260910-02" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/Everrealm/assets/pwa/everrealm-icon-180-v2.png?v=20260910-02" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/Everrealm/assets/pwa/everrealm-icon-32-v2.png?v=20260910-02" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/Everrealm/assets/pwa/everrealm-icon-16-v2.png?v=20260910-02" />
-    <link rel="shortcut icon" href="/Everrealm/assets/pwa/everrealm-favicon-v2.ico?v=20260910-02" />
+    <link rel="icon" href="favicon.ico" />
+    <script>
+      (() => {
+        // PWA metadata only makes sense on an HTTP(S) origin.  Loading the
+        // install icons from file:// creates noisy 404s while developing the
+        // standalone build, so leave the local file build on favicon.ico.
+        if (!/^https?:$/.test(window.location.protocol)) return;
+        const links = [
+          ["manifest", "", "", "everrealm.webmanifest?v=20260910-02"],
+          ["apple-touch-icon", "", "180x180", "assets/pwa/everrealm-icon-180-v2.png?v=20260910-02"],
+          ["icon", "image/png", "32x32", "assets/pwa/everrealm-icon-32-v2.png?v=20260910-02"],
+          ["icon", "image/png", "16x16", "assets/pwa/everrealm-icon-16-v2.png?v=20260910-02"],
+          ["shortcut icon", "", "", "assets/pwa/everrealm-favicon-v2.ico?v=20260910-02"],
+        ];
+        for (const [rel, type, sizes, href] of links) {
+          const link = document.createElement("link");
+          link.rel = rel;
+          if (type) link.type = type;
+          if (sizes) link.sizes = sizes;
+          link.href = href;
+          document.head.appendChild(link);
+        }
+      })();
+    </script>
     <title>永恆國度 · Everrealm</title>
     <script>
       (() => {
@@ -52,7 +71,7 @@
           ["inventoryOverhaulStyles", "inventory-overhaul.css"],
           ["everrealmUiStyles", "ui-system.css?v=20260910-09"],
           ["inventoryMinimalStyles", "inventory-minimal.css"],
-          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260911-14"],
+          ["everrealmResponsiveUiStyles", "responsive-ui-redesign.css?v=20260912-04"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -154,6 +173,7 @@
             <button id="systemLogDragHandle" class="system-log-drag-handle" type="button" aria-label="拖動系統資訊欄" title="拖動資訊欄">✥</button>
           </div>
           <div id="systemLogMessages" class="system-log-messages" aria-live="polite" aria-relevant="additions text"></div>
+          <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="喺呢度用滑鼠滾輪或手指上下掃動翻閱訊息"></div>
         </section>
 
         <div id="interactionPrompt" class="interaction-prompt" hidden>
@@ -252,6 +272,7 @@
             <h2 id="authTitle">登入旅程</h2>
             <p id="authMessage" class="auth-message" aria-live="polite"></p>
             <form id="authForm" class="auth-form">
+              <label id="authCharacterNameRow" for="authCharacterName" hidden>角色名稱<input id="authCharacterName" name="characterName" type="text" autocomplete="nickname" maxlength="24" /></label>
               <label for="authEmail">Email<input id="authEmail" name="email" type="email" autocomplete="username" required /></label>
               <label for="authPassword">密碼<input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="6" required /></label>
               <label id="authConfirmRow" for="authConfirmPassword" hidden>確認密碼<input id="authConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" /></label>
@@ -281,14 +302,30 @@
           <p class="modal-kicker">CHOOSE YOUR FIRST PATH</p>
           <h2 id="classSelectTitle">選擇初始職業</h2>
           <p>職業會決定初始武器、技能樹同戰鬥動作。</p>
-          <div class="class-choice-grid">
-            <button class="class-choice-card" type="button" data-class-choice="warrior">
-              <canvas id="warriorClassCanvas" width="220" height="230" aria-hidden="true"></canvas>
-              <strong>戰士</strong><small>刀劍 · 見習燈刃 · 瞬刃</small>
-            </button>
-            <button class="class-choice-card" type="button" data-class-choice="fighter">
-              <canvas id="fighterClassCanvas" width="220" height="230" aria-hidden="true"></canvas>
+          <div class="class-choice-grid class-choice-grid--six">
+            <button class="class-choice-card is-default" type="button" data-class-choice="fighter" aria-current="true">
+              <canvas id="fighterClassCanvas" class="class-choice-preview-canvas" width="220" height="260" aria-hidden="true"></canvas>
               <strong>格鬥士</strong><small>拳套 · 見習拳套 · 正拳</small>
+            </button>
+            <button class="class-choice-card is-locked" type="button" data-class-choice="warrior" data-class-locked="true">
+              <img class="class-choice-sprite" src="assets/locomotion/warrior-v1.png" alt="戰士" />
+              <strong>戰士</strong><small>刀劍 · 近戰攻守</small>
+            </button>
+            <button class="class-choice-card is-locked" type="button" data-class-choice="elementalist" data-class-locked="true">
+              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <strong>元素使</strong><small>元素魔法 · 遠距術式</small>
+            </button>
+            <button class="class-choice-card is-locked" type="button" data-class-choice="hexer" data-class-locked="true">
+              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <strong>咒印師</strong><small>咒印 · 弱化 · 陷阱</small>
+            </button>
+            <button class="class-choice-card is-locked" type="button" data-class-choice="cleric" data-class-locked="true">
+              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <strong>神官</strong><small>治療 · 守護 · 支援</small>
+            </button>
+            <button class="class-choice-card is-locked" type="button" data-class-choice="shadow" data-class-locked="true">
+              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <strong>影行者</strong><small>高機動 · 奇襲 · 弱化</small>
             </button>
           </div>
           <button id="classSelectCancel" class="secondary-button" type="button">返回標題</button>
@@ -345,7 +382,7 @@
             <h2 id="abandonCommissionTitle">確定放棄此委託？</h2>
             <p id="abandonCommissionDescription">目前進度將會失去，之後可以重新接受。</p>
             <div class="modal-actions abandon-commission-actions">
-              <button id="abandonCommissionConfirmButton" class="danger-button" type="button">確定放棄</button>
+              <button id="abandonCommissionConfirmButton" class="facility-action-button" type="button">確定放棄</button>
               <button id="abandonCommissionCancelButton" class="secondary-button" type="button">取消</button>
             </div>
           </div>
@@ -398,13 +435,14 @@
             <strong id="systemSettingsTitle">系統</strong>
             <button id="systemSettingsCloseButton" class="system-settings-close" type="button" aria-label="關閉系統設定">×</button>
           </header>
-          <button id="soundButton" class="system-setting-row" type="button" aria-label="關閉音樂" aria-pressed="true">
-            <span>音樂</span>
-            <span class="system-toggle-track" aria-hidden="true"><i></i></span>
-          </button>
-          <div class="system-account-row">
-            <span id="systemAccountText">未登入 · 本機保存</span>
-            <button id="systemLogoutButton" class="account-link-button" type="button" hidden>登出</button>
+          <div class="system-volume-row">
+            <span class="system-volume-heading"><span>音量</span><strong id="musicVolumeValue">70%</strong></span>
+            <span class="system-volume-control"><input id="musicVolumeSlider" type="range" min="0" max="100" step="1" value="70" aria-label="音量" /><button id="volumeMuteButton" class="system-volume-mute-button" type="button" aria-label="靜音" aria-pressed="false"><span aria-hidden="true">🔊</span></button></span>
+          </div>
+          <div class="system-account-card">
+            <span class="system-account-avatar" aria-hidden="true">●</span>
+            <span class="system-account-copy"><small>帳戶</small><strong id="systemAccountText">未登入</strong><span id="systemAccountMeta">需要登入才可以開始遊戲</span></span>
+            <button id="systemLogoutButton" class="system-logout-button" type="button" hidden>登出</button>
           </div>
         </section>
 
@@ -490,7 +528,7 @@
           "map/weapon-navigation.js",
           "map/inn-navigation.generated.js",
           "map/inn-navigation.js",
-          "map/item-navigation.generated.js",
+          "map/item-navigation.generated.js?v=20260912-01",
           "map/item-navigation.js",
           "map/guild-navigation.generated.js",
           "map/guild-navigation.js",
@@ -510,20 +548,20 @@
           "expansion-core.js?v=20260910-02",
           "expansion-world.js",
           "guild-commission-core.js",
-          "tactics-core.js",
+          "tactics-core.js?v=20260912-01",
           "skill-core.js?v=20260910-12",
           "monster-ai.js",
-          "audio-core.js?v=20260910-04",
+          "audio-core.js?v=20260911-01",
           "main-town-bgm-loop.js?v=20260910-04",
           "save-system.js",
           "firebase-config.js",
-          "firebase-client.js",
+          "firebase-client.js?v=20260911-01",
           "cloud-save.js",
           "save-persistence.js",
           "fighter-effects.js",
           "locomotion.js",
           "character-art.js",
-          "game.js?v=20260911-03",
+          "game.js?v=20260912-02",
         ];
         for (const src of scripts) {
           document.write(`<script src="${asset(src)}"><\/script>`);
@@ -537,6 +575,7 @@
           console.info("[Everrealm DEV] Service Worker disabled; code assets are cache-busted for this page.");
           return;
         }
+        if (!/^https?:$/.test(window.location.protocol)) return;
         if (!("serviceWorker" in navigator)) return;
         const hadController = Boolean(navigator.serviceWorker.controller);
         let refreshing = false;
@@ -549,7 +588,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260911-17", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260912-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

@@ -24,3 +24,7 @@ mountain track, so crossing between those maps does not restart the music.
 - Autoplay rejection is caught so audio policy cannot break gameplay. If a refresh/load is restored while music is enabled, the first subsequent pointer/keyboard user gesture retries the active map track immediately; playback must not wait for a later map transition.
 - The debug snapshot reports the selected source, paused/muted state, loop state
   and `activeInstances`; it must never report more than one active instance.
+
+## Volume control
+
+System settings expose a persistent BGM volume slider (`0–100%`). Runtime stores it as `everrealm-bgm-volume-v1` and applies the same normalized volume to both the map BGM manager and the battle BGM element. This volume control is for background music; the existing music on/off toggle remains separate.

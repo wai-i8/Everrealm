@@ -97,13 +97,36 @@
     return relativePosition(source, facing, destination) !== "rear";
   }
 
-  function positionalAttack(attacker, defender, options = {}) {
-    const attackerCell = cellOf(attacker);
+  function positionalApproachCell(attacker, defender, options = {}) {
+    const origin = cellOf(options.origin || attacker);
     const defenderCell = cellOf(defender);
-    const position = relativePosition(defenderCell, defender && defender.facing, attackerCell);
+    if (!origin || !defenderCell || sameCell(origin, defenderCell)) return origin;
+
+    const suppliedPath = Array.isArray(options.attackPath)
+      ? options.attackPath.filter(validCell).map(copyCell)
+      : [];
+    const facing = options.facing || attacker?.facing || "down";
+    const route = suppliedPath.length
+      ? suppliedPath
+      : facingOrthogonalPriority(origin, defenderCell, facing);
+    const impactIndex = route.findIndex((cell) => sameCell(cell, defenderCell));
+    if (impactIndex >= 0) return impactIndex > 0 ? copyCell(route[impactIndex - 1]) : copyCell(origin);
+
+    // Area/pathless effects have no interception route, but positional damage
+    // still needs a deterministic incoming direction.  Derive the same virtual
+    // forward-first orthogonal route that an ordinary linear attack would use.
+    const virtualRoute = facingOrthogonalPriority(origin, defenderCell, facing);
+    if (!virtualRoute.length) return copyCell(origin);
+    return virtualRoute.length > 1 ? copyCell(virtualRoute[virtualRoute.length - 2]) : copyCell(origin);
+  }
+
+  function positionalAttack(attacker, defender, options = {}) {
+    const defenderCell = cellOf(defender);
+    const approachCell = positionalApproachCell(attacker, defender, options);
+    const position = relativePosition(defenderCell, defender && defender.facing, approachCell);
     const defaults = POSITIONAL_MULTIPLIERS;
     const multiplier = Math.max(0, finiteStat(options[position], defaults[position]));
-    return { position, multiplier };
+    return { position, multiplier, approachCell };
   }
 
   function sameCell(a, b) {
@@ -1697,12 +1720,17 @@
 
   function applyDamage(unit, amount) {
     const hpBefore = Math.max(0, Math.trunc(finiteStat(unit && unit.hp, 0)));
-    const requested = Math.max(0, Math.trunc(finiteStat(amount, 0)));
-    const damage = Math.min(hpBefore, requested);
-    const hpAfter = hpBefore - damage;
+    const requestedDamage = Math.max(0, Math.trunc(finiteStat(amount, 0)));
+    const appliedDamage = Math.min(hpBefore, requestedDamage);
+    const hpAfter = hpBefore - appliedDamage;
     return {
       unit: { ...unit, hp: hpAfter, alive: hpAfter > 0 },
-      damage,
+      // `damage` remains the actual HP loss for compatibility with callers that
+      // need health accounting; presentation uses requestedDamage so an
+      // overkill hit still reports the attack's real calculated strength.
+      damage: appliedDamage,
+      requestedDamage,
+      appliedDamage,
       hpBefore,
       hpAfter,
       defeated: hpBefore > 0 && hpAfter === 0,

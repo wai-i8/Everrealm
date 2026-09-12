@@ -7,7 +7,7 @@
 - 場景物件：`assets/environment-atlas-v5.png`，1536 × 1920、4 × 5。由 `tools/repack-environment-atlas.ps1` 重排；每件物件的底座、根部及接地陰影都完整收納於單格，修正 v4 跨格及上下裁切。
 - 地面：`assets/terrain-atlas-v1.png`，4 × 3。草地、泥路、河水、石路、公會／商店地板與地毯、坑道地面、河岸及木橋全部使用 bitmap tile。
 - 室內／坑道物件：`assets/interior-props-v2.png`，4 × 3。室內委託板、長桌、屏風、人偶、旗幟、壁爐、壁燈、符文燈、菇叢、瓦礫、裂地及石柱。
-- 霧獸舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy runtime/fallback**；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
+- 霧獸舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy migration reference**；正式 runtime 唔可以因新 asset 未載入／失敗而自動跌返舊圖；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
 - 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
 - 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及 legacy 傳送門；flattened interior runtime 不把 marker 畫喺場景上。
@@ -15,7 +15,7 @@
 - 主城實體轉場：普通建築門同東側 passage 使用 semantic physical-door／physical-passage hit region；`assets/town-door-marker-v1.png` 同 `assets/town-gate-east-v1.png` 只保留作歷史／製作來源，不屬普通 transition runtime art。runtime 不顯示門口菱形、入口 label 或 talk prompt。
 - UI：`assets/ui/ui-visual-atlas-v1.png` 係共用 fantasy window、button、tab、slot、skill-node 嘅 bitmap source atlas；HTML/CSS 負責 9-slice 式可伸縮組合，`docs/UI_SYSTEM.md` 負責玩家可見嘅組合與狀態規則。
 - 探索 HUD pull-tab：`assets/ui/ui-sidebar-toggle-v1.png` 係 genuinely transparent、單一 bitmap 三角收合／展開控制；runtime 只可縮放佢嘅 hit area，唔可以用 CSS border、文字 glyph 或額外暗色 rail 代替 collapsed state。
-- 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 優先使用此正式資產，Canvas 床形只作載入前 fallback。
+- 旅店／療癒床：`assets/inn-bed-v1.png` 係可重用嘅透明 bitmap 床鋪；室內 bed prop 使用此正式資產；asset 未載入／失敗時暫時唔繪製，唔再畫 Canvas 床形 placeholder。
 - 物品圖示：`assets/item-icon-atlas-v1.png`，4 × 4。藥水、技能書、素材及貨幣；每格都係真正透明 PNG。
 - 裝備圖示：`assets/equipment-icon-atlas-v1.png`，4 × 4。依裝備 catalog 順序排列十五件裝備，最後一格保留透明。
 - 主角舊版多動作 atlas：`hero-anim-down-v3.png`、`hero-anim-up-v3.png`、`hero-anim-right-v3.png` 可保留作 attack／death／特殊動作兼容；**Idle + Walk locomotion 由新統一 28-frame locomotion atlas 接管**。新標準四方向必須各自有正式 frame，唔以向右圖鏡像假扮全部方向。
@@ -38,7 +38,7 @@ Guild、Weapon Shop、Inn、General Store 同 Hospital 五個室內場景使用�
 
 - visible master art：`assets/{guild|weapon|inn|item|hospital}/{scene}.png`，所有地板、牆、家具、裝飾及可見 NPC 都已烘焙入畫面；runtime 只顯示呢張圖。
 - authoring navigation art：同一資料夾嘅 `{scene}_walkable.png`，只供開發期生成器讀取，唔會由 browser runtime 載入；白色係 walkable allowlist、洋紅色係 NPC occupancy、青色係 exit／door region。
-- 每張圖固定為 `1672 × 941`，只接受精確不透明 `#ffffff`、`#ff00ff`、`#00ffff` authored colors；其他像素唔會被推導成 collision。
+- flattened 室內 master／authoring pair 必須使用相同 native dimensions；`1672 × 941` 只係舊基準，現時亦支援高解析度 pair（例如 Guild `3344 × 1882`、General Store `2508 × 2508`）。Authoring 只接受精確不透明 `#ffffff`、`#ff00ff`、`#00ffff`；其他像素唔會被推導成 collision。
 
 `tools/generate-flattened-navigation.js` 以 deterministic generator 將 authoring PNG 編譯成 `map/*-navigation.generated.js`；`map/flattened-navigation.js` 提供所有場景共用嘅 fail-closed feet-disk resolver（半徑 `3 px`）。NPC／exit region、anchor、bbox、centroid 同 source hash 都保留喺 generated package，map factory 只接入 semantic interaction、service data 同 transition contract。瀏覽器唔應掃描 PNG、由 visible art alpha 推導 collision，亦唔應把 authoring overlay 顯示畀玩家。
 
@@ -397,7 +397,7 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 可以暫時保留作：
 
 - 造型參考；
-- fallback；
+- migration 對照；
 - migration 前兼容。
 
 但新工作方向係：
@@ -451,7 +451,7 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 5. 新 standard mobile unit atlas 必須驗證固定 `4 × 7 = 28 frames`、四方向各 1 Idle + 6 Walk，唔可以缺格、重複錯格或方向次序錯。
 6. 必須分別喺 **探索地圖** 同 **戰鬥地圖** 播放同一 unit 嘅四方向 walk；兩邊都要有自然腳步動畫，正式 runtime 不接受靜止 sprite 純平移。
 7. 普通玩家／怪物／Familiar 必須驗證共用 fixed cell geometry + foot anchor 後，唔需要 per-frame／per-unit magic offset。
-8. Legacy atlas 只作 migration/fallback；如果問題根源係來源 atlas 分格唔可靠，優先重建 28-frame standardized locomotion asset，唔好繼續逐格 patch。
+8. Legacy atlas 只作 migration/reference；正式 runtime 不作 load-error fallback；如果問題根源係來源 atlas 分格唔可靠，優先重建 28-frame standardized locomotion asset，唔好繼續逐格 patch。
 9. 如任何一項仍有問題，不可標記完成；必須修正 source frame／repack／anchor metadata 後重新測試。
 10. 視覺問題修正後，再做一次 regression test，確認 collision、角色世界座標、名稱／任務標記、戰鬥朝向及其他 renderer 行為未因美術修正而改變。
 
@@ -563,7 +563,6 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 - **Canvas 係畫布／engine；正式 battlefield 內容以 bitmap art 為主。**
 - 純 Canvas 幾何 battlefield 只可作：
   - debug；
-  - asset 未載入時 fallback；
   - gameplay overlay；
   - selection／route／range effect。
 - 正式地面、背景、石、樹、灌木、水、裂地、石柱等全部應使用正式 bitmap asset。
@@ -627,7 +626,7 @@ assets/terrain-atlas-v1.png                               dirt／grass ground ti
 assets/environment-atlas-v5.png                           rock obstacle frame
 ```
 
-Renderer 只喺 `BattleContext.theme === "mountain"` 時啟用呢套 presentation；遠景以低對比 cover 方式鋪滿 viewport，board 內先以 `mountain-battle-ground-v3.png` 作為整塊地表 bitmap，再加低權重碎石／乾草 decal、正式 rock prop 同單位 contact shadow。地表 bitmap 應該以整塊 board 為單位處理，中央保持低噪音，邊緣以少量山石／乾草同低對比色調自然融入外圍風景；避免 raised hard-board frame、逐格重複或規律條紋。正式 terrain atlas 只作 asset 未載入時 fallback。Grid、移動／攻擊範圍、target、名稱、HP 同 skill effect 仍然係獨立 gameplay overlay，唔會燒入任何背景或地面素材。
+Renderer 只喺 `BattleContext.theme === "mountain"` 時啟用呢套 presentation；遠景以低對比 cover 方式鋪滿 viewport，board 內先以 `mountain-battle-ground-v3.png` 作為整塊地表 bitmap，再加低權重碎石／乾草 decal、正式 rock prop 同單位 contact shadow。地表 bitmap 應該以整塊 board 為單位處理，中央保持低噪音，邊緣以少量山石／乾草同低對比色調自然融入外圍風景；避免 raised hard-board frame、逐格重複或規律條紋。正式 primary battle art 未載入／失敗時，對應 layer 暫時留空；唔再以 legacy terrain／procedural Canvas 當載入 fallback。Grid、移動／攻擊範圍、target、名稱、HP 同 skill effect 仍然係獨立 gameplay overlay，唔會燒入任何背景或地面素材。
 
 Height-aware visual contract：目前山地遭遇戰嘅 `heightMap` 仍然全部係 `0`，所以唔以純視覺假造高低差；如果日後 map context 提供非零高度，tile renderer 會喺該 cell 加 top highlight／lower shadow lip，並由 battle rules 使用同一份 height data，保持畫面同實際 tile logic 一致。
 
@@ -766,4 +765,10 @@ decals
 | 16 | 公會櫃台 | 18 | 裝備展示架 |
 | 17 | 室內書架 | 19 | 室內鍛造台 |
 
-所有 bitmap 未完成載入或載入失敗時，遊戲可退回簡化 Canvas 佔位圖；佔位圖只作容錯，唔係正式畫風。碰撞箱、傳送點同任務座標完全唔受美術尺寸影響。
+所有正式 bitmap 未完成載入或載入失敗時，對應 visual 暫時唔繪製；runtime **唔可以**自動退回舊 Canvas／procedural placeholder。碰撞箱、傳送點同任務座標仍完全唔受美術載入狀態影響。
+
+## Standalone consumable icon
+
+- `assets/items/weak-potion-v1.png` is the dedicated transparent icon for `弱氣之藥`.
+- `assets/items/skill-envelope-v1.png` is the dedicated transparent bitmap for `技能書信封`; runtime must use this artwork instead of the old line-art/SVG placeholder.
+- Standalone consumable/reward art uses transparent PNG, centred subject, no matte/white fringe, and may coexist with `assets/item-icon-atlas-v1.png`; runtime chooses the standalone source from item data when `iconSrc` or the dedicated reward mapping is present.

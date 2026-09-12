@@ -167,7 +167,8 @@
     if (item.classId && base.classId && item.classId !== base.classId) return { ok: false, reason: "class", item };
     if (item.purchasable === false) return { ok: false, reason: "not-for-sale", item };
     if (base.ownedEquipment.includes(item.id)) return { ok: false, reason: "already-owned", item };
-    if (base.level < item.requiredLevel) return { ok: false, reason: "level", item };
+    // Required level governs wearing the item, not buying it.  Players may
+    // purchase higher-level equipment in advance and keep it in inventory.
     if (base.coins < item.cost) return { ok: false, reason: "coins", item };
     return { ok: true, reason: null, item };
   }

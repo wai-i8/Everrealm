@@ -80,13 +80,13 @@ Hospital、Guild、Equipment Shop、Inn、Item／General Store 同 Main Town 使
 | `guild` | `assets/guild/guild.png` | `assets/guild/guild_walkable.png` | `map/guild-navigation.generated.js` |
 | `world` Main Town | `assets/main-town/maintown.jpg` | `assets/main-town/maintown_walkable.jpg` | `map/main-town-navigation.generated.js` |
 
-室內 pair 必須保持 `1672 × 941` 原圖 pixel coordinate space。Main Town pair 必須保持 `7680 × 4320`。室內 generator 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。Main Town JPG compiler 以 supplied authoring image 的近色分類：白色係 walkable、六個青色 component 係固定 transition、粉紅色 `[255,0,255]` component 係 deck configuration interaction，其他像素 blocked。兩者都輸出 hash、connected-component bbox／centroid／feet anchor 同 RLE runtime mask；generated file 明確標示不可手改。
+Flattened 室內 pair 必須保持各自 master／authoring 圖完全相同嘅原生 pixel coordinate space；`1672 × 941` 係舊基準尺寸，但高解析度室內可以直接使用自己嘅 native dimensions（例如 Guild `3344 × 1882`、General Store `2508 × 2508`），唔可以 resize 返舊尺寸。Main Town pair 必須保持 `7680 × 4320`。室內 generator 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。Main Town JPG compiler 以 supplied authoring image 的近色分類：白色係 walkable、六個青色 component 係固定 transition、粉紅色 `[255,0,255]` component 係 deck configuration interaction，其他像素 blocked。兩者都輸出 hash、connected-component bbox／centroid／feet anchor 同 RLE runtime mask；generated file 明確標示不可手改。
 
 Main Town runtime 保留 supplied `7680 × 4320` native visible artwork、gameplay world 同 navigation pixels，採用 1:1 world-to-source mapping；camera 只從 native world 以 viewport world size crop 圍繞玩家取景，唔將全張 8K scene fit 入 gameplay viewport，亦不得套用舊 compact-map baseline、第二層圖片縮放、CSS 放大或獨立 input scale。background、entity、feet pivot、collision 同 screen-to-world click conversion 必須共用同一個 camera transform；far／mid／near 只係相機視角倍率，DPR 只影響 Canvas backing/output resolution，唔改變 world viewport。
 
 ### 2.3 Native map world and shared camera
 
-Every supplied scene image is its own gameplay world: native master width and height are the map's `pixelWidth` and `pixelHeight`, and the paired navigation package uses the same coordinate space. A 7680 × 4320 town is intentionally larger than a 1672 × 941 interior; neither is normalized to an old logical map size, fit to the viewport, or resized because of image resolution. NPCs, portals, feet anchors, click targets and movement all remain in those native pixels.
+Every supplied scene image is its own gameplay world: native master width and height are the map's `pixelWidth` and `pixelHeight`, and the paired navigation package uses the same coordinate space. A 7680 × 4320 town can coexist with 1672 × 941, 2508 × 2508, or 3344 × 1882 interiors; none is normalized to an old logical map size, fit to the viewport, or resized because of image resolution. NPCs, portals, feet anchors, click targets and movement all remain in those native pixels.
 
 One native scene pixel is one world unit. Every authored scene therefore keeps its own native dimensions as world bounds; there is no common logical size, old-world projection, resolution compensation, fit-to-map transform or automatic upscaling. Paired navigation data must use the same native dimensions and coordinates as the visible scene.
 
@@ -401,7 +401,7 @@ Biome data 最低：
 
 ## 9. Interaction Point
 
-NPC、門、工作台、委託板等都使用 interaction point／range。現行地圖暫停使用 runtime 寶箱。Flattened interior service NPC 使用 shared authored-region contract：service reach 為 `160 px`，命中區為 authored magenta region 外擴 `18 px`，距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
+NPC、門、工作台、委託板等都使用 interaction point／range。現行地圖暫停使用 runtime 寶箱。Flattened interior service NPC 使用 shared authored-region contract：以 `1672 × 941` authoring scene 為基準，service reach 為 `160 px`、命中 padding 為 `18 px`；較高解析度但同 authored scale 嘅 flattened scene 會按 source resolution 等比例放大（例如 `3344 × 1882` 公會使用 `320 px` reach／`36 px` padding）。距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
 
 ```js
 {

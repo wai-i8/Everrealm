@@ -18,7 +18,7 @@
     41: 22200, 42: 22900, 43: 23600, 44: 24300, 45: 25000,
   });
 
-  const DEFAULT_CLASS_ID = "warrior";
+  const DEFAULT_CLASS_ID = "fighter";
   const CLASS_IDS = Object.freeze(["warrior", "fighter"]);
 
   function buildLevelTable(classId) {

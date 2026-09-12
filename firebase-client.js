@@ -141,12 +141,24 @@
     });
   }
 
-  function createAccount(email, password) {
+  async function createAccount(email, password, options = {}) {
     forceNextSessionClaim = true;
-    return authCall("createUserWithEmailAndPassword", String(email || "").trim(), String(password || "")).catch((error) => {
+    try {
+      const credential = await authCall("createUserWithEmailAndPassword", String(email || "").trim(), String(password || ""));
+      const displayName = String(options.displayName || "").trim().slice(0, 24);
+      if (displayName && credential?.user) {
+        try {
+          const { authSdk } = await ready;
+          await authSdk.updateProfile(credential.user, { displayName });
+        } catch (profileError) {
+          console.warn("Everrealm account created, but Firebase Auth displayName sync failed.", profileError);
+        }
+      }
+      return credential;
+    } catch (error) {
       forceNextSessionClaim = false;
       throw error;
-    });
+    }
   }
 
   const api = {

@@ -10,6 +10,7 @@
   const MAIN_TOWN_LOOP_URL = "assets/audio/bgm/maintown-loop.mp3?v=20260910-03";
   const INTRO_END_SECONDS = 39.636462585034014;
   const MAIN_TOWN_GAIN = 0.58;
+  const LOCAL_FILE_MODE = root.location?.protocol === "file:";
 
   class MainTownLoopPlayer {
     constructor() {
@@ -163,6 +164,9 @@
   const originalCreateBgmManager = api.createBgmManager.bind(api);
 
   function createBgmManager(options = {}) {
+    // fetch() cannot reliably read local file:// MP3s in Chromium.  The base
+    // manager uses an <audio> element, which is the correct local-file path.
+    if (LOCAL_FILE_MODE) return originalCreateBgmManager(options);
     const base = originalCreateBgmManager(options);
     const mainTown = new MainTownLoopPlayer();
     let enabled = options.enabled !== false;

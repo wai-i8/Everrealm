@@ -57,6 +57,7 @@
   let world = overworld;
   const SOUND_KEY = "everrealm-sound";
   const LEGACY_SOUND_KEY = "lanternbound-sound";
+  const BGM_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const ZOOM_KEY = "everrealm-zoom";
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
@@ -99,7 +100,9 @@
   const systemButton = document.getElementById("systemButton");
   const systemSettingsPopover = document.getElementById("systemSettingsPopover");
   const systemSettingsCloseButton = document.getElementById("systemSettingsCloseButton");
-  const soundButton = document.getElementById("soundButton");
+  const volumeMuteButton = document.getElementById("volumeMuteButton");
+  const musicVolumeSlider = document.getElementById("musicVolumeSlider");
+  const musicVolumeValue = document.getElementById("musicVolumeValue");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
@@ -114,6 +117,8 @@
   const authKicker = document.getElementById("authKicker");
   const authTitle = document.getElementById("authTitle");
   const authMessage = document.getElementById("authMessage");
+  const authCharacterNameRow = document.getElementById("authCharacterNameRow");
+  const authCharacterName = document.getElementById("authCharacterName");
   const authEmail = document.getElementById("authEmail");
   const authPassword = document.getElementById("authPassword");
   const authConfirmRow = document.getElementById("authConfirmRow");
@@ -127,6 +132,7 @@
   const legacyUseButton = document.getElementById("legacyUseButton");
   const legacyStartButton = document.getElementById("legacyStartButton");
   const systemAccountText = document.getElementById("systemAccountText");
+  const systemAccountMeta = document.getElementById("systemAccountMeta");
   const systemLogoutButton = document.getElementById("systemLogoutButton");
   const interactionPrompt = document.getElementById("interactionPrompt");
   const interactionText = document.getElementById("interactionText");
@@ -137,6 +143,7 @@
   const systemLogToggleButton = document.getElementById("systemLogToggleButton");
   const systemLogDragHandle = document.getElementById("systemLogDragHandle");
   const systemLogMessages = document.getElementById("systemLogMessages");
+  const systemLogScrollZone = document.getElementById("systemLogScrollZone");
   const guildCommissionDetailPanel = document.getElementById("guildCommissionDetailPanel");
   const guildCommissionDetailContent = document.getElementById("guildCommissionDetailContent");
   const guildCommissionDetailCloseButton = document.getElementById("guildCommissionDetailCloseButton");
@@ -232,6 +239,7 @@
   let savePersistence = null;
   let authUser = null;
   let authMode = "login";
+  let pendingRegistrationCharacterName = "";
   let authSyncToken = 0;
   let authStateResolved = false;
   let legacyClaimUid = null;
@@ -283,6 +291,7 @@
   let systemLogEntries = [];
   let systemLogSerial = 0;
   let systemLogDragGesture = null;
+  let systemLogScrollGesture = null;
   let systemLogCollapsed = false;
   try { systemLogCollapsed = localStorage.getItem(SYSTEM_LOG_COLLAPSED_KEY) === "1"; } catch (_) {}
   let remoteSessionKickMessage = "";
@@ -354,7 +363,6 @@
   let currentZone = "米克雷帝國";
   let screenShake = 0;
   let screenFlash = 0;
-  let rainOffset = 0;
   let enemySerial = 100;
   let autoTarget = null;
   let battle = null;
@@ -373,7 +381,14 @@
   let automaticPortalReady = false;
   let battleToken = 0;
   let soundEnabled = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY) !== "off";
-  const bgm = Bgm.createBgmManager({ enabled: soundEnabled });
+  let bgmVolume = Core.clamp(Number(readPreference(BGM_VOLUME_KEY, "0.70")), 0, 1);
+  if (!Number.isFinite(bgmVolume)) bgmVolume = .7;
+  let lastAudibleBgmVolume = bgmVolume > 0 ? bgmVolume : .7;
+  // A stored 0% volume is semantically muted. Keep the speaker state, slider
+  // and persisted audio behavior in sync instead of showing an active speaker
+  // beside a zero-value control.
+  if (bgmVolume <= 0) soundEnabled = false;
+  const bgm = Bgm.createBgmManager({ enabled: soundEnabled, volume: bgmVolume });
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
@@ -394,7 +409,7 @@
   if (battleBgmAudio) {
     battleBgmAudio.loop = true;
     battleBgmAudio.preload = "auto";
-    battleBgmAudio.volume = .66;
+    battleBgmAudio.volume = bgmVolume;
   }
   let pageAudioSuspended = document.visibilityState !== "visible";
   let audioGestureUnlocked = false;
@@ -427,8 +442,8 @@
     const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
     const mapPlaying = mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
     if (audioGestureUnlocked && (battlePlaying || mapPlaying)) return;
-    resumeGameAudio();
     audioGestureUnlocked = true;
+    resumeGameAudio();
   }
 
   function startBattleBgm() {
@@ -481,20 +496,6 @@
   const atmosphereVignetteCache = document.createElement("canvas");
   const atmosphereVignetteCtx = atmosphereVignetteCache.getContext("2d");
   let atmosphereVignetteCacheKey = "";
-  const atmosphereFogSprites = Array.from({ length: 7 }, (_, index) => {
-    const fogCanvas = document.createElement("canvas");
-    fogCanvas.width = 360;
-    fogCanvas.height = 240;
-    const fogCtx = fogCanvas.getContext("2d");
-    const fogRadius = 130 + index * 8;
-    const gradient = fogCtx.createRadialGradient(180, 120, 0, 180, 120, fogRadius);
-    gradient.addColorStop(0, "rgba(190,205,222,.035)");
-    gradient.addColorStop(1, "rgba(190,205,222,0)");
-    fogCtx.fillStyle = gradient;
-    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
-    return fogCanvas;
-  });
-
   const miniMapBackgroundCache = document.createElement("canvas");
   const miniMapBackgroundCacheCtx = miniMapBackgroundCache.getContext("2d");
   let miniMapBackgroundCacheKey = "";
@@ -529,7 +530,7 @@
       this.suspended = document.visibilityState !== "visible";
     }
     ensure() {
-      if (!soundEnabled || this.suspended || document.visibilityState !== "visible") return null;
+      if (!soundEnabled || this.suspended || document.visibilityState !== "visible" || !audioGestureUnlocked) return null;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
       if (!this.context) this.context = new AudioContext();
@@ -607,8 +608,12 @@
     Object.assign(player, fresh);
   }
 
+  function normalizeCharacterName(value) {
+    return String(value || "").trim().replace(/\s+/g, " ").slice(0, 24);
+  }
+
   function playerDisplayName() {
-    return String(player?.name || "").trim().slice(0, 24) || "阿巡";
+    return normalizeCharacterName(player?.name) || "阿巡";
   }
 
   function playerStats() {
@@ -898,7 +903,14 @@
     world = overworld;
     clearExploreMovePath();
     pendingClickInteractionId = null;
+    const registeredName = normalizeCharacterName(
+      pendingRegistrationCharacterName
+      || (savePersistence?.hasCloudSave?.() ? player?.name : authenticatedUser()?.displayName)
+      || authenticatedUser()?.displayName
+      || player?.name,
+    );
     resetPlayer();
+    if (registeredName) player.name = registeredName;
     resetExpansionProgress(classId);
     openedChests = new Set();
     pendingLevelUps = 0;
@@ -921,6 +933,7 @@
     updateHud(true);
     canvas.focus({ preventScroll: true });
     if (!testingMode) saveImportant(false);
+    if (registeredName) pendingRegistrationCharacterName = "";
   }
 
   function requestNewGame() {
@@ -952,7 +965,7 @@
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
-    player.name = String(save.player?.name || "阿巡").trim().slice(0, 24) || "阿巡";
+    player.name = normalizeCharacterName(save.player?.name) || "阿巡";
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
     playTime = save.playTime;
@@ -1041,6 +1054,8 @@
     const registering = authMode === "register";
     authKicker.textContent = registering ? "CREATE ACCOUNT" : "ACCOUNT";
     authTitle.textContent = registering ? "建立旅程帳戶" : "登入旅程";
+    authCharacterNameRow.hidden = !registering;
+    authCharacterName.required = registering;
     authConfirmRow.hidden = !registering;
     authConfirmPassword.required = registering;
     authSubmitButton.querySelector("span").textContent = registering ? "建立帳戶" : "登入";
@@ -1078,7 +1093,10 @@
     titleActions.hidden = !canPlay;
     accountButton.hidden = !authStateResolved || signedIn;
     titleLogoutButton.hidden = !signedIn;
-    systemAccountText.textContent = signedIn ? statusLabel : "需要登入才可以開始遊戲";
+    if (systemAccountText) systemAccountText.textContent = signedIn ? email : "未登入";
+    if (systemAccountMeta) systemAccountMeta.textContent = signedIn
+      ? status === "cloud-error" ? "雲端同步有問題" : status === "syncing" ? "正在同步雲端進度…" : "雲端進度已同步"
+      : authStateResolved ? "需要登入才可以開始遊戲" : "正在確認帳戶…";
     systemLogoutButton.hidden = !signedIn;
     continueButton.hidden = !canPlay || !savePersistence?.hasCloudSave?.();
     exploreSidebar.hidden = !(canPlay && mode !== "title");
@@ -1143,6 +1161,7 @@
     legacyClaimUid = null;
     syncAccountStatus(user ? "syncing" : undefined);
     if (!user) {
+      pendingRegistrationCharacterName = "";
       savePersistence?.deactivateUser();
       clearGameplayState();
       syncAccountStatus();
@@ -1173,6 +1192,12 @@
     const result = await savePersistence?.resolveUser(authenticatedUid());
     if (token !== authSyncToken || authUser?.uid !== user.uid) return;
     syncAccountStatus(savePersistence?.getCloudStatus());
+    if (result?.status === "new-account") {
+      const registeredName = normalizeCharacterName(pendingRegistrationCharacterName || user.displayName);
+      if (registeredName) player.name = registeredName;
+    } else if (result?.status === "cloud-loaded") {
+      pendingRegistrationCharacterName = "";
+    }
     if (result?.status === "legacy-claim") {
       legacyClaimUid = user.uid;
       legacySaveMessage.textContent = "你可以只喺呢個帳戶使用，或者將本機角色安全連結到雲端。";
@@ -1188,6 +1213,12 @@
     event.preventDefault();
     const email = authEmail.value.trim();
     const password = authPassword.value;
+    const characterName = authMode === "register" ? normalizeCharacterName(authCharacterName.value) : "";
+    if (authMode === "register" && !characterName) {
+      setAuthMessage("請輸入角色名稱。", "error");
+      authCharacterName.focus({ preventScroll: true });
+      return;
+    }
     if (authMode === "register" && password !== authConfirmPassword.value) {
       setAuthMessage("兩次輸入嘅密碼唔一致。", "error");
       return;
@@ -1195,10 +1226,15 @@
     authSubmitButton.disabled = true;
     setAuthMessage("處理中…");
     try {
-      if (authMode === "register") await Firebase.createAccount(email, password);
-      else await Firebase.signIn(email, password);
+      if (authMode === "register") {
+        pendingRegistrationCharacterName = characterName;
+        await Firebase.createAccount(email, password, { displayName: characterName });
+      } else {
+        await Firebase.signIn(email, password);
+      }
       closeAuthPanel(true);
     } catch (error) {
+      if (authMode === "register") pendingRegistrationCharacterName = "";
       setAuthMessage(authErrorMessage(error), "error");
     } finally {
       authSubmitButton.disabled = false;
@@ -1354,10 +1390,47 @@
   }
 
   function syncSystemSoundControl() {
-    if (!soundButton) return;
-    soundButton.setAttribute("aria-pressed", String(soundEnabled));
-    soundButton.setAttribute("aria-label", soundEnabled ? "關閉音樂" : "開啟音樂");
-    soundButton.dataset.enabled = soundEnabled ? "true" : "false";
+    const effectiveVolume = soundEnabled ? bgmVolume : 0;
+    if (musicVolumeSlider) musicVolumeSlider.value = String(Math.round(effectiveVolume * 100));
+    if (musicVolumeValue) musicVolumeValue.textContent = `${Math.round(effectiveVolume * 100)}%`;
+    if (volumeMuteButton) {
+      volumeMuteButton.setAttribute("aria-pressed", String(!soundEnabled));
+      volumeMuteButton.setAttribute("aria-label", soundEnabled ? "靜音" : "取消靜音");
+      const icon = volumeMuteButton.querySelector("span");
+      if (icon) icon.textContent = soundEnabled ? "🔊" : "🔇";
+    }
+    systemSettingsPopover?.style.setProperty("--music-volume", String(effectiveVolume));
+  }
+
+  function setBgmVolume(value, persist = true) {
+    bgmVolume = Core.clamp(Number(value) || 0, 0, 1);
+    if (bgmVolume > 0) lastAudibleBgmVolume = bgmVolume;
+    bgm.setVolume?.(bgmVolume);
+    if (battleBgmAudio) battleBgmAudio.volume = bgmVolume;
+    if (persist) {
+      try { localStorage.setItem(BGM_VOLUME_KEY, bgmVolume.toFixed(2)); } catch (_) {}
+    }
+    syncSystemSoundControl();
+    return bgmVolume;
+  }
+
+  function setSoundEnabled(enabled, persist = true) {
+    soundEnabled = Boolean(enabled);
+    if (soundEnabled && bgmVolume <= 0) setBgmVolume(lastAudibleBgmVolume || .7, persist);
+    if (mode === "battle") {
+      bgm.setEnabled(false);
+      if (battleBgmAudio) {
+        if (soundEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
+        else battleBgmAudio.pause();
+      }
+    } else {
+      bgm.setEnabled(soundEnabled);
+    }
+    if (persist) {
+      try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
+    }
+    syncSystemSoundControl();
+    return soundEnabled;
   }
 
   function setSystemSettingsOpen(open) {
@@ -1532,21 +1605,60 @@
     if (clearPortalIntent) explorePortalIntentId = null;
   }
 
+  function nearestWalkableExploreDestination(goal, navigationRadius) {
+    if (!isBlocked({ x: goal.x, y: goal.y, radius: navigationRadius })) return { ...goal };
+    const authoritativeNavigation = world.navigation?.authoritative === true;
+
+    // Blocked clicks are common on authored bitmap maps. Searching A* against
+    // the blocked pixel itself forces the pathfinder to exhaust a large area
+    // before it can return a nearest-reachable fallback. Instead, snap the
+    // requested point to the first nearby standable ring, then route normally.
+    // The ring scan is deliberately bounded and samples at world-pixel scale,
+    // so even the 8K town / 4K field stay responsive on pointerdown.
+    const searchStep = authoritativeNavigation ? (currentMapId === "world" || currentMapId === "field" ? 16 : 8) : Math.max(8, Math.round(world.tileSize * .25));
+    const sampleSpacing = Math.max(20, searchStep * 1.5);
+    const maxSearchRadius = Math.min(1200, Math.max(320, Math.round(Math.min(world.pixelWidth, world.pixelHeight) * .22)));
+    const seen = new Set();
+
+    for (let radius = searchStep; radius <= maxSearchRadius; radius += searchStep) {
+      const samples = Math.max(12, Math.ceil((Math.PI * 2 * radius) / sampleSpacing));
+      let best = null;
+      for (let index = 0; index < samples; index += 1) {
+        const angle = index / samples * Math.PI * 2;
+        const candidate = {
+          x: Core.clamp(goal.x + Math.cos(angle) * radius, navigationRadius, world.pixelWidth - navigationRadius),
+          y: Core.clamp(goal.y + Math.sin(angle) * radius, navigationRadius, world.pixelHeight - navigationRadius),
+        };
+        const key = `${Math.round(candidate.x)}:${Math.round(candidate.y)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (isBlocked({ x: candidate.x, y: candidate.y, radius: navigationRadius })) continue;
+        const goalDistance = Core.distance(goal, candidate);
+        const playerDistance = Core.distance(player, candidate);
+        if (!best || goalDistance < best.goalDistance - .01 || (Math.abs(goalDistance - best.goalDistance) <= .01 && playerDistance < best.playerDistance)) {
+          best = { point: candidate, goalDistance, playerDistance };
+        }
+      }
+      if (best) return best.point;
+    }
+    return null;
+  }
+
   function planExploreMove(destination) {
     clearExploreMovePath(false);
-    const goal = {
+    const requestedGoal = {
       x: Core.clamp(Number(destination?.x) || player.x, player.radius, world.pixelWidth - player.radius),
       y: Core.clamp(Number(destination?.y) || player.y, player.radius, world.pixelHeight - player.radius),
     };
-    if (Core.distance(player, goal) <= Math.max(5, player.radius * .45)) return true;
+    if (Core.distance(player, requestedGoal) <= Math.max(5, player.radius * .45)) return true;
     const authoritativeNavigation = world.navigation?.authoritative === true;
     const navigationRadius = authoritativeNavigation
       ? Number(world.navigation?.feetRadiusPx) || (currentMapId === "world" ? MainTownNavigation?.feetRadiusPx : 3) || 3
       : player.radius;
-    // Invalid clicks on large authored maps used to run both coarse and fine A*
-    // searches before failing. Reject a blocked destination with the cheap local
-    // feet-disk lookup first; valid clicks keep the exact same path resolver.
-    if (authoritativeNavigation && isBlocked({ x: goal.x, y: goal.y, radius: navigationRadius })) return false;
+    const goal = authoritativeNavigation
+      ? nearestWalkableExploreDestination(requestedGoal, navigationRadius)
+      : requestedGoal;
+    if (!goal) return false;
     const baseOptions = {
       bounds: { x: 0, y: 0, w: world.pixelWidth, h: world.pixelHeight },
       sampleStep: authoritativeNavigation ? 1 : undefined,
@@ -1704,6 +1816,22 @@
     enemy.facingCandidateTime = 0;
   }
 
+  function blockingGameplayOverlayOpen() {
+    return Boolean(
+      guildCommissionDetailPanel?.hidden === false ||
+      skillBookConfirmPanel?.hidden === false ||
+      skillDetailPanel?.hidden === false ||
+      abandonCommissionPanel?.hidden === false ||
+      authPanel?.hidden === false ||
+      legacySavePanel?.hidden === false ||
+      classSelectPanel?.hidden === false ||
+      deathPanel?.hidden === false ||
+      levelUpPanel?.hidden === false ||
+      dialoguePanel?.hidden === false ||
+      hasBlockingFacilityWindow()
+    );
+  }
+
   function updatePlayer(dt) {
     const stats = playerStats();
     player.attackCooldown = Math.max(0, player.attackCooldown - dt);
@@ -1713,8 +1841,13 @@
     player.knockback.x *= drag;
     player.knockback.y *= drag;
 
-    updateSelectedPortalNavigation();
-    let direction = movementInput();
+    const movementBlockedByUi = blockingGameplayOverlayOpen();
+    if (movementBlockedByUi && (exploreMoveTarget || exploreMovePath.length)) {
+      clearExploreMovePath();
+      pendingClickInteractionId = null;
+    }
+    if (!movementBlockedByUi) updateSelectedPortalNavigation();
+    let direction = movementBlockedByUi ? { x: 0, y: 0 } : movementInput();
     let speed = stats.speed;
     if (player.attackTimer > .05) {
       speed *= .56;
@@ -2268,7 +2401,6 @@
     damageNumbers = damageNumbers.filter((number) => number.life > 0);
     screenShake *= Math.pow(.015, dt);
     screenFlash *= Math.pow(.035, dt);
-    rainOffset = (rainOffset + dt * 190) % 80;
   }
 
   function updateNearestInteraction() {
@@ -2370,7 +2502,7 @@
       return startDialogue({
         speaker: pool.name || "古怪水池",
         color: "#a88cff",
-        lines: ["你已經替委託人許過願。至於靈唔靈……返公會回報先啦。"],
+        lines: ["你已經替委託人許過願。至於靈唔靈……交畀個水池自己負責。"],
       });
     }
     const result = Guild.recordInteraction(guildCommissionState, pool.id);
@@ -2386,7 +2518,7 @@
     startDialogue({
       speaker: pool.name || "古怪水池",
       color: "#a88cff",
-      lines: ["你替委託人認真許咗個願。", "至於靈唔靈……交畀個水池自己負責。返公會回報啦。"],
+      lines: ["你替委託人認真許咗個願。", "至於靈唔靈……交畀個水池自己負責。"],
     });
   }
 
@@ -2612,28 +2744,28 @@
   }
 
   function drawClassSelectionPreviews() {
-    for (const [canvasId, classId] of [["warriorClassCanvas", "warrior"], ["fighterClassCanvas", "fighter"]]) {
-      const preview = document.getElementById(canvasId);
-      if (!preview) continue;
-      const previewCtx = preview.getContext("2d");
-      previewCtx.clearRect(0, 0, preview.width, preview.height);
-      const gradient = previewCtx.createRadialGradient(preview.width / 2, preview.height * .55, 10, preview.width / 2, preview.height * .55, preview.width * .55);
-      gradient.addColorStop(0, "rgba(82,220,203,.16)");
-      gradient.addColorStop(1, "rgba(7,11,22,0)");
-      previewCtx.fillStyle = gradient;
-      previewCtx.fillRect(0, 0, preview.width, preview.height);
-      Art.drawCharacter(previewCtx, {
-        actor: "player",
-        classId,
-        x: preview.width / 2,
-        y: preview.height - 12,
-        scale: 2.55,
-        state: "idle",
-        facing: "down",
-        phase: elapsed,
-        bitmap: true,
-      });
-    }
+    const preview = document.getElementById("fighterClassCanvas");
+    if (!preview) return;
+    const previewCtx = preview.getContext("2d");
+    previewCtx.clearRect(0, 0, preview.width, preview.height);
+    const gradient = previewCtx.createRadialGradient(preview.width / 2, preview.height * .55, 10, preview.width / 2, preview.height * .55, preview.width * .55);
+    gradient.addColorStop(0, "rgba(82,220,203,.16)");
+    gradient.addColorStop(1, "rgba(7,11,22,0)");
+    previewCtx.fillStyle = gradient;
+    previewCtx.fillRect(0, 0, preview.width, preview.height);
+    // Keep the original fighter art/runtime renderer. The smaller scale and
+    // lower anchor leave breathing room above the hair and below the feet.
+    Art.drawCharacter(previewCtx, {
+      actor: "player",
+      classId: "fighter",
+      x: preview.width / 2,
+      y: preview.height - 26,
+      scale: 2.05,
+      state: "idle",
+      facing: "down",
+      phase: elapsed,
+      bitmap: true,
+    });
   }
 
   function renderDialogue() {
@@ -2741,7 +2873,7 @@
   function statText(stats) {
     const labels = { attack: "攻擊", defense: "防禦", maxHp: "生命", speed: "速度", critChance: "暴擊", moveRange: "移動" };
     return Object.entries(stats)
-      .filter(([, value]) => value)
+      .filter(([key, value]) => key !== "weight" && value)
       .map(([key, value]) => `${labels[key] || key} ${value > 0 ? "+" : ""}${key === "critChance" ? Math.round(value * 100) + "%" : value}`)
       .join(" · ");
   }
@@ -2813,14 +2945,12 @@
             <strong>${active.title}</strong>
             <span>${ready ? "已完成" : "進行中"}</span>
           </div>
-          <div class="mission-objective"><small>目標</small><strong>${guildCommissionObjectiveText(active)}</strong></div>
-          <div class="mission-progress-row"><small>進度</small><strong>${progressText}</strong></div>
-          <div class="mission-meta-grid">
-            <div><small>建議等級</small><strong>Lv.${active.recommendedLevel}</strong></div>
-            <div><small>完成獎勵</small><strong>${skillBookRewardText(active)}</strong></div>
+          <div class="mission-task-row">
+            <div class="mission-objective"><small>目標</small><strong>${guildCommissionObjectiveText(active)}</strong></div>
+            <div class="mission-progress-row"><small>進度</small><strong>${progressText}</strong></div>
           </div>
           <div class="mission-progress-bar" role="progressbar" aria-label="任務進度" aria-valuemin="0" aria-valuemax="${progressMax}" aria-valuenow="${progressValue}"><i style="width:${progressPercent}%"></i></div>
-          ${ready ? '<p class="mission-report-note">返回公會回報</p>' : ""}
+          ${ready ? '<p class="mission-report-note">請返回公會回報任務</p>' : ""}
         </article>
       </section>`;
     setFacilityFooter("");
@@ -2837,7 +2967,7 @@
     const rows = offers.map((offer) => {
       const activeRow = active?.id === offer.id;
       const stateLabel = activeRow ? (guildCommissionState.status === "ready_to_report" ? "待回報" : "進行中") : "";
-      return `<button class="guild-simple-row ${activeRow ? "is-active" : ""}" type="button" data-facility-action="commission-detail" data-offer-id="${offer.id}"><span class="guild-simple-stars">${Skills.formatSkillBookRank(offer.star)}</span><strong>${offer.title}</strong>${stateLabel ? `<em>${stateLabel}</em>` : ""}</button>`;
+      return `<button class="guild-simple-row ${activeRow ? "is-active" : ""}" type="button" data-facility-action="commission-detail" data-offer-id="${offer.id}"><strong>${offer.title}</strong><span class="guild-simple-stars">${Skills.formatSkillBookRank(offer.star)}</span>${stateLabel ? `<em>${stateLabel}</em>` : ""}</button>`;
     }).join("");
     facilityContent.innerHTML = `<section class="guild-simple-list" aria-label="公會委託">${rows || '<div class="facility-empty-state"><strong>暫時冇委託</strong></div>'}</section>`;
     setFacilityFooter("");
@@ -2925,8 +3055,21 @@
     return `<span class="atlas-icon ${atlas}-icon-atlas ${extraClass}" style="--atlas-x:${column * 33.333333}%;--atlas-y:${row * 33.333333}%" role="img" aria-label="${label}"></span>`;
   }
 
+  function itemIconHtml(itemId, label, extraClass = "", fallbackIndex = 4) {
+    const item = ItemData?.getItem?.(itemId);
+    if (item?.iconSrc) {
+      return `<span class="standalone-item-icon ${extraClass}" style="--item-icon-src:url('${item.iconSrc}')" role="img" aria-label="${label}"></span>`;
+    }
+    return atlasIconHtml("item", Number.isFinite(Number(item?.iconIndex)) ? Number(item.iconIndex) : fallbackIndex, label, extraClass);
+  }
+
+  function coinAmountHtml(amount, extraClass = "") {
+    const value = Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString("zh-HK");
+    return `<span class="currency-amount ${extraClass}" aria-label="${value} 金幣"><i class="coin-icon" aria-hidden="true"></i><strong>${value}</strong></span>`;
+  }
+
   function envelopeIconHtml(label = "公會委託獎勵信") {
-    return `<span class="inventory-envelope-icon" role="img" aria-label="${label}"><svg viewBox="0 0 64 52" aria-hidden="true" focusable="false"><rect x="6" y="9" width="52" height="34" rx="4"></rect><path d="M8 13 32 30 56 13"></path><path d="M8 40 25 25M56 40 39 25"></path><circle cx="32" cy="31" r="3.3"></circle></svg></span>`;
+    return `<span class="standalone-item-icon inventory-envelope-icon" style="--item-icon-src:url('assets/items/skill-envelope-v1.png')" role="img" aria-label="${label}"></span>`;
   }
 
   function materialDescription(id) {
@@ -2961,7 +3104,7 @@
         isEquipped,
         disabled: isEquipped || levelLocked || classLocked,
         action: "equip",
-        actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "裝備",
+        actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? "無法裝備" : "裝備",
       });
     }
     if (player.potions > 0) items.push({
@@ -2975,24 +3118,22 @@
     if (weakPotionCount > 0) items.push({
       id: "weak_potion", name: "弱氣之藥", category: "消耗品", quantity: weakPotionCount,
       categoryKey: "consumable",
-      description: "令低等級霧獸更容易出現；效果持續 500 虛擬步。",
-      detail: weakPotionStepsRemaining > 0 ? `目前效果剩餘 ${weakPotionStepsRemaining} / ${WEAK_POTION_TOTAL_STEPS} 步` : "32 world px = 1 步；登出會取消效果",
+      description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。",
+      detail: weakPotionStepsRemaining > 0 ? "怪味仲纏住你，附近霧獸似乎更加躁動。" : "喝下後，這股古怪氣味會跟住你一段路。",
       action: "use-weak-potion", actionLabel: weakPotionStepsRemaining > 0 ? "重新使用" : "使用",
     });
     for (const star of Guild.COMMISSION_STARS) {
       const count = guildCommissionState.envelopes[star] || 0;
       if (!count) continue;
-      const pool = Skills.getFighterGuildBookPool(star);
       items.push({
         id: `skill_envelope_${star}`,
         iconType: "envelope",
-        name: "技能書信封",
-        rankLabel: Skills.formatSkillBookRank(star),
+        name: `${Skills.formatSkillBookRank(star)} 技能書信封`,
         category: "公會委託獎勵",
         categoryKey: "skillbook",
         quantity: count,
-        description: `開封後由格鬥士技能池抽取同星級技能書（${pool.length} 招）。`,
-        detail: "收到技能書後仍須符合格鬥士前置才能學習",
+        description: "",
+        detail: "",
         action: "open-envelope", actionLabel: "開封", envelopeStar: star,
       });
     }
@@ -3021,7 +3162,7 @@
       const learnability = classLocked ? { status: "conditionLocked" } : Skills.skillLearnability(skillState, skill.id);
       items.push({
         id: `manual_${skill.id}`,
-        iconId: "skill_book_1",
+        iconItemId: `skill_book_${Core.clamp(Math.round(Number(skill.star) || 1), 1, 3)}`,
         name: `技能書：${skill.name}`,
         rankLabel: skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star),
         category: `${skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star)} 技能書`,
@@ -3030,8 +3171,8 @@
         description: skill.description,
         detail: `${skillRangeText(skill)} · 速度 ${skill.speedGrade}`,
         action: "use-manual",
-        actionLabel: classLocked ? "職業不符" : learnability.status === "missingPrereq" ? "查看前置" : learnability.status === "learned" ? "處理重複書" : "學習",
-        disabled: classLocked,
+        actionLabel: learnability.status === "learned" ? "已學習" : learnability.status === "canLearn" ? "學習" : "無法學習",
+        disabled: learnability.status !== "canLearn",
         manualSkillId: skill.id,
       });
     }
@@ -3059,7 +3200,11 @@
       ? equipmentIconHtml(item.equipment, extraClass)
       : item.iconType === "envelope"
         ? envelopeIconHtml(item.name)
-        : atlasIconHtml("item", Number.isFinite(Number(item.iconId)) ? Number(item.iconId) : (ItemData?.getItem?.(item.id)?.iconIndex ?? 4), item.name, extraClass);
+        : item.iconItemId
+          ? itemIconHtml(item.iconItemId, item.name, extraClass, 4)
+          : Number.isFinite(Number(item.iconId))
+            ? atlasIconHtml("item", Number(item.iconId), item.name, extraClass)
+            : itemIconHtml(item.id, item.name, extraClass, 4);
     const actionMarkup = (item) => {
       if (!item.action) return "";
       const attrs = [
@@ -3078,14 +3223,17 @@
     </button>`).join("");
     const filters = Object.entries(categoryLabels).map(([key, label]) => `<button class="inventory-filter" type="button" data-facility-action="inventory-filter" data-inventory-category="${key}" aria-selected="${inventoryCategory === key ? "true" : "false"}">${label}</button>`).join("");
     const pager = pageCount > 1 ? `<nav class="inventory-pager" aria-label="物品分頁"><button type="button" data-facility-action="inventory-prev" ${inventoryPage <= 0 ? "disabled" : ""} aria-label="上一頁">‹</button><span>${inventoryPage + 1} / ${pageCount}</span><button type="button" data-facility-action="inventory-next" ${inventoryPage >= pageCount - 1 ? "disabled" : ""} aria-label="下一頁">›</button></nav>` : "";
+    const detailCopy = selectedItem
+      ? [selectedItem.description ? `<p>${selectedItem.description}</p>` : "", selectedItem.detail ? `<span>${selectedItem.detail}</span>` : ""].filter(Boolean).join("")
+      : "";
     const detail = selectedItem
-      ? `<div class="inventory-detail-layer" data-inventory-detail-dismiss aria-hidden="false"><section class="inventory-detail-popup" role="dialog" aria-modal="true" aria-label="${selectedItem.name}" aria-live="polite"><div class="inventory-detail-art">${iconMarkup(selectedItem)}${quantityMarkup(selectedItem)}</div>${selectedItem.rankLabel ? `<small class="inventory-detail-rank">${selectedItem.rankLabel}</small>` : ""}<strong class="inventory-detail-name">${selectedItem.name}</strong><div class="inventory-detail-copy"><p>${selectedItem.description}</p><span>${selectedItem.detail}</span></div><div class="inventory-detail-actions">${actionMarkup(selectedItem)}</div></section></div>`
+      ? `<div class="inventory-detail-layer" data-inventory-detail-dismiss aria-hidden="false"><section class="inventory-detail-popup" role="dialog" aria-modal="true" aria-label="${selectedItem.name}" aria-live="polite"><div class="inventory-detail-art">${iconMarkup(selectedItem)}${quantityMarkup(selectedItem)}</div>${selectedItem.rankLabel ? `<small class="inventory-detail-rank">${selectedItem.rankLabel}</small>` : ""}<strong class="inventory-detail-name">${selectedItem.name}</strong>${detailCopy ? `<div class="inventory-detail-copy">${detailCopy}</div>` : ""}<div class="inventory-detail-actions">${actionMarkup(selectedItem)}</div></section></div>`
       : "";
     facilityContent.innerHTML = `
       <section class="unified-inventory-layout" aria-label="角色裝備與隨身物品">
         <aside class="bag-loadout-panel" aria-label="角色目前裝備"><div class="paperdoll-board bag-paperdoll-board bag-equipment-grid">${paperdollSlotHtml("head", "頭部", "head", { iconOnly: true })}${paperdollSlotHtml("weapon", "武器", "weapon", { iconOnly: true })}${paperdollSlotHtml("upperBody", "上身", "upperBody", { iconOnly: true })}${paperdollSlotHtml("hands", "手部", "hands", { iconOnly: true })}${paperdollSlotHtml("lowerBody", "下身", "lowerBody", { iconOnly: true })}${paperdollSlotHtml("feet", "腳部", "feet", { iconOnly: true })}</div></aside>
         <section class="bag-items-panel" aria-label="隨身物品">
-          <div class="inventory-toolbar"><div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div><div class="inventory-money" aria-label="持有金幣"><span>金幣</span><strong>${player.coins.toLocaleString("zh-HK")}</strong></div></div>
+          <div class="inventory-toolbar"><div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div><div class="inventory-money" aria-label="持有金幣">${coinAmountHtml(player.coins)}</div></div>
           ${filteredItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>${pager}` : `<div class="inventory-empty-grid" aria-label="呢類物品仲係空嘅"></div>`}
         </section>${detail}
       </section>`;
@@ -3159,7 +3307,7 @@
         return `<article class="gear-collection-item ${isEquipped ? "is-equipped" : ""} ${levelLocked ? "is-locked" : ""}">
           ${equipmentIconHtml(item, "gear-collection-icon")}
           <div><small>${slotLabel}${item.occupiesSlots.length > 1 ? " · 一件式" : ""} · LV.${item.requiredLevel}</small><strong>${item.name}</strong><p>${item.description}</p><span>${statText(item.stats)}</span></div>
-          <button class="facility-action-button${isEquipped ? " is-quiet" : ""}" type="button" data-facility-action="equip" data-item-id="${item.id}" ${isEquipped || levelLocked ? "disabled" : ""}>${isEquipped ? "裝備中" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : "換上"}</button>
+          <button class="facility-action-button${isEquipped ? " is-quiet" : ""}" type="button" data-facility-action="equip" data-item-id="${item.id}" ${isEquipped || levelLocked ? "disabled" : ""}>${isEquipped ? "裝備中" : levelLocked ? "無法裝備" : "換上"}</button>
         </article>`;
       }).join("");
     facilityContent.innerHTML = `
@@ -3206,8 +3354,8 @@
       const levelLocked = player.level < item.requiredLevel;
       const shopCost = Math.max(0, Math.floor(item.cost * (1 - discountRate)));
       const action = owned ? "equip" : "buy";
-      const disabled = isEquipped || levelLocked || (!owned && (!item.purchasable || !atShop));
-      const buttonLabel = isEquipped ? "裝備中" : owned ? "裝備" : levelLocked ? `LV.${item.requiredLevel} 解鎖` : !item.purchasable ? "非賣品" : "購買";
+      const disabled = isEquipped || (owned && levelLocked) || (!owned && (!item.purchasable || !atShop));
+      const buttonLabel = isEquipped ? "裝備中" : owned ? (levelLocked ? "無法裝備" : "裝備") : !item.purchasable ? "非賣品" : "購買";
       const price = owned
         ? '<span class="equipment-price is-owned">已擁有</span>'
         : !item.purchasable
@@ -3236,11 +3384,11 @@
 
   function renderGeneralStoreFacility() {
     const goods = [
-      { id: "healing_potion", name: "小型回復藥", price: 30, description: "回復 30 HP。", iconIndex: ItemData?.getItem?.("healing_potion")?.iconIndex ?? 0 },
-      { id: "weak_potion", name: "弱氣之藥", price: 200, description: "令低等級霧獸更容易出現；效果持續 500 虛擬步。", iconIndex: ItemData?.getItem?.("weak_potion")?.iconIndex ?? 0 },
+      { id: "healing_potion", name: "小型回復藥", price: 30, description: "回復 30 HP。" },
+      { id: "weak_potion", name: "弱氣之藥", price: 200, description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。" },
     ];
-    const cards = goods.map((item) => `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${atlasIconHtml("item", item.iconIndex, item.name, "equipment-card-atlas-icon")}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong></div><p>${item.description}</p>${item.id === "weak_potion" ? '<small>500步 · 32 world px / 步 · 登出取消</small>' : ""}</div><div class="equipment-shop-purchase"><span class="equipment-price">${item.price} 金幣</span><button class="facility-action-button" type="button" data-facility-action="buy-store-item" data-item-id="${item.id}" ${player.coins < item.price ? "disabled" : ""}>購買</button></div></article>`).join("");
-    facilityContent.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="facility-section-heading equipment-shop-heading"><div><small>ITEM SHOP</small><h3>道具店</h3></div><span>${player.coins.toLocaleString("zh-HK")} 金幣</span></div><div class="equipment-grid general-store-grid">${cards}</div></section>`;
+    const cards = goods.map((item) => `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${itemIconHtml(item.id, item.name, "equipment-card-atlas-icon", 0)}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong></div><p>${item.description}</p></div><div class="equipment-shop-purchase"><span class="equipment-price">${coinAmountHtml(item.price, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="buy-store-item" data-item-id="${item.id}" ${player.coins < item.price ? "disabled" : ""}>購買</button></div></article>`).join("");
+    facilityContent.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="facility-section-heading equipment-shop-heading"><div><small>ITEM SHOP</small><h3>道具店</h3></div>${coinAmountHtml(player.coins, "store-balance")}</div><div class="equipment-grid general-store-grid">${cards}</div></section>`;
     setFacilityFooter("");
   }
 
@@ -3579,12 +3727,12 @@
     if (detailPattern) detailPattern.innerHTML = skillRangePatternMarkup(skill);
     const learnButton = document.getElementById("skillDetailLearnButton");
     learnButton.hidden = manualCount < 1;
-    learnButton.disabled = learnability.status === "missingPrereq" || learnability.status === "conditionLocked";
+    learnButton.disabled = learnability.status !== "canLearn";
     learnButton.textContent = learnability.status === "learned"
-      ? `處理重複技能書 ×${manualCount}`
-      : learnability.status === "missingPrereq"
-        ? `先學：${missingNames.join("、")}`
-        : `學習 ×${manualCount}`;
+      ? "已學習"
+      : learnability.status === "canLearn"
+        ? "學習"
+        : "無法學習";
     skillDetailPanel.hidden = false;
     resetDraggableWindowPosition(skillDetailPanel.querySelector(".ui-modal-window"));
     (learnButton.hidden || learnButton.disabled ? document.getElementById("skillDetailDismissButton") : learnButton).focus({ preventScroll: true });
@@ -3602,7 +3750,7 @@
     if (!pendingSkillDetailId) return;
     const skillId = pendingSkillDetailId;
     closeSkillDetail(false);
-    openSkillManualConfirm(skillId);
+    learnSkillManualImmediately(skillId);
   }
 
   function renderDeckFacility() {
@@ -3610,9 +3758,9 @@
     const canEdit = facilityContext === "deck" && currentMapId === "world";
     const slots = skillState.deckSlots.map((skillId, index) => {
       const skill = skillId ? Skills.getSkill(skillId) : null;
-      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" data-deck-slot-index="${index}" ${skill ? `data-deck-drag-source="slot" data-skill-id="${skill.id}"` : ""} aria-label="${skill ? skill.name : "未配置"}">${skill
+      return `<article class="deck-slot ${skill ? "is-filled" : "is-empty"}" data-deck-slot-index="${index}" ${skill ? `data-deck-drag-source="slot" data-skill-id="${skill.id}"` : ""} aria-label="${skill ? skill.name : `面板 ${index + 1} 空白`}">${skill
         ? `${skillBadgeMarkup(skill)}<strong>${skill.name}</strong>`
-        : '<span class="deck-slot-empty">未配置</span>'}</article>`;
+        : ""}</article>`;
     }).join("");
     const management = canEdit ? (() => {
       const learnedSkills = Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"));
@@ -3652,12 +3800,12 @@
       <div><dt>速度</dt><dd>${skill.speedGrade}</dd></div>
       <div><dt>前置</dt><dd>${skill.prerequisites.length ? skill.prerequisites.map((id) => Skills.getSkill(id)?.name || id).join(" → ") : "無"}</dd></div>`;
     const learnButton = document.getElementById("skillBookLearnButton");
-    learnButton.disabled = learnability.status === "missingPrereq" || learnability.status === "conditionLocked";
+    learnButton.disabled = learnability.status !== "canLearn";
     learnButton.textContent = learnability.status === "learned"
-      ? `轉換成 ${Skills.DUPLICATE_SHARDS[skill.star]} 精通碎片`
-      : learnability.status === "missingPrereq"
-        ? `先學：${missingNames.join("、")}`
-        : "確認學習";
+      ? "已學習"
+      : learnability.status === "canLearn"
+        ? "學習"
+        : "無法學習";
     skillBookConfirmPanel.hidden = false;
     resetDraggableWindowPosition(skillBookConfirmPanel.querySelector(".ui-modal-window"));
     (learnButton.disabled ? document.getElementById("skillBookCancelButton") : learnButton).focus({ preventScroll: true });
@@ -3669,20 +3817,52 @@
     facilityContent.focus({ preventScroll: true });
   }
 
-  function confirmSkillManualLearning() {
-    if (!pendingManualSkillId) return;
-    const result = Skills.learnSkillFromManual(skillState, pendingManualSkillId);
+  function learnSkillManualImmediately(skillId) {
+    if (!skillId) return false;
+    skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    const learnability = Skills.skillLearnability(skillState, skillId);
+    if (learnability.status === "learned") {
+      showToast("已學習", "good");
+      return false;
+    }
+    if (learnability.status !== "canLearn") {
+      showToast("無法學習", "danger");
+      return false;
+    }
+    const result = Skills.learnSkillFromManual(skillState, skillId);
     if (!result.ok) {
-      const missing = (result.missingPrerequisites || []).map((id) => Skills.getSkill(id)?.name || id).join("、");
-      showToast(result.reason === "missing-prerequisite" ? `要先學識：${missing}` : "未能學習呢本技能書。", "danger");
-      return;
+      showToast(result.reason === "already-learned" ? "已學習" : "無法學習", result.reason === "already-learned" ? "good" : "danger");
+      return false;
     }
     skillState = result.state;
+    pendingManualSkillId = null;
+    skillBookConfirmPanel.hidden = true;
     sound.crystal();
-    showToast(result.duplicate ? `重複技能書化成 ${result.shardsAwarded} 精通碎片。` : `已學識「${result.skill.name}」；去城門面板配置先可出戰。`, "good");
-    closeSkillManualConfirm();
+    showToast(`已學識「${result.skill.name}」；去城門面板配置先可出戰。`, "good");
     renderFacility();
     saveImportant(false);
+    return true;
+  }
+
+  function useSkillManualFromBag(skillId) {
+    const skill = Skills.getSkill(skillId);
+    if (!skill) return;
+    skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    const learnability = Skills.skillLearnability(skillState, skill.id);
+    if (learnability.status === "learned") {
+      showToast("已學習", "good");
+      return;
+    }
+    if (learnability.status !== "canLearn") {
+      showToast("無法學習", "danger");
+      return;
+    }
+    learnSkillManualImmediately(skill.id);
+  }
+
+  function confirmSkillManualLearning() {
+    if (!pendingManualSkillId) return;
+    learnSkillManualImmediately(pendingManualSkillId);
   }
 
   function useBagPotion() {
@@ -3833,6 +4013,12 @@
       gesture.ghost.classList.add("deck-drag-ghost");
       gesture.ghost.removeAttribute("data-deck-drag-source");
       gesture.ghost.removeAttribute("data-deck-slot-index");
+      const sourceRect = gesture.sourceElement.getBoundingClientRect();
+      gesture.ghost.style.setProperty("width", `${sourceRect.width}px`, "important");
+      gesture.ghost.style.setProperty("min-width", `${sourceRect.width}px`, "important");
+      gesture.ghost.style.setProperty("max-width", `${sourceRect.width}px`, "important");
+      gesture.ghost.style.setProperty("height", `${sourceRect.height}px`, "important");
+      gesture.ghost.style.setProperty("min-height", `${sourceRect.height}px`, "important");
       document.body.appendChild(gesture.ghost);
       gesture.sourceElement.classList.add("is-drag-source");
     }
@@ -3962,6 +4148,22 @@
     }
   }
 
+  function facilityWindowBlocksMovement(state) {
+    if (!state) return false;
+    return !["portable", "deck-view"].includes(state.context);
+  }
+
+  function hasBlockingFacilityWindow() {
+    return [...facilityWindows.values()].some(facilityWindowBlocksMovement);
+  }
+
+  function syncFacilityMovementMode() {
+    const shouldBlock = hasBlockingFacilityWindow();
+    mode = shouldBlock ? "facility" : "playing";
+    stage.dataset.gameState = mode;
+    return shouldBlock;
+  }
+
   function createFacilityWindow(tab, context) {
     const key = facilityWindowKey(tab, context);
     const panel = facilityPanelTemplate.cloneNode(true);
@@ -3995,6 +4197,7 @@
   }
 
   function clearAllFacilityWindows() {
+    selectedInventoryItemId = null;
     for (const state of facilityWindows.values()) state.panel.remove();
     facilityWindows.clear();
     activeFacilityWindow = null;
@@ -4043,7 +4246,7 @@
     const facilityTitle = facilityPanel.querySelector(".facility-header h2");
     if (facilityTitle) facilityTitle.textContent = copy[1];
     if (facilityHelpText) facilityHelpText.textContent = copy[2];
-    if (facilityHelpButton) facilityHelpButton.hidden = ["bag", "guild"].includes(facilityTab) || facilityContext === "general-store" || !copy[2];
+    if (facilityHelpButton) facilityHelpButton.hidden = ["bag", "guild", "shop"].includes(facilityTab) || facilityContext === "general-store" || !copy[2];
     setFacilityHelpOpen(false);
     for (const tab of facilityTabs?.querySelectorAll("[data-facility-tab]") || []) {
       const available = availableTabs.includes(tab.dataset.facilityTab);
@@ -4084,8 +4287,7 @@
     const existing = facilityWindows.get(key);
     if (existing) {
       activateFacilityWindow(existing);
-      mode = "facility";
-      stage.dataset.gameState = mode;
+      syncFacilityMovementMode();
       renderFacility();
       existing.closeButton?.focus({ preventScroll: true });
       return true;
@@ -4093,11 +4295,12 @@
 
     const state = createFacilityWindow(normalizedTab, normalizedContext);
     activateFacilityWindow(state);
-    mode = "facility";
-    stage.dataset.gameState = mode;
-    keys.clear();
-    clearExploreMovePath();
-    pendingClickInteractionId = null;
+    const blocksMovement = syncFacilityMovementMode();
+    if (blocksMovement) {
+      keys.clear();
+      clearExploreMovePath();
+      pendingClickInteractionId = null;
+    }
     renderFacility();
     resetDraggableWindowPosition(state.windowElement);
     const cascadeIndex = Math.max(0, facilityWindows.size - 1) % 6;
@@ -4112,6 +4315,7 @@
 
   function closeFacility(state = activeFacilityWindow) {
     if (!state || !facilityWindows.has(state.key)) return;
+    if (state.tab === "bag") selectedInventoryItemId = null;
     if (state.context === "guild" || state.tab === "guild") closeGuildCommissionDetail();
     if (state === activeFacilityWindow) {
       cancelDeckDrag();
@@ -4123,8 +4327,7 @@
     const next = topFacilityWindow();
     if (next) {
       activateFacilityWindow(next, { bringToFront: false });
-      mode = "facility";
-      stage.dataset.gameState = mode;
+      syncFacilityMovementMode();
     } else {
       facilityPanel = facilityPanelTemplate;
       facilityContent = facilityPanelTemplate.querySelector(".facility-content");
@@ -4221,7 +4424,7 @@
   function closeAbandonCommission(restoreFocus = true) {
     pendingAbandonContractId = null;
     abandonCommissionPanel.hidden = true;
-    if (restoreFocus && mode === "facility") facilityContent.focus({ preventScroll: true });
+    if (restoreFocus && facilityWindows.size) facilityContent.focus({ preventScroll: true });
   }
 
   function confirmAbandonCommission() {
@@ -4262,7 +4465,7 @@
     sound.crystal();
     showToast(`開封抽到「${skill.name}」技能書；仍須符合格鬥士前置先可以學習。`, "good");
     announce(`獲得格鬥士技能書：${skill.name}`);
-    if (mode === "facility") renderFacility();
+    if (facilityWindows.size) renderFacility();
     updateHud(true);
     saveImportant(false);
   }
@@ -4281,12 +4484,17 @@
       state = { ...state, coins: state.coins + discount };
       const purchase = Expansion.purchaseEquipment(state, itemId);
       if (!purchase.ok) {
-        const reason = purchase.reason === "coins" ? "金幣唔夠。" : purchase.reason === "level" ? "等級未夠。" : "呢件裝備而家買唔到。";
+        const reason = purchase.reason === "coins" ? "金幣唔夠。" : "呢件裝備而家買唔到。";
         return showToast(reason, "danger");
       }
-      state = purchase.state;
-      player.coins = state.coins;
-      ownedEquipment = state.ownedEquipment;
+      player.coins = purchase.state.coins;
+      ownedEquipment = purchase.state.ownedEquipment;
+      sound.coin();
+      showToast(`已購買：${purchase.item.name}`, "good");
+      renderFacility();
+      updateHud(true);
+      saveImportant(false);
+      return;
     }
     const result = Expansion.equipItem({ ...state, ownedEquipment, equipped }, itemId);
     if (!result.ok) return showToast("未可以裝備呢件物品。", "danger");
@@ -4294,7 +4502,7 @@
     const afterMax = playerStats().maxHp;
     player.hp = Core.clamp(player.hp + Math.max(0, afterMax - beforeMax), 1, afterMax);
     sound.coin();
-    showToast(`${buyFirst ? "買到兼裝備" : "已裝備"}：${result.item.name}`, "good");
+    showToast(`已裝備：${result.item.name}`, "good");
     renderFacility();
     updateHud(true);
     saveImportant(false);
@@ -4447,7 +4655,7 @@
 
   function startBattle(source, instant = false) {
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
-    setSystemSettingsOpen(false);
+    hideAllOverlays();
     activeBattleTouches.clear();
     battlePinchGesture = null;
     suppressBattleTouchTap = false;
@@ -5319,7 +5527,7 @@
     const spread = (hitIndex - (hitCount - 1) / 2) * .18;
     const offsetX = hitCount > 1 ? spread : 0;
     const offsetY = .16 + Math.floor(hitIndex / 2) * .42;
-    battle.effects.push({ cell: { ...unit.cell }, text: `-${result.damage}`, color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
+    battle.effects.push({ cell: { ...unit.cell }, text: `-${result.requestedDamage}`, color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
     return result;
   }
 
@@ -5462,11 +5670,13 @@
       if (damageEffect) {
         const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
         const recheck = Boolean(skill.hitResolution?.recheck_attack_path_each_hit);
-        const makeHeroHit = (target, hitIndex) => {
+        const makeHeroHit = (target, hitIndex, attackPath = projectileTrace?.path || heroAction.attackPath) => {
           if (!target) return null;
           const existingDebuff = target.defenceDownUntilRound >= battle.round ? target.defenceDown || 0 : 0;
           const defence = Math.max(0, (target.defence || 0) * (1 - existingDebuff) * (1 - (pierceEffect?.amount || 0)));
           const positional = Tactics.positionalAttack(battle.hero, target, {
+            attackPath,
+            facing: battle.hero.facing,
             side: 1 + BATTLE_SIDE_DAMAGE_BONUS,
             rear: 1 + BATTLE_REAR_DAMAGE_BONUS,
           });
@@ -5501,10 +5711,15 @@
           });
         } else {
           for (const target of affectedEnemies) {
-            for (let hitIndex = 0; hitIndex < hitCount; hitIndex += 1) {
-              const hit = makeHeroHit(target, hitIndex);
-              if (hit) heroHits.push(hit);
-            }
+            heroHitResolvers.push({
+              hitCount,
+              recheck: false,
+              path: [],
+              initialTarget: target,
+              deliveryMode: skill.deliveryMode,
+              arcHeight: skill.arcHeight,
+              makeHeroHit,
+            });
           }
         }
       }
@@ -5543,7 +5758,10 @@
       // A stale/empty prediction is cancelled silently: the monster does not
       // spend AP or perform an attack at a square where no target exists.
       if (!hit) continue;
+      const positionalPath = Tactics.facingOrthogonalPriority(enemy.cell, battle.hero.cell, enemy.facing);
       const positional = Tactics.positionalAttack(enemy, battle.hero, {
+        attackPath: positionalPath,
+        facing: enemy.facing,
         side: 1 + BATTLE_SIDE_DAMAGE_BONUS,
         rear: 1 + BATTLE_REAR_DAMAGE_BONUS,
       });
@@ -5588,12 +5806,12 @@
         battle.evasion = Math.max(battle.evasion || 0, evasionNext);
         const executionHits = [...heroHits];
         for (const resolver of heroHitResolvers) {
-          for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
-            const trace = resolver.recheck
-              ? Tactics.traceAttackPath({
+          const routedDelivery = ["linear", "arc"].includes(resolver.deliveryMode);
+          const traceNow = () => routedDelivery
+            ? Tactics.traceAttackPath({
                 origin: battle.hero.cell,
                 target: heroAction.targetCell,
-                path: resolver.path,
+                facing: battle.hero.facing,
                 grid: battle.grid,
                 units: battleUnits(),
                 actorId: battle.hero.id,
@@ -5602,9 +5820,12 @@
                 blocksByUnits: skill.blocksByUnits,
                 arcHeight: resolver.arcHeight,
               })
-              : null;
-            const target = resolver.recheck ? trace?.actualTarget : resolver.initialTarget;
-            const hit = resolver.makeHeroHit(target, hitIndex);
+            : null;
+          const stableTrace = routedDelivery && !resolver.recheck ? traceNow() : null;
+          for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
+            const trace = resolver.recheck ? traceNow() : stableTrace;
+            const target = routedDelivery ? trace?.actualTarget : resolver.initialTarget;
+            const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
             if (hit) executionHits.push(hit);
           }
         }
@@ -5622,7 +5843,7 @@
           if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
           else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...hit.target.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
           const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount);
-          addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.damage} 傷害`);
+          addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
           Tactics.applyInterrupt(
             battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
             battleNumber(skill.interrupt),
@@ -5662,6 +5883,13 @@
       }
       // The pending action was revalidated above against the current cells;
       // never execute a prediction from the old pre-knockback position.
+      const liveEnemyPositional = Tactics.positionalAttack(hit.enemy, battle.hero, {
+        attackPath: Tactics.facingOrthogonalPriority(hit.enemy.cell, battle.hero.cell, hit.enemy.facing),
+        facing: hit.enemy.facing,
+        side: 1 + BATTLE_SIDE_DAMAGE_BONUS,
+        rear: 1 + BATTLE_REAR_DAMAGE_BONUS,
+      });
+      hit.position = liveEnemyPositional.position;
       hit.enemy.ap = Math.max(0, (hit.enemy.ap || 0) - (hit.plan.apCost || hit.enemy.skillCost || 0));
       const passiveStats = learnedFighterPassives();
       const hitRoll = Tactics.rollHit({
@@ -5693,7 +5921,8 @@
         showFighterEffectEvents(counter);
       }
       const result = Tactics.applyDamage(battle.hero, hit.damage);
-      hit.damage = result.damage;
+      hit.appliedDamage = result.appliedDamage;
+      hit.damage = result.requestedDamage;
       addSystemMessage("combat", `${hit.enemy.name}對你造成 ${hit.damage} 傷害`, "incoming");
       battle.hero.hp = result.hpAfter;
       battle.hero.alive = !result.defeated;
@@ -5828,6 +6057,7 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     encounterGrace = 1.4;
+    addSystemMessage("combat", "撤退成功。", "good");
     showToast("撤退成功", "good");
     canvas.focus({ preventScroll: true });
   }
@@ -6469,6 +6699,33 @@
     try { localStorage.setItem(SYSTEM_LOG_POSITION_KEY, JSON.stringify({ x, y })); } catch (_) {}
   }
 
+  function scrollSystemLogBy(delta) {
+    if (!systemLogMessages || !Number.isFinite(Number(delta))) return;
+    systemLogMessages.scrollTop += Number(delta);
+  }
+
+  function beginSystemLogScroll(event) {
+    if (!systemLogScrollZone || event.button > 0) return;
+    systemLogScrollGesture = { pointerId: event.pointerId, y: event.clientY, scrollTop: systemLogMessages?.scrollTop || 0 };
+    systemLogScrollZone.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveSystemLogScroll(event) {
+    const gesture = systemLogScrollGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId || !systemLogMessages) return;
+    const dy = event.clientY - gesture.y;
+    systemLogMessages.scrollTop = gesture.scrollTop - dy;
+    event.preventDefault();
+  }
+
+  function finishSystemLogScroll(event) {
+    const gesture = systemLogScrollGesture;
+    if (!gesture || (event && event.pointerId !== gesture.pointerId)) return;
+    systemLogScrollGesture = null;
+    try { systemLogScrollZone?.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
+  }
+
   function showToast(message, style = "") {
     toastElement.textContent = message;
     toastElement.className = `game-toast ${style}`.trim();
@@ -6935,39 +7192,6 @@
     battleDrawPolygon(corners, fillStyle, strokeStyle, lineWidth);
   }
 
-  function drawMountainGroundStones(px, py, size, seed) {
-    const clusterX = px + size * (.2 + ((seed >>> 8) % 50) / 100);
-    const clusterY = py + size * (.2 + ((seed >>> 15) % 48) / 100);
-    ctx.save();
-    ctx.globalAlpha = .2;
-    for (let index = 0; index < 3; index += 1) {
-      const radius = size * (.025 + ((seed >>> (index * 3)) % 4) * .008);
-      const x = clusterX + (index - 1) * size * .075;
-      const y = clusterY + ((seed >>> (index * 5 + 4)) % 9 - 4) * size * .018;
-      ctx.fillStyle = index === 0 ? "#d0ae7b" : "#4f4032";
-      ctx.beginPath();
-      ctx.ellipse(x, y, radius * 1.55, radius, (seed % 5) * .2, 0, Core.TAU);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawMountainDryScrub(x, y, size, seed, alpha = .38) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = seed % 3 === 0 ? "#9a8153" : "#b29561";
-    ctx.lineWidth = Math.max(1, size * .018);
-    const count = 3 + (seed % 3);
-    for (let blade = 0; blade < count; blade += 1) {
-      const offset = (blade - (count - 1) / 2) * size * .038;
-      ctx.beginPath();
-      ctx.moveTo(x + offset, y + size * .06);
-      ctx.quadraticCurveTo(x + offset - size * .04, y - size * .01, x + offset + (blade % 2 ? size * .045 : -size * .02), y - size * .11);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   function drawMountainBattleBackdrop(layout) {
     const drewBackdrop = Art.drawBattleBackground(ctx, {
       theme: "mountain",
@@ -6977,14 +7201,8 @@
       height,
       alpha: .92,
     });
-    if (!drewBackdrop) {
-      const fallback = ctx.createLinearGradient(0, 0, 0, height);
-      fallback.addColorStop(0, "#6f8d8b");
-      fallback.addColorStop(.55, "#ad8753");
-      fallback.addColorStop(1, "#2d342c");
-      ctx.fillStyle = fallback;
-      ctx.fillRect(0, 0, width, height);
-    }
+    // If the authored battle background is unavailable, leave the background
+    // empty instead of reviving the old generated Canvas placeholder.
     const atmosphere = ctx.createLinearGradient(0, 0, 0, height);
     atmosphere.addColorStop(0, "rgba(15,28,31,.18)");
     atmosphere.addColorStop(.48, "rgba(49,44,34,.06)");
@@ -7180,20 +7398,8 @@
         );
         drawn = true;
       }
-      if (!drawn) {
-        drawn = Art.drawStandaloneSprite?.(ctx, {
-          sprite: "battleHighTree",
-          x: point.x,
-          y: baselineY,
-          width: size * 1.48,
-          height: size * 2.18,
-          anchorX: .5,
-          anchorY: .93,
-        });
-      }
-      if (!drawn) {
-        Art.drawEnvironmentSprite(ctx, { sprite: "broadleafTree", x: point.x, y: baselineY, width: size * 1.02, height: size * 1.42, alpha: .99 });
-      }
+      // If the supplied obstacle bitmap is unavailable, leave this visual
+      // empty. Do not revive the retired generated/static tree fallback.
       return;
     }
     if (mountainBattle && terrain?.kind === "scrub") {
@@ -7219,20 +7425,7 @@
         );
         drawn = true;
       }
-      // Keep the existing generated low-cover art only as a load-error fallback.
-      // No extra floor shadow is painted for either supplied rocks or plants.
-      if (!drawn) {
-        drawn = Art.drawStandaloneSprite?.(ctx, {
-          sprite: "battleLowScrub",
-          x: point.x,
-          y: baselineY,
-          width: size * 1.34,
-          height: size * .72,
-          anchorX: .5,
-          anchorY: .88,
-        });
-      }
-      if (!drawn) drawMountainDryScrub(point.x, point.y + size * .18, size * .88, seed, .55);
+      // Missing supplied art stays empty; do not revive legacy generated cover.
       return;
     }
     if (mountainBattle) {
@@ -7413,13 +7606,14 @@
     ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
     ctx.fillRect(point.x - barWidth / 2, barY, barWidth * Core.clamp(unit.hp / unit.maxHp, 0, 1), barHeight);
 
-    // Names belong to the rendered sprite, not the logical tile.  Character
-    // art supplies semantic anchors that remain correct across different body
-    // proportions, attack frames and monster species.
-    const movingUnit = battle.phase === "resolving_move" && Boolean(unit.renderCell);
-    const nameX = movingUnit ? point.x : (Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x);
-    const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .6);
-    const nameAnchorY = movingUnit ? fallbackNameY : (Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY);
+    // Player art has a stable authored name anchor. Monster locomotion frames
+    // have different opaque bounds, so using their per-frame visual anchor makes
+    // the name drift/fly while walking. Keep enemy labels tied to the interpolated
+    // battle cell instead; they still follow movement without frame-to-frame wobble.
+    const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .64);
+    const useArtNameAnchor = unit.side === "ally";
+    const nameX = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
+    const nameAnchorY = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY;
     const nameY = nameAnchorY - Math.max(2, actorCell * .025);
     ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
@@ -7540,7 +7734,7 @@
     const reach = Math.max(24, interactionReachForEntity(entity) - 8);
     const baseAngle = Math.atan2(player.y - regionPoint.y, player.x - regionPoint.x);
     const angleOffsets = [0, Math.PI / 12, -Math.PI / 12, Math.PI / 6, -Math.PI / 6, Math.PI / 4, -Math.PI / 4, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI];
-    const radii = [12, 18, 26, 36, 50, 68, 88, 112, 136, reach].filter((value, index, array) => value <= reach && array.indexOf(value) === index);
+    const radii = [12, 18, 26, 36, 50, 68, 88, 112, 136, 176, 216, 256, 296, reach].filter((value, index, array) => value <= reach && array.indexOf(value) === index);
     const navigationRadius = Number(navigation.feetRadiusPx) || 3;
     const candidates = [];
     for (const radius of radii) {
@@ -7665,7 +7859,7 @@
     exploreHoverEntityId = entity?.id || null;
     // Enemy targeting can gain its own cursor later. For now the hand is
     // reserved for world interactions such as NPCs, chests and the skill panel.
-    canvas.dataset.exploreCursor = entity && !entity.type ? "interact" : "default";
+    canvas.dataset.exploreCursor = entity && !entity.type && entity.kind !== "portal" ? "interact" : "default";
   }
 
   function clearExploreHoverPointer() {
@@ -7767,7 +7961,7 @@
       if (activeBattleTouches.size >= 2) beginBattlePinch();
       return;
     }
-    if (mode !== "playing" || event.button > 0) return;
+    if (mode !== "playing" || event.button > 0 || blockingGameplayOverlayOpen()) return;
 
     const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
     if (mobileTouch) {
@@ -7885,17 +8079,33 @@
     // A quick touch is a normal move / interaction tap. It is intentionally
     // committed here (rather than pointerdown) so pinch recognition wins.
     if (mobileTouch && !gesture.holdActive) {
-      const target = screenToWorld(event.clientX, event.clientY);
-      const entity = clickedExploreEntity(target.screenX, target.screenY);
-      setExploreClickTarget(entity || target, entity);
-      clearExplorePointerGesture(event.pointerId);
+      const { clientX, clientY, pointerId } = event;
+      event.preventDefault();
+      clearExplorePointerGesture(pointerId);
+      // Authored-map hit testing and route planning can be relatively heavy on
+      // high-resolution interiors. Run that work on the next frame so the
+      // browser's pointerup dispatch itself stays responsive.
+      window.requestAnimationFrame(() => {
+        if (mode !== "playing" || blockingGameplayOverlayOpen()) return;
+        const target = screenToWorld(clientX, clientY);
+        const entity = clickedExploreEntity(target.screenX, target.screenY);
+        setExploreClickTarget(entity || target, entity);
+      });
       return;
     }
 
     if (!gesture.holdActive && performance.now() - gesture.startedAt >= EXPLORE_HOLD_DELAY_MS) {
       gesture.holdActive = true;
     }
-    if (gesture.holdActive) retargetExploreHoldGesture(gesture, true);
+    // The hold timer / pointermove path has normally already targeted this
+    // point. Do not synchronously run authored-map pathfinding again during
+    // pointerup: on high-resolution interiors that duplicate route search can
+    // turn a harmless release into a 100ms+ long event handler.
+    if (gesture.holdActive && !gesture.lastTargetKey) {
+      window.requestAnimationFrame(() => {
+        if (explorePointerGesture === gesture && mode === "playing") retargetExploreHoldGesture(gesture, true);
+      });
+    }
     if (explorePointerGesture !== gesture) return;
     gesture.pressed = false;
     if (!gesture.holdActive || (gesture.pointerType !== "mouse" && !gesture.targetEntity)) {
@@ -8234,7 +8444,7 @@
         const point = worldToScreen({ x: tx * tileSize, y: ty * tileSize }, shakeX, shakeY);
         const noise = Core.hash2D(tx, ty, 93);
         const terrainSprite = terrainSpriteFor(tile);
-        if (Art.drawTerrainTile(ctx, {
+        Art.drawTerrainTile(ctx, {
           sprite: terrainSprite,
           x: Math.floor(point.x),
           y: Math.floor(point.y),
@@ -8242,63 +8452,7 @@
           height: Math.ceil(size),
           flipX: noise > .5,
           flipY: ((tx + ty) & 1) === 1,
-        })) continue;
-        if (tile === world.tileTypes.GRASS) {
-          ctx.fillStyle = noise > .66 ? "#173b3b" : noise > .32 ? "#153637" : "#123334";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          if (noise > .72) {
-            ctx.strokeStyle = "rgba(104,162,129,.25)";
-            ctx.lineWidth = Math.max(1, camera.zoom * .7);
-            ctx.beginPath();
-            ctx.moveTo(point.x + size * .22, point.y + size * .74);
-            ctx.lineTo(point.x + size * .18, point.y + size * .55);
-            ctx.moveTo(point.x + size * .22, point.y + size * .74);
-            ctx.lineTo(point.x + size * .32, point.y + size * .58);
-            ctx.stroke();
-          }
-        } else if (tile === world.tileTypes.PATH) {
-          ctx.fillStyle = noise > .5 ? "#6c5a45" : "#64523f";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          ctx.fillStyle = "rgba(245,233,202,.1)";
-          ctx.fillRect(point.x + size * noise * .7, point.y + size * ((noise * 5) % 1) * .7, Math.max(1, camera.zoom), Math.max(1, camera.zoom));
-        } else if (tile === world.tileTypes.WATER) {
-          ctx.fillStyle = noise > .5 ? "#17384d" : "#193f53";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          ctx.strokeStyle = "rgba(82,220,203,.2)";
-          ctx.lineWidth = Math.max(1, camera.zoom * .65);
-          const waveY = point.y + size * (.25 + ((elapsed * .23 + noise) % .55));
-          ctx.beginPath();
-          ctx.moveTo(point.x + size * .13, waveY);
-          ctx.lineTo(point.x + size * (.42 + noise * .35), waveY);
-          ctx.stroke();
-        } else if (tile === world.tileTypes.STONE) {
-          ctx.fillStyle = noise > .55 ? "#39465a" : "#354155";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          ctx.strokeStyle = "rgba(10,16,32,.23)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          if (noise > .7) {
-            ctx.beginPath();
-            ctx.moveTo(point.x + size * .3, point.y + size * .18);
-            ctx.lineTo(point.x + size * .45, point.y + size * .43);
-            ctx.lineTo(point.x + size * .38, point.y + size * .66);
-            ctx.stroke();
-          }
-        } else if (tile === world.tileTypes.WOOD) {
-          ctx.fillStyle = noise > .5 ? "#8a6141" : "#7e573c";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          ctx.strokeStyle = "rgba(38,24,28,.36)";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(point.x, point.y + size * .5);
-          ctx.lineTo(point.x + size, point.y + size * .5);
-          ctx.stroke();
-        } else {
-          ctx.fillStyle = noise > .5 ? "#263147" : "#222c41";
-          ctx.fillRect(Math.floor(point.x), Math.floor(point.y), Math.ceil(size), Math.ceil(size));
-          ctx.fillStyle = "rgba(245,233,202,.08)";
-          ctx.fillRect(point.x + 2, point.y + 2, size - 4, Math.max(2, camera.zoom * 2));
-        }
+        });
       }
     }
     drawTownRoadEdges(shakeX, shakeY);
@@ -8463,7 +8617,7 @@
     const authoredHeight = Number(prop.authoredRegion?.h) || 0;
     const topY = point.y - authoredHeight * scale / 2;
     const fontSize = Core.clamp(18 * scale, 13, 19);
-    const labelY = topY - Math.max(15, 18 * scale);
+    const labelY = topY - Math.max(22, 26 * scale);
     const label = "✦ 面板配置 ✦";
     ctx.save();
     ctx.textAlign = "center";
@@ -8558,32 +8712,26 @@
   function drawMapProp(prop, shakeX, shakeY) {
     const point = worldToScreen(prop, shakeX, shakeY);
     const scale = camera.zoom;
-    ctx.save();
     if (prop.kind === "questBoard") {
       const indoor = ["guild", "shop", "clinic", "general-store", "inn", "dungeon"].includes(currentMapId);
       const boardDrawer = indoor ? Art.drawInteriorSprite : Art.drawEnvironmentSprite;
-      const isSkillPanel = prop.boardId === "deck-loadout";
-      if (isSkillPanel) drawSkillPanelLabel(prop, shakeX, shakeY);
-      if (boardDrawer(ctx, {
+      if (prop.boardId === "deck-loadout") drawSkillPanelLabel(prop, shakeX, shakeY);
+      boardDrawer(ctx, {
         sprite: indoor ? "indoorQuestBoard" : "questBoard",
         x: point.x,
         y: point.y + (indoor ? 20 : 15) * scale,
         width: (indoor ? 88 : 76) * scale,
         height: (indoor ? 72 : 76) * scale,
-      })) {
-        ctx.restore();
-        return;
-      }
-      ctx.fillStyle = "#6d4e34"; ctx.fillRect(point.x - 17 * scale, point.y - 20 * scale, 34 * scale, 28 * scale);
-      ctx.fillStyle = "#ead9a7"; ctx.fillRect(point.x - 12 * scale, point.y - 16 * scale, 10 * scale, 13 * scale); ctx.fillRect(point.x + 2 * scale, point.y - 13 * scale, 9 * scale, 10 * scale);
-      ctx.strokeStyle = "#ffc857"; ctx.strokeRect(point.x - 18 * scale, point.y - 21 * scale, 36 * scale, 30 * scale);
-    } else if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
+      });
+      return;
+    }
+    if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
       const w = Math.max(16, (prop.w || 28) * scale);
       const h = Math.max(12, (prop.h || 22) * scale);
       if (prop.kind === "bed") {
         const bedW = Math.max(96, (prop.w || 120) * 1.18 * scale);
         const bedH = bedW * (1024 / 1536);
-        if (Art.drawStandaloneSprite(ctx, {
+        Art.drawStandaloneSprite(ctx, {
           sprite: "innBed",
           x: point.x + w / 2,
           y: point.y + h + 3 * scale,
@@ -8592,89 +8740,54 @@
           anchorX: .5,
           anchorY: 1,
           flipX: prop.id?.includes("east"),
-        })) {
-          ctx.restore();
-          return;
-        }
-        // Canvas fallback is intentionally plain and is only used before the
-        // reusable bitmap asset finishes loading.
-        ctx.fillStyle = "rgba(2,5,12,.3)";
-        ctx.fillRect(point.x + 5 * scale, point.y + 7 * scale, bedW, Math.max(22, (prop.h || 42) * scale));
-        ctx.restore();
+        });
         return;
       }
       const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge", goodsCrate: "barrelCrate" };
       const interiorSprites = { table: "guildTable", screen: "fittingScreen", pillar: "pillar" };
       const sprite = environmentSprites[prop.kind] || interiorSprites[prop.kind];
+      if (!sprite) return;
       const drawer = environmentSprites[prop.kind] ? Art.drawEnvironmentSprite : Art.drawInteriorSprite;
       const artWidth = prop.kind === "counter" ? w * 1.03 : prop.kind === "bookshelf" ? Math.max(w * 2.4, 76 * scale) : prop.kind.includes("Rack") ? Math.max(w * 1.45, 86 * scale) : prop.kind === "table" ? w * 1.08 : prop.kind === "goodsCrate" ? Math.max(w * 1.35, 58 * scale) : Math.max(w * 1.25, 68 * scale);
       const artHeight = prop.kind === "counter" ? Math.max(h * 2.15, 68 * scale) : prop.kind === "bookshelf" ? h * 1.03 : prop.kind.includes("Rack") ? Math.max(h * 1.2, 78 * scale) : prop.kind === "table" ? Math.max(h * 2.4, 74 * scale) : prop.kind === "goodsCrate" ? Math.max(h * 1.2, 58 * scale) : Math.max(h * 1.15, 72 * scale);
-      if (sprite && drawer(ctx, {
-        sprite,
-        x: point.x + w / 2,
-        y: point.y + h,
-        width: artWidth,
-        height: artHeight,
-      })) {
-        ctx.restore();
-        return;
-      }
-      const colors = { counter: "#79553c", bookshelf: "#4f3c36", table: "#72533d", weaponRack: "#604b42", armourRack: "#536273", anvil: "#59616d", screen: "#796175", pillar: "#556273", goodsCrate: "#8f6843" };
-      ctx.fillStyle = "rgba(2,5,12,.32)"; ctx.fillRect(point.x + 4, point.y + 6, w, h);
-      ctx.fillStyle = colors[prop.kind] || "#586273"; ctx.fillRect(point.x, point.y, w, h);
-      ctx.strokeStyle = "rgba(245,233,202,.2)"; ctx.strokeRect(point.x, point.y, w, h);
-      if (prop.kind === "bookshelf" || prop.kind.includes("Rack")) {
-        ctx.strokeStyle = "rgba(255,200,87,.55)"; ctx.beginPath(); ctx.moveTo(point.x + w * .2, point.y + 4); ctx.lineTo(point.x + w * .2, point.y + h - 4); ctx.moveTo(point.x + w * .55, point.y + 4); ctx.lineTo(point.x + w * .55, point.y + h - 4); ctx.stroke();
-      }
-    } else if (prop.kind === "rug") {
-      const w = (prop.w || 100) * scale; const h = (prop.h || 80) * scale;
-      if (Art.drawTerrainTile(ctx, { sprite: ["shop", "general-store"].includes(currentMapId) ? "shopRug" : "guildRug", x: point.x - w / 2, y: point.y - h / 2, width: w, height: h })) {
-        ctx.restore();
-        return;
-      }
-      ctx.globalAlpha = .72; ctx.fillStyle = prop.color || "#315d66"; ctx.fillRect(point.x - w / 2, point.y - h / 2, w, h); ctx.strokeStyle = "rgba(245,233,202,.24)"; ctx.strokeRect(point.x - w / 2 + 4, point.y - h / 2 + 4, w - 8, h - 8);
-    } else if (["fireplace", "forgeFire", "ancientLamp", "wallSconce"].includes(prop.kind)) {
-      drawGlow(prop, prop.kind === "forgeFire" ? "rgba(255,116,76,.22)" : "rgba(82,220,203,.18)", prop.radius ? prop.radius * 3 : 70, shakeX, shakeY);
+      drawer(ctx, { sprite, x: point.x + w / 2, y: point.y + h, width: artWidth, height: artHeight });
+      return;
+    }
+    if (prop.kind === "rug") {
+      const w = (prop.w || 100) * scale;
+      const h = (prop.h || 80) * scale;
+      Art.drawTerrainTile(ctx, { sprite: ["shop", "general-store"].includes(currentMapId) ? "shopRug" : "guildRug", x: point.x - w / 2, y: point.y - h / 2, width: w, height: h });
+      return;
+    }
+    if (["fireplace", "forgeFire", "ancientLamp", "wallSconce"].includes(prop.kind)) {
       const useEnvironment = prop.kind === "forgeFire";
       const sprite = prop.kind === "forgeFire" ? "indoorForge" : prop.kind === "fireplace" ? "fireplace" : prop.kind === "wallSconce" ? "wallSconce" : "ancientLamp";
       const drawer = useEnvironment ? Art.drawEnvironmentSprite : Art.drawInteriorSprite;
-      if (drawer(ctx, {
+      const drew = drawer(ctx, {
         sprite,
         x: point.x,
         y: point.y + 14 * scale,
         width: (prop.kind === "forgeFire" ? 92 : prop.kind === "fireplace" ? 76 : 48) * scale,
         height: (prop.kind === "forgeFire" ? 86 : prop.kind === "fireplace" ? 72 : 48) * scale,
-      })) {
-        ctx.restore();
-        return;
-      }
-      ctx.fillStyle = prop.kind === "forgeFire" ? "#ff8b62" : "#52dccb"; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(point.x, point.y, 6 * scale, 0, Core.TAU); ctx.fill(); ctx.shadowBlur = 0;
-    } else if (prop.kind === "banner") {
-      if (Art.drawInteriorSprite(ctx, { sprite: "guildBanner", x: point.x, y: point.y + 24 * scale, width: 50 * scale, height: 68 * scale })) {
-        ctx.restore();
-        return;
-      }
-      ctx.fillStyle = prop.color || "#ffc857"; ctx.beginPath(); ctx.moveTo(point.x - 10 * scale, point.y - 18 * scale); ctx.lineTo(point.x + 10 * scale, point.y - 18 * scale); ctx.lineTo(point.x + 8 * scale, point.y + 13 * scale); ctx.lineTo(point.x, point.y + 7 * scale); ctx.lineTo(point.x - 8 * scale, point.y + 13 * scale); ctx.closePath(); ctx.fill();
-    } else if (prop.kind === "glowMushroom") {
-      if (Art.drawInteriorSprite(ctx, { sprite: "glowMushroom", x: point.x, y: point.y + 10 * scale, width: 54 * scale, height: 54 * scale })) {
-        ctx.restore();
-        return;
-      }
-      ctx.fillStyle = prop.color || "#52dccb"; ctx.globalAlpha = .7; ctx.beginPath(); ctx.arc(point.x, point.y, 4 * scale, Math.PI, Core.TAU); ctx.fill(); ctx.fillRect(point.x - scale, point.y, 2 * scale, 5 * scale);
-    } else if (["rubble", "crackedTile"].includes(prop.kind)) {
-      if (Art.drawInteriorSprite(ctx, { sprite: prop.kind, x: point.x, y: point.y + 8 * scale, width: (prop.kind === "rubble" ? 52 : 46) * scale, height: (prop.kind === "rubble" ? 52 : 34) * scale })) {
-        ctx.restore();
-        return;
-      }
-      ctx.strokeStyle = "rgba(159,178,194,.28)"; ctx.beginPath(); ctx.moveTo(point.x - 5 * scale, point.y + 3 * scale); ctx.lineTo(point.x, point.y - 4 * scale); ctx.lineTo(point.x + 6 * scale, point.y + 2 * scale); ctx.stroke();
-    } else if (prop.kind === "mannequin") {
-      if (Art.drawInteriorSprite(ctx, { sprite: "mannequin", x: point.x, y: point.y + 18 * scale, width: 62 * scale, height: 72 * scale })) {
-        ctx.restore();
-        return;
-      }
-      ctx.fillStyle = "#88765f"; ctx.beginPath(); ctx.arc(point.x, point.y - 13 * scale, 5 * scale, 0, Core.TAU); ctx.fill(); ctx.fillRect(point.x - 7 * scale, point.y - 7 * scale, 14 * scale, 20 * scale);
+      });
+      if (drew) drawGlow(prop, prop.kind === "forgeFire" ? "rgba(255,116,76,.22)" : "rgba(82,220,203,.18)", prop.radius ? prop.radius * 3 : 70, shakeX, shakeY);
+      return;
     }
-    ctx.restore();
+    if (prop.kind === "banner") {
+      Art.drawInteriorSprite(ctx, { sprite: "guildBanner", x: point.x, y: point.y + 24 * scale, width: 50 * scale, height: 68 * scale });
+      return;
+    }
+    if (prop.kind === "glowMushroom") {
+      Art.drawInteriorSprite(ctx, { sprite: "glowMushroom", x: point.x, y: point.y + 10 * scale, width: 54 * scale, height: 54 * scale });
+      return;
+    }
+    if (["rubble", "crackedTile"].includes(prop.kind)) {
+      Art.drawInteriorSprite(ctx, { sprite: prop.kind, x: point.x, y: point.y + 8 * scale, width: (prop.kind === "rubble" ? 52 : 46) * scale, height: (prop.kind === "rubble" ? 52 : 34) * scale });
+      return;
+    }
+    if (prop.kind === "mannequin") {
+      Art.drawInteriorSprite(ctx, { sprite: "mannequin", x: point.x, y: point.y + 18 * scale, width: 62 * scale, height: 72 * scale });
+    }
   }
 
   function drawHouse(house, shakeX, shakeY) {
@@ -8700,64 +8813,7 @@
         width: spriteSettings.width * camera.zoom,
         height: spriteSettings.height * camera.zoom,
       }));
-    if (!drewSprite) {
-      ctx.fillStyle = "rgba(3,6,14,.35)";
-      ctx.fillRect(point.x + 7, point.y + 10, w, h);
-      ctx.fillStyle = "#263047";
-      ctx.fillRect(point.x + w * .08, point.y + h * .28, w * .84, h * .7);
-      ctx.fillStyle = house.roof;
-      ctx.beginPath();
-      ctx.moveTo(point.x - w * .05, point.y + h * .34);
-      ctx.lineTo(point.x + w * .15, point.y + h * .05);
-      ctx.lineTo(point.x + w * .85, point.y + h * .05);
-      ctx.lineTo(point.x + w * 1.05, point.y + h * .34);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "rgba(245,233,202,.22)";
-      ctx.lineWidth = Math.max(1, camera.zoom);
-      for (let i = 0; i < 5; i += 1) {
-        const roofLineY = point.y + h * (.09 + i * .055);
-        ctx.beginPath();
-        ctx.moveTo(point.x + w * (.1 - i * .02), roofLineY);
-        ctx.lineTo(point.x + w * (.9 + i * .02), roofLineY);
-        ctx.stroke();
-      }
-      const windowW = 18 * camera.zoom;
-      const windowH = 16 * camera.zoom;
-      [point.x + w * .26, point.x + w * .67].forEach((x) => {
-        ctx.fillStyle = house.light;
-        ctx.globalAlpha = .68 + Math.sin(elapsed * 1.7 + x) * .12;
-        ctx.fillRect(x, point.y + h * .55, windowW, windowH);
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#141b2d";
-        ctx.strokeRect(x, point.y + h * .55, windowW, windowH);
-      });
-      ctx.fillStyle = "#151b2b";
-      ctx.fillRect(point.x + w * .45, point.y + h * .63, w * .13, h * .35);
-      if (house.role === "clinic") {
-        ctx.fillStyle = "#82d6c7";
-        ctx.fillRect(point.x + w * .23, point.y + h * .4, w * .54, h * .07);
-        ctx.fillStyle = "#fff1bf";
-        ctx.fillRect(point.x + w * .47, point.y + h * .13, w * .06, h * .13);
-        ctx.fillRect(point.x + w * .42, point.y + h * .18, w * .16, h * .06);
-        ctx.fillStyle = "#82d6c7";
-        ctx.fillRect(point.x + w * .19, point.y + h * .54, w * .12, h * .11);
-        ctx.fillRect(point.x + w * .69, point.y + h * .54, w * .12, h * .11);
-      } else if (house.role === "general-store") {
-        ctx.fillStyle = "#f0c36a";
-        ctx.fillRect(point.x + w * .18, point.y + h * .4, w * .64, h * .08);
-        for (let stripe = 0; stripe < 4; stripe += 1) {
-          ctx.fillStyle = stripe % 2 ? "#9c6545" : "#f0c36a";
-          ctx.fillRect(point.x + w * (.2 + stripe * .16), point.y + h * .46, w * .13, h * .08);
-        }
-        ctx.fillStyle = "#8a6847";
-        ctx.fillRect(point.x + w * .08, point.y + h * .7, w * .14, h * .13);
-        ctx.fillRect(point.x + w * .78, point.y + h * .7, w * .14, h * .13);
-        ctx.strokeStyle = "#f0c36a";
-        ctx.strokeRect(point.x + w * .08, point.y + h * .7, w * .14, h * .13);
-        ctx.strokeRect(point.x + w * .78, point.y + h * .7, w * .14, h * .13);
-      }
-    }
+    if (!drewSprite) return;
     const label = house.label;
     if (label) {
       const centerX = point.x + w / 2;
@@ -8784,133 +8840,59 @@
     const treeSize = 88 * renderScale;
     const variants = ["broadleafTree", "pineTree", "autumnTree", "blossomTree"];
     const variant = tree.variant || variants[Math.min(variants.length - 1, Math.floor((Number(tree.seed) || 0) * variants.length))];
-    if (Art.drawEnvironmentSprite(ctx, {
-      sprite: variant,
-      x: point.x,
-      y: point.y + 27 * scale,
-      width: treeSize * scale,
-      height: treeSize * scale,
-    })) return;
-    ctx.fillStyle = "rgba(3,7,13,.35)";
-    ctx.beginPath();
-    ctx.ellipse(point.x + 3, point.y + 14 * scale, 18 * scale, 7 * scale, 0, 0, Core.TAU);
-    ctx.fill();
-    ctx.fillStyle = "#584336";
-    ctx.fillRect(point.x - 4 * scale, point.y - 2 * scale, 8 * scale, 22 * scale);
-    const sway = Math.sin(elapsed * .7 + tree.seed * 8) * 1.2 * scale;
-    const colors = ["#1b4a45", "#20534a", "#183f40"];
-    [[-10,-14,16],[10,-12,15],[0,-25,18],[-2,-6,19]].forEach((part, index) => {
-      ctx.fillStyle = colors[index % colors.length];
-      ctx.beginPath();
-      ctx.arc(point.x + part[0] * scale + sway, point.y + part[1] * scale, part[2] * scale, 0, Core.TAU);
-      ctx.fill();
-    });
-    ctx.fillStyle = "rgba(135,219,130,.18)";
-    ctx.beginPath();
-    ctx.arc(point.x - 7 * scale + sway, point.y - 24 * scale, 7 * scale, 0, Core.TAU);
-    ctx.fill();
+    Art.drawEnvironmentSprite(ctx, { sprite: variant, x: point.x, y: point.y + 27 * scale, width: treeSize * scale, height: treeSize * scale });
   }
 
   function drawRock(rock, shakeX, shakeY) {
     const point = worldToScreen(rock, shakeX, shakeY);
     const r = rock.radius * camera.zoom;
-    if (Art.drawEnvironmentSprite(ctx, {
-      sprite: "rock",
-      x: point.x,
-      y: point.y + r * .8,
-      width: r * 4.15,
-      height: r * 4.15,
-    })) return;
-    ctx.fillStyle = "rgba(3,6,13,.3)";
-    ctx.beginPath(); ctx.ellipse(point.x + 2, point.y + r * .7, r * 1.15, r * .45, 0, 0, Core.TAU); ctx.fill();
-    ctx.fillStyle = rock.seed > .5 ? "#52606a" : "#46555f";
-    ctx.beginPath();
-    ctx.moveTo(point.x - r, point.y + r * .45);
-    ctx.lineTo(point.x - r * .65, point.y - r * .55);
-    ctx.lineTo(point.x + r * .2, point.y - r);
-    ctx.lineTo(point.x + r, point.y - r * .15);
-    ctx.lineTo(point.x + r * .7, point.y + r * .65);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "rgba(245,233,202,.16)"; ctx.stroke();
+    Art.drawEnvironmentSprite(ctx, { sprite: "rock", x: point.x, y: point.y + r * .8, width: r * 4.15, height: r * 4.15 });
   }
 
   function drawLamp(lamp, shakeX, shakeY) {
     const point = worldToScreen(lamp, shakeX, shakeY);
     const scale = camera.zoom;
-    if (Art.drawEnvironmentSprite(ctx, {
-      sprite: "lamp",
-      x: point.x,
-      y: point.y + 13 * scale,
-      width: 62 * scale,
-      height: 62 * scale,
-    })) return;
-    ctx.strokeStyle = "#735a42"; ctx.lineWidth = 3 * scale;
-    ctx.beginPath(); ctx.moveTo(point.x, point.y + 10 * scale); ctx.lineTo(point.x, point.y - 22 * scale); ctx.stroke();
-    ctx.fillStyle = "#ffc857"; ctx.shadowColor = "#ffc857"; ctx.shadowBlur = 12;
-    ctx.fillRect(point.x - 5 * scale, point.y - 26 * scale, 10 * scale, 11 * scale);
-    ctx.shadowBlur = 0;
+    const drew = Art.drawEnvironmentSprite(ctx, { sprite: "lamp", x: point.x, y: point.y + 13 * scale, width: 62 * scale, height: 62 * scale });
+    if (drew) drawGlow(lamp, "rgba(255,200,87,.16)", 100, shakeX, shakeY);
   }
 
   function drawShrine(shrine, shakeX, shakeY) {
     const point = worldToScreen(shrine, shakeX, shakeY);
     const scale = camera.zoom;
-    if (Art.drawEnvironmentSprite(ctx, {
-      sprite: "shrine",
-      x: point.x,
-      y: point.y + 25 * scale,
-      width: 88 * scale,
-      height: 88 * scale,
-    })) return;
-    ctx.fillStyle = "rgba(3,6,13,.35)"; ctx.beginPath(); ctx.ellipse(point.x, point.y + 13 * scale, 23 * scale, 8 * scale, 0, 0, Core.TAU); ctx.fill();
-    ctx.fillStyle = "#6e594a"; ctx.fillRect(point.x - 17 * scale, point.y - 2 * scale, 34 * scale, 23 * scale);
-    ctx.fillStyle = "#23314a"; ctx.beginPath(); ctx.moveTo(point.x - 23 * scale, point.y); ctx.lineTo(point.x, point.y - 19 * scale); ctx.lineTo(point.x + 23 * scale, point.y); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#ffc857"; ctx.shadowColor = "#ffc857"; ctx.shadowBlur = 16;
-    ctx.fillRect(point.x - 5 * scale, point.y + 3 * scale, 10 * scale, 11 * scale); ctx.shadowBlur = 0;
+    Art.drawEnvironmentSprite(ctx, { sprite: "shrine", x: point.x, y: point.y + 25 * scale, width: 88 * scale, height: 88 * scale });
   }
 
   function drawSign(sign, shakeX, shakeY) {
     const point = worldToScreen(sign, shakeX, shakeY);
     const scale = camera.zoom;
-    if (Art.drawEnvironmentSprite(ctx, {
-      sprite: "sign",
-      x: point.x,
-      y: point.y + 20 * scale,
-      width: 58 * scale,
-      height: 58 * scale,
-    })) return;
-    ctx.fillStyle = "#624a39"; ctx.fillRect(point.x - 2 * scale, point.y - 2 * scale, 4 * scale, 20 * scale);
-    ctx.fillStyle = "#8a6847"; ctx.fillRect(point.x - 13 * scale, point.y - 12 * scale, 26 * scale, 13 * scale);
-    ctx.strokeStyle = "#34281f"; ctx.strokeRect(point.x - 13 * scale, point.y - 12 * scale, 26 * scale, 13 * scale);
+    Art.drawEnvironmentSprite(ctx, { sprite: "sign", x: point.x, y: point.y + 20 * scale, width: 58 * scale, height: 58 * scale });
   }
 
   function drawChest(chest, shakeX, shakeY) {
+    if (openedChests.has(chest.id)) return;
     const point = worldToScreen(chest, shakeX, shakeY);
     const scale = camera.zoom;
-    const open = openedChests.has(chest.id);
-    if (!open && Art.drawEnvironmentSprite(ctx, {
-      sprite: "chest",
-      x: point.x,
-      y: point.y + 13 * scale,
-      width: 54 * scale,
-      height: 54 * scale,
-    })) return;
-    ctx.fillStyle = "rgba(3,6,13,.3)"; ctx.beginPath(); ctx.ellipse(point.x, point.y + 8 * scale, 15 * scale, 5 * scale, 0, 0, Core.TAU); ctx.fill();
-    ctx.save(); ctx.translate(point.x, point.y);
-    if (open) ctx.rotate(-.25);
-    ctx.fillStyle = "#7c5637"; ctx.fillRect(-13 * scale, -7 * scale, 26 * scale, 16 * scale);
-    ctx.fillStyle = "#a77b49"; ctx.fillRect(-13 * scale, -8 * scale, 26 * scale, 5 * scale);
-    ctx.fillStyle = "#ffc857"; ctx.fillRect(-2 * scale, -4 * scale, 4 * scale, 8 * scale);
-    ctx.restore();
+    Art.drawEnvironmentSprite(ctx, { sprite: "chest", x: point.x, y: point.y + 13 * scale, width: 54 * scale, height: 54 * scale });
   }
 
   function drawNpc(npc, shakeX, shakeY) {
     const point = worldToScreen(npc, shakeX, shakeY);
     const scale = camera.zoom;
     if (npc.render === false) {
-      // The Hospital nurse is already part of the supplied flattened bitmap.
-      // Keep the semantic NPC for collision, authored-hotspot clicks and the
-      // existing service flow without drawing a duplicate sprite over it.
-      drawNpcName(point.x, point.y - 69 * scale, npcDisplayName(npc));
+      // Flattened interiors bake the visible receptionist into the map art.
+      // Anchor the label to the authored magenta NPC region so higher-resolution
+      // interiors do not place the name over the character's face.
+      const region = authoritativeInteractionRegion(npc);
+      const authored = region ? world.navigation?.data?.regions?.[region]?.[0] : null;
+      if (authored?.bbox) {
+        const labelPoint = worldToScreen({
+          x: authored.bbox.x + authored.bbox.width / 2,
+          y: authored.bbox.y - 12,
+        }, shakeX, shakeY);
+        drawNpcName(labelPoint.x, labelPoint.y, npcDisplayName(npc));
+      } else {
+        drawNpcName(point.x, point.y - 69 * scale, npcDisplayName(npc));
+      }
       return;
     }
     const actors = {
@@ -8948,30 +8930,6 @@
     ctx.strokeText(name, x, y);
     ctx.fillStyle = "#f5e9ca";
     ctx.fillText(name, x, y);
-    ctx.restore();
-  }
-
-  function drawHumanoid(x, y, color, facing, walk, playerActor) {
-    const scale = camera.zoom;
-    ctx.save();
-    ctx.fillStyle = "rgba(2,5,12,.42)"; ctx.beginPath(); ctx.ellipse(x, y + 10 * scale, 11 * scale, 4 * scale, 0, 0, Core.TAU); ctx.fill();
-    const leg = walk * 3 * scale;
-    ctx.strokeStyle = "#121829"; ctx.lineWidth = 4 * scale; ctx.lineCap = "square";
-    ctx.beginPath(); ctx.moveTo(x - 4 * scale, y + 5 * scale); ctx.lineTo(x - 4 * scale + leg, y + 14 * scale); ctx.moveTo(x + 4 * scale, y + 5 * scale); ctx.lineTo(x + 4 * scale - leg, y + 14 * scale); ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.moveTo(x - 10 * scale, y - 9 * scale); ctx.lineTo(x + 10 * scale, y - 9 * scale); ctx.lineTo(x + 8 * scale, y + 9 * scale); ctx.lineTo(x - 8 * scale, y + 9 * scale); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#edc6a2"; ctx.beginPath(); ctx.arc(x, y - 15 * scale, 7 * scale, 0, Core.TAU); ctx.fill();
-    ctx.fillStyle = playerActor ? "#1c2945" : "#2d3548";
-    ctx.beginPath(); ctx.arc(x, y - 18 * scale, 7.5 * scale, Math.PI, Core.TAU); ctx.fill();
-    if (playerActor) {
-      const facingVector = Core.directionVector(facing);
-      ctx.strokeStyle = "#ffc857"; ctx.lineWidth = 2 * scale;
-      ctx.beginPath(); ctx.moveTo(x - 8 * scale, y - 7 * scale); ctx.lineTo(x + 8 * scale, y - 5 * scale); ctx.stroke();
-      const lanternX = x - facingVector.y * 10 * scale;
-      const lanternY = y + 2 * scale;
-      ctx.fillStyle = "#ffc857"; ctx.shadowColor = "#ffc857"; ctx.shadowBlur = 9;
-      ctx.fillRect(lanternX - 2 * scale, lanternY - 2 * scale, 4 * scale, 6 * scale); ctx.shadowBlur = 0;
-    }
     ctx.restore();
   }
 
@@ -9027,56 +8985,22 @@
   }
 
   function drawEnemy(enemy, shakeX, shakeY) {
+    if (!Art?.drawEnemy) return;
     const point = worldToScreen(enemy, shakeX, shakeY);
     const scale = camera.zoom;
-    if (Art?.drawEnemy) {
-      ctx.save();
-      if (enemy.hitFlash > 0) ctx.filter = "brightness(2.2)";
-      Art.drawEnemy(ctx, {
-        x: point.x,
-        y: point.y + enemy.radius * .72 * scale,
-        scale: scale * (enemy.boss ? 1.03 : .98),
-        type: enemy.type,
-        facing: enemy.facing,
-        phase: enemy.anim,
-        state: enemy.hitFlash > 0 ? "hurt" : enemy.locomotion?.state || "idle",
-        locomotion: enemy.locomotion,
-        palette: { body: enemy.color },
-      });
-      ctx.restore();
-      return;
-    }
     ctx.save();
-    if (enemy.hitFlash > 0) ctx.filter = "brightness(2.4)";
-    ctx.fillStyle = "rgba(2,5,12,.42)"; ctx.beginPath(); ctx.ellipse(point.x, point.y + enemy.radius * .72 * scale, enemy.radius * 1.05 * scale, enemy.radius * .4 * scale, 0, 0, Core.TAU); ctx.fill();
-    if (enemy.type === "slime") {
-      const bounce = Math.sin(enemy.anim) * 2.2 * scale;
-      ctx.fillStyle = enemy.color;
-      ctx.beginPath(); ctx.moveTo(point.x - 14 * scale, point.y + 9 * scale); ctx.quadraticCurveTo(point.x - 13 * scale, point.y - 12 * scale - bounce, point.x, point.y - 13 * scale - bounce); ctx.quadraticCurveTo(point.x + 13 * scale, point.y - 12 * scale - bounce, point.x + 14 * scale, point.y + 9 * scale); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#d8d4ff"; ctx.fillRect(point.x - 6 * scale, point.y - 3 * scale - bounce, 3 * scale, 3 * scale); ctx.fillRect(point.x + 4 * scale, point.y - 3 * scale - bounce, 3 * scale, 3 * scale);
-    } else if (enemy.type === "wisp") {
-      ctx.globalCompositeOperation = "lighter";
-      const glow = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 28 * scale);
-      glow.addColorStop(0, "rgba(240,230,255,.9)"); glow.addColorStop(.25, "rgba(174,145,255,.7)"); glow.addColorStop(1, "rgba(174,145,255,0)");
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(point.x, point.y, 28 * scale, 0, Core.TAU); ctx.fill();
-      ctx.fillStyle = "#f5e9ff"; ctx.beginPath(); ctx.arc(point.x, point.y - 2 * scale, 6 * scale, 0, Core.TAU); ctx.fill();
-      ctx.strokeStyle = "#ae91ff"; ctx.lineWidth = 3 * scale; ctx.beginPath(); ctx.moveTo(point.x, point.y + 3 * scale); ctx.quadraticCurveTo(point.x - 9 * scale, point.y + 12 * scale, point.x + Math.sin(elapsed * 4 + enemy.x) * 5 * scale, point.y + 19 * scale); ctx.stroke();
-      ctx.globalCompositeOperation = "source-over";
-    } else if (enemy.type === "hound") {
-      ctx.fillStyle = enemy.color;
-      ctx.beginPath(); ctx.ellipse(point.x, point.y, 18 * scale, 10 * scale, 0, 0, Core.TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(point.x + 13 * scale, point.y - 8 * scale, 9 * scale, 0, Core.TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(point.x + 7 * scale, point.y - 14 * scale); ctx.lineTo(point.x + 10 * scale, point.y - 25 * scale); ctx.lineTo(point.x + 16 * scale, point.y - 14 * scale); ctx.fill();
-      ctx.fillStyle = "#ff6b6b"; ctx.fillRect(point.x + 15 * scale, point.y - 9 * scale, 3 * scale, 3 * scale);
-    } else {
-      const pulse = 1 + Math.sin(enemy.anim * .7) * .04;
-      ctx.translate(point.x, point.y); ctx.scale(pulse, pulse);
-      ctx.fillStyle = "#371f45"; ctx.beginPath(); ctx.arc(0, -4 * scale, 27 * scale, 0, Core.TAU); ctx.fill();
-      ctx.fillStyle = enemy.color; ctx.beginPath(); ctx.moveTo(-24 * scale, -12 * scale); ctx.lineTo(-33 * scale, -29 * scale); ctx.lineTo(-11 * scale, -21 * scale); ctx.moveTo(24 * scale, -12 * scale); ctx.lineTo(33 * scale, -29 * scale); ctx.lineTo(11 * scale, -21 * scale); ctx.fill();
-      ctx.fillStyle = "#ffc857"; ctx.shadowColor = "#ff6b91"; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(-9 * scale, -7 * scale, 4 * scale, 0, Core.TAU); ctx.arc(9 * scale, -7 * scale, 4 * scale, 0, Core.TAU); ctx.fill(); ctx.shadowBlur = 0;
-      ctx.strokeStyle = "#ff6b91"; ctx.lineWidth = 3 * scale; ctx.beginPath(); ctx.arc(0, 2 * scale, 12 * scale, .25, Math.PI - .25); ctx.stroke();
-    }
-    ctx.filter = "none";
+    if (enemy.hitFlash > 0) ctx.filter = "brightness(2.2)";
+    Art.drawEnemy(ctx, {
+      x: point.x,
+      y: point.y + enemy.radius * .72 * scale,
+      scale: scale * (enemy.boss ? 1.03 : .98),
+      type: enemy.type,
+      facing: enemy.facing,
+      phase: enemy.anim,
+      state: enemy.hitFlash > 0 ? "hurt" : enemy.locomotion?.state || "idle",
+      locomotion: enemy.locomotion,
+      palette: { body: enemy.color },
+    });
     ctx.restore();
   }
 
@@ -9101,17 +9025,11 @@
 
   function drawQuestMark(x, y, mark) {
     const sprite = mark === "!" ? "exclamation" : "question";
-    if (Art.drawMarker(ctx, { sprite, x, y: y + Math.sin(elapsed * 4) * 3, size: Math.max(26, 31 * camera.zoom), anchorY: .5 })) return;
-    ctx.fillStyle = "#ffc857"; ctx.strokeStyle = "#11182a"; ctx.lineWidth = 3;
-    ctx.font = `900 ${Math.max(14, 18 * camera.zoom)}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.strokeText(mark, x, y + Math.sin(elapsed * 4) * 3); ctx.fillText(mark, x, y + Math.sin(elapsed * 4) * 3);
+    Art.drawMarker(ctx, { sprite, x, y: y + Math.sin(elapsed * 4) * 3, size: Math.max(26, 31 * camera.zoom), anchorY: .5 });
   }
 
   function drawInteractDiamond(x, y) {
-    if (Art.drawMarker(ctx, { sprite: "interact", x, y: y + Math.sin(elapsed * 4) * 3, size: Math.max(19, 22 * camera.zoom), anchorY: .5 })) return;
-    const size = 5 * camera.zoom;
-    ctx.save(); ctx.translate(x, y + Math.sin(elapsed * 4) * 3); ctx.rotate(Math.PI / 4);
-    ctx.strokeStyle = "#52dccb"; ctx.lineWidth = 2; ctx.strokeRect(-size, -size, size * 2, size * 2); ctx.restore();
+    Art.drawMarker(ctx, { sprite: "interact", x, y: y + Math.sin(elapsed * 4) * 3, size: Math.max(19, 22 * camera.zoom), anchorY: .5 });
   }
 
   function drawProjectiles(shakeX, shakeY) {
@@ -9163,25 +9081,6 @@
     ensureAtmosphereVignetteCache();
     ctx.drawImage(atmosphereVignetteCache, 0, 0, width, height);
 
-    ctx.save();
-    for (let i = 0; i < atmosphereFogSprites.length; i += 1) {
-      const fogX = ((i * 239 + elapsed * (8 + i)) % (width + 320)) - 160;
-      const fogY = height * (.2 + ((i * .173) % .7));
-      ctx.drawImage(atmosphereFogSprites[i], fogX - 180, fogY - 120, 360, 240);
-    }
-    if (["world", "field"].includes(currentMapId)) {
-      ctx.strokeStyle = "rgba(190,220,228,.1)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let i = 0; i < Math.ceil(width / 56); i += 1) {
-        const x = (i * 67 + (i * 17 % 23)) % width;
-        const y = (i * 93 + rainOffset * (1 + i % 3)) % (height + 50) - 25;
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - 5, y + 14);
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
     ctx.restore();
   }
 
@@ -9221,8 +9120,6 @@
       }
     } else if (mode === "battle") {
       updateBattle(rawDelta);
-    } else if (mode === "title") {
-      rainOffset = (rainOffset + rawDelta * 80) % 80;
     }
     render();
     requestAnimationFrame(frame);
@@ -9235,6 +9132,22 @@
 
     if (mode === "title") {
       if (code === "Enter" || code === "Space") requestNewGame();
+      return;
+    }
+    if (guildCommissionDetailPanel?.hidden === false) {
+      if (code === "Escape" || code === "KeyE") closeGuildCommissionDetail();
+      return;
+    }
+    if (!skillDetailPanel.hidden) {
+      if (code === "Escape" || code === "KeyE") closeSkillDetail();
+      return;
+    }
+    if (!skillBookConfirmPanel.hidden) {
+      if (code === "Escape" || code === "KeyE") closeSkillManualConfirm();
+      return;
+    }
+    if (!abandonCommissionPanel.hidden) {
+      if (code === "Escape" || code === "KeyE") closeAbandonCommission();
       return;
     }
     if (mode === "facility") {
@@ -9333,6 +9246,10 @@
     if (code === "Escape" && systemSettingsPopover?.hidden === false) {
       setSystemSettingsOpen(false);
       systemButton?.focus({ preventScroll: true });
+      return;
+    }
+    if (code === "Escape" && facilityWindows.size) {
+      closeFacility(topFacilityWindow());
       return;
     }
     if (code === "KeyI") openFacility("bag");
@@ -9477,7 +9394,7 @@
           };
         })() : null,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
-        facility: mode === "facility" ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
+        facility: facilityWindows.size ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
         checkpoint: { ...checkpoint },
         enemyLevels: enemies.map((enemy) => ({ id: enemy.id, level: enemy.level, boss: enemy.boss })),
         enemyStates: enemies.filter((enemy) => enemy.alive).map((enemy) => ({
@@ -9700,7 +9617,7 @@
       setGuildMarks: (value) => {
         guildMarks = Core.clamp(Math.floor(Number(value) || 0), 0, 99999);
         syncDeckCapacityMilestones({ silent: true });
-        if (mode === "facility") renderFacility();
+        if (facilityWindows.size) renderFacility();
         return window.__RPG_DEBUG__.snapshot();
       },
       chooseUpgrade,
@@ -9721,7 +9638,7 @@
       facilityTab: (tab) => { facilityTab = tab; renderFacility(); },
       setInventoryFixture: (count = 0) => {
         inventoryFixtureCount = Core.clamp(Math.floor(Number(count) || 0), 0, 30);
-        if (mode === "facility" && facilityTab === "bag") renderBagFacility();
+        if (facilityWindows.size && facilityTab === "bag") renderBagFacility();
         return window.__RPG_DEBUG__.snapshot();
       },
       acceptOffer: (id) => acceptGuildOffer(id || currentContractOffers()[0]?.id),
@@ -9734,7 +9651,7 @@
       grantSkillBook: (star, quantity = 1) => {
         const result = Skills.grantSkillBooks(skillState, star, quantity);
         if (result.ok) skillState = result.state;
-        if (mode === "facility") renderFacility();
+        if (facilityWindows.size) renderFacility();
         return window.__RPG_DEBUG__.snapshot();
       },
       openSkillBook: (star) => { openGuildSkillBook(Number(star)); return window.__RPG_DEBUG__.snapshot(); },
@@ -9751,7 +9668,7 @@
           deckSlots: ids,
           deckCapacity: Math.max(skillState.deckCapacity, Math.min(Skills.MAX_EQUIPPED_SKILLS, ids.length)),
         });
-        if (mode === "facility") renderFacility();
+        if (facilityWindows.size) renderFacility();
         return window.__RPG_DEBUG__.snapshot();
       },
       setBattleAp: (value) => {
@@ -9810,7 +9727,13 @@
 
   document.getElementById("newGameButton").addEventListener("click", requestNewGame);
   for (const card of document.querySelectorAll("[data-class-choice]")) {
-    card.addEventListener("click", () => startNewGameWithClass(card.dataset.classChoice));
+    card.addEventListener("click", () => {
+      if (card.dataset.classLocked === "true") {
+        showToast("此職業需課金解鎖", "danger");
+        return;
+      }
+      startNewGameWithClass(card.dataset.classChoice);
+    });
   }
   document.getElementById("classSelectCancel").addEventListener("click", () => {
     classSelectPanel.hidden = true;
@@ -9887,12 +9810,24 @@
       event.preventDefault();
       return;
     }
-    if (event.target.matches("[data-inventory-detail-dismiss]")) {
+    const clickedDetailPopup = event.target.closest?.(".inventory-detail-popup");
+    const clickedDetailBackdrop = event.target.closest?.("[data-inventory-detail-dismiss]");
+    const clickedInventoryItem = event.target.closest?.('[data-facility-action="select-item"]');
+    const button = event.target.closest("[data-facility-action]");
+    if (facilityTab === "bag" && selectedInventoryItemId && clickedDetailBackdrop && !clickedDetailPopup) {
       selectedInventoryItemId = null;
       renderBagFacility();
       return;
     }
-    const button = event.target.closest("[data-facility-action]");
+    if (facilityTab === "bag" && selectedInventoryItemId && !clickedDetailPopup && !clickedInventoryItem) {
+      selectedInventoryItemId = null;
+      // If the click was only on inventory/background space, close immediately.
+      // For a real control (filter/page/etc.), let that action continue below.
+      if (!button) {
+        renderBagFacility();
+        return;
+      }
+    }
     if (!button || button.disabled) return;
     const action = button.dataset.facilityAction;
     if (action === "select-item") {
@@ -9929,7 +9864,7 @@
     else if (action === "buy-store-item") buyGeneralStoreItem(button.dataset.itemId);
     else if (action === "open-book") openGuildSkillBook(Number(button.dataset.bookStar));
     else if (action === "open-envelope") openGuildEnvelope(Number(button.dataset.envelopeStar));
-    else if (action === "use-manual") openSkillManualConfirm(button.dataset.skillId);
+    else if (action === "use-manual") useSkillManualFromBag(button.dataset.skillId);
     else if (action === "skill-detail") openSkillDetail(button.dataset.skillId, button);
     else if (action === "equip-skill") changeSkillLoadout(button.dataset.skillId, true);
     else if (action === "unequip-skill") changeSkillLoadout(button.dataset.skillId, false);
@@ -9985,6 +9920,15 @@
     renderSystemLog();
   });
   systemLogToggleButton?.addEventListener("click", toggleSystemLogCollapsed);
+  systemLogScrollZone?.addEventListener("wheel", (event) => {
+    if (!event.deltaY) return;
+    scrollSystemLogBy(event.deltaY);
+    event.preventDefault();
+  }, { passive: false });
+  systemLogScrollZone?.addEventListener("pointerdown", beginSystemLogScroll);
+  systemLogScrollZone?.addEventListener("pointermove", moveSystemLogScroll);
+  systemLogScrollZone?.addEventListener("pointerup", finishSystemLogScroll);
+  systemLogScrollZone?.addEventListener("pointercancel", finishSystemLogScroll);
   systemLogDragHandle?.addEventListener("pointerdown", beginSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointermove", moveSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointerup", finishSystemLogDrag);
@@ -10100,20 +10044,18 @@
     setSystemSettingsOpen(false);
     systemButton?.focus({ preventScroll: true });
   });
-  soundButton?.addEventListener("click", () => {
-    soundEnabled = !soundEnabled;
-    if (mode === "battle") {
-      bgm.setEnabled(false);
-      if (battleBgmAudio) {
-        if (soundEnabled) battleBgmAudio.play().catch(() => {});
-        else battleBgmAudio.pause();
-      }
-    } else {
-      bgm.setEnabled(soundEnabled);
+  volumeMuteButton?.addEventListener("click", () => {
+    const enabled = setSoundEnabled(!soundEnabled);
+    if (enabled) sound.tone(520, .1, { to: 760, gain: .03 });
+  });
+  musicVolumeSlider?.addEventListener("input", () => {
+    const nextVolume = Core.clamp(Number(musicVolumeSlider.value) / 100, 0, 1);
+    if (nextVolume <= 0) {
+      setSoundEnabled(false);
+      return;
     }
-    try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
-    syncSystemSoundControl();
-    if (soundEnabled) sound.tone(520, .1, { to: 760, gain: .03 });
+    setBgmVolume(nextVolume);
+    if (!soundEnabled) setSoundEnabled(true);
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   document.addEventListener("pointerdown", unlockGameAudioFromGesture, { capture: true, passive: true });

@@ -1274,25 +1274,20 @@
     if (!skill) return { ok: false, reason: "not-found", state, skill: null };
     if (wholeNumber(state.manualCounts[skill.id]) < 1) return { ok: false, reason: "no-manual", state, skill };
     if (skill.classId !== state.classId) return { ok: false, reason: "wrong-class", state, skill };
-    const duplicate = stateHasSkill(state.unlockedSkillIds, skill.id);
-    if (!duplicate) {
-      const learnability = skillLearnability(state, skill.id, options);
-      if (learnability.status !== "canLearn") {
-        return { ok: false, reason: learnability.reason, state, skill, missingPrerequisites: learnability.missingPrerequisites };
-      }
+    const learnability = skillLearnability(state, skill.id, options);
+    if (learnability.status === "learned") {
+      // An already learned manual stays in the bag.  Do not silently convert
+      // or consume it; the UI simply reports 「已學習」.
+      return { ok: false, reason: "already-learned", state, skill, duplicate: true, isDuplicate: true, shardsAwarded: 0, missingPrerequisites: [] };
+    }
+    if (learnability.status !== "canLearn") {
+      return { ok: false, reason: learnability.reason, state, skill, missingPrerequisites: learnability.missingPrerequisites };
     }
     const next = cloneState(state);
     next.manualCounts[skill.id] -= 1;
     if (next.manualCounts[skill.id] <= 0) delete next.manualCounts[skill.id];
-    let shardsAwarded = 0;
-    if (duplicate) {
-      shardsAwarded = DUPLICATE_SHARDS[skill.star];
-      next.masteryShards = Math.min(999999, next.masteryShards + shardsAwarded);
-      next.duplicateCounts[skill.id] = wholeNumber(next.duplicateCounts[skill.id]) + 1;
-    } else {
-      next.unlockedSkillIds.push(skill.id);
-    }
-    return { ok: true, reason: null, skill, duplicate, isDuplicate: duplicate, shardsAwarded, state: next };
+    next.unlockedSkillIds.push(skill.id);
+    return { ok: true, reason: null, skill, duplicate: false, isDuplicate: false, shardsAwarded: 0, state: next };
   }
 
   function unlockSkillWithShards(rawState, skillId) {

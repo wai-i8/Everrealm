@@ -102,7 +102,7 @@ top-level page header。Info/X sizing 由 shared component 統一，唔按頁分
 
 ### Buttons and tabs
 
-- primary action 可以使用 gold bitmap-backed button，但文字必須保持高對比淺色／cream；禁止金色底配黑色或近黑文字。hover 只提高亮度／少量上移，focus 使用明顯 teal/gold outline。
+- primary action 可以使用 gold bitmap-backed button，但文字必須保持高對比淺色／cream；禁止金色底配黑色或近黑文字。hover 只提高亮度／少量上移，focus 使用明顯 teal/gold outline。bitmap button 本身已經係完整 surface，背後不可再疊額外深藍矩形、glow plate 或 shadow panel；按鈕寬度由文字內容驅動，長文案以 9-slice／`border-image` 只延伸中段，左右裝飾端帽保持原比例。
 - secondary action 使用 dark inset button；danger action 使用低飽和紅。
 - tab 只喺同一窗口內有多個同級內容時使用；active tab 以 gold underline 和 inset
   glow 表達，唔靠顏色以外嘅符號。
@@ -220,10 +220,11 @@ Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及
 
 ### Guild variant
 
+Guild 委託主列表使用 compact Status-tier footprint；每個委託 summary row 內容整組置中，順序固定為「委託名稱 → 星級 →（如有）進行狀態」，避免星級先行令短標題視覺偏左。左側 launcher 開出嘅 `任務` 同唯讀 `面板` window 同樣使用 Status-tier compact width；城門真正可編輯嘅面板配置保持約 `17rem` 窄窗，但「技能／面板」兩個管理區固定左右並排，唔因窄身而堆成上下。
+
 Guild window 可以有非常克制嘅金色 guild accent、委託星級同 progress meter，
 但仍然使用相同 base frame、字級、padding、button 和 scroll rules。正式頁面身份
-為「公會委託」；接受後卡片必須用內容驅動的緊湊 layout 完整容納 status、objective、
-recommendation、progress、reward 同 contextual action。卡片不可因 decorative frame
+為「公會委託」；公會內接受前／詳情頁可以按需要顯示 recommendation、reward 同 contextual action。左側 launcher 開出嘅已接受「任務」卡則只保留任務名稱／狀態、objective、progress 同 progress bar；已完成時底部只顯示提示文字「請返回公會回報任務」，唔顯示建議等級、完成獎勵或可令人誤會會自動傳送嘅回報 button。卡片不可因 decorative frame
 或固定高度令操作被裁切，窄屏則自然堆疊。Guild action 採深色 inset surface 配暖金細框／hover，
 唔使用大面積金色填滿；文字一律保持 cream／white 高對比。視窗高度由內容決定，唔為短內容保留大幅空白。放棄委託確認框同樣使用 compact content-driven layout。
 
@@ -333,8 +334,9 @@ tests alone are insufficient.
 
 Inventory 左側 canonical equipment paperdoll 係固定區域；右側物品 grid 固定每頁 `5 × 3 = 15` 件。
 超過 15 件先顯示上一頁／下一頁及 `current / total`，切頁只更新右側物品 grid，左側裝備區唔移位、
-唔重新變成另一頁。分類切換後由該分類第 1 頁開始。Inventory toolbar 同時顯示玩家現有「金幣」，
-全 game player-facing currency 一律叫「金幣」。Inventory 冇額外 help copy，因此 header 唔顯示 `[i]`。
+唔重新變成另一頁。分類切換後由該分類第 1 頁開始。Inventory toolbar 同時顯示玩家現有「金幣」；
+金額顯示使用共用金幣 icon + 數字，唔重複印「金幣」兩字。道具店餘額同商品價格沿用同一 currency treatment。
+全 game player-facing currency 名稱仍然係「金幣」（例如說明、toast、獎勵文案）。Inventory 冇額外 help copy，因此 header 唔顯示 `[i]`。
 
 ### Bottom-left system / battle log
 
@@ -355,3 +357,13 @@ Firebase 帳戶未通過登入／授權前，左側主功能 launcher 必須完�
 普通旅館、醫院等 NPC 對話使用單一乾淨 anchored frame：speaker 置頂、正文自然左對齊、留白按內容決定。
 單向對話唔硬塞選項；如有 choices，唔顯示 `1.`／`2.` 或其他無意義括號數字，亦唔用拉長金色 bitmap
 再疊第二層底框。選項只係真正 branching/service action 時先出現。
+
+## 7. 2026-09-11 compact launcher / click-through log update
+
+- Compact launcher-family windows use the narrow trial footprint requested for visual testing: `status`, portable `missions`, portable read-only `deck-view`, and the in-Guild commission list target about `16rem` desktop max width. The city-gate editable Deck configurator targets about `17rem`; its learned-skill and current-panel regions remain side-by-side inside that narrow footprint.
+- The six left launcher functions (`status`, `bag`, `deck-view`, `skills`, `missions`, `system`) are non-blocking exploration UI: the player may keep walking while these windows are open. Facility/service UI reached through world interaction (`guild`, `shop`, `general-store`, editable `deck`) and modal confirmations/details remain movement-blocking.
+- Inventory remains exactly `5 × 3` per page. Each visible item tile uses one `1:1` outer frame only（icon 上、名稱下），唔再喺 icon 外加第二層卡框；左邊六格裝備板保留，但移除再包住整塊裝備板嘅最外層裝飾框。物品區高度按最多三行內容決定，唔為空白行拉長。Item/equipment detail popup 點擊 popup 外背景即關閉，關閉物品欄亦會清除 selection。
+- The persistent System/Battle log is HUD text rather than a panel surface: no message background, no visible scrollbar, and text does not intercept map clicks. Each full message line inherits one category/tone colour from `[tag]` through body text and uses a black outline/shadow for contrast.
+- Log history is scrolled only from an invisible strip on the left side of the log: mouse wheel on desktop or vertical finger swipe on touch devices. Tabs, collapse and drag controls remain the only other interactive log controls.
+- NPC dialogue always renders above the persistent log HUD.
+- System settings use a single 0–100% volume row；移除獨立音樂 toggle 同左側 speaker，只保留 slider 右邊一個 speaker button。按 speaker 會由目前音量切到 `0%` mute，再按一次恢復 mute 前音量。The account section is a compact card that separates email from cloud-sync status and provides a styled logout button. Entering battle forcibly closes all exploration launcher windows and their detail popups.
