@@ -7410,6 +7410,11 @@ html body [aria-disabled="true"] {
 .ui-button,
 .modal-overlay .facility-action-button,
 .facility-overlay:not([data-facility-tab="guild"]) .facility-action-button {
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  justify-self: start !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -7565,11 +7570,11 @@ html body [aria-disabled="true"] {
   pointer-events: auto !important;
 }
 
-/* Confirm/Cancel in the abandon dialog must be the same visual footprint even
-   though they use different semantic/button skins. */
+/* Confirm/Cancel keep the same height and spacing, but shared bitmap buttons
+   size horizontally from their label instead of stretching across the row. */
 .abandon-commission-actions > #abandonCommissionConfirmButton,
 .abandon-commission-actions > #abandonCommissionCancelButton {
-  width: 100% !important;
+  width: fit-content !important;
   min-width: 0 !important;
   height: 2.75rem !important;
   min-height: 2.75rem !important;
@@ -7634,8 +7639,8 @@ html body [aria-disabled="true"] {
   margin-top: .8rem !important;
 }
 .dialogue-choices.is-compact .dialogue-choice {
-  width: auto !important;
-  min-width: 6.5rem !important;
+  width: fit-content !important;
+  min-width: 0 !important;
   height: 2.25rem !important;
   min-height: 2.25rem !important;
   padding: .3rem .9rem !important;
@@ -7692,7 +7697,7 @@ html body [aria-disabled="true"] {
 }
 .inventory-detail-actions .facility-action-button,
 .inventory-detail-actions .secondary-button {
-  width: 100% !important;
+  width: fit-content !important;
   height: 2.2rem !important;
   min-height: 2.2rem !important;
   min-width: 0 !important;
