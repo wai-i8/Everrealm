@@ -33,7 +33,7 @@
 - 主城可見 artwork、native gameplay world 同 authored navigation 都固定為 `7680 × 4320`；玩家約 `128 × 192` 嘅可見 sprite body proportion 係以呢個原生尺度 authored，標準玩家 locomotion frame 保持 `256 × 256` world units，唔使用 `worldScale`／`entityScale`／`unitScale` migration factor。camera 係圍繞玩家裁切 viewport 嘅 window，唔係將全張主城 fit 入 gameplay viewport；全局遠／中／近 native-world zoom 固定為 `0.46176`／`0.592`／`0.72224`，8K source 尺寸亦唔會自動改變所選 view mode。background、entity、collision 同 screen／world conversion 共用同一 camera transform，DPR 只提高 Canvas output resolution，唔改變 world viewport。
 - 每張 supplied map image 都係自己嘅 gameplay world：一個 native scene pixel 就係一個 world unit，native image width／height 就係 world bounds。大地圖會真實較耐行，小型 interior 會真實較快行，兩者唔會 normalize 到共同尺寸或舊 logical world。玩家、NPC 同各 monster 嘅 authored render dimensions、`330` world-units/sec 基礎探索移速及遠／中／近 camera preset 全部係 global contract，唔由地圖尺寸、場景身份或解析度推導；細地圖不足以覆蓋 viewport 時亦唔使用 cover-zoom floor，場景保持原有比例並置中／clamp 於 native world bounds，background、entity、collision 同 click conversion 必須繼續共用同一 camera transform。
 - 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；公會、裝備店、療癒所、雜貨舖及旅店等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
-- 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊固定每頁 `5 × 3`、最多 15 格列出藥水、技能書、素材及裝備；每件物品只用一層 outer slot frame，icon 上、名稱下，左邊裝備板亦唔再額外加最外層 shell。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
+- 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊固定每頁 `5 × 3`、最多 15 格列出藥水、技能書、素材及裝備；每件物品只用一層 outer slot frame，icon 上、名稱下，左邊裝備板亦唔再額外加最外層 shell。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；已裝備物品可直接「卸下」，一般可棄物品可經確認後「銷毀」，detail popup 點外層背景或關閉物品欄時 action state 必須一齊清除。換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。開啟狀態、物品、面板、技能、任務或系統時左側功能列繼續顯示，玩家可以同時開多個不同功能 window；同一功能只維持一個 instance。新開／重新點擊嘅 window 置頂，點擊其他已開 window 會將其帶回前景。系統設定同其他五個主功能使用同一套可拖動、可疊放 window 行為，唔再固定黐住 system icon。
 - 所有一般彈出視窗右上角永遠提供清楚可見、bitmap-backed 的 shared close control。阻塞式 modal／confirmation 可以點半透明背景關閉；可並存嘅主功能 window 則使用 transparent positioning layer，點 window 外唔會自動關閉，並容許玩家繼續操作左側 launcher。Popup backdrop 唔使用 blur；major window／modal 可用滑鼠或觸控由標題、文字或其他非互動區域拖動，button、input、link、可拖技能等 interactive control 本身唔啟動視窗拖動。
 - 玩家長時間無操作不會再開啟阻塞式「停一停／Night Watch Paused」視窗；持久化改用無干擾的 dirty-state autosave checkpoint。狀態有意義地改變時標記 dirty，約每 5 秒只檢查並保存一次有變更的狀態；重要場景轉移、交易、技能取得、裝備或任務狀態轉移會即時保存，保存失敗會保留 dirty 等待重試。這是 client persistence checkpoint，唔預設未來 authoritative server 行為。
@@ -50,7 +50,7 @@
 - 公會、裝備店、療癒所、雜貨舖及旅店嘅入口使用可見 master art 對應嘅 semantic physical door；門區只要在鏡頭內就可以直接點擊／按住行入，但唔常駐繪製 marker 或入口 label。Flattened scene 可以由「正式顯示圖 + 配對 authoring 圖」定義；authoring 圖擁有 walkability、transition 同 special interaction geometry，建築圖片尺寸不得改變入口傳送點、點擊目標或碰撞門廊的設計位置；具體 contract 見 `ART_PIPELINE.md`，transition geometry 見 `docs/MAP_SYSTEM.md`。
 - 玩家、普通怪物及 Familiar 正式移動時都要有四方向行走動畫；探索地圖唔接受靜止 sprite 純平移。普通怪物接近斜角時保留原軸向，改向需要短暫確認及冷卻，避免碰牆或微小路徑修正造成左右高速閃爍。具體 28-frame locomotion atlas、anchor、repack 及 animation QA 規格見 `ART_PIPELINE.md`。
 - 探索地圖不顯示怪物血條；只有戰鬥場景在角色腳下顯示血條。
-- 公會任務只可在公會開啟；商店只可在裝備店開啟。一般物品、狀態、裝備及技能可由左側選單隨時查看。
+- 公會任務只可在公會開啟；裝備交易只可在裝備店開啟，道具交易只可在道具店開啟。一般物品、狀態、裝備及技能可由左側選單隨時查看。
 
 ## 戰棋戰鬥概要
 
@@ -64,6 +64,7 @@
 - 角色有上、下、左、右四方向；技能範圍、側擊／背擊及最終命中受實際位置與朝向影響。
 - 戰鬥 AP 初始 10、每輪 +10、上限 200；技能按 `S > A > B > C > D > E > F` 速度順序結算。
 - Everrealm 遵守 **SIMPLE NUMBERS, DEEP TACTICS**：通用戰鬥數值係 HP、ATK、DEF、Accuracy、Evasion、AP、Weight、Move；Skill Speed、Interrupt、Skill Durability、facing、range 同 attack path 保留作戰術深度。唔引入 MAG、獨立 Magic Attack／Defense，亦唔建立 slash／impact／piercing／elemental 攻防矩陣。
+- 基礎 Accuracy 為 `99%`、基礎 Evasion 為 `0%`；最終命中率統一使用 `(Effective Accuracy / 100) × Skill Accuracy Multiplier × (1 - Effective Evasion / 100)`。普通技能 multiplier 預設 `1.0`，Miss 戰場浮字使用黃色 `MISS`，左下 Battle Log 保留出手方原本訊息顏色。格鬥士「舞葉」當次 action resolution 提供 `50%` Evasion，下一回合前清除。
 - Everrealm 標準傷害技能以正拳 `3 AP = 1.0×` 為 baseline，總技能傷害倍率使用 `sqrt(AP / 3)`；技能說明如包含擊退、轉倒、中毒等額外非傷害 utility，最終傷害再 `×0.8`。`dealsDamage=false` 技能完全唔套用傷害公式；原作明確屬固定剩餘 HP 型嘅特殊傷害（例如留下半氣拳／留下後一拳）使用 explicit damage model，唔重複套標準倍率公式。
 - Multi-hit 技能先計整招總傷害，再拆成每 Hit；除唔盡嘅整數 remainder 永遠優先分畀後面 Hits。原作標記「判定：毎回」嘅連擊類技能，每 Hit 都按更新後 battle state 重新掃同一 attack path，因此前一 Hit 擊倒／擊殺 blocker 後，下一 Hit 可以繼續打到路線後方單位。
 - 攻擊唔係「點中邊個就必定打中邊個」。Linear 攻擊使用共用 deterministic 正交 attack-path resolver：目標喺前半面時先向前再左右轉；同橫排直接左右；目標喺後半面時先左右、再向後。實際路線上第一個合法單位／地形可以攔截。Arc 攻擊按弧線高度判斷；Pathless 攻擊冇中途 interception。詳細規則見 `docs/BATTLE_SYSTEM.md`。
@@ -108,7 +109,7 @@
 
 ### Fighter V1 equipment
 
-格鬥士 V1 商店只顯示五類：武器、頭部、上身、下身、武道服；戰士武器及其他職業裝備不可跨職業使用。現行拳套數值改以《幸福 Online／STRUGARDEN》原作「衝」攻擊作 Everrealm `ATK`：`metal_knuckles`（Lv6，ATK 23，450）、`giz_armguard`（Lv12，ATK 27，1800）、`heavy_knuckles`（Lv18，ATK 33，4050）、`superheavy_knuckles`（Lv24，ATK 39，7200）。格鬥士防具同樣以原作數據轉換：原作衝攻直接成為該件 Everrealm `ATK`；原作衝防以 `round(衝防 / 5)` 成為 Everrealm `DEF`；required level 與購買價亦盡量跟原作表。例：門人系衝攻 `+2`、衝防 `12 → DEF 2`；練武系 `+3`、`16 → DEF 3`；鍛鍊系 `+4`、`21 → DEF 4`；髮髻帽衝防 `14 → DEF 3`。完整原作式五部位平衡基準（頭、上身、下身、手、腳）為 Lv6 約 `ATK 31 / DEF 11`、Lv14 約 `ATK 39 / DEF 15`；目前 V1 商店仍只露出上／下身，手／腳記錄保留為 legacy compatibility，但怪物同級攻防曲線以完整格鬥士裝備基準校準。完整固定資料由 `data/equipment.js` 保存，購買／裝備驗證由 `expansion-core.js` 負責。等級不足或職業不符時，商店購買與裝備都必須拒絕，不能以 UI 隱藏取代核心驗證。
+格鬥士 V1 商店只顯示五類：武器、頭部、上身、下身、武道服；戰士武器及其他職業裝備不可跨職業使用。現行拳套數值改以《幸福 Online／STRUGARDEN》原作「衝」攻擊作 Everrealm `ATK`：`metal_knuckles`（Lv6，ATK 23，450）、`giz_armguard`（Lv12，ATK 27，1800）、`heavy_knuckles`（Lv18，ATK 33，4050）、`superheavy_knuckles`（Lv24，ATK 39，7200）。格鬥士防具同樣以原作數據轉換：原作衝攻直接成為該件 Everrealm `ATK`；原作衝防以 `round(衝防 / 5)` 成為 Everrealm `DEF`；required level 與購買價亦盡量跟原作表。例：門人系衝攻 `+2`、衝防 `12 → DEF 2`；練武系 `+3`、`16 → DEF 3`；鍛鍊系 `+4`、`21 → DEF 4`；髮髻帽衝防 `14 → DEF 3`。完整原作式五部位平衡基準（頭、上身、下身、手、腳）為 Lv6 約 `ATK 31 / DEF 11`、Lv14 約 `ATK 39 / DEF 15`；目前 V1 商店仍只露出上／下身，手／腳記錄保留為 legacy compatibility，但怪物同級攻防曲線以完整格鬥士裝備基準校準。完整固定資料由 `data/equipment.js` 保存，購買／裝備驗證由 `expansion-core.js` 負責。購買只增加 owned inventory，唔會自動裝備；等級不足仍然可以預先購買，`requiredLevel` 只喺實際裝備時阻擋。裝備店與道具店提供「購買／出售」模式，已裝備物品必須先卸下先可出售。職業不符仍不可裝備。
 
 ## 世界與美術一致性
 
@@ -122,7 +123,7 @@
 ## 等級與職業平衡
 
 - 等級上限為 `45`。玩家升級本身**不提供 Base ATK / Base DEF**；`data/classes.js` 由 Lv1–45 全部固定 `attack: 0`、`defence: 0`。ATK／DEF 由裝備、PSV、buff/debuff 及暫時戰鬥效果建立，令攻防成長直接反映玩家實際著咩裝。
-- 等級主要增加 Max HP、解鎖技能／裝備及推進內容。現行 deterministic HP curve：格鬥士 `MaxHP = 88 + 7×(Lv-1) + 3×floor((Lv-1)/5)`；戰士 `MaxHP = 88 + 8×(Lv-1) + 4×floor((Lv-1)/5)`。無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，裝備只用 explicit Move modifier 改變可走格數。
+- 等級主要增加 Max HP、解鎖技能／裝備及推進內容；裝備不提供 Max HP bonus，`maxHp` 裝備欄位只作 legacy compatibility 並在 runtime 忽略。現行 deterministic HP curve：格鬥士 `MaxHP = 88 + 7×(Lv-1) + 3×floor((Lv-1)/5)`；戰士 `MaxHP = 88 + 8×(Lv-1) + 4×floor((Lv-1)/5)`。無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，裝備只用 explicit Move modifier 改變可走格數。
 - 升級時 HP 立即回復到新上限，並寫入「等級提升」系統訊息；所有舊存檔的待選升級數歸零。
 - 主職業每級所需 EXP 跟《幸福 Online／STRUGARDEN》必要經驗表；Everrealm 只使用至 Lv45：
 

@@ -574,7 +574,7 @@
     "stats": {
       "attack": 31,
       "defense": 0,
-      "maxHp": 12,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0.05,
       "moveRange": 0,
@@ -605,7 +605,7 @@
     "stats": {
       "attack": 0,
       "defense": 1,
-      "maxHp": 4,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -636,7 +636,7 @@
     "stats": {
       "attack": 0,
       "defense": 3,
-      "maxHp": 12,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -667,7 +667,7 @@
     "stats": {
       "attack": 0,
       "defense": 5,
-      "maxHp": 18,
+      "maxHp": 0,
       "speed": 5,
       "critChance": 0,
       "moveRange": 0,
@@ -698,7 +698,7 @@
     "stats": {
       "attack": 0,
       "defense": 9,
-      "maxHp": 30,
+      "maxHp": 0,
       "speed": -8,
       "critChance": 0,
       "moveRange": -1,
@@ -729,7 +729,7 @@
     "stats": {
       "attack": 0,
       "defense": 14,
-      "maxHp": 44,
+      "maxHp": 0,
       "speed": 4,
       "critChance": 0,
       "moveRange": 0,
@@ -760,7 +760,7 @@
     "stats": {
       "attack": 2,
       "defense": 2,
-      "maxHp": 2,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -882,7 +882,7 @@
     "stats": {
       "attack": 3,
       "defense": 3,
-      "maxHp": 5,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -1004,7 +1004,7 @@
     "stats": {
       "attack": 4,
       "defense": 4,
-      "maxHp": 8,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -1312,7 +1312,7 @@
     "stats": {
       "attack": 0,
       "defense": 0,
-      "maxHp": 8,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,
@@ -1405,7 +1405,7 @@
     "stats": {
       "attack": 7,
       "defense": 5,
-      "maxHp": 20,
+      "maxHp": 0,
       "speed": 0,
       "critChance": 0,
       "moveRange": 0,

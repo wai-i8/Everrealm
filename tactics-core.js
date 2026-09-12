@@ -1563,7 +1563,7 @@
   // unbounded until after evasion is applied so accuracy bonuses can counter
   // evasive builds.
   function resolveHitChance(options = {}) {
-    const baseAccuracy = finiteStat(options.baseAccuracy, finiteStat(options.accuracy, 100));
+    const baseAccuracy = finiteStat(options.baseAccuracy, finiteStat(options.accuracy, 99));
     const baseEvasion = finiteStat(options.baseEvasion, finiteStat(options.evasion, 0));
     const effectiveAccuracy = baseAccuracy
       + sumModifiers(options.accuracyBonuses)
@@ -1571,12 +1571,14 @@
     const effectiveEvasion = baseEvasion
       + sumModifiers(options.evasionBonuses)
       - sumModifiers(options.evasionPenalties);
-    const rawHitChance = (effectiveAccuracy / 100) * (1 - effectiveEvasion / 100);
+    const accuracyMultiplier = Math.max(0, finiteStat(options.accuracyMultiplier, 1));
+    const rawHitChance = (effectiveAccuracy / 100) * accuracyMultiplier * (1 - effectiveEvasion / 100);
     return {
       baseAccuracy,
       baseEvasion,
       effectiveAccuracy,
       effectiveEvasion,
+      accuracyMultiplier,
       rawHitChance,
       hitChance: Math.min(1, Math.max(0, rawHitChance)),
     };

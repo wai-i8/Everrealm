@@ -122,6 +122,8 @@ The following is the complete 65-skill audit. `requires` is the only learning ed
 | `gouhoukyaku` | 豪砲腳 | CMD / kick | `fuujinkyaku` | 36 · D · 12 · 4 | `[0,1],[-1,0],[1,0]` / 1·1 | damage_control · linear · 2.7713 · 1 |
 | `fuujin_kikoukyaku` | 風神氣功腳 | CMD / kick_ki_hybrid | `gouhoukyaku` + `kikoudan` | 55 · D · 1 · 6 | 9-cell authored set / up2·down∞ uncertain-up | damage · linear · 4.2817 · 1 |
 | `buyou` | 舞葉 | CMD / evade_counter | `kentotsu` | 7 · A · — · 10 | `[0,0]` / N/A | self_buff · — · 0 · 0 |
+
+Runtime balance override: `舞葉` grants **50% Evasion** after it resolves, for the remainder of that same action-resolution round only. It is cleared before the next round and does not become a two-round carry-over buff.
 | `sen_no_sen` | 先之先 | CMD / evade_counter | `buyou` | 18 · B · — · 10 | `[0,0]` / N/A | counter_stance · — · 0 · 0 |
 | `choudankyaku` | 跳彈腳 | CMD / evade_counter | `sen_no_sen` + `tenpoukyaku` | 18 · B · — · 6 | `[0,0]` / N/A | counter_stance · — · 0 · 0 |
 | `ryuugan` | 龍眼 | CMD / evade_counter | `choudankyaku` | 16 · A · — · 10 | `[0,0]` / N/A | self_buff · — · 0 · 0 |

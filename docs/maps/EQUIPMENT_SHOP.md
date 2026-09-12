@@ -1,4 +1,4 @@
-# 銀火裝備店 · Equipment Shop
+# 裝備店 · Equipment Shop
 
 - `map_id: shop`
 - 類型：主城 flattened interior；主題：鍛造／裝備店。

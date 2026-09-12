@@ -281,9 +281,11 @@
   let draggableWindowGesture = null;
   let suppressSkillTreeClickUntil = 0;
   let selectedInventoryItemId = null;
+  let pendingInventoryDestroyItemId = null;
   let inventoryCategory = "all";
   let inventoryPage = 0;
   let equipmentShopCategory = "weapon";
+  let shopTradeMode = "buy";
   let weakPotionStepsRemaining = 0;
   let weakPotionDistanceRemainder = 0;
   let pendingCommissionDetailId = null;
@@ -322,6 +324,12 @@
   });
   const mobileExploreZoomByMap = new Map();
   const FIGHTER_SHOP_ITEM_ID_SET = EquipmentData?.FIGHTER_SHOP_ITEM_ID_SET || new Set();
+  const GENERAL_STORE_GOODS = Object.freeze([
+    Object.freeze({ id: "healing_potion", name: "小型回復藥", price: 30, description: "回復 30 HP。" }),
+    Object.freeze({ id: "weak_potion", name: "弱氣之藥", price: 200, description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。" }),
+  ]);
+  const GENERAL_STORE_GOODS_BY_ID = new Map(GENERAL_STORE_GOODS.map((item) => [item.id, item]));
+  const SHOP_SELL_RATE = 1 / 3;
   const FIGHTER_GUILD_BOOK_RANKS = new Map(
     (window.LanternFighterSkillData?.skills || []).map((sourceSkill) => {
       const ranks = (sourceSkill.original_reference?.acquisition?.guild_reward_books || [])
@@ -622,7 +630,10 @@
     const passives = learnedFighterPassives();
     return {
       ...base,
-      maxHp: Math.max(1, Math.round(base.maxHp + gear.maxHp)),
+      // Equipment never changes Max HP.  Keep the legacy maxHp field in the
+      // data schema for save compatibility, but combat/runtime HP progression
+      // is owned entirely by the class level curve.
+      maxHp: Math.max(1, Math.round(base.maxHp)),
       attack: Math.max(0, Math.round((base.attack + gear.attack) * (passives.attackMultiplier || 1))),
       defence: Math.max(0, Math.round((base.defence + gear.defense) * (passives.defenceMultiplier || 1))),
       speed: Math.max(
@@ -630,7 +641,7 @@
         Core.EXPLORATION_MOVEMENT.baseWorldUnitsPerSecond
           + gear.speed * Core.EXPLORATION_MOVEMENT.equipmentPointWorldUnitsPerSecond,
       ),
-      accuracy: Math.max(0, 100 + gear.accuracy + (passives.accuracy || 0) * 100),
+      accuracy: Math.max(0, 99 + gear.accuracy + (passives.accuracy || 0) * 100),
       evasion: Math.max(0, gear.evasion + (passives.evasion || 0) * 100),
       weight: Math.max(0, gear.weight),
       move: Core.clamp(base.moveRange + gear.moveRange, 2, 7),
@@ -789,9 +800,11 @@
     facilityTab = "bag";
     facilityContext = "portable";
     selectedInventoryItemId = null;
+    pendingInventoryDestroyItemId = null;
     inventoryCategory = "all";
     inventoryPage = 0;
     equipmentShopCategory = "weapon";
+    shopTradeMode = "buy";
     inventoryFixtureCount = 0;
     weakPotionStepsRemaining = 0;
     weakPotionDistanceRemainder = 0;
@@ -2648,7 +2661,7 @@
       lines: ["齋磨同一把舊刀始終有限。我同裝備店店員搬晒新貨入工房：短刀夠快、重刃破甲，護甲仲會改你行幾多格。"],
       choices: [
         {
-          label: "入銀火裝備店",
+          label: "入裝備店",
           action: () => transitionMap("shop", expansionMaps.shop.start),
         },
         { label: "等我準備吓先", action: () => {} },
@@ -2905,10 +2918,10 @@
   }
 
   function statText(stats) {
-    const labels = { attack: "攻擊", defense: "防禦", maxHp: "生命", speed: "速度", critChance: "暴擊", moveRange: "移動" };
+    const labels = { attack: "攻擊", defense: "防禦", speed: "速度", critChance: "暴擊", moveRange: "移動", accuracy: "命中", evasion: "迴避" };
     return Object.entries(stats)
-      .filter(([key, value]) => key !== "weight" && value)
-      .map(([key, value]) => `${labels[key] || key} ${value > 0 ? "+" : ""}${key === "critChance" ? Math.round(value * 100) + "%" : value}`)
+      .filter(([key, value]) => !["weight", "maxHp"].includes(key) && value)
+      .map(([key, value]) => `${labels[key] || key} ${value > 0 ? "+" : ""}${key === "critChance" ? Math.round(value * 100) + "%" : ["accuracy", "evasion"].includes(key) ? `${value}%` : value}`)
       .join(" · ");
   }
 
@@ -3136,9 +3149,10 @@
         equipment: item,
         categoryKey: "equipment",
         isEquipped,
-        disabled: isEquipped || levelLocked || classLocked,
-        action: "equip",
-        actionLabel: isEquipped ? "裝備中" : classLocked ? "職業不符" : levelLocked ? "無法裝備" : "裝備",
+        disabled: !isEquipped && (levelLocked || classLocked),
+        action: isEquipped ? "unequip" : "equip",
+        actionLabel: isEquipped ? "卸下" : classLocked ? "職業不符" : levelLocked ? "無法裝備" : "裝備",
+        destroyable: !isEquipped,
       });
     }
     if (player.potions > 0) items.push({
@@ -3147,6 +3161,7 @@
       description: "回復 30 HP；探索同戰鬥都用得到。",
       detail: player.hp >= maxHp ? "目前生命已全滿" : `目前 HP ${Math.ceil(player.hp)} / ${maxHp}`,
       action: "use-potion", actionLabel: player.hp >= maxHp ? "生命已滿" : "使用", disabled: player.hp >= maxHp,
+      destroyable: true,
     });
     const weakPotionCount = Math.max(0, Math.floor(Number(inventory.weak_potion) || 0));
     if (weakPotionCount > 0) items.push({
@@ -3155,6 +3170,7 @@
       description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。",
       detail: weakPotionStepsRemaining > 0 ? "怪味仲纏住你，附近霧獸似乎更加躁動。" : "喝下後，這股古怪氣味會跟住你一段路。",
       action: "use-weak-potion", actionLabel: weakPotionStepsRemaining > 0 ? "重新使用" : "使用",
+      destroyable: true,
     });
     for (const star of Guild.COMMISSION_STARS) {
       const count = guildCommissionState.envelopes[star] || 0;
@@ -3169,6 +3185,7 @@
         description: "",
         detail: "",
         action: "open-envelope", actionLabel: "開封", envelopeStar: star,
+        destroyable: true,
       });
     }
     for (const star of Skills.BOOK_STARS) {
@@ -3186,6 +3203,7 @@
         description: `開封後會抽出 ${pool.length} 本對應職業技能書；唔會直接學識。`,
         detail: `技能消耗範圍 ${apBand.min}–${apBand.max} AP`,
         action: "open-book", actionLabel: "開封", bookStar: star,
+        destroyable: true,
       });
     }
     for (const [skillId, count] of Object.entries(skillState.manualCounts || {})) {
@@ -3208,6 +3226,7 @@
         actionLabel: learnability.status === "learned" ? "已學習" : learnability.status === "canLearn" ? "學習" : "無法學習",
         disabled: learnability.status !== "canLearn",
         manualSkillId: skill.id,
+        destroyable: true,
       });
     }
     for (const [id, amount] of Object.entries(inventory)
@@ -3215,7 +3234,7 @@
       .sort(([left], [right]) => inventoryItemName(left).localeCompare(inventoryItemName(right), "zh-HK"))) {
       const itemData = ItemData?.getItem?.(id);
       const categoryKey = itemData?.kind === "consumable" ? "consumable" : "material";
-      items.push({ id, name: inventoryItemName(id), category: categoryKey === "consumable" ? "消耗品" : "素材", categoryKey, quantity: amount, description: materialDescription(id), detail: categoryKey === "consumable" ? "消耗品" : "冒險素材" });
+      items.push({ id, name: inventoryItemName(id), category: categoryKey === "consumable" ? "消耗品" : "素材", categoryKey, quantity: amount, description: materialDescription(id), detail: categoryKey === "consumable" ? "消耗品" : "冒險素材", destroyable: itemData?.destroyable !== false && itemData?.kind !== "quest" });
     }
     if (inventoryFixtureCount > 0) {
       const fixtureNames = ["霧晶碎片", "舊銅齒輪", "潮濕苔絲", "微光粉末", "沉燈玻璃", "巡夜羽片"];
@@ -3228,8 +3247,11 @@
     const pageCount = Math.max(1, Math.ceil(filteredItems.length / INVENTORY_PAGE_SIZE));
     inventoryPage = Core.clamp(inventoryPage, 0, pageCount - 1);
     const visibleItems = filteredItems.slice(inventoryPage * INVENTORY_PAGE_SIZE, (inventoryPage + 1) * INVENTORY_PAGE_SIZE);
-    if (!filteredItems.some((item) => item.id === selectedInventoryItemId)) selectedInventoryItemId = null;
-    const selectedItem = filteredItems.find((item) => item.id === selectedInventoryItemId) || null;
+    if (!items.some((item) => item.id === selectedInventoryItemId)) {
+      selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
+    }
+    const selectedItem = items.find((item) => item.id === selectedInventoryItemId) || null;
     const iconMarkup = (item, extraClass = "") => item.equipment
       ? equipmentIconHtml(item.equipment, extraClass)
       : item.iconType === "envelope"
@@ -3240,15 +3262,26 @@
             ? atlasIconHtml("item", Number(item.iconId), item.name, extraClass)
             : itemIconHtml(item.id, item.name, extraClass, 4);
     const actionMarkup = (item) => {
-      if (!item.action) return "";
-      const attrs = [
-        `data-facility-action="${item.action}"`,
-        item.bookStar ? `data-book-star="${item.bookStar}"` : "",
-        item.envelopeStar ? `data-envelope-star="${item.envelopeStar}"` : "",
-        item.manualSkillId ? `data-skill-id="${item.manualSkillId}"` : "",
-        item.equipment || ["use-weak-potion"].includes(item.action) ? `data-item-id="${item.id}"` : "",
-      ].filter(Boolean).join(" ");
-      return `<button class="facility-action-button" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`;
+      const buttons = [];
+      if (item.action) {
+        const attrs = [
+          `data-facility-action="${item.action}"`,
+          item.bookStar ? `data-book-star="${item.bookStar}"` : "",
+          item.envelopeStar ? `data-envelope-star="${item.envelopeStar}"` : "",
+          item.manualSkillId ? `data-skill-id="${item.manualSkillId}"` : "",
+          `data-item-id="${item.id}"`,
+        ].filter(Boolean).join(" ");
+        buttons.push(`<button class="facility-action-button" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`);
+      }
+      if (item.destroyable) {
+        if (pendingInventoryDestroyItemId === item.id) {
+          buttons.push(`<button class="danger-button inventory-destroy-confirm" type="button" data-facility-action="confirm-destroy-item" data-item-id="${item.id}">確定銷毀</button>`);
+          buttons.push(`<button class="secondary-button inventory-destroy-cancel" type="button" data-facility-action="cancel-destroy-item" data-item-id="${item.id}">取消</button>`);
+        } else {
+          buttons.push(`<button class="danger-button inventory-destroy-button" type="button" data-facility-action="destroy-item" data-item-id="${item.id}">銷毀</button>`);
+        }
+      }
+      return buttons.join("");
     };
     const quantityMarkup = (item) => item.quantity > 1 ? `<b class="inventory-quantity" aria-label="數量 ${item.quantity}">×${item.quantity}</b>` : "";
     const itemCards = visibleItems.map((item) => `<button class="inventory-grid-item ui-slot ${item.equipment ? "inventory-equipment-item" : ""} ${item.isEquipped ? "is-equipped" : ""} ${selectedItem?.id === item.id ? "is-selected" : ""}" type="button" data-item-id="${item.id}" data-facility-action="select-item" aria-pressed="${selectedItem?.id === item.id ? "true" : "false"}" aria-label="選取${item.name}，數量 ${item.quantity}">
@@ -3308,10 +3341,10 @@
     }
     if (!item) return `<article class="paperdoll-slot is-empty ${options.iconOnly ? "is-icon-only" : ""}" data-paperdoll-slot="${visualSlot}" aria-label="${label}：未裝備">${paperdollSlotIconHtml(visualSlot)}</article>`;
     if (options.iconOnly) {
-      return `<article class="paperdoll-slot is-filled is-icon-only" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
+      return `<button class="paperdoll-slot is-filled is-icon-only" type="button" data-paperdoll-slot="${visualSlot}" data-facility-action="select-item" data-item-id="${item.id}" aria-label="${label}：${item.name}，查看詳情">
         ${equipmentIconHtml(item, "paperdoll-slot-icon")}
         <strong class="paperdoll-compact-name" title="${item.name}">${item.name}</strong>
-      </article>`;
+      </button>`;
     }
     return `<article class="paperdoll-slot is-filled" data-paperdoll-slot="${visualSlot}" aria-label="${label}：${item.name}">
       ${equipmentIconHtml(item, "paperdoll-slot-icon")}<div class="paperdoll-item-name"><strong>${item.name}</strong></div>
@@ -3341,7 +3374,7 @@
         return `<article class="gear-collection-item ${isEquipped ? "is-equipped" : ""} ${levelLocked ? "is-locked" : ""}">
           ${equipmentIconHtml(item, "gear-collection-icon")}
           <div><small>${slotLabel}${item.occupiesSlots.length > 1 ? " · 一件式" : ""} · LV.${item.requiredLevel}</small><strong>${item.name}</strong><p>${item.description}</p><span>${statText(item.stats)}</span></div>
-          <button class="facility-action-button${isEquipped ? " is-quiet" : ""}" type="button" data-facility-action="equip" data-item-id="${item.id}" ${isEquipped || levelLocked ? "disabled" : ""}>${isEquipped ? "裝備中" : levelLocked ? "無法裝備" : "換上"}</button>
+          <button class="facility-action-button${isEquipped ? " is-quiet" : ""}" type="button" data-facility-action="${isEquipped ? "unequip" : "equip"}" data-item-id="${item.id}" ${!isEquipped && levelLocked ? "disabled" : ""}>${isEquipped ? "卸下" : levelLocked ? "無法裝備" : "換上"}</button>
         </article>`;
       }).join("");
     facilityContent.innerHTML = `
@@ -3366,9 +3399,56 @@
     setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`);
   }
 
+  function shopTradeTabsHtml() {
+    return `<nav class="shop-trade-tabs" role="tablist" aria-label="交易模式">
+      <button class="equipment-shop-tab" type="button" role="tab" data-facility-action="shop-trade-mode" data-shop-trade-mode="buy" aria-selected="${shopTradeMode === "buy" ? "true" : "false"}">購買</button>
+      <button class="equipment-shop-tab" type="button" role="tab" data-facility-action="shop-trade-mode" data-shop-trade-mode="sell" aria-selected="${shopTradeMode === "sell" ? "true" : "false"}">出售</button>
+    </nav>`;
+  }
+
+  function equipmentSellPrice(item) {
+    const cost = Math.max(0, Math.floor(Number(item?.cost) || 0));
+    return cost > 0 ? Math.max(1, Math.floor(cost * SHOP_SELL_RATE)) : 0;
+  }
+
+  function generalStoreSellPrice(itemId) {
+    const shopItem = GENERAL_STORE_GOODS_BY_ID.get(itemId);
+    if (shopItem) return Math.max(1, Math.floor(shopItem.price * SHOP_SELL_RATE));
+    const item = ItemData?.getItem?.(itemId);
+    if (!item || ["ui", "currency", "quest"].includes(item.kind) || item.sellable === false) return 0;
+    // Materials do not currently have a purchase price.  Give them a simple
+    // baseline resale value so unwanted drops can always be cleared for coin.
+    return 10;
+  }
+
   function renderShopFacility() {
     const atShop = currentMapId === "shop";
     const discountRate = guildDiscountRate();
+    if (!['buy', 'sell'].includes(shopTradeMode)) shopTradeMode = "buy";
+    const tradeTabs = shopTradeTabsHtml();
+
+    if (shopTradeMode === "sell") {
+      const sellable = Expansion.DEFAULT_EQUIPMENT_CATALOG
+        .filter((item) => ownedEquipment.includes(item.id) && equipmentSellPrice(item) > 0)
+        .sort((left, right) => left.requiredLevel - right.requiredLevel || left.name.localeCompare(right.name, "zh-HK"));
+      const cards = sellable.map((item) => {
+        const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
+        const sellPrice = equipmentSellPrice(item);
+        return `<article class="equipment-card equipment-shop-card ${isEquipped ? "is-equipped" : ""}">
+          <div class="equipment-shop-art">${equipmentIconHtml(item, "equipment-card-atlas-icon")}</div>
+          <div class="equipment-copy">
+            <div class="facility-card-heading"><span class="facility-chip">LV.${item.requiredLevel}</span><strong>${item.name}</strong></div>
+            <p>${item.description}</p>
+            <small>${statText(item.stats)}</small>
+          </div>
+          <div class="equipment-shop-purchase"><span class="equipment-price">出售價 ${coinAmountHtml(sellPrice, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="sell-equipment" data-item-id="${item.id}" ${!atShop || isEquipped ? "disabled" : ""}>${isEquipped ? "請先卸下" : "出售"}</button></div>
+        </article>`;
+      }).join("");
+      facilityContent.innerHTML = `${tradeTabs}<section class="equipment-shop-browser" aria-label="出售裝備"><div class="facility-section-heading equipment-shop-heading"><div><small>SELL EQUIPMENT</small><h3>出售裝備</h3></div>${coinAmountHtml(player.coins, "store-balance")}</div><div class="equipment-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售裝備</strong></div>'}</div></section>`;
+      setFacilityFooter("");
+      return;
+    }
+
     const categories = [
       { key: "weapon", label: "武器", matches: (item) => item.slot === "weapon" },
       { key: "head", label: "頭部", matches: (item) => item.slot === "head" },
@@ -3387,14 +3467,14 @@
       const isEquipped = Expansion.isEquipmentEquipped({ equipped }, item.id);
       const levelLocked = player.level < item.requiredLevel;
       const shopCost = Math.max(0, Math.floor(item.cost * (1 - discountRate)));
-      const action = owned ? "equip" : "buy";
-      const disabled = isEquipped || (owned && levelLocked) || (!owned && (!item.purchasable || !atShop));
-      const buttonLabel = isEquipped ? "裝備中" : owned ? (levelLocked ? "無法裝備" : "裝備") : !item.purchasable ? "非賣品" : "購買";
+      const action = owned ? (isEquipped ? "unequip" : "equip") : "buy";
+      const disabled = owned ? (!isEquipped && levelLocked) : (!item.purchasable || !atShop);
+      const buttonLabel = isEquipped ? "卸下" : owned ? (levelLocked ? "無法裝備" : "裝備") : !item.purchasable ? "非賣品" : "購買";
       const price = owned
         ? '<span class="equipment-price is-owned">已擁有</span>'
         : !item.purchasable
           ? '<span class="equipment-price">非賣品</span>'
-          : `<span class="equipment-price">${shopCost} 金幣${discountRate ? `<small>原價 ${item.cost}</small>` : ""}</span>`;
+          : `<span class="equipment-price">${coinAmountHtml(shopCost, "store-price")}${discountRate ? `<small>原價 ${item.cost}</small>` : ""}</span>`;
       const onePiece = item.occupiesSlots.includes("upperBody") && item.occupiesSlots.includes("lowerBody");
       return `<article class="equipment-card equipment-shop-card ${isEquipped ? "is-equipped" : ""}">
         <div class="equipment-shop-art">${equipmentIconHtml(item, "equipment-card-atlas-icon")}</div>
@@ -3407,31 +3487,42 @@
       </article>`;
     }).join("");
     facilityContent.innerHTML = `
-      ${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去米克雷帝國「銀火裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}
+      ${tradeTabs}
+      ${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去「裝備店」；已擁有裝備可以隨時換。</span></div>' : ""}
       <nav class="equipment-shop-tabs" role="tablist" aria-label="裝備分類">${tabs}</nav>
       <section class="equipment-shop-browser" aria-label="${activeCategory.label}">
         <div class="facility-section-heading equipment-shop-heading"><div><small>FIGHTER EQUIPMENT</small><h3>${activeCategory.label}</h3></div><span>格鬥士專用裝備</span></div>
         <div class="equipment-grid">${cards || '<div class="facility-empty-state"><strong>呢個分類暫時冇商品</strong></div>'}</div>
       </section>`;
-    setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 金幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}銀火裝備店`);
+    setFacilityFooter(`<span aria-hidden="true">⚒</span> ${player.coins} 金幣 · ${discountRate ? `${guildRankInfo().name}折扣 ${Math.round(discountRate * 100)}% · ` : ""}裝備店`);
   }
 
   function renderGeneralStoreFacility() {
-    const goods = [
-      { id: "healing_potion", name: "小型回復藥", price: 30, description: "回復 30 HP。" },
-      { id: "weak_potion", name: "弱氣之藥", price: 200, description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。" },
-    ];
-    const cards = goods.map((item) => `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${itemIconHtml(item.id, item.name, "equipment-card-atlas-icon", 0)}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong></div><p>${item.description}</p></div><div class="equipment-shop-purchase"><span class="equipment-price">${coinAmountHtml(item.price, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="buy-store-item" data-item-id="${item.id}" ${player.coins < item.price ? "disabled" : ""}>購買</button></div></article>`).join("");
-    facilityContent.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="facility-section-heading equipment-shop-heading"><div><small>ITEM SHOP</small><h3>道具店</h3></div>${coinAmountHtml(player.coins, "store-balance")}</div><div class="equipment-grid general-store-grid">${cards}</div></section>`;
+    if (!['buy', 'sell'].includes(shopTradeMode)) shopTradeMode = "buy";
+    const tradeTabs = shopTradeTabsHtml();
+    if (shopTradeMode === "sell") {
+      const sellItems = [];
+      if (player.potions > 0) sellItems.push({ id: "healing_potion", name: "小型回復藥", quantity: player.potions, description: GENERAL_STORE_GOODS_BY_ID.get("healing_potion")?.description || "回復 30 HP。" });
+      for (const [id, quantity] of Object.entries(inventory).filter(([, amount]) => Number(amount) > 0)) {
+        const item = ItemData?.getItem?.(id);
+        if (!item || ["ui", "currency", "quest"].includes(item.kind) || item.sellable === false) continue;
+        sellItems.push({ id, name: item.name, quantity: Number(quantity), description: item.description || materialDescription(id) });
+      }
+      const cards = sellItems.map((item) => {
+        const sellPrice = generalStoreSellPrice(item.id);
+        return `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${itemIconHtml(item.id, item.name, "equipment-card-atlas-icon", 0)}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong><span class="facility-chip">×${item.quantity}</span></div><p>${item.description}</p></div><div class="equipment-shop-purchase"><span class="equipment-price">出售價 ${coinAmountHtml(sellPrice, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="sell-store-item" data-item-id="${item.id}" ${sellPrice <= 0 ? "disabled" : ""}>出售 1 件</button></div></article>`;
+      }).join("");
+      facilityContent.innerHTML = `${tradeTabs}<section class="equipment-shop-browser general-store-browser" aria-label="道具店出售"><div class="facility-section-heading equipment-shop-heading"><div><small>SELL ITEMS</small><h3>出售物品</h3></div>${coinAmountHtml(player.coins, "store-balance")}</div><div class="equipment-grid general-store-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}</div></section>`;
+      setFacilityFooter("");
+      return;
+    }
+    const cards = GENERAL_STORE_GOODS.map((item) => `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${itemIconHtml(item.id, item.name, "equipment-card-atlas-icon", 0)}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong></div><p>${item.description}</p></div><div class="equipment-shop-purchase"><span class="equipment-price">${coinAmountHtml(item.price, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="buy-store-item" data-item-id="${item.id}" ${player.coins < item.price ? "disabled" : ""}>購買</button></div></article>`).join("");
+    facilityContent.innerHTML = `${tradeTabs}<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="facility-section-heading equipment-shop-heading"><div><small>ITEM SHOP</small><h3>道具店</h3></div>${coinAmountHtml(player.coins, "store-balance")}</div><div class="equipment-grid general-store-grid">${cards}</div></section>`;
     setFacilityFooter("");
   }
 
   function buyGeneralStoreItem(itemId) {
-    const catalog = {
-      healing_potion: { price: 30, name: "小型回復藥" },
-      weak_potion: { price: 200, name: "弱氣之藥" },
-    };
-    const item = catalog[itemId];
+    const item = GENERAL_STORE_GOODS_BY_ID.get(itemId);
     if (!item || currentMapId !== "general-store") return showToast("呢件商品而家買唔到。", "danger");
     if (player.coins < item.price) return showToast("金幣唔夠。", "danger");
     player.coins -= item.price;
@@ -3443,6 +3534,46 @@
     addSystemMessage("item", `購買 ${item.name} · -${item.price} 金幣`);
     updateHud(true);
     renderFacility();
+    saveImportant(false);
+  }
+
+  function sellEquipmentItem(itemId) {
+    if (currentMapId !== "shop") return showToast("出售裝備要親身去裝備店。", "danger");
+    const item = equipmentItem(itemId);
+    if (!item || !ownedEquipment.includes(item.id)) return showToast("你冇呢件裝備。", "danger");
+    if (Expansion.isEquipmentEquipped({ equipped }, item.id)) return showToast("請先卸下裝備。", "danger");
+    const sellPrice = equipmentSellPrice(item);
+    if (sellPrice <= 0) return showToast("呢件裝備唔可以出售。", "danger");
+    ownedEquipment = ownedEquipment.filter((id) => id !== item.id);
+    player.coins = Math.min(99999, player.coins + sellPrice);
+    sound.coin();
+    showToast(`已出售：${item.name} · +${sellPrice} 金幣`, "good");
+    addSystemMessage("item", `出售 ${item.name} · +${sellPrice} 金幣`);
+    renderFacility();
+    updateHud(true);
+    saveImportant(false);
+  }
+
+  function sellGeneralStoreItem(itemId) {
+    if (currentMapId !== "general-store") return showToast("出售物品要親身去道具店。", "danger");
+    const sellPrice = generalStoreSellPrice(itemId);
+    if (sellPrice <= 0) return showToast("呢件物品唔可以出售。", "danger");
+    const itemName = inventoryItemName(itemId);
+    if (itemId === "healing_potion") {
+      if (player.potions <= 0) return showToast("你冇呢件物品。", "danger");
+      player.potions -= 1;
+    } else {
+      const amount = Math.max(0, Math.floor(Number(inventory[itemId]) || 0));
+      if (amount <= 0) return showToast("你冇呢件物品。", "danger");
+      inventory[itemId] = amount - 1;
+      if (inventory[itemId] <= 0) delete inventory[itemId];
+    }
+    player.coins = Math.min(99999, player.coins + sellPrice);
+    sound.coin();
+    showToast(`已出售：${itemName} · +${sellPrice} 金幣`, "good");
+    addSystemMessage("item", `出售 ${itemName} · +${sellPrice} 金幣`);
+    renderFacility();
+    updateHud(true);
     saveImportant(false);
   }
 
@@ -4232,6 +4363,7 @@
 
   function clearAllFacilityWindows() {
     selectedInventoryItemId = null;
+    pendingInventoryDestroyItemId = null;
     for (const state of facilityWindows.values()) state.panel.remove();
     facilityWindows.clear();
     activeFacilityWindow = null;
@@ -4257,7 +4389,7 @@
       equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
       deck: ["", facilityContext === "deck" ? "面板配置" : "面板", ""],
       guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
-      shop: ["", facilityContext === "general-store" ? "道具店" : "銀火裝備店", facilityContext === "general-store" ? "" : "同一間店可以購買格鬥士武器與防具；用分類切換武器、頭部、上身、下身及武道服。"],
+      shop: ["", facilityContext === "general-store" ? "道具店" : "裝備店", facilityContext === "general-store" ? "" : "同一間店可以購買格鬥士武器與防具；用分類切換武器、頭部、上身、下身及武道服。"],
       skills: ["", "技能樹", ""],
       codex: ["", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
     }[facilityTab];
@@ -4328,6 +4460,7 @@
     }
 
     const state = createFacilityWindow(normalizedTab, normalizedContext);
+    if (normalizedTab === "shop") shopTradeMode = "buy";
     activateFacilityWindow(state);
     const blocksMovement = syncFacilityMovementMode();
     if (blocksMovement) {
@@ -4349,7 +4482,10 @@
 
   function closeFacility(state = activeFacilityWindow) {
     if (!state || !facilityWindows.has(state.key)) return;
-    if (state.tab === "bag") selectedInventoryItemId = null;
+    if (state.tab === "bag") {
+      selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
+    }
     if (state.context === "guild" || state.tab === "guild") closeGuildCommissionDetail();
     if (state === activeFacilityWindow) {
       cancelDeckDrag();
@@ -4505,12 +4641,11 @@
   }
 
   function changeEquipment(itemId, buyFirst = false) {
-    const beforeMax = playerStats().maxHp;
     const requestedItem = equipmentItem(itemId);
     if (!equipmentMatchesClass(requestedItem)) return showToast("呢件裝備唔適合目前職業。", "danger");
     let state = { coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped };
     if (buyFirst) {
-      if (currentMapId !== "shop") return showToast("購買裝備要親身去銀火裝備店。", "danger");
+      if (currentMapId !== "shop") return showToast("購買裝備要親身去裝備店。", "danger");
       const item = equipmentItem(itemId);
       const discountedCost = item ? Math.max(0, Math.floor(item.cost * (1 - guildDiscountRate()))) : 0;
       if (item && player.coins < discountedCost) return showToast("金幣唔夠。", "danger");
@@ -4533,11 +4668,107 @@
     const result = Expansion.equipItem({ ...state, ownedEquipment, equipped }, itemId);
     if (!result.ok) return showToast("未可以裝備呢件物品。", "danger");
     equipped = result.state.equipped;
-    const afterMax = playerStats().maxHp;
-    player.hp = Core.clamp(player.hp + Math.max(0, afterMax - beforeMax), 1, afterMax);
+    player.hp = Core.clamp(player.hp, 1, playerStats().maxHp);
     sound.coin();
     showToast(`已裝備：${result.item.name}`, "good");
     renderFacility();
+    updateHud(true);
+    saveImportant(false);
+  }
+
+  function unequipEquipment(itemId) {
+    const item = equipmentItem(itemId);
+    if (!item || !Expansion.isEquipmentEquipped({ equipped }, item.id)) return showToast("呢件裝備目前冇裝備緊。", "danger");
+    const occupiedSlot = item.occupiesSlots.find((slot) => equipped[slot] === item.id);
+    if (!occupiedSlot) return showToast("未能找到裝備槽位。", "danger");
+    const result = Expansion.unequipItem({ coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped }, occupiedSlot);
+    if (!result.ok) return showToast("未能卸下呢件裝備。", "danger");
+    equipped = result.state.equipped;
+    player.hp = Core.clamp(player.hp, 1, playerStats().maxHp);
+    pendingInventoryDestroyItemId = null;
+    sound.coin();
+    showToast(`已卸下：${item.name}`, "good");
+    if (facilityWindows.size) renderFacility();
+    updateHud(true);
+    saveImportant(false);
+  }
+
+  function destroyInventoryItem(itemId) {
+    const id = String(itemId || "").trim();
+    if (!id) return showToast("呢件物品唔可以銷毀。", "danger");
+    let itemName = inventoryItemName(id);
+    let destroyed = false;
+
+    const equipment = equipmentItem(id);
+    if (equipment && ownedEquipment.includes(equipment.id)) {
+      if (Expansion.isEquipmentEquipped({ equipped }, equipment.id)) return showToast("請先卸下裝備。", "danger");
+      ownedEquipment = ownedEquipment.filter((ownedId) => ownedId !== equipment.id);
+      itemName = equipment.name;
+      destroyed = true;
+    } else if (id === "healing_potion") {
+      if (player.potions > 0) {
+        player.potions -= 1;
+        itemName = "小型回復藥";
+        destroyed = true;
+      }
+    } else if (id === "weak_potion") {
+      const amount = Math.max(0, Math.floor(Number(inventory.weak_potion) || 0));
+      if (amount > 0) {
+        inventory.weak_potion = amount - 1;
+        if (inventory.weak_potion <= 0) delete inventory.weak_potion;
+        destroyed = true;
+      }
+    } else {
+      const envelopeMatch = id.match(/^skill_envelope_(\d+)$/);
+      const bookMatch = id.match(/^skill_book_(\d+)$/);
+      const manualMatch = id.match(/^manual_(.+)$/);
+      if (envelopeMatch) {
+        const star = Number(envelopeMatch[1]);
+        const state = Guild.normalizeState(guildCommissionState);
+        if ((state.envelopes[star] || 0) > 0) {
+          guildCommissionState = { ...state, envelopes: { ...state.envelopes, [star]: state.envelopes[star] - 1 } };
+          itemName = `${skillStars(star)} 技能書信封`;
+          destroyed = true;
+        }
+      } else if (bookMatch) {
+        const star = Number(bookMatch[1]);
+        const state = Skills.normalizeSkillState(skillState);
+        if ((state.books[star] || 0) > 0) {
+          skillState = { ...state, books: { ...state.books, [star]: state.books[star] - 1 } };
+          itemName = `${skillStars(star)} 技能書`;
+          destroyed = true;
+        }
+      } else if (manualMatch) {
+        const skillId = manualMatch[1];
+        const state = Skills.normalizeSkillState(skillState);
+        const amount = Math.max(0, Math.floor(Number(state.manualCounts[skillId]) || 0));
+        if (amount > 0) {
+          const manualCounts = { ...state.manualCounts, [skillId]: amount - 1 };
+          if (manualCounts[skillId] <= 0) delete manualCounts[skillId];
+          skillState = { ...state, manualCounts };
+          itemName = `技能書：${Skills.getSkill(skillId)?.name || skillId}`;
+          destroyed = true;
+        }
+      } else {
+        const itemData = ItemData?.getItem?.(id);
+        const amount = Math.max(0, Math.floor(Number(inventory[id]) || 0));
+        // UI/currency/unknown identifiers are treated as protected.  Only
+        // ordinary inventory consumables/materials can be destroyed here.
+        if (itemData && !["ui", "currency", "quest"].includes(itemData.kind) && itemData.destroyable !== false && amount > 0) {
+          inventory[id] = amount - 1;
+          if (inventory[id] <= 0) delete inventory[id];
+          itemName = itemData.name || itemName;
+          destroyed = true;
+        }
+      }
+    }
+
+    if (!destroyed) return showToast("呢件物品唔可以銷毀。", "danger");
+    pendingInventoryDestroyItemId = null;
+    selectedInventoryItemId = null;
+    showToast(`已銷毀：${itemName}`, "good");
+    addSystemMessage("item", `銷毀 ${itemName}`);
+    renderBagFacility();
     updateHud(true);
     saveImportant(false);
   }
@@ -4553,6 +4784,7 @@
   const BATTLE_ACTION_LINGER_SECONDS = reducedMotion ? .24 : .7;
   const BATTLE_SIDE_DAMAGE_BONUS = .15;
   const BATTLE_REAR_DAMAGE_BONUS = .35;
+  const BATTLE_MISS_COLOR = "#ffc857";
   const MOUNTAIN_BATTLEFIELD = Object.freeze({
     biome: "mountain",
     theme: "mountain",
@@ -4658,7 +4890,7 @@
       defence: primary ? (source.defence ?? stats?.defense ?? base.defence ?? 0) : (stats?.defense ?? base.defence ?? 0),
       xp: blueprint?.rewards?.baseXp ?? source.xp ?? base.xp ?? 0,
       coins: blueprint?.rewards?.coins ?? source.coins ?? base.coins ?? 0,
-      accuracy: 100,
+      accuracy: 99,
       evasion: 0,
       weight: 0,
       moveRange: Math.max(0, blueprint?.moveRange ?? source.moveRange ?? stats?.moveRange ?? base.moveRange ?? 4),
@@ -4744,7 +4976,6 @@
       guard: false,
       guardReduction: 0,
       moveBonusNext: 0,
-      evasionNext: 0,
       evasion: 0,
       selectedAction: "move",
       cursor: { ...hero.cell },
@@ -4788,8 +5019,7 @@
     battle.hero.moveRange = FighterEffects?.isDisabled(battle.hero, battle.round, "move") ? 0
       : Math.max(0, battle.hero.baseMoveRange + (battle.moveBonusNext || 0) - (FighterEffects?.movementPenalty(battle.hero, battle.round) || 0));
     battle.moveBonusNext = 0;
-    battle.evasion = battle.evasionNext || 0;
-    battle.evasionNext = 0;
+    battle.evasion = 0;
     battle.moved = false;
     battle.guard = false;
     battle.guardReduction = 0;
@@ -4909,9 +5139,13 @@
 
   function battleTargetEvasion(unit) {
     if (!unit) return 0;
-    const passives = unit === battle?.hero ? learnedFighterPassives() : {};
-    const status = FighterEffects?.statusEvasion(unit, battle?.round || 0, passives) || 0;
-    return Math.max(0, Number(unit.evasion) || 0, status * 100, unit === battle?.hero ? (battle.evasion || 0) * 100 : 0);
+    // unit.evasion already contains permanent gear/passive modifiers. Ask the
+    // status system only for temporary stance/concealment bonuses, then add
+    // the one-resolution battle stance (e.g. 舞葉) on top.
+    const base = Math.max(0, Number(unit.evasion) || 0);
+    const status = (FighterEffects?.statusEvasion(unit, battle?.round || 0, {}) || 0) * 100;
+    const battleStance = unit === battle?.hero ? Math.max(0, Number(battle.evasion) || 0) * 100 : 0;
+    return Math.max(0, base + status + battleStance);
   }
 
   function revalidateBattlePendingAction(pending) {
@@ -5664,11 +5898,12 @@
     let skill = null;
     let guardReduction = battle.guardReduction || 0;
     let moveBonusNext = 0;
-    let evasionNext = 0;
+    let evasionThisRound = 0;
     let effectTargets = [];
     let specialEffectsApplied = false;
     const statusTargets = [];
     const heroHitResolvers = [];
+    let heroMissCount = 0;
     if (heroAction.type === "skill") {
       skill = Skills.getSkill(heroAction.skillId);
       const cells = heroAction.pattern?.length ? heroAction.pattern : Skills.patternCells(skill, battle.hero.cell, heroAction.targetCell, { grid: battle.grid, facing: battle.hero.facing });
@@ -5762,7 +5997,7 @@
       }
       if (guardEffect && pattern.has(Tactics.cellKey(battle.hero.cell))) guardReduction = Math.max(guardReduction, guardEffect.amount || 0);
       if (moveUpEffect) moveBonusNext = Math.max(moveBonusNext, moveUpEffect.amount || 0);
-      if (evasionEffect) evasionNext = Math.max(evasionNext, evasionEffect.amount || 0);
+      if (evasionEffect) evasionThisRound = Math.max(evasionThisRound, evasionEffect.amount || 0);
       if (defenceDownEffect || moveDownEffect) {
         for (const target of affectedEnemies) statusTargets.push({ target, defenceDownEffect, moveDownEffect });
       }
@@ -5836,8 +6071,10 @@
         battle.guardReduction = guardReduction;
         battle.guard = guardReduction > 0;
         battle.moveBonusNext = Math.max(battle.moveBonusNext || 0, moveBonusNext);
-        battle.evasionNext = Math.max(battle.evasionNext || 0, evasionNext);
-        battle.evasion = Math.max(battle.evasion || 0, evasionNext);
+        // Evasion stance applies to this resolution only. It is cleared after
+        // both sides finish acting, so a one-round stance never leaks into
+        // the next round.
+        battle.evasion = Math.max(battle.evasion || 0, evasionThisRound);
         const executionHits = [...heroHits];
         for (const resolver of heroHitResolvers) {
           const routedDelivery = ["linear", "arc"].includes(resolver.deliveryMode);
@@ -5867,11 +6104,14 @@
           if (!hit.target.alive || hit.target.hp <= 0) continue;
           const hitRoll = Tactics.rollHit({
             accuracy: battle.hero.accuracy,
+            accuracyMultiplier: skill?.accuracyMultiplier ?? 1,
             evasion: battleTargetEvasion(hit.target),
             accuracyPenalties: [(FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) * 100],
           }, battleRandom);
           if (!hitRoll.hit) {
-            battle.effects.push({ cell: { ...hit.target.cell }, text: "MISS", color: "#a9c9ff", life: .9, maxLife: .9, offsetY: .16 });
+            heroMissCount += 1;
+            battle.effects.push({ cell: { ...hit.target.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
+            addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}未命中`);
             continue;
           }
           if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
@@ -5928,11 +6168,13 @@
       const passiveStats = learnedFighterPassives();
       const hitRoll = Tactics.rollHit({
         accuracy: hit.enemy.accuracy,
+        accuracyMultiplier: hit.plan.skill?.accuracyMultiplier ?? 1,
         evasion: battleTargetEvasion(battle.hero),
         accuracyPenalties: [(FighterEffects?.accuracyPenalty(hit.enemy, battle.round) || 0) * 100],
       }, battleRandom);
       if (!hitRoll.hit) {
-        missedCells.push({ ...battle.hero.cell });
+        missedCells.push({ cell: { ...battle.hero.cell }, enemy: hit.enemy, skillName: hit.plan.skillName || hit.enemy.skillName || "攻擊" });
+        addSystemMessage("combat", `${hit.enemy.name}對你未命中`, "incoming");
         continue;
       }
       const activeGuard = battle.guardReduction || 0;
@@ -5974,7 +6216,11 @@
     if (skill && heroExecuted) {
       const skillColor = skill.star === 3 ? "#ff9dd3" : skill.star === 2 ? "#a9c9ff" : "#ffc857";
       const landed = executedHeroHits.length || heroHeal > 0 || specialEffectsApplied || statusTargets.length || skill.effects.some((effect) => ["guard", "move_up", "evasion"].includes(effect.type));
-      battle.effects.push({ cell: { ...heroAction.targetCell }, text: landed ? skillIcon(skill) : "MISS", color: skillColor, life: 1, maxLife: 1, burst: true });
+      if (landed) battle.effects.push({ cell: { ...heroAction.targetCell }, text: skillIcon(skill), color: skillColor, life: 1, maxLife: 1, burst: true });
+      else if (!heroMissCount) {
+        battle.effects.push({ cell: { ...heroAction.targetCell }, text: "MISS", color: BATTLE_MISS_COLOR, life: 1, maxLife: 1, burst: true });
+        addSystemMessage("combat", `${skill.name}未命中`);
+      }
       if (skill.tags.includes("heal")) sound.heal();
       else if (skill.tags.includes("magic")) sound.crystal();
       else if (executedHeroHits.length) { sound.swing(); sound.hit(); }
@@ -5989,7 +6235,7 @@
       battle.effects.push({ cell: { ...battle.hero.cell }, text: "行動取消", color: "#ff6b6b", life: 1, maxLife: 1 });
     }
 
-    for (const cell of missedCells.slice(0, 2)) battle.effects.push({ cell: { ...cell }, text: "避開！", color: "#52dccb", life: .9, maxLife: .9 });
+    for (const miss of missedCells.slice(0, 2)) battle.effects.push({ cell: { ...miss.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9 });
     const totalEnemyDamage = executedEnemyHits.reduce((sum, hit) => sum + hit.damage, 0);
     player.hp = battle.hero.hp;
     if (totalEnemyDamage > 0) {
@@ -6588,7 +6834,7 @@
 
   function zoneForPosition(position) {
     if (currentMapId === "guild") return "公會";
-    if (currentMapId === "shop") return "銀火裝備店";
+    if (currentMapId === "shop") return "裝備店";
     if (currentMapId === "clinic") return "霧草療癒所";
     if (currentMapId === "general-store") return "霧穀雜貨舖";
     if (currentMapId === "inn") return "霧燈旅店";
@@ -8919,11 +9165,17 @@
       const region = authoritativeInteractionRegion(npc);
       const authored = region ? world.navigation?.data?.regions?.[region]?.[0] : null;
       if (authored?.bbox) {
-        const labelPoint = worldToScreen({
+        const labelGapPx = Math.max(2, Number(npc.nameLabelGapPx) || 8);
+        const fontSize = Core.clamp(8.5 * camera.zoom, 10, 14);
+        const labelTop = worldToScreen({
           x: authored.bbox.x + authored.bbox.width / 2,
-          y: authored.bbox.y - 12,
+          y: authored.bbox.y,
         }, shakeX, shakeY);
-        drawNpcName(labelPoint.x, labelPoint.y, npcDisplayName(npc));
+        const anchorMode = String(npc.nameLabelAnchorMode || "").trim();
+        const labelY = anchorMode === "region-top"
+          ? labelTop.y - labelGapPx * scale - fontSize * .5
+          : labelTop.y - 12 * scale;
+        drawNpcName(labelTop.x, labelY, npcDisplayName(npc));
       } else {
         drawNpcName(point.x, point.y - 69 * scale, npcDisplayName(npc));
       }
@@ -9208,6 +9460,7 @@
       }
       if (facilityTab === "bag" && selectedInventoryItemId && (code === "Escape" || code === "KeyE")) {
         selectedInventoryItemId = null;
+        pendingInventoryDestroyItemId = null;
         renderBagFacility();
         return;
       }
@@ -9850,11 +10103,13 @@
     const button = event.target.closest("[data-facility-action]");
     if (facilityTab === "bag" && selectedInventoryItemId && clickedDetailBackdrop && !clickedDetailPopup) {
       selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
       renderBagFacility();
       return;
     }
     if (facilityTab === "bag" && selectedInventoryItemId && !clickedDetailPopup && !clickedInventoryItem) {
       selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
       // If the click was only on inventory/background space, close immediately.
       // For a real control (filter/page/etc.), let that action continue below.
       if (!button) {
@@ -9866,6 +10121,7 @@
     const action = button.dataset.facilityAction;
     if (action === "select-item") {
       selectedInventoryItemId = button.dataset.itemId || null;
+      pendingInventoryDestroyItemId = null;
       renderBagFacility();
     } else if (action === "inventory-filter") {
       inventoryCategory = ["all", "equipment", "consumable", "skillbook", "material"].includes(button.dataset.inventoryCategory)
@@ -9873,26 +10129,42 @@
         : "all";
       inventoryPage = 0;
       selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
       renderBagFacility();
     } else if (action === "inventory-prev") {
       inventoryPage = Math.max(0, inventoryPage - 1);
       selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
       renderBagFacility();
     } else if (action === "inventory-next") {
       inventoryPage += 1;
       selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
       renderBagFacility();
     } else if (action === "shop-category") {
       equipmentShopCategory = ["weapon", "head", "upper", "lower", "martial"].includes(button.dataset.shopCategory)
         ? button.dataset.shopCategory
         : "weapon";
       renderShopFacility();
+    } else if (action === "shop-trade-mode") {
+      shopTradeMode = button.dataset.shopTradeMode === "sell" ? "sell" : "buy";
+      facilityContext === "general-store" ? renderGeneralStoreFacility() : renderShopFacility();
     } else if (action === "commission-detail") renderGuildCommissionDetail(button.dataset.offerId);
     else if (action === "accept") acceptGuildOffer(button.dataset.offerId);
     else if (action === "claim") claimGuildContract(button.dataset.contractId);
     else if (action === "abandon") openAbandonCommission(button.dataset.contractId);
     else if (action === "buy") changeEquipment(button.dataset.itemId, true);
     else if (action === "equip") changeEquipment(button.dataset.itemId, false);
+    else if (action === "unequip") unequipEquipment(button.dataset.itemId);
+    else if (action === "sell-equipment") sellEquipmentItem(button.dataset.itemId);
+    else if (action === "sell-store-item") sellGeneralStoreItem(button.dataset.itemId);
+    else if (action === "destroy-item") {
+      pendingInventoryDestroyItemId = button.dataset.itemId || null;
+      renderBagFacility();
+    } else if (action === "cancel-destroy-item") {
+      pendingInventoryDestroyItemId = null;
+      renderBagFacility();
+    } else if (action === "confirm-destroy-item") destroyInventoryItem(button.dataset.itemId);
     else if (action === "use-potion") useBagPotion();
     else if (action === "use-weak-potion") useWeakPotion();
     else if (action === "buy-store-item") buyGeneralStoreItem(button.dataset.itemId);

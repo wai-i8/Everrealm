@@ -8,11 +8,11 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (generated) {
   "use strict";
 
-  const EXPECTED_WIDTH = 1672;
-  const EXPECTED_HEIGHT = 941;
+  const EXPECTED_WIDTH = 1254;
+  const EXPECTED_HEIGHT = 1254;
   const FEET_RADIUS = 3;
   const SERVICE_INTERACTION_REACH_PX = 160;
-  const SERVICE_INTERACTION_HIT_PADDING_PX = 18;
+  const SERVICE_INTERACTION_HIT_PADDING_PX = 32;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));

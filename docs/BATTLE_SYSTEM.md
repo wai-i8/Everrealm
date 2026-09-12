@@ -1482,20 +1482,27 @@ visuals; they do not create an elemental defense matrix.
 The battle resolver uses percentage points and the following single formula:
 
 ```text
-Base Accuracy = 100%
+Base Accuracy = 99%
 Base Evasion  = 0%
+Skill Accuracy Multiplier = 1.0 by default
 
 Effective Accuracy = Base Accuracy + Accuracy bonuses - Accuracy penalties
 Effective Evasion  = Base Evasion + Evasion bonuses - Evasion penalties
 
 rawHitChance = (Effective Accuracy / 100)
+               × Skill Accuracy Multiplier
                × (1 - Effective Evasion / 100)
 Final Hit Chance = clamp(rawHitChance, 0%, 100%)
 ```
 
 Effective Accuracy is not clamped before Evasion is applied. Thus 120% Accuracy
 against 20% Evasion is 96%, while 150% against 30% is a raw 105% and a final
-100%. The battle owns one seeded/testable RNG stream per encounter; hit,
+100%. Normal attacks therefore still retain a 1% miss chance at 99% Accuracy.
+Skills may author an Accuracy multiplier without creating a second hit system.
+A failed roll renders a yellow `MISS` floating label on the battlefield; the
+bottom-left Battle Log records the miss using the attacker's normal log tone
+(player combat colour or enemy/incoming colour), not the yellow float colour.
+The battle owns one seeded/testable RNG stream per encounter; hit,
 critical and authored effect rolls consume that stream rather than ad-hoc
 `Math.random()` calls.
 

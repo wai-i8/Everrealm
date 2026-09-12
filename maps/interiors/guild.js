@@ -40,6 +40,9 @@
     const npcs = [{
       id: "guildmaster-yin", name: "妍姐", displayName: "公會接待員", role: "公會接待員／委託回報", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
+      navigationRegion: "npc",
+      nameLabelGapPx: 8,
+      interactionHitRadius: 128,
       color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32,
       appearance: "紅黑女劍士造型、赤紅披肩、黑色輕甲與高筒戰靴", zone: "reception-admin",
       services: ["guild-rank", "bounty-report", "repeatable-bounties"], render: false,

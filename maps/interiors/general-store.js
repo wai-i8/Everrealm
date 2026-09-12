@@ -38,6 +38,10 @@
     const npcs = [{
       id: "store-merchant-gin", name: "穀嬸", displayName: "道具店店員", role: "道具店店員／雜貨櫃台", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
+      navigationRegion: "npc",
+      nameLabelGapPx: 8,
+      nameLabelAnchorMode: "region-top",
+      interactionHitRadius: 128,
       color: "#f0c36a", facing: "down", actor: "merchant", gender: "female", age: 36,
       appearance: "紅髮女商人造型、酒紅短外套、金飾腰封與高筒靴", zone: "sales-counter", services: ["general-store"], render: false,
     }];

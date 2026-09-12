@@ -9,7 +9,7 @@
   const DEFAULT_HEIGHT = 941;
   const FEET_RADIUS = 3;
   const SERVICE_INTERACTION_REACH_PX = 160;
-  const SERVICE_INTERACTION_HIT_PADDING_PX = 18;
+  const SERVICE_INTERACTION_HIT_PADDING_PX = 32;
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
   function positiveDimension(value) {

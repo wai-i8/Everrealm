@@ -3464,3 +3464,44 @@ html body [aria-disabled="true"] {
   line-height: 1 !important;
   white-space: nowrap !important;
 }
+
+
+/* Round 6: inventory ownership controls + shop trade mode. */
+.facility-overlay[data-facility-tab="bag"] .paperdoll-slot[type="button"] {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+.facility-overlay[data-facility-tab="bag"] .paperdoll-slot[type="button"]:hover,
+.facility-overlay[data-facility-tab="bag"] .paperdoll-slot[type="button"]:focus-visible {
+  border-color: rgba(255,200,87,.72) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,200,87,.2), 0 0 .75rem rgba(255,200,87,.08) !important;
+  outline: none;
+}
+.inventory-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .36rem;
+}
+.inventory-detail-actions .facility-action-button,
+.inventory-detail-actions .danger-button,
+.inventory-detail-actions .secondary-button {
+  width: 100%;
+  min-height: 2rem;
+}
+.shop-trade-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+  margin: 0 0 .7rem;
+  padding: .38rem;
+  border: 1px solid rgba(245,233,202,.14);
+  border-radius: .72rem;
+  background: rgba(4,9,20,.44);
+}
+.shop-trade-tabs .equipment-shop-tab {
+  width: 100%;
+}

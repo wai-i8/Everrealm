@@ -16,7 +16,11 @@ and a `stats` object. Runtime equipment stats are:
 - `accuracy` and `evasion` — percentage-point modifiers;
 - `weight` — a real timing stat, not cosmetic metadata;
 - `moveRange` — the explicit grid Move modifier;
-- `maxHp`, `speed`, and `critChance` — existing non-matrix build modifiers.
+- `speed` and `critChance` — existing non-matrix build modifiers.
+
+`maxHp` remains a legacy schema key for save/data compatibility but equipment
+never contributes Max HP at runtime. Current equipment records keep it at `0`;
+class/level progression owns the HP curve.
 
 There are no runtime slash, impact, piercing, elemental, magic attack or
 magic defense fields. Historical source fields may remain in reference data,
@@ -75,6 +79,21 @@ leaving the item owned in the player's inventory. Full-body items therefore
 clear both body slots together; an over-level item must never continue
 contributing stats after a level-down.
 
+
+## Shop ownership and resale
+
+Buying gear only adds the item to ownership; the shop never auto-equips it.
+`requiredLevel` is checked when equipping, not when purchasing, so a player may
+buy higher-level gear in advance. Class restrictions still prevent invalid gear
+from being equipped. Equipped gear can be removed with `unequipItem()` and must
+be unequipped before it can be sold.
+
+The equipment shop and general item shop expose separate `購買` / `出售` modes.
+Sell value is one third of the normal purchase price, rounded down with a
+minimum of 1 coin for priced items. Ordinary materials without a catalog price
+use the current simple material resale baseline. Inventory detail may also
+permanently `銷毀` an unwanted owned item after an explicit confirmation;
+protected/UI/currency identifiers are never destructible.
 
 ## Active catalog and legacy saves
 

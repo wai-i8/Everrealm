@@ -160,7 +160,7 @@
       else if (type === "feint") effects.push({ type, effectiveAgainst: utility.effective_against || "guarding_target" });
       else if (type === "self_poison") effects.push({ type: "self_poison", duration: Math.max(1, Number(utility.duration_turns) || 1) });
       else if (type === "poison") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1), sourceUncertain: utility.status === "uncertain" });
-      else if (type === "evasion_stance") effects.push({ type: "evasion", amount: .55, duration: 1 });
+      else if (type === "evasion_stance") effects.push({ type: "evasion", amount: .5, duration: 1 });
       else if (type === "super_evasion_stance") effects.push({ type: "evasion", amount: .72, duration: 1 });
       else if (type === "counter_stance") effects.push({ type: "counter", amount: .9, duration: 1 });
       else if (type === "projectile_reflect_stance") effects.push({ type: "projectile_counter", amount: 1, duration: 1 });
@@ -255,6 +255,7 @@
       utilityEffects: everrealm.utility_effects || [],
       damage: damage,
       hitResolution,
+      accuracyMultiplier: Math.max(0, finiteNumber(hitResolution.accuracy_multiplier, 1)),
       sourceHitJudgement: original.source_hit_judgement || null,
       guildBookStars: [...new Set((original.acquisition?.guild_reward_books || [])
         .map((book) => Math.trunc(Number(book?.star_value)))
@@ -302,6 +303,7 @@
       utilityEffects: spec.utilityEffects,
       damage: spec.damage,
       hitResolution: spec.hitResolution,
+      accuracyMultiplier: spec.accuracyMultiplier,
       sourceHitJudgement: spec.sourceHitJudgement,
       guildBookStars: spec.guildBookStars,
       treeGroup: spec.treeGroup,
@@ -432,6 +434,7 @@
       utilityEffects: Array.isArray(source.utilityEffects) ? source.utilityEffects.map((effect) => ({ ...effect })) : [],
       damage: source.damage ? { ...source.damage } : null,
       hitResolution: source.hitResolution ? { ...source.hitResolution } : null,
+      accuracyMultiplier: Math.max(0, finiteNumber(source.accuracyMultiplier ?? source.hitResolution?.accuracy_multiplier, 1)),
       sourceHitJudgement: source.sourceHitJudgement || null,
       guildBookStars: Array.isArray(source.guildBookStars) ? source.guildBookStars.map((star) => Math.trunc(Number(star))).filter((star) => star > 0) : [],
     };

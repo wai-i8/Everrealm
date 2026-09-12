@@ -23,7 +23,7 @@
   // supplied authoring JPG.
   const BUILDINGS = Object.freeze([
     Object.freeze({ id: "keeper-house", role: "guild", triggerName: "Guild", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", label: "✦ 公會", mapLabel: "公會", name: "公會", entryFacing: "up", returnFacing: "down" }),
-    Object.freeze({ id: "forge", role: "equipment-shop", triggerName: "Weapon Shop", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", label: "⚒ 銀火裝備店", mapLabel: "裝備店", name: "銀火裝備店", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "forge", role: "equipment-shop", triggerName: "Weapon Shop", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", label: "⚒ 裝備店", mapLabel: "裝備店", name: "裝備店", entryFacing: "up", returnFacing: "down" }),
     Object.freeze({ id: "tea-house", role: "inn", triggerName: "Inn", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", label: "▰ 霧燈旅店", mapLabel: "旅店", name: "霧燈旅店", entryFacing: "up", returnFacing: "down" }),
     Object.freeze({ id: "clinic", role: "clinic", triggerName: "Hospital / Clinic", portalId: "world-to-clinic", targetMap: MAP_IDS.CLINIC, targetSpawn: "entrance", returnSpawn: "clinicFront", label: "✚ 霧草療癒所", mapLabel: "療癒所", name: "霧草療癒所", entryFacing: "up", returnFacing: "down" }),
     Object.freeze({ id: "general-store", role: "general-store", triggerName: "Item / General Store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", label: "◇ 霧穀雜貨舖", mapLabel: "雜貨舖", name: "霧穀雜貨舖", entryFacing: "up", returnFacing: "down" }),

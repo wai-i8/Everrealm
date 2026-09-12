@@ -13,11 +13,11 @@
   const HOSPITAL_AUTHORING = "assets/hospital/hospital_walkable.png";
   const navigation = navigationApi.createResolver();
   const navigationPackage = navigation.data;
-  const NPC_REGION = navigationPackage?.regions?.npc?.[0] || { anchor: { x: 829, y: 266 }, bbox: { x: 786, y: 147, width: 86, height: 120 } };
-  const EXIT_REGION = navigationPackage?.regions?.exit?.[0] || { centroid: { x: 837, y: 833 }, bbox: { x: 735, y: 806, width: 204, height: 55 } };
+  const NPC_REGION = navigationPackage?.regions?.npc?.[0] || { anchor: { x: 628, y: 708 }, bbox: { x: 577, y: 564, width: 102, height: 145 } };
+  const EXIT_REGION = navigationPackage?.regions?.exit?.[0] || { centroid: { x: 627, y: 1119 }, bbox: { x: 501, y: 1070, width: 260, height: 99 } };
   const NPC_FEET = { x: NPC_REGION.anchor.x, y: NPC_REGION.anchor.y };
   const EXIT_POINT = { x: EXIT_REGION.centroid.x, y: EXIT_REGION.centroid.y };
-  const ENTRANCE_SPAWN = { x: 837, y: 780 };
+  const ENTRANCE_SPAWN = { x: EXIT_POINT.x, y: EXIT_REGION.bbox.y - 20 };
 
   function createClinicMap() {
     const furniture = [
@@ -41,18 +41,20 @@
       displayName: "護士",
       role: "醫療所護士／療癒服務",
       kind: "npc",
-      x: 829,
-      y: 343,
+      x: NPC_FEET.x,
+      y: NPC_FEET.y,
       radius: 12,
-      interactionHitRadius: 92,
-      approachPoint: { x: 829, y: 360 },
+      interactionHitRadius: 128,
+      navigationRegion: "npc",
+      nameLabelGapPx: 8,
+      nameLabelAnchorMode: "region-top",
       render: false,
       color: "#87db82",
       facing: "down",
       actor: "healer",
       gender: "female",
       age: 27,
-      appearance: "金髮藍白女法師造型、白金短斗篷、藍寶石法袍與長靴",
+      appearance: "棕髮白紅護士制服、護士帽與紅十字徽章",
       zone: "reception",
       services: ["clinic-healing"],
     }];
@@ -101,7 +103,7 @@
         theme: "clinic",
         ambient: "herbal-warm",
         start: ENTRANCE_SPAWN,
-        spawnPoints: { entrance: ENTRANCE_SPAWN, healer: { x: 829, y: 343 }, exit: EXIT_POINT },
+        spawnPoints: { entrance: ENTRANCE_SPAWN, healer: NPC_FEET, exit: EXIT_POINT },
         worldBuildingId: "clinic",
         art: {
           flattened: true,
