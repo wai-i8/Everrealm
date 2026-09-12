@@ -68,7 +68,8 @@
     "game/facility-basic-views.js",
     "game/facility-catalog-views.js",
     "game/facility-progression-views.js",
-    "game.js?v=20260912-07",
+    "game/facility-bag-view.js",
+    "game.js?v=20260912-08",
   ]);
 
   return Object.freeze({ scripts });

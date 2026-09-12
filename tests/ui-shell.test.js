@@ -7,6 +7,7 @@ const rpgRoot = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(rpgRoot, "index.html"), "utf8");
 const game = fs.readFileSync(path.join(rpgRoot, "game.js"), "utf8");
 const dialogueUi = fs.readFileSync(path.join(rpgRoot, "game", "dialogue-ui.js"), "utf8");
+const facilityBagView = fs.readFileSync(path.join(rpgRoot, "game", "facility-bag-view.js"), "utf8");
 const css = fs.readFileSync(path.join(rpgRoot, "styles.css"), "utf8");
 const characterArt = fs.readFileSync(path.join(rpgRoot, "character-art.js"), "utf8");
 const worldSource = fs.readFileSync(path.join(rpgRoot, "world.js"), "utf8");
@@ -274,8 +275,7 @@ test("skill manual dialog exposes the shared website-style dismissal controls", 
 });
 
 test("inventory item detail backdrop dismisses without starting a window drag", () => {
-  const bagRenderer = game.match(/function renderBagFacility\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(bagRenderer, /class="inventory-detail-layer" data-inventory-detail-dismiss data-no-window-drag/);
+  assert.match(facilityBagView, /class="inventory-detail-layer" data-inventory-detail-dismiss data-no-window-drag/);
   assert.match(game, /clickedDetailBackdrop && !clickedDetailPopup[\s\S]*?selectedInventoryItemId = null;[\s\S]*?renderBagFacility\(\);/);
   assert.match(game, /const nonDraggableControlSelector = [^\n]*\[data-no-window-drag\]/);
 });

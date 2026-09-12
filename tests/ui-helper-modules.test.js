@@ -7,6 +7,7 @@ const SystemFeedback = require("../game/system-feedback.js");
 const DialogueUi = require("../game/dialogue-ui.js");
 const FacilityBasicViews = require("../game/facility-basic-views.js");
 const FacilityProgressionViews = require("../game/facility-progression-views.js");
+const FacilityBagView = require("../game/facility-bag-view.js");
 const Skills = require("../skill-core.js");
 
 function testClassList() {
@@ -538,4 +539,88 @@ test("progression facility deck view preserves editable drag datasets and readon
   assert.match(content.innerHTML, /deck-view-shell is-readonly/);
   assert.doesNotMatch(content.innerHTML, /data-deck-region="learned"/);
   assert.deepEqual(footerMessages, ["", ""]);
+});
+
+
+test("bag facility view preserves filters, paperdoll, selection, paging, and action datasets", () => {
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const equipmentItem = {
+    id: "gloves",
+    name: "重拳套",
+    quantity: 1,
+    categoryKey: "equipment",
+    equipment: { id: "gloves", name: "重拳套" },
+    isEquipped: true,
+    destroyable: false,
+    description: "重型拳套。",
+    detail: "攻擊 +8",
+  };
+  const manualItem = {
+    id: "manual_dash",
+    name: "技能書：疾步",
+    quantity: 2,
+    categoryKey: "skillbook",
+    iconItemId: "skill_book_1",
+    rankLabel: "初階",
+    description: "快速移動。",
+    detail: "自身 · 速度 A",
+    action: "use-manual",
+    actionLabel: "學習",
+    manualSkillId: "dash",
+    destroyable: true,
+  };
+  const helpers = {
+    equipmentIconHtml: (item, extraClass = "") => `<i class="${extraClass}" data-equipment="${item.id}"></i>`,
+    paperdollSlotHtml: (visualSlot, label, slot, options = {}) => `<b data-paperdoll="${visualSlot}:${label}:${slot}:${options.iconOnly ? "icon" : "full"}"></b>`,
+    envelopeIconHtml: (label) => `<i data-envelope="${label}"></i>`,
+    itemIconHtml: (id, label, extraClass = "") => `<i class="${extraClass}" data-item="${id}" aria-label="${label}"></i>`,
+    atlasIconHtml: (atlas, index, label) => `<i data-atlas="${atlas}:${index}" aria-label="${label}"></i>`,
+    coinAmountHtml: (amount) => `<span data-coins>${amount}</span>`,
+  };
+
+  FacilityBagView.renderBagFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    filteredItems: [equipmentItem, manualItem],
+    visibleItems: [equipmentItem, manualItem],
+    selectedItem: manualItem,
+    pendingDestroyItemId: null,
+    inventoryCategory: "all",
+    inventoryPage: 0,
+    pageCount: 2,
+    coins: 123,
+    ...helpers,
+  });
+
+  assert.match(content.innerHTML, /class="unified-inventory-layout"/);
+  assert.match(content.innerHTML, /data-paperdoll="head:頭部:head:icon"/);
+  assert.match(content.innerHTML, /inventory-equipment-item is-equipped/);
+  assert.match(content.innerHTML, /data-facility-action="inventory-filter" data-inventory-category="all" aria-selected="true"/);
+  assert.match(content.innerHTML, /data-facility-action="inventory-next"/);
+  assert.match(content.innerHTML, /<span>1 \/ 2<\/span>/);
+  assert.match(content.innerHTML, /data-facility-action="use-manual" data-skill-id="dash" data-item-id="manual_dash"/);
+  assert.match(content.innerHTML, /data-facility-action="destroy-item" data-item-id="manual_dash"/);
+  assert.match(content.innerHTML, /inventory-detail-rank">初階/);
+  assert.match(content.innerHTML, /<span data-coins>123<\/span>/);
+  assert.equal(footerMessages.at(-1), "");
+
+  FacilityBagView.renderBagFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    filteredItems: [manualItem],
+    visibleItems: [manualItem],
+    selectedItem: manualItem,
+    pendingDestroyItemId: "manual_dash",
+    inventoryCategory: "skillbook",
+    inventoryPage: 0,
+    pageCount: 1,
+    coins: 123,
+    ...helpers,
+  });
+
+  assert.match(content.innerHTML, /data-inventory-category="skillbook" aria-selected="true"/);
+  assert.match(content.innerHTML, /data-facility-action="confirm-destroy-item" data-item-id="manual_dash"/);
+  assert.match(content.innerHTML, /data-facility-action="cancel-destroy-item" data-item-id="manual_dash"/);
+  assert.doesNotMatch(content.innerHTML, /data-facility-action="use-manual"/);
 });

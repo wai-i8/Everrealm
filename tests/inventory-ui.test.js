@@ -6,6 +6,7 @@ const Expansion = require("../expansion-core.js");
 
 const rpgRoot = path.resolve(__dirname, "..");
 const gameSource = fs.readFileSync(path.join(rpgRoot, "game.js"), "utf8");
+const bagViewSource = fs.readFileSync(path.join(rpgRoot, "game", "facility-bag-view.js"), "utf8");
 const inventoryCss = fs.readFileSync(path.join(rpgRoot, "inventory-overhaul.css"), "utf8");
 
 test("inventory and class-specific equipment atlases exist and every catalog item has an explicit frame", () => {
@@ -30,10 +31,10 @@ test("inventory and class-specific equipment atlases exist and every catalog ite
 });
 
 test("bag uses an icon grid and paper doll exposes all seven canonical visual slots", () => {
-  assert.match(gameSource, /class="inventory-icon-grid"/);
-  assert.match(gameSource, /class="inventory-grid-item\s/);
+  assert.match(bagViewSource, /class="inventory-icon-grid"/);
+  assert.match(bagViewSource, /class="inventory-grid-item\s/);
   for (const slot of ["weapon", "head", "upperBody", "lowerBody", "hands", "feet", "charm"]) {
-    assert.match(gameSource, new RegExp(`paperdollSlotHtml\\("${slot}"`));
+    assert.match(bagViewSource, new RegExp(`paperdollSlotHtml\\("${slot}"`));
     assert.match(inventoryCss, new RegExp(`data-paperdoll-slot="${slot}"`));
   }
   assert.match(inventoryCss, /\.item-icon-atlas\s*\{/);
@@ -43,7 +44,7 @@ test("bag uses an icon grid and paper doll exposes all seven canonical visual sl
 });
 
 test("bag keeps a contained loadout beside a compact selectable grid", () => {
-  const bagRenderer = gameSource.match(/function renderBagFacility\(\)\s*\{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function equipmentIconHtml/)?.[1] || "";
+  const bagRenderer = `${gameSource}\n${bagViewSource}`;
   assert.match(bagRenderer, /class="unified-inventory-layout"/);
   assert.match(bagRenderer, /class="bag-loadout-panel"/);
   assert.match(bagRenderer, /class="bag-items-panel"/);
