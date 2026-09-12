@@ -6,7 +6,7 @@ const Skills = require("../skill-core.js");
 
 const root = path.resolve(__dirname, "..");
 const gameSource = fs.readFileSync(path.join(root, "game.js"), "utf8");
-const responsiveCss = fs.readFileSync(path.join(root, "responsive-ui-redesign.css"), "utf8");
+const stylesCss = fs.readFileSync(path.join(root, "styles.css"), "utf8");
 
 function extractFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -70,20 +70,20 @@ test("deck UI is a persistent learned-skill library with pointer drag/drop", () 
 });
 
 test("deck layout stays two-column, centered, compact, and scrolls only when needed", () => {
-  assert.match(responsiveCss, /data-facility-tab="deck"[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(responsiveCss, /\.deck-region-heading h3\s*\{[\s\S]*?text-align:\s*center/);
-  assert.match(responsiveCss, /\.deck-skill-list\s*\{[\s\S]*?overflow-y:\s*auto/);
-  assert.match(responsiveCss, /data-facility-tab="deck"[^\n]*#facilityHelpButton/);
-  assert.match(responsiveCss, /\.deck-skill-choice,[\s\S]*?\.deck-slot\s*\{[\s\S]*?height:\s*3\.05rem/);
-  assert.match(responsiveCss, /\.skill-kind-badge b\s*\{[\s\S]*?\.9rem\/1/);
+  assert.match(stylesCss, /data-facility-tab="deck"[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(stylesCss, /\.deck-region-heading h3\s*\{[\s\S]*?text-align:\s*center/);
+  assert.match(stylesCss, /\.deck-skill-list\s*\{[\s\S]*?overflow-y:\s*auto/);
+  assert.match(stylesCss, /data-facility-tab="deck"[^\n]*#facilityHelpButton/);
+  assert.match(stylesCss, /\.deck-skill-choice,[\s\S]*?\.deck-slot\s*\{[\s\S]*?height:\s*3\.05rem/);
+  assert.match(stylesCss, /\.skill-kind-badge b\s*\{[\s\S]*?\.9rem\/1/);
 });
 
 test("deck skill cards are edge-to-edge compact rows", () => {
-  const finalRuleStart = responsiveCss.lastIndexOf('.facility-overlay[data-facility-tab="deck"] .deck-skill-choice,');
-  const finalRuleEnd = responsiveCss.indexOf("\n}", finalRuleStart) + 2;
-  const finalRule = responsiveCss.slice(finalRuleStart, finalRuleEnd);
+  const finalRuleStart = stylesCss.lastIndexOf('.facility-overlay[data-facility-tab="deck"] .deck-skill-choice,');
+  const finalRuleEnd = stylesCss.indexOf("\n}", finalRuleStart) + 2;
+  const finalRule = stylesCss.slice(finalRuleStart, finalRuleEnd);
   assert.match(finalRule, /min-height:\s*1\.42rem !important/);
   assert.match(finalRule, /height:\s*1\.42rem !important/);
   assert.match(finalRule, /padding:\s*0 !important/);
-  assert.match(responsiveCss, /\.facility-overlay\[data-facility-tab="deck"\] \.deck-skill-list,[\s\S]*?\.deck-slot-list\s*\{[\s\S]*?gap:\s*0 !important/);
+  assert.match(stylesCss, /\.facility-overlay\[data-facility-tab="deck"\] \.deck-skill-list,[\s\S]*?\.deck-slot-list\s*\{[\s\S]*?gap:\s*0 !important/);
 });

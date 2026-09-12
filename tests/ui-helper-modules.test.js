@@ -317,3 +317,141 @@ test("mission facility view preserves empty, active, and completed states", () =
   assert.match(content.innerHTML, /style="width:100%"/);
   assert.deepEqual(footerMessages, ["", "", ""]);
 });
+
+test("catalog facility equipment view preserves paperdoll, stats, and equipment action markup", () => {
+  const CatalogViews = require("../game/facility-catalog-views.js");
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  let drewPaperdoll = false;
+  const catalog = [
+    { id: "gloves", name: "重拳套", slot: "weapon", occupiesSlots: ["weapon"], requiredLevel: 6, description: "重型拳套。", stats: { attack: 8 } },
+    { id: "gi", name: "武道服", slot: "upperBody", occupiesSlots: ["upperBody", "lowerBody"], requiredLevel: 8, description: "一件式武道服。", stats: { defence: 5 } },
+  ];
+  CatalogViews.renderEquipmentFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    stats: { maxHp: 88, attack: 31, defence: 12, speed: 4.6, moveRange: 5 },
+    level: 6,
+    displayName: "阿巡",
+    ownedEquipment: ["gloves", "gi"],
+    equipped: { weapon: "gloves" },
+    catalog,
+    equipmentMatchesClass: () => true,
+    isEquipmentEquipped: ({ equipped }, id) => Object.values(equipped).includes(id),
+    statText: (stats) => stats.attack ? `攻擊 +${stats.attack}` : `防禦 +${stats.defence}`,
+    equipmentIconHtml: (item, extraClass) => `<i class="${extraClass}" data-icon="${item.id}"></i>`,
+    paperdollSlotHtml: (visualSlot, label, slot) => `<b data-slot="${visualSlot}:${label}:${slot}"></b>`,
+    drawEquipmentPaperdoll: () => { drewPaperdoll = true; },
+  });
+
+  assert.match(content.innerHTML, /LV\.6 阿巡/);
+  assert.match(content.innerHTML, /<dd>31<\/dd>/);
+  assert.match(content.innerHTML, /<dd>5<\/dd>/);
+  assert.match(content.innerHTML, /data-facility-action="unequip" data-item-id="gloves"/);
+  assert.match(content.innerHTML, /data-facility-action="equip" data-item-id="gi" disabled>無法裝備<\/button>/);
+  assert.match(content.innerHTML, /上身 · 一件式 · LV\.8/);
+  assert.match(content.innerHTML, /2 件/);
+  assert.equal(drewPaperdoll, true);
+  assert.equal(footerMessages[0], '<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。');
+});
+
+test("catalog facility shop view preserves buy and sell action datasets", () => {
+  const CatalogViews = require("../game/facility-catalog-views.js");
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const catalog = [
+    { id: "owned", name: "舊拳套", slot: "weapon", occupiesSlots: ["weapon"], requiredLevel: 2, description: "已擁有", stats: { attack: 2 }, cost: 100, purchasable: true },
+    { id: "new", name: "新拳套", slot: "weapon", occupiesSlots: ["weapon"], requiredLevel: 6, description: "新品", stats: { attack: 8 }, cost: 200, purchasable: true },
+  ];
+  const common = {
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    tradeTabs: "<nav>tabs</nav>",
+    atShop: true,
+    category: "weapon",
+    discountRate: 0.1,
+    guildRankName: "白銀級",
+    coins: 500,
+    level: 6,
+    ownedEquipment: ["owned"],
+    equipped: {},
+    catalog,
+    fighterShopItemIdSet: new Set(["owned", "new"]),
+    equipmentMatchesClass: () => true,
+    equipmentSellPrice: (item) => item.cost / 2,
+    isEquipmentEquipped: ({ equipped }, id) => Object.values(equipped).includes(id),
+    statText: (stats) => `攻擊 +${stats.attack}`,
+    equipmentIconHtml: (item) => `<i data-icon="${item.id}"></i>`,
+    coinAmountHtml: (amount, extraClass = "") => `<span class="${extraClass}">${amount}</span>`,
+  };
+
+  CatalogViews.renderShopFacility({ ...common, mode: "buy" });
+  assert.match(content.innerHTML, /data-shop-category="weapon" aria-selected="true"/);
+  assert.match(content.innerHTML, /data-facility-action="equip" data-item-id="owned"/);
+  assert.match(content.innerHTML, /data-facility-action="buy" data-item-id="new"/);
+  assert.match(content.innerHTML, /原價 200/);
+  assert.equal(footerMessages.at(-1), '<span aria-hidden="true">⚒</span> 500 金幣 · 白銀級折扣 10% · 裝備店');
+
+  CatalogViews.renderShopFacility({ ...common, mode: "sell", equipped: { weapon: "owned" } });
+  assert.match(content.innerHTML, /data-facility-action="sell-equipment" data-item-id="owned" disabled>請先卸下<\/button>/);
+  assert.equal(footerMessages.at(-1), "");
+});
+
+test("catalog facility general-store view preserves buy/sell prices and disabled state", () => {
+  const CatalogViews = require("../game/facility-catalog-views.js");
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  const goods = [
+    { id: "cheap", name: "平價藥", description: "平", price: 10 },
+    { id: "dear", name: "貴價藥", description: "貴", price: 99 },
+  ];
+  const goodsById = new Map(goods.map((item) => [item.id, item]));
+  goodsById.set("healing_potion", { description: "回復 30 HP。" });
+  const common = {
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    tradeTabs: "<nav>tabs</nav>",
+    coins: 20,
+    potions: 0,
+    inventory: {},
+    goods,
+    goodsById,
+    itemData: { getItem: (id) => id === "mat" ? { name: "素材", description: "素材", kind: "material", sellable: true } : null },
+    generalStoreSellPrice: (id) => id === "mat" ? 10 : 0,
+    materialDescription: () => "素材描述",
+    itemIconHtml: (id) => `<i data-item-icon="${id}"></i>`,
+    coinAmountHtml: (amount, extraClass = "") => `<span class="${extraClass}">${amount}</span>`,
+  };
+
+  CatalogViews.renderGeneralStoreFacility({ ...common, mode: "buy" });
+  assert.match(content.innerHTML, /data-facility-action="buy-store-item" data-item-id="cheap" >購買<\/button>/);
+  assert.match(content.innerHTML, /data-facility-action="buy-store-item" data-item-id="dear" disabled>購買<\/button>/);
+
+  CatalogViews.renderGeneralStoreFacility({ ...common, mode: "sell", inventory: { mat: 3 } });
+  assert.match(content.innerHTML, /×3/);
+  assert.match(content.innerHTML, /出售價 <span class="store-price">10<\/span>/);
+  assert.match(content.innerHTML, /data-facility-action="sell-store-item" data-item-id="mat" >出售 1 件<\/button>/);
+  assert.deepEqual(footerMessages, ["", ""]);
+});
+
+test("catalog facility codex view preserves hidden and discovered monster presentation", () => {
+  const CatalogViews = require("../game/facility-catalog-views.js");
+  const content = { innerHTML: "" };
+  const footerMessages = [];
+  CatalogViews.renderCodexFacility({
+    content,
+    setFacilityFooter: (message) => footerMessages.push(message),
+    ids: ["turtle", "snake"],
+    monsterKills: { turtle: 3 },
+    legacyMonsterMigration: {},
+    monsterBlueprint: (type) => type === "turtle"
+      ? { battleRole: "tank", name_zh: "苔甲龜", codex: { summary: "耐打。" }, normalLevelRange: [6, 8] }
+      : { battleRole: "poison", name_zh: "蛇", codex: { summary: "有毒。" }, normalLevelRange: [7, 9] },
+  });
+  assert.match(content.innerHTML, /1 \/ 2 種/);
+  assert.match(content.innerHTML, /codex-card "><span class="codex-count">討伐 3/);
+  assert.match(content.innerHTML, /codex-card is-unknown/);
+  assert.match(content.innerHTML, /苔甲龜/);
+  assert.match(content.innerHTML, /？？？/);
+  assert.equal(footerMessages[0], '<span aria-hidden="true">◎</span> 每次討伐都會永久記錄；目前戰鬥只會獲得 EXP。');
+});
