@@ -46,7 +46,10 @@
       radius: 12,
       interactionHitRadius: 128,
       navigationRegion: "npc",
-      nameLabelGapPx: 8,
+      // Keep the role label clearly above the authored magenta NPC region.
+      // The flattened nurse artwork reaches the region's top edge, so the
+      // label needs room for its font/stroke at the smallest explore zoom.
+      nameLabelGapPx: 24,
       nameLabelAnchorMode: "region-top",
       render: false,
       color: "#87db82",
@@ -123,6 +126,7 @@
     map.pixelWidth = navigationPackage.source.width;
     map.pixelHeight = navigationPackage.source.height;
     map.navigation = {
+      data: navigationPackage,
       packageId: "hospital-navigation-prototype",
       source: { ...navigationPackage.source },
       coordinateSystem: navigationPackage.coordinate_system,
