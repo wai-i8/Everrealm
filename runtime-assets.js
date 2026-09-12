@@ -1,0 +1,68 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EverrealmRuntimeAssets = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const scripts = Object.freeze([
+    "data/classes.js",
+    "rpg-core.js",
+    "data/items.js",
+    "data/equipment.js",
+    "data/quests.js",
+    "data/skills/monster.js",
+    "data/monsters.js",
+    "data/skills/warrior.js",
+    "data/skills/fighter.js",
+    "map/map-constants.js",
+    "map/map-helpers.js",
+    "map/monster-blueprints.js",
+    "map/interior-helpers.js",
+    "map/main-town-navigation.generated.js",
+    "map/main-town-navigation.js",
+    "map/flattened-navigation.js",
+    "map/hospital-navigation.generated.js",
+    "map/hospital-navigation.js",
+    "map/weapon-navigation.generated.js",
+    "map/weapon-navigation.js",
+    "map/inn-navigation.generated.js",
+    "map/inn-navigation.js",
+    "map/item-navigation.generated.js?v=20260912-02",
+    "map/item-navigation.js",
+    "map/guild-navigation.generated.js",
+    "map/guild-navigation.js",
+    "map/field-navigation.generated.js",
+    "map/field-navigation.js",
+    "maps/main-town.js",
+    "maps/mountain-field.js",
+    "maps/mine.js",
+    "maps/interiors/guild.js",
+    "maps/interiors/equipment-shop.js",
+    "maps/interiors/clinic.js",
+    "maps/interiors/general-store.js",
+    "maps/interiors/inn.js",
+    "map/map-transitions.js",
+    "map/map-registry.js",
+    "world.js",
+    "expansion-core.js?v=20260910-02",
+    "expansion-world.js",
+    "guild-commission-core.js",
+    "tactics-core.js?v=20260912-01",
+    "skill-core.js?v=20260910-12",
+    "monster-ai.js",
+    "audio-core.js?v=20260911-01",
+    "main-town-bgm-loop.js?v=20260910-04",
+    "save-system.js",
+    "firebase-config.js",
+    "firebase-client.js?v=20260911-01",
+    "cloud-save.js",
+    "save-persistence.js",
+    "fighter-effects.js",
+    "locomotion.js",
+    "character-art.js",
+    "game.js?v=20260912-02",
+  ]);
+
+  return Object.freeze({ scripts });
+});

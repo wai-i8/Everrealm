@@ -40,7 +40,8 @@ firebase deploy --only firestore:rules,firestore:indexes --project everrealm-f5a
 ## Project structure
 
 - `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。
-- 玩家 progression：`data/classes.js` 擁有 Lv45 cap、Lv1–45 HP／Base ATK-DEF=0 及《幸福 Online／STRUGARDEN》升級 EXP 表；`rpg-core.js` 保留相同 runtime fallback／grant logic。
+- `runtime-assets.js`：瀏覽器 runtime script 載入次序唯一清單；`index.html` 同 `everrealm-sw.js` 都共用佢，避免兩份清單漂移。
+- 玩家 progression：`data/classes.js` 是 Lv45 cap、Lv1–45 HP／Base ATK-DEF=0 及升級 EXP 表的唯一資料來源；`rpg-core.js`／`expansion-core.js` 只負責 progression runtime logic。
 - 怪物本體資料：`data/monsters.js`；怪物技能：`data/skills/monster.js`；戰場技能驅動 AI：`monster-ai.js`；同級攻防校準、encounter HP／EXP 規則見 `docs/MONSTER_SYSTEM.md`。
 - `assets/`：正式 runtime 美術資產，包括角色、NPC、怪物、動畫、terrain、battlefield、場景物件、UI、物品及裝備圖示。
 - `tests/`：自動 regression / gameplay tests。

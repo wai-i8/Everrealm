@@ -45,8 +45,11 @@ Everrealm UI 係暗色 fantasy RPG：
 
 正式共用 bitmap source atlas 為 `assets/ui/ui-visual-atlas-v1.png`。它提供
 frame corners、straight edges、inset panels、button、tab、slot 同 skill-node
-狀態。runtime 由 `ui-system.css` 用 CSS background layers 組合，HTML 文字及
-controls 疊在上面。
+狀態。runtime 由單一 `styles.css` 用 CSS background layers 組合，HTML 文字及
+controls 疊在上面。`styles.css` 係唯一 runtime stylesheet；舊有 inventory / UI /
+responsive stylesheet 已按原 cascade 次序整合入同一檔案，避免後載入 override 令
+修改表面上「冇反應」。新增 UI 規則必須放返相關 section，禁止再新增 catch-all
+final override stylesheet。
 
 ### 3.1 Stretchable frame
 
@@ -78,7 +81,7 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 `facility-window` 係現有 major-window base；`ui-window` class 係新 skin hook。
 兩者可以同時存在以維持既有 JS 行為，視覺不可再退回 flat Canvas rectangle。
 
-所有 `ui-window` major popup 與 shared modal 預設可拖動：desktop 用 pointer/mouse，mobile 用 touch；標題、文字及非互動空白位可以作 drag surface，button、link、input、select、textarea、技能 drag source 等 interactive control 不可劫持成 window drag。拖動位置要限制到 viewport 仍保留可操作部分。Overlay 只作輕微 dim，禁止 `backdrop-filter: blur(...)`，玩家仍應清楚睇到正常遊戲背景。
+所有 `ui-window` major popup 與 shared modal 預設可拖動：desktop 用 pointer/mouse，mobile 用 touch；標題、文字及非互動空白位可以作 drag surface，button、link、input、select、textarea、技能節點／技能 drag source 等 interactive control 不可劫持成 window drag。Skill Tree 桌面空白位可以拖動整個 window，但技能節點 click 必須直接打開 Skill Detail；touch 裝置可保留 tree pan。拖動位置要限制到 viewport 仍保留可操作部分。Overlay 只作輕微 dim，禁止 `backdrop-filter: blur(...)`，玩家仍應清楚睇到正常遊戲背景。
 
 探索左側六個主功能（狀態、物品、面板、技能、任務、系統）採 desktop-style multi-window contract：開啟 major window 後左側 launcher 保持可用；不同功能可以同時存在，同一功能再次開啟只 focus 現有 instance，唔建立 duplicate。新開或被點擊嘅 window 升到最高 z-layer；各 window 可獨立拖動。功能 window 自身嘅 full-stage positioning layer 必須 transparent 並讓 pointer 穿透到未被 window 覆蓋嘅遊戲／launcher 區域。系統設定亦係同一種可拖 major window，唔再依附喺 sidebar icon 旁邊。
 
@@ -356,13 +359,13 @@ Firebase 帳戶未通過登入／授權前，左側主功能 launcher 必須完�
 
 普通旅館、醫院等 NPC 對話使用單一乾淨 anchored frame：speaker 置頂、正文自然左對齊、留白按內容決定。
 單向對話唔硬塞選項；如有 choices，唔顯示 `1.`／`2.` 或其他無意義括號數字，亦唔用拉長金色 bitmap
-再疊第二層底框。選項只係真正 branching/service action 時先出現。
+再疊第二層底框。短 service choice（例如醫院「治療／不用了」）使用內容寬度、橫向 compact buttons，唔拉滿整行。選項只係真正 branching/service action 時先出現。
 
 ## 7. 2026-09-11 compact launcher / click-through log update
 
 - Compact launcher-family windows use the narrow trial footprint requested for visual testing: `status`, portable `missions`, portable read-only `deck-view`, and the in-Guild commission list target about `16rem` desktop max width. The city-gate editable Deck configurator targets about `17rem`; its learned-skill and current-panel regions remain side-by-side inside that narrow footprint.
 - The six left launcher functions (`status`, `bag`, `deck-view`, `skills`, `missions`, `system`) are non-blocking exploration UI: the player may keep walking while these windows are open. Facility/service UI reached through world interaction (`guild`, `shop`, `general-store`, editable `deck`) and modal confirmations/details remain movement-blocking.
-- Inventory remains exactly `5 × 3` per page. Each visible item tile uses one `1:1` outer frame only（icon 上、名稱下），唔再喺 icon 外加第二層卡框；左邊六格裝備板保留，但移除再包住整塊裝備板嘅最外層裝飾框。物品區高度按最多三行內容決定，唔為空白行拉長。Item/equipment detail popup 點擊 popup 外背景即關閉，關閉物品欄亦會清除 selection；已裝備物品嘅 `卸下` 同一般物品嘅 `銷毀` action 都屬 detail popup state，popup 一關就必須一齊消失。`銷毀` 要先進入明確確認狀態。
+- Inventory remains exactly `5 × 3` per page. Each visible item tile uses one `1:1` outer frame only（icon 上、名稱下），唔再喺 icon 外加第二層卡框；左邊六格裝備板保留，但移除再包住整塊裝備板嘅最外層裝飾框。物品區高度按最多三行內容決定，唔為空白行拉長。Item/equipment detail popup 點擊 popup 外背景即關閉，關閉物品欄亦會清除 selection；已裝備物品嘅 `卸下` 同一般物品嘅 `銷毀` action 都屬 detail popup state，popup 一關就必須一齊消失。`銷毀` 要先進入明確確認狀態；確認狀態只顯示「確定銷毀」同「取消」，唔同時再顯示「裝備」。Inventory action hierarchy 只用金／藍兩級：金色係主要／確定動作（使用、裝備、確定銷毀），藍色係次要／返回動作（卸下、銷毀入口、取消、返回），唔使用紅色 destroy skin。卸下成功後關閉目前 detail selection，唔即時將同一位置變成「裝備」按鈕。短內容 detail popup 自然增高／增闊，唔因幾行內容出現內部 scrollbar；只喺極窄／極矮 viewport 才容許 fallback scroll。
 - The persistent System/Battle log is HUD text rather than a panel surface: no message background, no visible scrollbar, and text does not intercept map clicks. Each full message line inherits one category/tone colour from `[tag]` through body text and uses a black outline/shadow for contrast.
 - Log history is scrolled only from an invisible strip on the left side of the log: mouse wheel on desktop or vertical finger swipe on touch devices. Tabs, collapse and drag controls remain the only other interactive log controls.
 - NPC dialogue always renders above the persistent log HUD.

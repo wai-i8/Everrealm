@@ -41,7 +41,7 @@
 
 戰鬥以《幸福 Online／STRUGARDEN》式同步戰棋為核心：
 
-> 玩家規劃移動與朝向 → 敵我同步移動 → 再按位置、朝向、攻擊路線及速度同步結算行動。
+> 玩家規劃移動與朝向 → 敵我同步移動 → 再按位置、朝向、攻擊路線及技能速度排定出手次序，逐個完成行動。
 
 戰鬥唔係「點中邊個就保證打中邊個」。
 
@@ -86,7 +86,7 @@
 1. **同步移動規劃**
 2. **同步逐格移動**
 3. **技能／行動規劃**
-4. **同步行動結算**
+4. **按速度次序逐個行動結算**
 
 ---
 
@@ -1598,6 +1598,9 @@ S > A > B > C > D > E > F
 4. stable actor ID.
 
 決定執行順序。
+
+行動 phase 只保留「排序同步」，唔再將所有攻擊動畫同一時間播放：
+排第一嘅單位必須先完整播放出招／命中／效果，再到下一個單位；後手單位喺真正輪到自己前仍要按當刻 HP、status、位置、朝向同 attack path 重新驗證。被前手擊倒、打斷或令技能失效嘅 action 直接取消，唔播放假攻擊。同步逐格移動規則維持不變。
 
 The grade ordering is the canonical `S > A > B > C > D > E > F`. The current
 repository does not define a final numeric conversion between Weight units and

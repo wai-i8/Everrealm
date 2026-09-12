@@ -5,11 +5,7 @@
   "description": "永恆國度 · Everrealm — zero-dependency browser RPG",
   "scripts": {
     "start": "python -m http.server 4173",
-    "generate:main-town-navigation": "node tools/generate-main-town-navigation.js",
-    "generate:hospital-navigation": "node tools/generate-hospital-navigation.js",
-    "generate:flattened-navigation": "node tools/generate-flattened-navigation.js",
-    "test": "node --test",
-    "test:cdp": "powershell -ExecutionPolicy Bypass -File .\\tests\\cdp-smoke.ps1"
+    "test": "node --test"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "3.0.4",

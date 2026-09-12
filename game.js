@@ -1,28 +1,6 @@
 (function () {
   "use strict";
 
-  if (!document.getElementById("inventoryOverhaulStyles")) {
-    const stylesheet = document.createElement("link");
-    stylesheet.id = "inventoryOverhaulStyles";
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = "inventory-overhaul.css";
-    document.head.append(stylesheet);
-  }
-  if (!document.getElementById("everrealmUiStyles")) {
-    const stylesheet = document.createElement("link");
-    stylesheet.id = "everrealmUiStyles";
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = "ui-system.css";
-    document.head.append(stylesheet);
-  }
-  if (!document.getElementById("inventoryMinimalStyles")) {
-    const stylesheet = document.createElement("link");
-    stylesheet.id = "inventoryMinimalStyles";
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = "inventory-minimal.css";
-    document.head.append(stylesheet);
-  }
-
   const Core = window.LanternCore;
   const World = window.LanternWorld;
   const Expansion = window.LanternExpansion;
@@ -2676,17 +2654,19 @@
       startDialogue({
         speaker: npc.name,
         color: npc.color,
-        lines: ["你而家狀態好好，HP 已經全滿，唔需要治療。繼續旅程吧。"],
+        lines: ["目前不需要治療。"],
       });
       return;
     }
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: [`你而家仲差 ${Math.ceil(missingHp)} HP，要我幫你完全恢復嗎？`],
+      lines: ["需要治療嗎？"],
+      choiceLayout: "compact",
       choices: [
         {
-          label: "請幫我治療",
+          label: "治療",
+          buttonStyle: "primary",
           action: () => {
             const healTo = playerStats().maxHp;
             player.hp = healTo;
@@ -2698,7 +2678,7 @@
             updateHud(true);
           },
         },
-        { label: "暫時唔使", action: () => {} },
+        { label: "不用了", buttonStyle: "secondary", action: () => {} },
       ],
     });
   }
@@ -2826,12 +2806,14 @@
     next.setAttribute("aria-label", atEnd ? "確定並關閉對話" : "繼續對話");
     if (atEnd && dialogue.choices?.length) {
       choices.hidden = false;
+      choices.classList.toggle("is-compact", dialogue.choiceLayout === "compact");
       next.hidden = true;
       choices.innerHTML = "";
       dialogue.choices.forEach((choice, index) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `dialogue-choice${index === dialogueChoiceIndex ? " selected" : ""}`;
+        const choiceStyle = choice.buttonStyle === "primary" ? " is-primary primary-button" : choice.buttonStyle === "secondary" ? " is-secondary secondary-button" : "";
+        button.className = `dialogue-choice${choiceStyle}${index === dialogueChoiceIndex ? " selected" : ""}`;
         button.setAttribute("role", "listitem");
         button.setAttribute("aria-pressed", String(index === dialogueChoiceIndex));
         button.textContent = choice.label;
@@ -2841,6 +2823,7 @@
       choices.children[dialogueChoiceIndex]?.focus({ preventScroll: true });
     } else {
       choices.hidden = true;
+      choices.classList.remove("is-compact");
       choices.innerHTML = "";
       next.hidden = false;
     }
@@ -2974,7 +2957,6 @@
     if (!active) {
       facilityContent.innerHTML = `
         <section class="mission-view is-empty" aria-label="目前任務">
-          <div class="mission-empty-mark" aria-hidden="true">◇</div>
           <strong>目前沒有進行中的任務</strong>
         </section>`;
       setFacilityFooter("");
@@ -3263,7 +3245,8 @@
             : itemIconHtml(item.id, item.name, extraClass, 4);
     const actionMarkup = (item) => {
       const buttons = [];
-      if (item.action) {
+      const confirmingDestroy = item.destroyable && pendingInventoryDestroyItemId === item.id;
+      if (item.action && !confirmingDestroy) {
         const attrs = [
           `data-facility-action="${item.action}"`,
           item.bookStar ? `data-book-star="${item.bookStar}"` : "",
@@ -3271,14 +3254,15 @@
           item.manualSkillId ? `data-skill-id="${item.manualSkillId}"` : "",
           `data-item-id="${item.id}"`,
         ].filter(Boolean).join(" ");
-        buttons.push(`<button class="facility-action-button" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`);
+        const actionClass = item.action === "unequip" ? "secondary-button" : "facility-action-button";
+        buttons.push(`<button class="${actionClass}" type="button" ${attrs} ${item.disabled ? "disabled" : ""}>${item.actionLabel}</button>`);
       }
       if (item.destroyable) {
-        if (pendingInventoryDestroyItemId === item.id) {
-          buttons.push(`<button class="danger-button inventory-destroy-confirm" type="button" data-facility-action="confirm-destroy-item" data-item-id="${item.id}">確定銷毀</button>`);
+        if (confirmingDestroy) {
+          buttons.push(`<button class="facility-action-button inventory-destroy-confirm" type="button" data-facility-action="confirm-destroy-item" data-item-id="${item.id}">確定銷毀</button>`);
           buttons.push(`<button class="secondary-button inventory-destroy-cancel" type="button" data-facility-action="cancel-destroy-item" data-item-id="${item.id}">取消</button>`);
         } else {
-          buttons.push(`<button class="danger-button inventory-destroy-button" type="button" data-facility-action="destroy-item" data-item-id="${item.id}">銷毀</button>`);
+          buttons.push(`<button class="secondary-button inventory-destroy-button" type="button" data-facility-action="destroy-item" data-item-id="${item.id}">銷毀</button>`);
         }
       }
       return buttons.join("");
@@ -4074,7 +4058,8 @@
   }
 
   function beginSkillTreePan(event) {
-    if (facilityTab !== "skills" || event.button !== 0) return;
+    if (facilityTab !== "skills" || event.button !== 0 || event.pointerType !== "touch") return;
+    if (event.target.closest?.("button, a, input, select, textarea, [contenteditable], [role=button], .skill-tree-node")) return;
     const viewport = event.target.closest?.(".skill-tree-scroll");
     if (!viewport || !facilityContent.contains(viewport)) return;
     skillTreePanGesture = {
@@ -4685,6 +4670,7 @@
     if (!result.ok) return showToast("未能卸下呢件裝備。", "danger");
     equipped = result.state.equipped;
     player.hp = Core.clamp(player.hp, 1, playerStats().maxHp);
+    selectedInventoryItemId = null;
     pendingInventoryDestroyItemId = null;
     sound.coin();
     showToast(`已卸下：${item.name}`, "good");
@@ -5863,21 +5849,60 @@
     battle.phase = "resolving_action";
     battle.selectedAction = null;
     battle.messageDanger = false;
-    battle.actionResolution = { elapsed: 0, applied: false, completed: false, heroAction, actionOrder, pendingActions: [heroPending, ...enemyPending] };
-    battle.actingUnitId = null;
-    battle.actingUnitIds = actionOrder.map((action) => action.actorId);
-    battle.message = `${heroAction.label}已確認（速度 ${heroSpeedGrade}）——按 S → A → B → C → D → E → F 結算！`;
+    battle.actionResolution = {
+      elapsed: 0,
+      actionElapsed: 0,
+      actionIndex: 0,
+      applied: false,
+      completed: false,
+      heroAction,
+      actionOrder,
+      pendingActions: [heroPending, ...enemyPending],
+      resolvedActorIds: [],
+      heroSummary: "",
+      enemySummaries: [],
+      cancelledActors: [],
+    };
+    battle.actingUnitId = actionOrder[0]?.actorId || null;
+    battle.actingUnitIds = [];
+    battle.message = `${heroAction.label}已確認（速度 ${heroSpeedGrade}）——按 S → A → B → C → D → E → F 順序出手。`;
     updateBattleUi();
   }
 
   function updateActionResolution(dt) {
     const resolution = battle?.actionResolution;
     if (!resolution || battle.phase !== "resolving_action") return;
+    const duration = Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS);
     resolution.elapsed += dt;
-    if (!resolution.applied && resolution.elapsed >= BATTLE_ACTION_WINDUP_SECONDS) applySimultaneousBattleActions(resolution.heroAction);
-    if (!resolution.completed && resolution.elapsed >= BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS) {
+    resolution.actionElapsed += dt;
+    const current = resolution.actionOrder?.[resolution.actionIndex] || null;
+    battle.actingUnitId = current?.actorId || null;
+    battle.actingUnitIds = [];
+
+    if (current && !resolution.resolvedActorIds.includes(current.actorId) && resolution.actionElapsed >= BATTLE_ACTION_WINDUP_SECONDS) {
+      applyOrderedBattleAction(resolution.heroAction, current.actorId);
+    }
+
+    if (!resolution.completed && resolution.actionElapsed >= duration) {
+      if (current && !resolution.resolvedActorIds.includes(current.actorId)) applyOrderedBattleAction(resolution.heroAction, current.actorId);
+      resolution.actionIndex += 1;
+      resolution.actionElapsed = 0;
+      const next = resolution.actionOrder?.[resolution.actionIndex] || null;
+      if (next) {
+        battle.actingUnitId = next.actorId;
+        updateBattleUi();
+        return;
+      }
+
       resolution.completed = true;
+      resolution.applied = true;
+      battle.actingUnitId = null;
       battle.actingUnitIds = [];
+      battle.evasion = 0;
+      const summaries = [resolution.heroSummary, ...(resolution.enemySummaries || [])].filter(Boolean);
+      const cancelled = [...new Set(resolution.cancelledActors || [])];
+      if (cancelled.length) summaries.push(`${cancelled.join("、")}因倒下或異常狀態取消行動`);
+      if (summaries.length) battle.message = `${summaries.join("；")}。`;
       if (battle.hero.hp <= 0) return finishBattleDefeat();
       if (livingBattleEnemies().length === 0) return finishBattleVictory();
       battle.round += 1;
@@ -5885,9 +5910,9 @@
     }
   }
 
-  function applySimultaneousBattleActions(heroAction) {
-    if (!battle?.actionResolution || battle.actionResolution.applied) return;
-    battle.actionResolution.applied = true;
+  function applyOrderedBattleAction(heroAction, actorId) {
+    const resolution = battle?.actionResolution;
+    if (!resolution || resolution.resolvedActorIds.includes(actorId)) return;
     const enemiesAtStart = livingBattleEnemies();
     const heroHits = [];
     const executedHeroHits = [];
@@ -5901,6 +5926,7 @@
     let evasionThisRound = 0;
     let effectTargets = [];
     let specialEffectsApplied = false;
+    const heroBuffFeedback = [];
     const statusTargets = [];
     const heroHitResolvers = [];
     let heroMissCount = 0;
@@ -5995,9 +6021,18 @@
       if (healEffect && pattern.has(Tactics.cellKey(battle.hero.cell))) {
         heroHeal = Math.round(battle.hero.maxHp * (healEffect.maxHpRatio || 0) + (healEffect.flat || 0));
       }
-      if (guardEffect && pattern.has(Tactics.cellKey(battle.hero.cell))) guardReduction = Math.max(guardReduction, guardEffect.amount || 0);
-      if (moveUpEffect) moveBonusNext = Math.max(moveBonusNext, moveUpEffect.amount || 0);
-      if (evasionEffect) evasionThisRound = Math.max(evasionThisRound, evasionEffect.amount || 0);
+      if (guardEffect && pattern.has(Tactics.cellKey(battle.hero.cell))) {
+        guardReduction = Math.max(guardReduction, guardEffect.amount || 0);
+        heroBuffFeedback.push("防禦力提升");
+      }
+      if (moveUpEffect) {
+        moveBonusNext = Math.max(moveBonusNext, moveUpEffect.amount || 0);
+        heroBuffFeedback.push("移動力提升");
+      }
+      if (evasionEffect) {
+        evasionThisRound = Math.max(evasionThisRound, evasionEffect.amount || 0);
+        heroBuffFeedback.push("迴避力提升");
+      }
       if (defenceDownEffect || moveDownEffect) {
         for (const target of affectedEnemies) statusTargets.push({ target, defenceDownEffect, moveDownEffect });
       }
@@ -6047,10 +6082,16 @@
       { actorId: battle.hero.id, kind: "hero", speedGrade: heroSpeedGrade, initiative: battle.hero.initiative },
       ...enemyHits.map((hit) => ({ actorId: hit.enemy.id, kind: "enemy", speedGrade: hit.plan.speedGrade || hit.enemy.speedGrade || "C", initiative: hit.enemy.initiative, hit })),
     ]);
-    battle.actionResolution.actionOrder = orderedActions.map((action) => ({ actorId: action.actorId, speedGrade: action.speedGrade, weight: action.weight || 0 }));
-    battle.actingUnitIds = orderedActions.map((action) => action.actorId);
+    const currentAction = orderedActions.find((action) => action.actorId === actorId) || null;
+    battle.actingUnitIds = [];
+
+    if (!currentAction) {
+      const skippedUnit = battleUnits().find((unit) => unit.id === actorId);
+      if (skippedUnit?.name) cancelledActions.push(skippedUnit.name);
+    }
 
     for (const action of orderedActions) {
+      if (action.actorId !== actorId) continue;
       const pending = battle.actionResolution.pendingActions.find((entry) => entry.actorId === action.actorId);
       const validation = pending ? revalidateBattlePendingAction(pending) : { ok: true };
       if (!validation.ok) {
@@ -6061,6 +6102,7 @@
       pending && (pending.status = "executing");
       if (action.kind === "hero") {
         if (!battle.hero.alive || battle.hero.hp <= 0 || FighterEffects?.isDisabled(battle.hero, battle.round)) {
+          pending && (pending.status = "cancelled");
           cancelledActions.push(battle.hero.name);
           continue;
         }
@@ -6152,6 +6194,7 @@
 
       const hit = action.hit;
       if (!hit.enemy.alive || hit.enemy.hp <= 0 || !battle.hero.alive || battle.hero.hp <= 0 || FighterEffects?.isDisabled(hit.enemy, battle.round)) {
+        pending && (pending.status = "cancelled");
         cancelledActions.push(hit.enemy.name);
         continue;
       }
@@ -6212,61 +6255,101 @@
       );
       executedEnemyHits.push(hit);
     }
-    if (!heroExecuted) heroHeal = 0;
-    if (skill && heroExecuted) {
-      const skillColor = skill.star === 3 ? "#ff9dd3" : skill.star === 2 ? "#a9c9ff" : "#ffc857";
-      const landed = executedHeroHits.length || heroHeal > 0 || specialEffectsApplied || statusTargets.length || skill.effects.some((effect) => ["guard", "move_up", "evasion"].includes(effect.type));
-      if (landed) battle.effects.push({ cell: { ...heroAction.targetCell }, text: skillIcon(skill), color: skillColor, life: 1, maxLife: 1, burst: true });
-      else if (!heroMissCount) {
-        battle.effects.push({ cell: { ...heroAction.targetCell }, text: "MISS", color: BATTLE_MISS_COLOR, life: 1, maxLife: 1, burst: true });
-        addSystemMessage("combat", `${skill.name}未命中`);
+    const actorIsHero = actorId === battle.hero.id;
+    if (actorIsHero && !heroExecuted) heroHeal = 0;
+    if (actorIsHero) {
+      if (skill && heroExecuted) {
+        const skillColor = skill.star === 3 ? "#ff9dd3" : skill.star === 2 ? "#a9c9ff" : "#ffc857";
+        const appliedBuffLabels = [...new Set(heroBuffFeedback)];
+        appliedBuffLabels.forEach((label, index) => {
+          battle.effects.push({
+            cell: { ...battle.hero.cell },
+            text: label,
+            color: "#87db82",
+            life: 1.05,
+            maxLife: 1.05,
+            kind: "status",
+            burst: true,
+            offsetY: -.55 - index * .34,
+          });
+          addSystemMessage("combat", label);
+        });
+        const landed = executedHeroHits.length || heroHeal > 0 || specialEffectsApplied || statusTargets.length || appliedBuffLabels.length > 0;
+        const pureCoreBuff = appliedBuffLabels.length > 0 && !executedHeroHits.length && heroHeal <= 0 && !specialEffectsApplied && !statusTargets.length;
+        if (landed && !pureCoreBuff) battle.effects.push({ cell: { ...heroAction.targetCell }, text: skillIcon(skill), color: skillColor, life: 1, maxLife: 1, burst: true });
+        else if (!landed && !heroMissCount) {
+          battle.effects.push({ cell: { ...heroAction.targetCell }, text: "MISS", color: BATTLE_MISS_COLOR, life: 1, maxLife: 1, burst: true });
+          addSystemMessage("combat", `${skill.name}未命中`);
+        }
+        if (skill.tags.includes("heal")) sound.heal();
+        else if (skill.tags.includes("magic")) sound.crystal();
+        else if (executedHeroHits.length) { sound.swing(); sound.hit(); }
+        else sound.tone(430, .13, { to: 680, gain: .025 });
+      } else if (heroAction.type === "potion" && heroExecuted) {
+        battle.effects.push({ cell: { ...battle.hero.cell }, text: `+${heroHeal}`, color: "#87db82", life: 1, maxLife: 1, burst: true });
+        addSystemMessage("item", `使用小型回復藥，恢復 ${heroHeal} HP`);
+        sound.heal();
+      } else if (heroExecuted) {
+        battle.effects.push({ cell: { ...battle.hero.cell }, text: "待機", color: "#87db82", life: .9, maxLife: .9 });
+      } else {
+        battle.effects.push({ cell: { ...battle.hero.cell }, text: "行動取消", color: "#ff6b6b", life: 1, maxLife: 1 });
       }
-      if (skill.tags.includes("heal")) sound.heal();
-      else if (skill.tags.includes("magic")) sound.crystal();
-      else if (executedHeroHits.length) { sound.swing(); sound.hit(); }
-      else sound.tone(430, .13, { to: 680, gain: .025 });
-    } else if (heroAction.type === "potion" && heroExecuted) {
-      battle.effects.push({ cell: { ...battle.hero.cell }, text: `+${heroHeal}`, color: "#87db82", life: 1, maxLife: 1, burst: true });
-      addSystemMessage("item", `使用小型回復藥，恢復 ${heroHeal} HP`);
-      sound.heal();
-    } else if (heroExecuted) {
-      battle.effects.push({ cell: { ...battle.hero.cell }, text: "待機", color: "#87db82", life: .9, maxLife: .9 });
-    } else {
-      battle.effects.push({ cell: { ...battle.hero.cell }, text: "行動取消", color: "#ff6b6b", life: 1, maxLife: 1 });
     }
 
     for (const miss of missedCells.slice(0, 2)) battle.effects.push({ cell: { ...miss.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9 });
     const totalEnemyDamage = executedEnemyHits.reduce((sum, hit) => sum + hit.damage, 0);
     player.hp = battle.hero.hp;
-    if (totalEnemyDamage > 0) {
+    if (!actorIsHero && totalEnemyDamage > 0) {
       battle.hero.hitFlash = .35;
       if (executedEnemyHits.some((hit) => hit.position === "rear")) battle.effects.push({ cell: { ...battle.hero.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
       else if (executedEnemyHits.some((hit) => hit.position === "side")) battle.effects.push({ cell: { ...battle.hero.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
       battle.effects.push({ cell: { ...battle.hero.cell }, text: `-${totalEnemyDamage}`, color: "#ff6b6b", life: 1, maxLife: 1, kind: "damage", offsetY: .16 });
       sound.hurt();
       screenShake = reducedMotion ? 0 : 7;
-    } else if (missedCells.length) sound.tone(620, .11, { to: 840, gain: .025 });
-    battle.evasion = 0;
+    } else if (!actorIsHero && missedCells.length) sound.tone(620, .11, { to: 840, gain: .025 });
 
-    const skillResults = [];
-    if (executedHeroHits.length) {
-      const targetCount = new Set(executedHeroHits.map((hit) => hit.target.id)).size;
-      const hitCopy = executedHeroHits.length > targetCount ? `、${executedHeroHits.length} 段` : "";
-      skillResults.push(`命中 ${targetCount} 個目標${hitCopy}`);
+    if (actorIsHero) {
+      const skillResults = [];
+      if (executedHeroHits.length) {
+        const targetCount = new Set(executedHeroHits.map((hit) => hit.target.id)).size;
+        const hitCopy = executedHeroHits.length > targetCount ? `、${executedHeroHits.length} 段` : "";
+        skillResults.push(`命中 ${targetCount} 個目標${hitCopy}`);
+      }
+      if (executedHeroHits.some((hit) => hit.position === "rear")) skillResults.push("觸發背擊 +35%");
+      else if (executedHeroHits.some((hit) => hit.position === "side")) skillResults.push("觸發側擊 +15%");
+      if (heroHeal) skillResults.push(`回復 ${heroHeal} HP`);
+      if (specialEffectsApplied) skillResults.push("技能效果生效");
+      if (guardReduction) skillResults.push(`減傷 ${Math.round(guardReduction * 100)}%`);
+      if (battle.moveBonusNext) skillResults.push(`下輪移動 +${battle.moveBonusNext}`);
+      const heroName = battle.hero.name || playerDisplayName();
+      resolution.heroSummary = !heroExecuted
+        ? `${heroName}未及出招，行動取消`
+        : heroAction.type === "wait"
+          ? `${heroName}待機（不附帶減傷）`
+          : heroAction.type === "potion"
+            ? `${heroName}回復 ${heroHeal} HP`
+            : skill
+              ? `${heroName}施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}`
+              : `${heroName}完成行動`;
+      battle.message = `${resolution.heroSummary}。`;
+    } else {
+      const usedSkills = [...new Set(executedEnemyHits.map((hit) => hit.skillName).filter(Boolean))];
+      const enemyPosition = executedEnemyHits.some((hit) => hit.position === "rear") ? "（背擊 +35%）" : executedEnemyHits.some((hit) => hit.position === "side") ? "（側擊 +15%）" : "";
+      const actorUnit = battleUnits().find((unit) => unit.id === actorId);
+      const enemyResult = executedEnemyHits.length
+        ? `${actorUnit?.name || "霧獸"}用${usedSkills.length ? `「${usedSkills.join("／")}」` : "技能"}${enemyPosition}造成 ${totalEnemyDamage} 傷害`
+        : missedCells.length
+          ? `${actorUnit?.name || "霧獸"}技能落空`
+          : `${actorUnit?.name || "霧獸"}未能出招`;
+      resolution.enemySummaries.push(enemyResult);
+      battle.message = `${enemyResult}。`;
     }
-    if (executedHeroHits.some((hit) => hit.position === "rear")) skillResults.push("觸發背擊 +35%");
-    else if (executedHeroHits.some((hit) => hit.position === "side")) skillResults.push("觸發側擊 +15%");
-    if (heroHeal) skillResults.push(`回復 ${heroHeal} HP`);
-    if (specialEffectsApplied) skillResults.push("技能效果生效");
-    if (guardReduction) skillResults.push(`減傷 ${Math.round(guardReduction * 100)}%`);
-    if (battle.moveBonusNext) skillResults.push(`下輪移動 +${battle.moveBonusNext}`);
-    const heroName = battle.hero.name || playerDisplayName();
-    const heroResult = !heroExecuted ? `${heroName}未及出招，行動取消` : heroAction.type === "wait" ? `${heroName}待機（不附帶減傷）` : heroAction.type === "potion" ? `${heroName}回復 ${heroHeal} HP` : skill ? `${heroName}施放「${skill.name}」${skillResults.length ? `：${skillResults.join("、")}` : "，但冇命中"}` : `${heroName}完成行動`;
-    const usedSkills = [...new Set(executedEnemyHits.map((hit) => hit.skillName).filter(Boolean))];
-    const enemyPosition = executedEnemyHits.some((hit) => hit.position === "rear") ? "（背擊 +35%）" : executedEnemyHits.some((hit) => hit.position === "side") ? "（側擊 +15%）" : "";
-    const cancelledCopy = cancelledActions.length ? `；${cancelledActions.join("、")}因倒下或異常狀態取消行動` : "";
-    const enemyResult = executedEnemyHits.length ? `霧獸用${usedSkills.length ? `「${usedSkills.join("／")}」` : "技能"}${enemyPosition}合共造成 ${totalEnemyDamage} 傷害` : missedCells.length ? "霧獸技能全部落空" : "霧獸未能出招";
-    battle.message = `${heroResult}；${enemyResult}${cancelledCopy}。`;
+
+    if (cancelledActions.length) resolution.cancelledActors.push(...cancelledActions);
+    const pendingForActor = resolution.pendingActions.find((entry) => entry.actorId === actorId);
+    if (pendingForActor?.status === "executing") pendingForActor.status = "resolved";
+    resolution.resolvedActorIds.push(actorId);
+    resolution.applied = resolution.resolvedActorIds.length >= resolution.actionOrder.length;
     updateHud();
     updateBattleUi();
   }
@@ -6916,7 +6999,7 @@
 
   function addSystemMessage(type, text, tone = "") {
     const safeType = Object.hasOwn(SYSTEM_LOG_LABELS, type) ? type : "system";
-    const safeText = String(text || "").trim();
+    const safeText = String(text || "").trim().replace(/。+$/u, "");
     if (!safeText) return;
     systemLogEntries.push({ id: ++systemLogSerial, type: safeType, text: safeText, tone: String(tone || "") });
     if (systemLogEntries.length > 400) systemLogEntries.splice(0, systemLogEntries.length - 400);
@@ -7813,7 +7896,7 @@
     const hurt = unit.hitFlash > 0;
     const stopped = !hurt && (unit.stopFlash || 0) > 0;
     const actionProgress = battle.phase === "resolving_action"
-      ? Core.clamp((battle.actionResolution?.elapsed || 0) / Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS), 0, 1)
+      ? Core.clamp((battle.actionResolution?.actionElapsed ?? battle.actionResolution?.elapsed ?? 0) / Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS), 0, 1)
       : stopped
         ? 1 - Core.clamp((unit.stopFlash || 0) / .48, 0, 1)
         : 0;
@@ -9168,7 +9251,7 @@
         const labelGapPx = Math.max(2, Number(npc.nameLabelGapPx) || 8);
         const fontSize = Core.clamp(8.5 * camera.zoom, 10, 14);
         const labelTop = worldToScreen({
-          x: authored.bbox.x + authored.bbox.width / 2,
+          x: authored.bbox.x + authored.bbox.width / 2 + (Number(npc.nameLabelOffsetXPx) || 0),
           y: authored.bbox.y,
         }, shakeX, shakeY);
         const anchorMode = String(npc.nameLabelAnchorMode || "").trim();
@@ -10029,7 +10112,7 @@
   document.getElementById("dialogueNext").addEventListener("click", advanceDialogue);
   sidebarToggle?.addEventListener("click", () => setHudCollapsed(!hudCollapsed));
   const draggableWindowSelector = ".facility-window.ui-window, .ui-modal-window, .system-settings-window.ui-window";
-  const nonDraggableControlSelector = "button, a, input, select, textarea, [contenteditable], [role=button], [data-no-window-drag], .skill-tree-scroll, [data-deck-drag-source]";
+  const nonDraggableControlSelector = "button, a, input, select, textarea, [contenteditable], [role=button], [data-no-window-drag], [data-deck-drag-source]";
 
   function resetDraggableWindowPosition(windowElement) {
     if (!windowElement) return;
@@ -10045,6 +10128,7 @@
     const facilityState = facilityStateForNode(windowElement);
     if (facilityState) activateFacilityWindow(facilityState);
     else if (windowElement === systemSettingsPopover) focusUiWindow(windowElement);
+    if (event.pointerType === "touch" && event.target.closest?.(".skill-tree-scroll")) return;
     if (event.target.closest?.(nonDraggableControlSelector)) return;
     const style = getComputedStyle(windowElement);
     const startOffsetX = Number.parseFloat(style.getPropertyValue("--ui-drag-x")) || 0;

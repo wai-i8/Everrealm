@@ -50,6 +50,7 @@
       // The flattened nurse artwork reaches the region's top edge, so the
       // label needs room for its font/stroke at the smallest explore zoom.
       nameLabelGapPx: 24,
+      nameLabelOffsetXPx: -4,
       nameLabelAnchorMode: "region-top",
       render: false,
       color: "#87db82",

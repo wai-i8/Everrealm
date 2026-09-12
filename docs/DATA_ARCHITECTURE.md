@@ -6,7 +6,7 @@ Everrealm separates fixed game definitions from runtime/player state. A fixed en
 
 ## Canonical data owners
 
-- `data/classes.js` — class IDs, level tables, starter equipment/skills.
+- `data/classes.js` — class IDs, level tables, Lv45 cap, canonical level EXP requirements, starter equipment/skills.
 - `data/items.js` — item/material identity, presentation metadata and legacy item-ID migration.
 - `data/equipment.js` — active and legacy-only equipment records, shop membership and icon/art metadata.
 - `data/monsters.js` — monster identities, combat skills, drops, ecology and exploration tuning.

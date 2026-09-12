@@ -1,0 +1,26 @@
+Everrealm CSS cleanup — 2026-09-12
+
+What changed
+- Consolidated the previous 5 runtime stylesheets into one source of truth: styles.css.
+- Preserved the previous stylesheet load order inside styles.css so the cascade result stays the same.
+- Removed 11 exact duplicate top-level CSS rule blocks (safe byte-equivalent duplicates only).
+- Removed game.js fallback code that could silently inject old CSS files again.
+- Removed obsolete runtime CSS files:
+  inventory-overhaul.css
+  ui-system.css
+  inventory-minimal.css
+  responsive-ui-redesign.css
+- Removed stale duplicate service-worker.js; everrealm-sw.js is the only worker.
+- Updated index.html to load only styles.css.
+- Updated everrealm-sw.js precache list and cache version.
+- Updated UI/PWA documentation to match the new ownership model.
+
+Maintenance rule
+- Put all runtime CSS changes in styles.css.
+- Search its section headers and edit the owning section.
+- Do not add another catch-all/final override stylesheet.
+- Use !important only when an existing specificity/inline-style constraint genuinely requires it.
+
+Why !important was not mass-deleted
+- The old responsive/UI layers rely on many !important declarations to beat legacy selectors and some runtime styles.
+- Removing them mechanically could change the live UI. This cleanup intentionally prioritizes preserving the current appearance while eliminating multi-file override ambiguity.
