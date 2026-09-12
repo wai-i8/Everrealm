@@ -8,6 +8,7 @@ const DialogueUi = require("../game/dialogue-ui.js");
 const FacilityBasicViews = require("../game/facility-basic-views.js");
 const FacilityProgressionViews = require("../game/facility-progression-views.js");
 const FacilityBagView = require("../game/facility-bag-view.js");
+const FacilityWindowShell = require("../game/facility-window-shell.js");
 const Skills = require("../skill-core.js");
 
 function testClassList() {
@@ -623,4 +624,227 @@ test("bag facility view preserves filters, paperdoll, selection, paging, and act
   assert.match(content.innerHTML, /data-facility-action="confirm-destroy-item" data-item-id="manual_dash"/);
   assert.match(content.innerHTML, /data-facility-action="cancel-destroy-item" data-item-id="manual_dash"/);
   assert.doesNotMatch(content.innerHTML, /data-facility-action="use-manual"/);
+});
+
+
+test("facility window shell resolves contexts, restricted tabs, and top-window order", () => {
+  const tabsForContext = (context, mapId) => {
+    if (context === "guild" && mapId === "guild") return ["guild", "skills"];
+    if (context === "deck") return ["deck"];
+    return ["status", "missions", "bag", "equipment"];
+  };
+  const normalize = (tab, context, mapId) => {
+    const tabs = tabsForContext(context, mapId);
+    return tabs.includes(tab) ? tab : tabs.includes("bag") ? "bag" : tabs[0];
+  };
+  const base = {
+    currentMapId: "world",
+    facilityTabs: ["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"],
+    facilityTabsForContext: tabsForContext,
+    normalizeFacilityTab: normalize,
+  };
+
+  const bag = FacilityWindowShell.resolveOpenRequest({ ...base, tab: "bag" });
+  assert.deepEqual(bag, {
+    allowed: true,
+    context: "portable",
+    availableTabs: ["status", "missions", "bag", "equipment"],
+    tab: "bag",
+    key: "portable:bag",
+  });
+
+  const missions = FacilityWindowShell.resolveOpenRequest({ ...base, tab: "missions" });
+  assert.equal(missions.tab, "missions");
+  assert.equal(missions.key, "portable:missions");
+
+  const guildDenied = FacilityWindowShell.resolveOpenRequest({ ...base, tab: "guild" });
+  assert.equal(guildDenied.allowed, false);
+  assert.equal(guildDenied.context, "guild");
+  assert.equal(guildDenied.message, "公會功能要親身入公會先用到。");
+
+  const guildAllowed = FacilityWindowShell.resolveOpenRequest({ ...base, tab: "guild", currentMapId: "guild" });
+  assert.equal(guildAllowed.allowed, true);
+  assert.equal(guildAllowed.tab, "guild");
+  assert.equal(guildAllowed.key, "guild:guild");
+
+  const invalidContext = FacilityWindowShell.resolveOpenRequest({ ...base, tab: "bag", requestedContext: "bad-context" });
+  assert.equal(invalidContext.context, "portable");
+
+  const low = { panel: { style: { zIndex: "41" } } };
+  const high = { panel: { style: { zIndex: "88" } } };
+  const unset = { panel: { style: {} } };
+  assert.equal(FacilityWindowShell.topWindow([low, unset, high]), high);
+  assert.equal(FacilityWindowShell.topWindow([]), null);
+});
+
+test("facility window shell remaps cloned ids and preserves aria references", () => {
+  const label = {
+    id: "facilityTitle",
+    attrs: {},
+    getAttribute(name) { return this.attrs[name] || null; },
+    setAttribute(name, value) { this.attrs[name] = value; },
+  };
+  const control = {
+    id: "facilityClose",
+    attrs: { "aria-labelledby": "facilityTitle missingId", "aria-controls": "facilityTitle" },
+    getAttribute(name) { return this.attrs[name] || null; },
+    setAttribute(name, value) { this.attrs[name] = value; },
+  };
+  const panel = {
+    id: "facilityPanel",
+    attrs: { "aria-describedby": "facilityTitle" },
+    getAttribute(name) { return this.attrs[name] || null; },
+    setAttribute(name, value) { this.attrs[name] = value; },
+    querySelectorAll(selector) {
+      if (selector === "[id]") return [label, control];
+      if (selector === "*") return [label, control];
+      return [];
+    },
+  };
+
+  FacilityWindowShell.remapCloneIds(panel, "portable:bag");
+  assert.equal(panel.id, "facilityPanel-portable-bag");
+  assert.equal(label.id, "facilityTitle-portable-bag");
+  assert.equal(control.id, "facilityClose-portable-bag");
+  assert.equal(panel.attrs["aria-describedby"], "facilityTitle-portable-bag");
+  assert.equal(control.attrs["aria-labelledby"], "facilityTitle-portable-bag missingId");
+  assert.equal(control.attrs["aria-controls"], "facilityTitle-portable-bag");
+});
+
+test("facility window shell wiring preserves activation, tab, content, and pointer routing", () => {
+  function target() {
+    return {
+      handlers: {},
+      addEventListener(type, handler, capture) { this.handlers[type] = { handler, capture }; },
+    };
+  }
+  const panel = target();
+  const content = target();
+  const closeButton = target();
+  const helpButton = target();
+  const state = {
+    panel,
+    content,
+    closeButton,
+    helpButton,
+    helpPopover: { hidden: false },
+  };
+  const calls = [];
+  let active = true;
+  const handlers = {
+    close: (value) => calls.push(["close", value]),
+    activate: (value) => calls.push(["activate", value]),
+    toggleHelp: (value) => calls.push(["toggleHelp", value]),
+    closeHelp: (value) => calls.push(["closeHelp", value]),
+    availableTabs: () => ["bag", "status"],
+    selectTab: (tab) => calls.push(["selectTab", tab]),
+    contentClick: (event, value) => calls.push(["contentClick", event, value]),
+    isActive: () => active,
+    beginSkillTreePan: () => calls.push(["beginSkillTreePan"]),
+    beginDeckDrag: () => calls.push(["beginDeckDrag"]),
+    moveSkillTreePan: () => calls.push(["moveSkillTreePan"]),
+    moveDeckDrag: () => calls.push(["moveDeckDrag"]),
+    finishSkillTreePan: () => calls.push(["finishSkillTreePan"]),
+    finishDeckDrag: () => calls.push(["finishDeckDrag"]),
+    cancelSkillTreePan: () => calls.push(["cancelSkillTreePan"]),
+    cancelDeckDrag: () => calls.push(["cancelDeckDrag"]),
+  };
+
+  FacilityWindowShell.wireWindow(state, handlers);
+  assert.equal(panel.handlers.pointerdown.capture, true);
+
+  closeButton.handlers.click.handler();
+  const helpEvent = { stopPropagation() { calls.push(["stopPropagation"]); } };
+  helpButton.handlers.click.handler(helpEvent);
+  assert.deepEqual(calls.slice(0, 4).map((entry) => entry[0]), ["close", "stopPropagation", "activate", "toggleHelp"]);
+
+  const tabNode = { dataset: { facilityTab: "status" } };
+  panel.handlers.click.handler({
+    target: {
+      closest(selector) {
+        if (selector === ".facility-help-popover, .ui-info-button") return null;
+        if (selector === "[data-facility-tab]") return tabNode;
+        return null;
+      },
+    },
+  });
+  assert.ok(calls.some(([name]) => name === "closeHelp"));
+  assert.ok(calls.some(([name, tab]) => name === "selectTab" && tab === "status"));
+
+  const clickEvent = {};
+  content.handlers.click.handler(clickEvent);
+  assert.ok(calls.some(([name, event]) => name === "contentClick" && event === clickEvent));
+
+  content.handlers.pointerdown.handler({});
+  assert.ok(calls.some(([name]) => name === "beginSkillTreePan"));
+  assert.ok(calls.some(([name]) => name === "beginDeckDrag"));
+
+  content.handlers.pointermove.handler({});
+  assert.ok(calls.some(([name]) => name === "moveSkillTreePan"));
+  assert.ok(calls.some(([name]) => name === "moveDeckDrag"));
+
+  active = false;
+  const before = calls.length;
+  content.handlers.pointerup.handler({});
+  content.handlers.pointercancel.handler({});
+  assert.equal(calls.length, before);
+});
+
+test("facility window shell creates a remapped floating window state", () => {
+  const title = {
+    id: "facilityTitle",
+    attrs: {},
+    getAttribute(name) { return this.attrs[name] || null; },
+    setAttribute(name, value) { this.attrs[name] = value; },
+  };
+  const refs = Object.fromEntries([
+    ".facility-window.ui-window",
+    ".facility-content",
+    ".facility-tabs",
+    ".facility-footer",
+    ".ui-info-button",
+    ".facility-help-popover",
+    ".facility-help-popover p",
+    ".facility-close-button",
+  ].map((selector) => [selector, { selector }]));
+  const panel = {
+    id: "facilityPanel",
+    hidden: true,
+    dataset: {},
+    attrs: { "aria-labelledby": "facilityTitle" },
+    classes: [],
+    classList: { add(name) { panel.classes.push(name); } },
+    setAttribute(name, value) { this.attrs[name] = value; },
+    getAttribute(name) { return this.attrs[name] || null; },
+    querySelectorAll(selector) {
+      if (selector === "[id]" || selector === "*") return [title];
+      return [];
+    },
+    querySelector(selector) { return refs[selector] || null; },
+  };
+  const template = { cloneNode(deep) { assert.equal(deep, true); return panel; } };
+  const appended = [];
+  const stage = { appendChild(node) { appended.push(node); } };
+
+  const state = FacilityWindowShell.createWindow({
+    template,
+    stage,
+    key: "portable:bag",
+    tab: "bag",
+    context: "portable",
+  });
+
+  assert.equal(panel.hidden, false);
+  assert.equal(panel.dataset.facilityWindowKey, "portable:bag");
+  assert.equal(panel.attrs["aria-modal"], "false");
+  assert.equal(panel.attrs["aria-labelledby"], "facilityTitle-portable-bag");
+  assert.deepEqual(panel.classes, ["is-floating-facility-layer"]);
+  assert.deepEqual(appended, [panel]);
+  assert.equal(state.key, "portable:bag");
+  assert.equal(state.tab, "bag");
+  assert.equal(state.context, "portable");
+  assert.equal(state.panel, panel);
+  assert.equal(state.windowElement, refs[".facility-window.ui-window"]);
+  assert.equal(state.content, refs[".facility-content"]);
+  assert.equal(state.closeButton, refs[".facility-close-button"]);
 });

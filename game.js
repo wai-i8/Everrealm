@@ -33,6 +33,7 @@
   const FacilityCatalogViews = window.EverrealmFacilityCatalogViews;
   const FacilityProgressionViews = window.EverrealmFacilityProgressionViews;
   const FacilityBagView = window.EverrealmFacilityBagView;
+  const FacilityWindowShell = window.EverrealmFacilityWindowShell;
   const {
     normalizeCharacterName,
     statText,
@@ -4002,27 +4003,6 @@
     activeFacilityWindow.context = facilityContext;
   }
 
-  function remapFacilityCloneIds(panel, key) {
-    const slug = key.replace(/[^a-z0-9_-]+/gi, "-");
-    const idMap = new Map();
-    for (const element of [panel, ...panel.querySelectorAll("[id]")]) {
-      const oldId = element.id;
-      if (!oldId) continue;
-      const nextId = `${oldId}-${slug}`;
-      idMap.set(oldId, nextId);
-      element.id = nextId;
-    }
-    const idRefAttributes = ["aria-labelledby", "aria-describedby", "aria-controls", "for"];
-    for (const element of [panel, ...panel.querySelectorAll("*")]) {
-      for (const attribute of idRefAttributes) {
-        const value = element.getAttribute?.(attribute);
-        if (!value) continue;
-        const next = value.split(/\s+/).map((id) => idMap.get(id) || id).join(" ");
-        element.setAttribute(attribute, next);
-      }
-    }
-  }
-
   function facilityWindowBlocksMovement(state) {
     if (!state) return false;
     return !["portable", "deck-view"].includes(state.context);
@@ -4041,34 +4021,20 @@
 
   function createFacilityWindow(tab, context) {
     const key = facilityWindowKey(tab, context);
-    const panel = facilityPanelTemplate.cloneNode(true);
-    panel.hidden = false;
-    panel.dataset.facilityWindowKey = key;
-    panel.classList.add("is-floating-facility-layer");
-    panel.setAttribute("aria-modal", "false");
-    remapFacilityCloneIds(panel, key);
-    stage.appendChild(panel);
-    const state = {
+    const state = FacilityWindowShell.createWindow({
+      template: facilityPanelTemplate,
+      stage,
       key,
       tab,
       context,
-      panel,
-      windowElement: panel.querySelector(".facility-window.ui-window"),
-      content: panel.querySelector(".facility-content"),
-      tabs: panel.querySelector(".facility-tabs"),
-      footer: panel.querySelector(".facility-footer"),
-      helpButton: panel.querySelector(".ui-info-button"),
-      helpPopover: panel.querySelector(".facility-help-popover"),
-      helpText: panel.querySelector(".facility-help-popover p"),
-      closeButton: panel.querySelector(".facility-close-button"),
-    };
+    });
     facilityWindows.set(key, state);
     wireFacilityWindow(state);
     return state;
   }
 
   function topFacilityWindow() {
-    return [...facilityWindows.values()].sort((a, b) => (Number(b.panel.style.zIndex) || 0) - (Number(a.panel.style.zIndex) || 0))[0] || null;
+    return FacilityWindowShell.topWindow(facilityWindows.values());
   }
 
   function clearAllFacilityWindows() {
@@ -4148,18 +4114,21 @@
 
   function openFacility(tab = "bag", requestedContext) {
     if (!["playing", "facility"].includes(mode)) return false;
-    const nextContext = requestedContext || (tab === "guild" ? "guild" : tab === "shop" ? "shop" : tab === "deck" ? "deck-view" : "portable");
-    const normalizedContext = ["portable", "guild", "shop", "general-store", "deck", "deck-view"].includes(nextContext) ? nextContext : "portable";
-    const availableTabs = facilityTabsForContext(normalizedContext, currentMapId);
-    if (!availableTabs.includes(tab) && ["guild", "shop", "deck"].includes(tab)) {
-      showToast(tab === "guild" ? "公會功能要親身入公會先用到。" : tab === "shop" ? "購物功能要親身入商店先用到。" : "面板配置要去舊港城門設定。", "danger");
+    const request = FacilityWindowShell.resolveOpenRequest({
+      tab,
+      requestedContext,
+      currentMapId,
+      facilityTabs: FACILITY_TABS,
+      facilityTabsForContext,
+      normalizeFacilityTab: Expansion.normalizeFacilityTab,
+    });
+    if (!request.allowed) {
+      showToast(request.message, "danger");
       return false;
     }
-    const requestedTab = FACILITY_TABS.includes(tab) ? tab : "bag";
-    const normalizedTab = requestedTab === "missions" && availableTabs.includes("missions")
-      ? "missions"
-      : Expansion.normalizeFacilityTab(requestedTab, normalizedContext, currentMapId);
-    const key = facilityWindowKey(normalizedTab, normalizedContext);
+    const normalizedContext = request.context;
+    const normalizedTab = request.tab;
+    const key = request.key;
     const existing = facilityWindows.get(key);
     if (existing) {
       activateFacilityWindow(existing);
@@ -9941,42 +9910,26 @@
   }
 
   function wireFacilityWindow(state) {
-    state.closeButton?.addEventListener("click", () => closeFacility(state));
-    state.helpButton?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      activateFacilityWindow(state);
-      toggleFacilityHelp(state);
-    });
-    state.panel.addEventListener("pointerdown", () => activateFacilityWindow(state), true);
-    state.panel.addEventListener("click", (event) => {
-      if (!state.helpPopover?.hidden && !event.target.closest(".facility-help-popover, .ui-info-button")) setFacilityHelpOpen(false, state);
-      const tab = event.target.closest("[data-facility-tab]");
-      if (!tab) return;
-      activateFacilityWindow(state);
-      if (!availableFacilityTabs().includes(tab.dataset.facilityTab)) return;
-      facilityTab = tab.dataset.facilityTab;
-      renderFacility();
-    });
-    state.content.addEventListener("click", (event) => handleFacilityContentClick(event, state));
-    state.content.addEventListener("pointerdown", (event) => {
-      activateFacilityWindow(state);
-      beginSkillTreePan(event);
-      beginDeckDrag(event);
-    });
-    state.content.addEventListener("pointermove", (event) => {
-      if (activeFacilityWindow !== state) return;
-      moveSkillTreePan(event);
-      moveDeckDrag(event);
-    });
-    state.content.addEventListener("pointerup", (event) => {
-      if (activeFacilityWindow !== state) return;
-      finishSkillTreePan(event);
-      finishDeckDrag(event);
-    });
-    state.content.addEventListener("pointercancel", (event) => {
-      if (activeFacilityWindow !== state) return;
-      cancelSkillTreePan(event);
-      cancelDeckDrag(event);
+    FacilityWindowShell.wireWindow(state, {
+      close: closeFacility,
+      activate: activateFacilityWindow,
+      toggleHelp: toggleFacilityHelp,
+      closeHelp: (windowState) => setFacilityHelpOpen(false, windowState),
+      availableTabs: availableFacilityTabs,
+      selectTab: (tab) => {
+        facilityTab = tab;
+        renderFacility();
+      },
+      contentClick: handleFacilityContentClick,
+      isActive: (windowState) => activeFacilityWindow === windowState,
+      beginSkillTreePan,
+      beginDeckDrag,
+      moveSkillTreePan,
+      moveDeckDrag,
+      finishSkillTreePan,
+      finishDeckDrag,
+      cancelSkillTreePan,
+      cancelDeckDrag,
     });
   }
 

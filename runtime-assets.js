@@ -69,7 +69,8 @@
     "game/facility-catalog-views.js",
     "game/facility-progression-views.js",
     "game/facility-bag-view.js",
-    "game.js?v=20260912-08",
+    "game/facility-window-shell.js",
+    "game.js?v=20260912-09",
   ]);
 
   return Object.freeze({ scripts });
