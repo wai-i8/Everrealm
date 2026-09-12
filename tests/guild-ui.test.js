@@ -5,13 +5,14 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const game = fs.readFileSync(path.join(root, "game.js"), "utf8");
+const facilityWindowShell = fs.readFileSync(path.join(root, "game", "facility-window-shell.js"), "utf8");
 const uiCss = fs.readFileSync(path.join(root, "inventory-overhaul.css"), "utf8");
 const maps = require(path.join(root, "map", "map-registry.js")).createMapRegistry();
 
 test("Guild commission UI is single-identity, summary-first and progressive-disclosure", () => {
   const renderGuild = game.match(/function renderGuildFacility\(\) \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function totalOwnedSkillBooks/)?.[1] || "";
-  assert.match(game, /guild: \["", "公會委託"/);
-  assert.match(game, /一份委託只可以同時進行/);
+  assert.match(facilityWindowShell, /guild: \["", "公會委託"/);
+  assert.match(facilityWindowShell, /一份委託只可以同時進行/);
   assert.doesNotMatch(renderGuild, /拾燈公會|公會委託板|公會規矩|canonical Fighter/);
   assert.match(renderGuild, /guild-commission-state-line/);
   assert.match(renderGuild, /guild-commission-card/);
@@ -26,9 +27,9 @@ test("Guild commission UI is single-identity, summary-first and progressive-disc
 });
 
 test("Guild help carries rules while player-facing UI avoids developer terminology", () => {
-  assert.match(game, /facilityHelpText\.textContent = copy\[2\]/);
-  assert.match(game, /五份固定委託都可以重複接受/);
-  assert.match(game, /完成目標後返公會回報/);
+  assert.match(facilityWindowShell, /helpText\.textContent = copy\[2\]/);
+  assert.match(facilityWindowShell, /五份固定委託都可以重複接受/);
+  assert.match(facilityWindowShell, /完成目標後返公會回報/);
   assert.doesNotMatch(game.match(/function renderGuildFacility\(\) \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function totalOwnedSkillBooks/)?.[1] || "", /canonical Fighter|Fighter 技能資料/);
   assert.doesNotMatch(game, /開封後從 canonical Fighter/);
   assert.doesNotMatch(game, /仍須符合 Fighter 前置/);

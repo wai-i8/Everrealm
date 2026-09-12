@@ -4037,19 +4037,24 @@
     return FacilityWindowShell.topWindow(facilityWindows.values());
   }
 
+  function restoreFacilityTemplateBindings() {
+    const bindings = FacilityWindowShell.templateBindings(facilityPanelTemplate);
+    facilityPanel = bindings.panel;
+    facilityContent = bindings.content;
+    facilityTabs = bindings.tabs;
+    facilityFooter = bindings.footer;
+    facilityHelpButton = bindings.helpButton;
+    facilityHelpPopover = bindings.helpPopover;
+    facilityHelpText = bindings.helpText;
+  }
+
   function clearAllFacilityWindows() {
     selectedInventoryItemId = null;
     pendingInventoryDestroyItemId = null;
     for (const state of facilityWindows.values()) state.panel.remove();
     facilityWindows.clear();
     activeFacilityWindow = null;
-    facilityPanel = facilityPanelTemplate;
-    facilityContent = facilityPanelTemplate.querySelector(".facility-content");
-    facilityTabs = facilityPanelTemplate.querySelector(".facility-tabs");
-    facilityFooter = facilityPanelTemplate.querySelector(".facility-footer");
-    facilityHelpButton = facilityPanelTemplate.querySelector(".ui-info-button");
-    facilityHelpPopover = facilityPanelTemplate.querySelector(".facility-help-popover");
-    facilityHelpText = facilityPanelTemplate.querySelector(".facility-help-popover p");
+    restoreFacilityTemplateBindings();
     facilityPanelTemplate.hidden = true;
   }
 
@@ -4058,47 +4063,18 @@
     facilityTab = facilityTab === "missions" && availableTabs.includes("missions")
       ? "missions"
       : Expansion.normalizeFacilityTab(facilityTab, facilityContext, currentMapId);
-    const copy = {
-      status: ["", "角色狀態", ""],
-      missions: ["", "任務", ""],
-      bag: ["", "物品欄", ""],
-      equipment: ["", "角色裝備欄", "查看身上裝備同已擁有收藏，隨時切換出戰配置。"],
-      deck: ["", facilityContext === "deck" ? "面板配置" : "面板", ""],
-      guild: ["", "公會委託", "一份委託只可以同時進行；完成目標後返公會回報。五份固定委託都可以重複接受，信封開封後會得到對應星級技能書。"],
-      shop: ["", facilityContext === "general-store" ? "道具店" : "裝備店", facilityContext === "general-store" ? "" : "同一間店可以購買格鬥士武器與防具；用分類切換武器、頭部、上身、下身及武道服。"],
-      skills: ["", "技能樹", ""],
-      codex: ["", "霧獸圖鑑", "記錄你見過同擊敗過嘅每一種霧獸。"],
-    }[facilityTab];
-    stage.dataset.facilityTab = facilityTab;
-    stage.dataset.facilityContext = facilityContext;
-    facilityPanel.dataset.facilityContext = facilityContext;
-    facilityPanel.dataset.facilityTab = facilityTab;
-    facilityPanel.dataset.panelSize = facilityTab === "deck"
-      ? facilityContext === "deck-view" ? "compact" : "wide"
-      : facilityTab === "status" ? "compact"
-      : facilityTab === "missions" ? "medium"
-      : facilityTab === "guild" && activeGuildCommission() ? "medium"
-      : "wide";
-    if (facilityTabs) facilityTabs.dataset.visibleTabs = availableTabs.join(" ");
-    const facilityKicker = facilityPanel.querySelector(".facility-kicker");
-    if (facilityKicker) {
-      facilityKicker.textContent = copy[0];
-      facilityKicker.hidden = true;
-    }
-    const facilityTitle = facilityPanel.querySelector(".facility-header h2");
-    if (facilityTitle) facilityTitle.textContent = copy[1];
-    if (facilityHelpText) facilityHelpText.textContent = copy[2];
-    if (facilityHelpButton) facilityHelpButton.hidden = ["bag", "guild", "shop"].includes(facilityTab) || facilityContext === "general-store" || !copy[2];
+    FacilityWindowShell.renderWindowChrome({
+      stage,
+      panel: facilityPanel,
+      tabs: facilityTabs,
+      helpButton: facilityHelpButton,
+      helpText: facilityHelpText,
+      tab: facilityTab,
+      context: facilityContext,
+      availableTabs,
+      hasActiveGuildCommission: facilityTab === "guild" && Boolean(activeGuildCommission()),
+    });
     setFacilityHelpOpen(false);
-    for (const tab of facilityTabs?.querySelectorAll("[data-facility-tab]") || []) {
-      const available = availableTabs.includes(tab.dataset.facilityTab);
-      const active = tab.dataset.facilityTab === facilityTab;
-      tab.hidden = !available;
-      tab.disabled = !available;
-      tab.classList.toggle("is-active", available && active);
-      tab.setAttribute("aria-selected", String(available && active));
-      tab.setAttribute("aria-hidden", String(!available));
-    }
     updateMenuBadges();
     if (facilityTab === "status") renderStatusFacility();
     else if (facilityTab === "missions") renderMissionFacility();
@@ -4170,21 +4146,14 @@
       cancelDeckDrag();
       setFacilityHelpOpen(false, state);
     }
-    facilityWindows.delete(state.key);
-    state.panel.remove();
+    const removal = FacilityWindowShell.removeWindow({ windows: facilityWindows, state });
+    if (!removal.removed) return;
     if (activeFacilityWindow === state) activeFacilityWindow = null;
-    const next = topFacilityWindow();
-    if (next) {
-      activateFacilityWindow(next, { bringToFront: false });
+    if (removal.next) {
+      activateFacilityWindow(removal.next, { bringToFront: false });
       syncFacilityMovementMode();
     } else {
-      facilityPanel = facilityPanelTemplate;
-      facilityContent = facilityPanelTemplate.querySelector(".facility-content");
-      facilityTabs = facilityPanelTemplate.querySelector(".facility-tabs");
-      facilityFooter = facilityPanelTemplate.querySelector(".facility-footer");
-      facilityHelpButton = facilityPanelTemplate.querySelector(".ui-info-button");
-      facilityHelpPopover = facilityPanelTemplate.querySelector(".facility-help-popover");
-      facilityHelpText = facilityPanelTemplate.querySelector(".facility-help-popover p");
+      restoreFacilityTemplateBindings();
       mode = "playing";
       stage.dataset.gameState = mode;
       updateHud(true);

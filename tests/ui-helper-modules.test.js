@@ -848,3 +848,111 @@ test("facility window shell creates a remapped floating window state", () => {
   assert.equal(state.content, refs[".facility-content"]);
   assert.equal(state.closeButton, refs[".facility-close-button"]);
 });
+
+test("facility window shell renders chrome metadata, title, help, and tab state", () => {
+  function tab(name) {
+    return {
+      dataset: { facilityTab: name },
+      hidden: false,
+      disabled: false,
+      classes: new Set(),
+      attrs: {},
+      classList: { toggle(value, on) { on ? this.owner.classes.add(value) : this.owner.classes.delete(value); }, owner: null },
+      setAttribute(name, value) { this.attrs[name] = value; },
+    };
+  }
+  const bagTab = tab("bag");
+  bagTab.classList.owner = bagTab;
+  const guildTab = tab("guild");
+  guildTab.classList.owner = guildTab;
+  const kicker = { textContent: "old", hidden: false };
+  const title = { textContent: "old" };
+  const panel = {
+    dataset: {},
+    querySelector(selector) {
+      if (selector === ".facility-kicker") return kicker;
+      if (selector === ".facility-header h2") return title;
+      return null;
+    },
+  };
+  const tabs = {
+    dataset: {},
+    querySelectorAll(selector) {
+      assert.equal(selector, "[data-facility-tab]");
+      return [bagTab, guildTab];
+    },
+  };
+  const stage = { dataset: {} };
+  const helpButton = { hidden: false };
+  const helpText = { textContent: "" };
+
+  FacilityWindowShell.renderWindowChrome({
+    stage,
+    panel,
+    tabs,
+    helpButton,
+    helpText,
+    tab: "guild",
+    context: "guild",
+    availableTabs: ["guild"],
+    hasActiveGuildCommission: true,
+  });
+
+  assert.equal(stage.dataset.facilityTab, "guild");
+  assert.equal(stage.dataset.facilityContext, "guild");
+  assert.equal(panel.dataset.facilityTab, "guild");
+  assert.equal(panel.dataset.facilityContext, "guild");
+  assert.equal(tabs.dataset.visibleTabs, "guild");
+  assert.equal(kicker.textContent, "");
+  assert.equal(kicker.hidden, true);
+  assert.equal(title.textContent, "公會委託");
+  assert.match(helpText.textContent, /五份固定委託都可以重複接受/);
+  assert.equal(panel.dataset.panelSize, "medium");
+  assert.equal(helpButton.hidden, true, "guild help button follows existing hidden rule");
+  assert.equal(bagTab.hidden, true);
+  assert.equal(bagTab.disabled, true);
+  assert.equal(bagTab.attrs["aria-selected"], "false");
+  assert.equal(bagTab.attrs["aria-hidden"], "true");
+  assert.equal(guildTab.hidden, false);
+  assert.equal(guildTab.disabled, false);
+  assert.equal(guildTab.attrs["aria-selected"], "true");
+  assert.equal(guildTab.attrs["aria-hidden"], "false");
+  assert.equal(guildTab.classes.has("is-active"), true);
+});
+
+test("facility window shell resolves template bindings without owning gameplay state", () => {
+  const refs = Object.fromEntries([
+    ".facility-content",
+    ".facility-tabs",
+    ".facility-footer",
+    ".ui-info-button",
+    ".facility-help-popover",
+    ".facility-help-popover p",
+  ].map((selector) => [selector, { selector }]));
+  const template = { querySelector(selector) { return refs[selector] || null; } };
+  const bindings = FacilityWindowShell.templateBindings(template);
+  assert.equal(bindings.panel, template);
+  assert.equal(bindings.content, refs[".facility-content"]);
+  assert.equal(bindings.tabs, refs[".facility-tabs"]);
+  assert.equal(bindings.footer, refs[".facility-footer"]);
+  assert.equal(bindings.helpButton, refs[".ui-info-button"]);
+  assert.equal(bindings.helpPopover, refs[".facility-help-popover"]);
+  assert.equal(bindings.helpText, refs[".facility-help-popover p"]);
+});
+
+test("facility window shell removes a window and returns the next top window", () => {
+  const removed = [];
+  const low = { key: "portable:bag", panel: { style: { zIndex: "20" }, remove() { removed.push("low"); } } };
+  const high = { key: "portable:status", panel: { style: { zIndex: "80" }, remove() { removed.push("high"); } } };
+  const closing = { key: "guild:guild", panel: { style: { zIndex: "100" }, remove() { removed.push("closing"); } } };
+  const windows = new Map([[low.key, low], [high.key, high], [closing.key, closing]]);
+
+  const result = FacilityWindowShell.removeWindow({ windows, state: closing });
+  assert.equal(result.removed, true);
+  assert.equal(result.next, high);
+  assert.equal(windows.has(closing.key), false);
+  assert.deepEqual(removed, ["closing"]);
+
+  const missing = FacilityWindowShell.removeWindow({ windows, state: closing });
+  assert.deepEqual(missing, { removed: false, next: null });
+});

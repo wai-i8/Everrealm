@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(rpgRoot, "index.html"), "utf8");
 const game = fs.readFileSync(path.join(rpgRoot, "game.js"), "utf8");
 const dialogueUi = fs.readFileSync(path.join(rpgRoot, "game", "dialogue-ui.js"), "utf8");
 const facilityBagView = fs.readFileSync(path.join(rpgRoot, "game", "facility-bag-view.js"), "utf8");
+const facilityWindowShell = fs.readFileSync(path.join(rpgRoot, "game", "facility-window-shell.js"), "utf8");
 const css = fs.readFileSync(path.join(rpgRoot, "styles.css"), "utf8");
 const characterArt = fs.readFileSync(path.join(rpgRoot, "character-art.js"), "utf8");
 const worldSource = fs.readFileSync(path.join(rpgRoot, "world.js"), "utf8");
@@ -172,7 +173,7 @@ test("Deck sizing and shared badge readability are content-driven", () => {
   assert.match(uiCss, /--ui-panel-wide-max:\s*66rem/);
   assert.match(uiCss, /data-panel-size="compact"/);
   assert.match(uiCss, /data-panel-size="wide"\]\[data-facility-tab="deck"\][\s\S]*min-height:\s*0/);
-  assert.match(game, /facilityPanel\.dataset\.panelSize = facilityTab === "deck"/);
+  assert.match(facilityWindowShell, /panel\.dataset\.panelSize = panelSizeFor\(tab, context, hasActiveGuildCommission\)/);
   assert.match(uiCss, /--ui-skill-badge-width/);
   assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-width\)/);
   assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-height\)/);
