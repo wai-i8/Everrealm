@@ -907,6 +907,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr;
+  justify-items: end;
   gap: .42rem;
   margin: 0 0 .35rem;
 }
@@ -1264,7 +1265,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .star-2 .skill-book-cover { color: #a9c9ff; border-color: rgba(142,188,255,.66); }.star-3 .skill-book-cover { color: #ff9dd3; border-color: rgba(255,139,196,.72); }
 .skill-book-cover span { font-size: .57rem; letter-spacing: -.08em; }.skill-book-cover b { font-size: .66rem; }.skill-book-cover small { font: 700 .36rem/1 ui-monospace,monospace; letter-spacing: .08em; }
 .skill-book-copy { min-width: 0; display: grid; gap: .28rem; }.skill-book-copy strong { font-size: .75rem; }.skill-book-copy p { margin: 0; color: var(--muted); font-size: .58rem; line-height: 1.5; }.skill-book-copy small { color: var(--teal); font-size: .52rem; }
-.skill-book-card .facility-action-button { grid-column: 1 / -1; }
+.skill-book-card .facility-action-button { grid-column: 1 / -1; justify-self: center; }
 .skill-list-heading { margin-top: 1.25rem; }
 .skill-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .62rem; }
 .skill-card { display: grid; grid-template-columns: 2.7rem minmax(0,1fr) auto; align-items: center; gap: .68rem; padding: .68rem; border: 1px solid rgba(245,233,202,.2); border-radius: .9rem; background: linear-gradient(145deg,rgba(38,51,82,.86),rgba(14,22,42,.92)); box-shadow: 3px 4px 0 rgba(0,0,0,.28); }
@@ -2020,6 +2021,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   align-self: stretch;
   display: grid;
   align-content: center;
+  justify-items: center;
   gap: .4rem;
 }
 .equipment-price {
@@ -3134,6 +3136,35 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .ui-tab,
 .ui-slot { min-width: 0; }
 .ui-scroll { min-width: 0; min-height: 0; overscroll-behavior: contain; }
+
+/* Action layout contract -------------------------------------------------
+   Buttons own only their skin and intrinsic/content-driven size. Their parent
+   action row owns placement. New UI should use .ui-actions plus one alignment
+   modifier; the legacy semantic action rows below are mapped to the same
+   centred contract so individual buttons do not need margin/width hacks. */
+.ui-actions,
+.modal-actions,
+.auth-actions,
+.death-actions,
+.abandon-commission-actions,
+.guild-detail-actions,
+.inventory-detail-actions {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+}
+.ui-actions--start { justify-content: flex-start; }
+.ui-actions--center,
+.modal-actions,
+.auth-actions,
+.death-actions,
+.abandon-commission-actions,
+.guild-detail-actions,
+.inventory-detail-actions { justify-content: center; }
+.ui-actions--end { justify-content: flex-end; }
+.ui-actions--spread { justify-content: space-between; }
 
 /* Modal panels use a content-sized inner window instead of a fixed-height
    pseudo background, so range-heavy skill details remain contained. */
@@ -4996,7 +5027,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   padding-top: .12rem;
 }
 .inventory-detail-actions .facility-action-button {
-  width: 100%;
+  width: fit-content;
   min-height: 2rem;
 }
 .inventory-detail-layer > .inventory-detail-popup {
@@ -5964,8 +5995,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   line-height: 1.65;
 }
 .death-actions {
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: .65rem !important;
   width: 100%;
   margin-top: 1rem;
@@ -6009,8 +6042,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   line-height: 1.58;
 }
 .abandon-commission-actions {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: .55rem !important;
   width: 100%;
 }
@@ -6219,8 +6254,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 
 @media (max-width: 620px) {
-  .death-actions,
-  .abandon-commission-actions,
   .guild-commission-actions,
   .guild-offer-grid {
     grid-template-columns: 1fr !important;
@@ -6531,7 +6564,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .guild-detail-grid > div { padding: .65rem .72rem; border: 1px solid rgba(255,255,255,.1); border-radius: .55rem; background: rgba(6,13,28,.58); }
 .guild-detail-grid dt { color: #8f9db1; font-size: .64rem; }
 .guild-detail-grid dd { margin: .22rem 0 0; color: #f3ead2; font-size: .8rem; font-weight: 750; }
-.guild-detail-actions { display: flex; justify-content: flex-end; gap: .55rem; }
+.guild-detail-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .55rem; }
 
 /* General store reuses the equipment-shop visual language without category tabs. */
 .facility-overlay[data-facility-context="general-store"] .facility-window.ui-window { width: min(48rem, calc(100vw - 2rem)) !important; min-height: 0 !important; }
@@ -6560,7 +6593,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .dialogue-speaker { margin: 0 0 .5rem !important; padding: 0 0 .42rem !important; border-bottom: 1px solid rgba(82,220,203,.26); }
 .speaker-name { color: #ffc857 !important; font-size: .82rem !important; }
 .dialogue-body > p { margin: 0 !important; color: #efe7d1 !important; font-size: .88rem !important; line-height: 1.55 !important; text-align: left !important; }
-.dialogue-choices { display: grid !important; gap: .42rem !important; margin-top: .75rem !important; }
+.dialogue-choices { display: grid !important; justify-items: end !important; gap: .42rem !important; margin-top: .75rem !important; }
 .dialogue-choices[hidden] { display: none !important; }
 .dialogue-choice {
   width: 100% !important;
@@ -7414,7 +7447,6 @@ html body [aria-disabled="true"] {
   min-width: 0 !important;
   max-width: 100% !important;
   flex: 0 0 auto !important;
-  justify-self: start !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -7604,14 +7636,16 @@ html body [aria-disabled="true"] {
   outline: none;
 }
 .inventory-detail-actions {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: .36rem;
 }
 .inventory-detail-actions .facility-action-button,
 .inventory-detail-actions .danger-button,
 .inventory-detail-actions .secondary-button {
-  width: 100%;
+  width: fit-content;
   min-height: 2rem;
 }
 .shop-trade-tabs {
