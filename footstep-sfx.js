@@ -7,7 +7,8 @@
   "use strict";
 
   const SOUND_KEY = "everrealm-sound";
-  const VOLUME_KEY = "everrealm-bgm-volume-v1";
+  const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
+  const LEGACY_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const DEFAULT_INTERVAL = 0.30;
   const DEFAULT_FIRST_DELAY = 0.10;
   const DEFAULT_GAIN = 0.48;
@@ -80,7 +81,7 @@
     }
 
     function volume() {
-      return clamp01(read(VOLUME_KEY, "0.70"));
+      return clamp01(read(SFX_VOLUME_KEY, read(LEGACY_VOLUME_KEY, "0.70")));
     }
 
     function variants() {

@@ -70,6 +70,7 @@
   const SOUND_KEY = "everrealm-sound";
   const LEGACY_SOUND_KEY = "lanternbound-sound";
   const BGM_VOLUME_KEY = "everrealm-bgm-volume-v1";
+  const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const ZOOM_KEY = "everrealm-zoom";
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
@@ -115,6 +116,8 @@
   const volumeMuteButton = document.getElementById("volumeMuteButton");
   const musicVolumeSlider = document.getElementById("musicVolumeSlider");
   const musicVolumeValue = document.getElementById("musicVolumeValue");
+  const soundEffectsVolumeSlider = document.getElementById("soundEffectsVolumeSlider");
+  const soundEffectsVolumeValue = document.getElementById("soundEffectsVolumeValue");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
@@ -396,6 +399,7 @@
   let screenShake = 0;
   let screenFlash = 0;
   let enemySerial = 100;
+  const enemySessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
   let autoTarget = null;
   let battle = null;
   const battleCommandPosition = { manual: false, x: 0, y: 0, xRatio: null, yRatio: null, pointerId: null, offsetX: 0, offsetY: 0 };
@@ -415,11 +419,8 @@
   let soundEnabled = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY) !== "off";
   let bgmVolume = Core.clamp(Number(readPreference(BGM_VOLUME_KEY, "0.70")), 0, 1);
   if (!Number.isFinite(bgmVolume)) bgmVolume = .7;
-  let lastAudibleBgmVolume = bgmVolume > 0 ? bgmVolume : .7;
-  // A stored 0% volume is semantically muted. Keep the speaker state, slider
-  // and persisted audio behavior in sync instead of showing an active speaker
-  // beside a zero-value control.
-  if (bgmVolume <= 0) soundEnabled = false;
+  let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
+  if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
   const bgm = Bgm.createBgmManager({ enabled: soundEnabled, volume: bgmVolume });
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
@@ -562,7 +563,7 @@
       this.suspended = document.visibilityState !== "visible";
     }
     ensure() {
-      if (!soundEnabled || this.suspended || document.visibilityState !== "visible" || !audioGestureUnlocked) return null;
+      if (!soundEnabled || sfxVolume <= 0 || this.suspended || document.visibilityState !== "visible" || !audioGestureUnlocked) return null;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
       if (!this.context) this.context = new AudioContext();
@@ -589,7 +590,7 @@
       oscillator.frequency.setValueAtTime(frequency, now);
       if (options.to) oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, options.to), now + duration);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(options.gain || 0.045, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime((options.gain || 0.045) * sfxVolume, now + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
       oscillator.connect(gain);
       gain.connect(audio.destination);
@@ -710,7 +711,7 @@
     const id = overrides.id || spawn.id || `enemy-${enemySerial++}`;
     return {
       id,
-      instanceId: `${id}:${enemySerial++}`,
+      instanceId: `${enemySessionId}:${id}:${enemySerial++}`,
       type,
       name: spawn.name || blueprint?.name_zh || base.name,
       x: overrides.x ?? spawn.x,
@@ -1430,21 +1431,24 @@
   }
 
   function syncSystemSoundControl() {
-    const effectiveVolume = soundEnabled ? bgmVolume : 0;
-    if (musicVolumeSlider) musicVolumeSlider.value = String(Math.round(effectiveVolume * 100));
-    if (musicVolumeValue) musicVolumeValue.textContent = `${Math.round(effectiveVolume * 100)}%`;
+    const effectiveMusicVolume = soundEnabled ? bgmVolume : 0;
+    const effectiveSfxVolume = soundEnabled ? sfxVolume : 0;
+    if (musicVolumeSlider) musicVolumeSlider.value = String(Math.round(effectiveMusicVolume * 100));
+    if (musicVolumeValue) musicVolumeValue.textContent = `${Math.round(effectiveMusicVolume * 100)}%`;
+    if (soundEffectsVolumeSlider) soundEffectsVolumeSlider.value = String(Math.round(effectiveSfxVolume * 100));
+    if (soundEffectsVolumeValue) soundEffectsVolumeValue.textContent = `${Math.round(effectiveSfxVolume * 100)}%`;
     if (volumeMuteButton) {
       volumeMuteButton.setAttribute("aria-pressed", String(!soundEnabled));
-      volumeMuteButton.setAttribute("aria-label", soundEnabled ? "靜音" : "取消靜音");
+      volumeMuteButton.setAttribute("aria-label", soundEnabled ? "全部靜音" : "取消全部靜音");
       const icon = volumeMuteButton.querySelector("span");
       if (icon) icon.textContent = soundEnabled ? "🔊" : "🔇";
     }
-    systemSettingsPopover?.style.setProperty("--music-volume", String(effectiveVolume));
+    systemSettingsPopover?.style.setProperty("--music-volume", String(effectiveMusicVolume));
+    systemSettingsPopover?.style.setProperty("--sfx-volume", String(effectiveSfxVolume));
   }
 
   function setBgmVolume(value, persist = true) {
     bgmVolume = Core.clamp(Number(value) || 0, 0, 1);
-    if (bgmVolume > 0) lastAudibleBgmVolume = bgmVolume;
     bgm.setVolume?.(bgmVolume);
     if (battleBgmAudio) battleBgmAudio.volume = bgmVolume;
     if (persist) {
@@ -1454,9 +1458,17 @@
     return bgmVolume;
   }
 
+  function setSfxVolume(value, persist = true) {
+    sfxVolume = Core.clamp(Number(value) || 0, 0, 1);
+    if (persist) {
+      try { localStorage.setItem(SFX_VOLUME_KEY, sfxVolume.toFixed(2)); } catch (_) {}
+    }
+    syncSystemSoundControl();
+    return sfxVolume;
+  }
+
   function setSoundEnabled(enabled, persist = true) {
     soundEnabled = Boolean(enabled);
-    if (soundEnabled && bgmVolume <= 0) setBgmVolume(lastAudibleBgmVolume || .7, persist);
     if (mode === "battle") {
       bgm.setEnabled(false);
       if (battleBgmAudio) {
@@ -7590,7 +7602,7 @@
     // have different opaque bounds, so using their per-frame visual anchor makes
     // the name drift/fly while walking. Keep enemy labels tied to the interpolated
     // battle cell instead; they still follow movement without frame-to-frame wobble.
-    const fallbackNameY = point.y - actorCell * (unit.boss ? .76 : unit.side === "ally" ? .68 : .64);
+    const fallbackNameY = point.y - actorCell * (unit.boss ? .82 : unit.side === "ally" ? .68 : .76);
     const useArtNameAnchor = unit.side === "ally";
     const nameX = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
     const nameAnchorY = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY;
@@ -10040,12 +10052,13 @@
   });
   musicVolumeSlider?.addEventListener("input", () => {
     const nextVolume = Core.clamp(Number(musicVolumeSlider.value) / 100, 0, 1);
-    if (nextVolume <= 0) {
-      setSoundEnabled(false);
-      return;
-    }
     setBgmVolume(nextVolume);
-    if (!soundEnabled) setSoundEnabled(true);
+    if (nextVolume > 0 && !soundEnabled) setSoundEnabled(true);
+  });
+  soundEffectsVolumeSlider?.addEventListener("input", () => {
+    const nextVolume = Core.clamp(Number(soundEffectsVolumeSlider.value) / 100, 0, 1);
+    setSfxVolume(nextVolume);
+    if (nextVolume > 0 && !soundEnabled) setSoundEnabled(true);
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   document.addEventListener("pointerdown", unlockGameAudioFromGesture, { capture: true, passive: true });

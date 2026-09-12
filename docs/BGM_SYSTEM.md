@@ -27,4 +27,8 @@ mountain track, so crossing between those maps does not restart the music.
 
 ## Volume control
 
-System settings expose a persistent BGM volume slider (`0–100%`). Runtime stores it as `everrealm-bgm-volume-v1` and applies the same normalized volume to both the map BGM manager and the battle BGM element. This volume control is for background music; the existing music on/off toggle remains separate.
+System settings expose separate persistent `0–100%` sliders for background music and sound effects.
+
+- BGM uses `everrealm-bgm-volume-v1` and applies the normalized value to both the map BGM manager and the battle BGM element.
+- SFX uses `everrealm-sfx-volume-v1` and applies the normalized value to generated gameplay tones plus sampled effects such as footsteps. Existing saves migrate naturally because SFX falls back to the old BGM value until the dedicated SFX preference is first written.
+- The speaker button remains a global on/off mute for both categories. Setting either slider to `0%` only mutes that category; it must not force the other category off.

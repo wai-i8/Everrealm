@@ -623,7 +623,7 @@
     const visualCenterX = box.x + (opaque.sx - selected.sx + opaque.sw / 2) * visualScale;
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, visualScale, 15, .34);
+      drawGroundShadow(ctx, x, y, visualScale, settings.actor === "player" ? 23 : 15, .34);
       if (settings.selected) {
         ctx.strokeStyle = settings.selectionColor || "#ffc857";
         ctx.lineWidth = 1.4 * visualScale;
