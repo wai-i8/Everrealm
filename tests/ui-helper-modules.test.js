@@ -9,6 +9,7 @@ const FacilityBasicViews = require("../game/facility-basic-views.js");
 const FacilityProgressionViews = require("../game/facility-progression-views.js");
 const FacilityBagView = require("../game/facility-bag-view.js");
 const FacilityWindowShell = require("../game/facility-window-shell.js");
+const FacilityActionRouter = require("../game/facility-action-router.js");
 const Skills = require("../skill-core.js");
 
 function testClassList() {
@@ -955,4 +956,126 @@ test("facility window shell removes a window and returns the next top window", (
 
   const missing = FacilityWindowShell.removeWindow({ windows, state: closing });
   assert.deepEqual(missing, { removed: false, next: null });
+});
+
+
+test("facility action router normalizes button commands without mutating gameplay state", () => {
+  const inventoryButton = { dataset: { facilityAction: "inventory-filter", inventoryCategory: "invalid" } };
+  assert.deepEqual(FacilityActionRouter.commandFromButton(inventoryButton), {
+    type: "inventory-filter",
+    category: "all",
+    button: inventoryButton,
+  });
+
+  const shopButton = { dataset: { facilityAction: "shop-category", shopCategory: "invalid" } };
+  assert.equal(FacilityActionRouter.commandFromButton(shopButton).category, "weapon");
+  const sellButton = { dataset: { facilityAction: "shop-trade-mode", shopTradeMode: "sell" } };
+  assert.equal(FacilityActionRouter.commandFromButton(sellButton).mode, "sell");
+  const bookButton = { dataset: { facilityAction: "open-book", bookStar: "4" } };
+  assert.equal(FacilityActionRouter.commandFromButton(bookButton).star, 4);
+  const detailButton = { dataset: { facilityAction: "skill-detail", skillId: "straight_punch" } };
+  const detail = FacilityActionRouter.commandFromButton(detailButton);
+  assert.equal(detail.skillId, "straight_punch");
+  assert.equal(detail.button, detailButton);
+});
+
+test("facility action router suppresses post-pan clicks and dismisses bag detail backdrops", () => {
+  let prevented = false;
+  const skillTreeEvent = {
+    target: {
+      closest(selector) { return selector === ".skill-tree-scroll" ? {} : null; },
+    },
+    preventDefault() { prevented = true; },
+  };
+  const suppressed = FacilityActionRouter.resolveContentClick({
+    event: skillTreeEvent,
+    facilityTab: "skills",
+    hasSelectedInventoryItem: false,
+    suppressSkillTreeClickUntil: 500,
+    now: 400,
+  });
+  assert.equal(suppressed.kind, "suppressed");
+  assert.equal(suppressed.preventDefault, true);
+  assert.equal(prevented, false, "resolver reports preventDefault without owning the browser event");
+
+  const backdropEvent = {
+    target: {
+      closest(selector) {
+        if (selector === "[data-inventory-detail-dismiss]") return { dataset: {} };
+        return null;
+      },
+    },
+  };
+  const dismissed = FacilityActionRouter.resolveContentClick({
+    event: backdropEvent,
+    facilityTab: "bag",
+    hasSelectedInventoryItem: true,
+  });
+  assert.equal(dismissed.kind, "dismiss-inventory-detail");
+  assert.equal(dismissed.dismissInventoryDetail, true);
+  assert.equal(dismissed.renderAfterDismiss, true);
+  assert.equal(dismissed.command, null);
+});
+
+test("facility action router keeps bag dismissal semantics while allowing real controls to continue", () => {
+  const filterButton = {
+    disabled: false,
+    dataset: { facilityAction: "inventory-filter", inventoryCategory: "material" },
+  };
+  const filterEvent = {
+    target: {
+      closest(selector) {
+        if (selector === "[data-facility-action]") return filterButton;
+        return null;
+      },
+    },
+  };
+  const filterClick = FacilityActionRouter.resolveContentClick({
+    event: filterEvent,
+    facilityTab: "bag",
+    hasSelectedInventoryItem: true,
+  });
+  assert.equal(filterClick.kind, "action");
+  assert.equal(filterClick.dismissInventoryDetail, true);
+  assert.equal(filterClick.renderAfterDismiss, false);
+  assert.equal(filterClick.command.category, "material");
+
+  const itemButton = { disabled: false, dataset: { facilityAction: "select-item", itemId: "weak_potion" } };
+  const itemEvent = {
+    target: {
+      closest(selector) {
+        if (selector === '[data-facility-action="select-item"]') return itemButton;
+        if (selector === "[data-facility-action]") return itemButton;
+        return null;
+      },
+    },
+  };
+  const itemClick = FacilityActionRouter.resolveContentClick({
+    event: itemEvent,
+    facilityTab: "bag",
+    hasSelectedInventoryItem: true,
+  });
+  assert.equal(itemClick.dismissInventoryDetail, false);
+  assert.equal(itemClick.command.itemId, "weak_potion");
+
+  filterButton.disabled = true;
+  const disabledClick = FacilityActionRouter.resolveContentClick({
+    event: filterEvent,
+    facilityTab: "bag",
+    hasSelectedInventoryItem: true,
+  });
+  assert.equal(disabledClick.kind, "ignored");
+  assert.equal(disabledClick.dismissInventoryDetail, true);
+  assert.equal(disabledClick.command, null);
+});
+
+test("facility action router dispatches known commands and ignores unknown handlers", () => {
+  const calls = [];
+  const command = { type: "equip", itemId: "fighter_gloves" };
+  assert.equal(FacilityActionRouter.dispatch(command, {
+    equip: (value) => calls.push(value),
+  }), true);
+  assert.deepEqual(calls, [command]);
+  assert.equal(FacilityActionRouter.dispatch({ type: "missing" }, {}), false);
+  assert.equal(FacilityActionRouter.dispatch(null, { equip() {} }), false);
 });

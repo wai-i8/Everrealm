@@ -34,6 +34,7 @@
   const FacilityProgressionViews = window.EverrealmFacilityProgressionViews;
   const FacilityBagView = window.EverrealmFacilityBagView;
   const FacilityWindowShell = window.EverrealmFacilityWindowShell;
+  const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const {
     normalizeCharacterName,
     statText,
@@ -9791,90 +9792,89 @@
     try { gesture.windowElement.releasePointerCapture?.(gesture.pointerId); } catch (_) {}
   }
 
-  function handleFacilityContentClick(event, state) {
-    if (!activateFacilityWindow(state)) return;
-    if (performance.now() < suppressSkillTreeClickUntil && event.target.closest?.(".skill-tree-scroll")) {
-      event.preventDefault();
-      return;
-    }
-    const clickedDetailPopup = event.target.closest?.(".inventory-detail-popup");
-    const clickedDetailBackdrop = event.target.closest?.("[data-inventory-detail-dismiss]");
-    const clickedInventoryItem = event.target.closest?.('[data-facility-action="select-item"]');
-    const button = event.target.closest("[data-facility-action]");
-    if (facilityTab === "bag" && selectedInventoryItemId && clickedDetailBackdrop && !clickedDetailPopup) {
-      selectedInventoryItemId = null;
+  const facilityActionHandlers = Object.freeze({
+    "select-item": ({ itemId }) => {
+      selectedInventoryItemId = itemId;
       pendingInventoryDestroyItemId = null;
       renderBagFacility();
-      return;
-    }
-    if (facilityTab === "bag" && selectedInventoryItemId && !clickedDetailPopup && !clickedInventoryItem) {
-      selectedInventoryItemId = null;
-      pendingInventoryDestroyItemId = null;
-      // If the click was only on inventory/background space, close immediately.
-      // For a real control (filter/page/etc.), let that action continue below.
-      if (!button) {
-        renderBagFacility();
-        return;
-      }
-    }
-    if (!button || button.disabled) return;
-    const action = button.dataset.facilityAction;
-    if (action === "select-item") {
-      selectedInventoryItemId = button.dataset.itemId || null;
-      pendingInventoryDestroyItemId = null;
-      renderBagFacility();
-    } else if (action === "inventory-filter") {
-      inventoryCategory = ["all", "equipment", "consumable", "skillbook", "material"].includes(button.dataset.inventoryCategory)
-        ? button.dataset.inventoryCategory
-        : "all";
+    },
+    "inventory-filter": ({ category }) => {
+      inventoryCategory = category;
       inventoryPage = 0;
       selectedInventoryItemId = null;
       pendingInventoryDestroyItemId = null;
       renderBagFacility();
-    } else if (action === "inventory-prev") {
+    },
+    "inventory-prev": () => {
       inventoryPage = Math.max(0, inventoryPage - 1);
       selectedInventoryItemId = null;
       pendingInventoryDestroyItemId = null;
       renderBagFacility();
-    } else if (action === "inventory-next") {
+    },
+    "inventory-next": () => {
       inventoryPage += 1;
       selectedInventoryItemId = null;
       pendingInventoryDestroyItemId = null;
       renderBagFacility();
-    } else if (action === "shop-category") {
-      equipmentShopCategory = ["weapon", "head", "upper", "lower", "martial"].includes(button.dataset.shopCategory)
-        ? button.dataset.shopCategory
-        : "weapon";
+    },
+    "shop-category": ({ category }) => {
+      equipmentShopCategory = category;
       renderShopFacility();
-    } else if (action === "shop-trade-mode") {
-      shopTradeMode = button.dataset.shopTradeMode === "sell" ? "sell" : "buy";
+    },
+    "shop-trade-mode": ({ mode: tradeMode }) => {
+      shopTradeMode = tradeMode;
       facilityContext === "general-store" ? renderGeneralStoreFacility() : renderShopFacility();
-    } else if (action === "commission-detail") renderGuildCommissionDetail(button.dataset.offerId);
-    else if (action === "accept") acceptGuildOffer(button.dataset.offerId);
-    else if (action === "claim") claimGuildContract(button.dataset.contractId);
-    else if (action === "abandon") openAbandonCommission(button.dataset.contractId);
-    else if (action === "buy") changeEquipment(button.dataset.itemId, true);
-    else if (action === "equip") changeEquipment(button.dataset.itemId, false);
-    else if (action === "unequip") unequipEquipment(button.dataset.itemId);
-    else if (action === "sell-equipment") sellEquipmentItem(button.dataset.itemId);
-    else if (action === "sell-store-item") sellGeneralStoreItem(button.dataset.itemId);
-    else if (action === "destroy-item") {
-      pendingInventoryDestroyItemId = button.dataset.itemId || null;
+    },
+    "commission-detail": ({ offerId }) => renderGuildCommissionDetail(offerId),
+    accept: ({ offerId }) => acceptGuildOffer(offerId),
+    claim: ({ contractId }) => claimGuildContract(contractId),
+    abandon: ({ contractId }) => openAbandonCommission(contractId),
+    buy: ({ itemId }) => changeEquipment(itemId, true),
+    equip: ({ itemId }) => changeEquipment(itemId, false),
+    unequip: ({ itemId }) => unequipEquipment(itemId),
+    "sell-equipment": ({ itemId }) => sellEquipmentItem(itemId),
+    "sell-store-item": ({ itemId }) => sellGeneralStoreItem(itemId),
+    "destroy-item": ({ itemId }) => {
+      pendingInventoryDestroyItemId = itemId;
       renderBagFacility();
-    } else if (action === "cancel-destroy-item") {
+    },
+    "cancel-destroy-item": () => {
       pendingInventoryDestroyItemId = null;
       renderBagFacility();
-    } else if (action === "confirm-destroy-item") destroyInventoryItem(button.dataset.itemId);
-    else if (action === "use-potion") useBagPotion();
-    else if (action === "use-weak-potion") useWeakPotion();
-    else if (action === "buy-store-item") buyGeneralStoreItem(button.dataset.itemId);
-    else if (action === "open-book") openGuildSkillBook(Number(button.dataset.bookStar));
-    else if (action === "open-envelope") openGuildEnvelope(Number(button.dataset.envelopeStar));
-    else if (action === "use-manual") useSkillManualFromBag(button.dataset.skillId);
-    else if (action === "skill-detail") openSkillDetail(button.dataset.skillId, button);
-    else if (action === "equip-skill") changeSkillLoadout(button.dataset.skillId, true);
-    else if (action === "unequip-skill") changeSkillLoadout(button.dataset.skillId, false);
-    else if (action === "master-skill") masterSkill(button.dataset.skillId);
+    },
+    "confirm-destroy-item": ({ itemId }) => destroyInventoryItem(itemId),
+    "use-potion": () => useBagPotion(),
+    "use-weak-potion": () => useWeakPotion(),
+    "buy-store-item": ({ itemId }) => buyGeneralStoreItem(itemId),
+    "open-book": ({ star }) => openGuildSkillBook(star),
+    "open-envelope": ({ star }) => openGuildEnvelope(star),
+    "use-manual": ({ skillId }) => useSkillManualFromBag(skillId),
+    "skill-detail": ({ skillId, button }) => openSkillDetail(skillId, button),
+    "equip-skill": ({ skillId }) => changeSkillLoadout(skillId, true),
+    "unequip-skill": ({ skillId }) => changeSkillLoadout(skillId, false),
+    "master-skill": ({ skillId }) => masterSkill(skillId),
+  });
+
+  function handleFacilityContentClick(event, state) {
+    if (!activateFacilityWindow(state)) return;
+    const click = FacilityActionRouter.resolveContentClick({
+      event,
+      facilityTab,
+      hasSelectedInventoryItem: Boolean(selectedInventoryItemId),
+      suppressSkillTreeClickUntil,
+      now: performance.now(),
+    });
+    if (click.preventDefault) event.preventDefault();
+    if (click.dismissInventoryDetail) {
+      selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
+      if (click.renderAfterDismiss) {
+        renderBagFacility();
+        return;
+      }
+    }
+    if (!click.command) return;
+    FacilityActionRouter.dispatch(click.command, facilityActionHandlers);
     syncActiveFacilityWindowState();
   }
 
