@@ -433,11 +433,11 @@
           </header>
           <div class="system-volume-row">
             <span class="system-volume-heading"><span>音樂</span><strong id="musicVolumeValue">70%</strong></span>
-            <span class="system-volume-control"><input id="musicVolumeSlider" type="range" min="0" max="100" step="1" value="70" aria-label="音樂音量" /><button id="volumeMuteButton" class="system-volume-mute-button" type="button" aria-label="音樂靜音" aria-pressed="false"><span aria-hidden="true">🔊</span></button></span>
+            <span class="system-volume-control"><input id="musicVolumeSlider" type="range" min="0" max="100" step="1" value="70" aria-label="音樂音量" /><button id="volumeMuteButton" class="system-volume-mute-button" type="button" aria-label="全部靜音" aria-pressed="false"><span aria-hidden="true">🔊</span></button></span>
           </div>
           <div class="system-volume-row">
             <span class="system-volume-heading"><span>音效</span><strong id="soundEffectsVolumeValue">70%</strong></span>
-            <span class="system-volume-control"><input id="soundEffectsVolumeSlider" type="range" min="0" max="100" step="1" value="70" aria-label="音效音量" /><button id="soundEffectsMuteButton" class="system-volume-mute-button" type="button" aria-label="音效靜音" aria-pressed="false"><span aria-hidden="true">🔊</span></button></span>
+            <span class="system-volume-control"><input id="soundEffectsVolumeSlider" type="range" min="0" max="100" step="1" value="70" aria-label="音效音量" /></span>
           </div>
           <div class="system-account-card">
             <span class="system-account-avatar" aria-hidden="true">●</span>
@@ -505,7 +505,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260913-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js")}"><\/script>`);
       })();
     </script>
 

@@ -55,19 +55,6 @@ test("player and monster locomotion frames own canonical world dimensions", () =
   assert.equal(Art.locomotionWorldFrame.length, 1);
 });
 
-test("monster stable visual bounds use one animation-independent top anchor", () => {
-  const chick = Locomotion.stableVisualBounds("chick");
-  assert.ok(chick);
-  assert.equal(chick.top, 80);
-  assert.equal(chick.bottom, metadata.anchorY);
-  for (let index = 0; index < metadata.columns * metadata.rows; index += 1) {
-    const frame = Locomotion.frameVisualBounds("chick", index);
-    assert.ok(frame.sy - Math.floor(index / metadata.columns) * metadata.cellHeight >= chick.top);
-  }
-  const fox = Locomotion.stableVisualBounds("fox");
-  assert.ok(fox && Number.isFinite(fox.top));
-});
-
 test("animation controller preserves facing and returns immediately to Idle on STOP", () => {
   let state = Locomotion.create("left");
   state = Locomotion.update(state, { moving: true, facing: "up", dt: .16 });

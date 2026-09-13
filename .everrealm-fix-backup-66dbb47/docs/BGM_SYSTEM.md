@@ -31,5 +31,4 @@ System settings expose separate persistent `0–100%` sliders for background mus
 
 - BGM uses `everrealm-bgm-volume-v1` and applies the normalized value to both the map BGM manager and the battle BGM element.
 - SFX uses `everrealm-sfx-volume-v1` and applies the normalized value to generated gameplay tones plus sampled effects such as footsteps. Existing saves migrate naturally because SFX falls back to the old BGM value until the dedicated SFX preference is first written.
-- BGM mute uses `everrealm-bgm-enabled-v1`; SFX mute uses `everrealm-sfx-enabled-v1`. Each settings row owns its own speaker button, so muting music never mutes footsteps/combat/UI effects and muting SFX never stops BGM. Legacy `everrealm-sound` / `lanternbound-sound` values are used only as the first-run migration fallback.
-- Setting either slider to `0%` changes only that category's volume and does not change the other category or its mute state.
+- The speaker button remains a global on/off mute for both categories. Setting either slider to `0%` only mutes that category; it must not force the other category off.

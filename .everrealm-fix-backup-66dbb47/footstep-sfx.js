@@ -6,9 +6,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
 
-  const SFX_ENABLED_KEY = "everrealm-sfx-enabled-v1";
-  const LEGACY_SOUND_KEY = "everrealm-sound";
-  const OLDEST_SOUND_KEY = "lanternbound-sound";
+  const SOUND_KEY = "everrealm-sound";
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const LEGACY_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const DEFAULT_INTERVAL = 0.30;
@@ -79,8 +77,7 @@
     function enabled() {
       if (suspended) return false;
       if (host?.document?.visibilityState && host.document.visibilityState !== "visible") return false;
-      const legacyEnabled = read(LEGACY_SOUND_KEY, read(OLDEST_SOUND_KEY, "on"));
-      return read(SFX_ENABLED_KEY, legacyEnabled) !== "off" && volume() > 0;
+      return read(SOUND_KEY, "on") !== "off" && volume() > 0;
     }
 
     function volume() {

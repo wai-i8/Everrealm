@@ -456,12 +456,8 @@
       version: 1,
       player: {
         name: String(player.name || "").trim().slice(0, 24) || "阿巡",
-        // Map dimensions are no longer fixed to the legacy 2760x1800 world.
-        // Preserve finite authored coordinates here; game.js validates the loaded
-        // position against the active map's authoritative navigation and falls
-        // back to that map's start only when the saved point is genuinely invalid.
-        x: Number(player.x),
-        y: Number(player.y),
+        x: clamp(player.x, 40, 2760),
+        y: clamp(player.y, 40, 1800),
         hp: Math.max(1, Number(player.hp) || 1),
         level,
         xp: level >= LEVEL_CAP ? 0 : clamp(Math.floor(Number(player.xp) || 0), 0, xpRequired(level) - 1),

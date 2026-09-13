@@ -289,11 +289,11 @@ test("battle starts immediately and hides every enemy route or danger-cell previ
   assert.doesNotMatch(game, /ctx\.setLineDash\(\[4, 5\]\)/);
   assert.match(game, /const skillRange = new Set/);
   assert.match(game, /const attackableEnemies = new Set/);
-  assert.match(game, /Locomotion\.stableVisualBounds\?\.\(unit\.type\)/);
-  assert.match(game, /sprite\.anchorY - stableBounds\.top/);
+  assert.match(game, /const nameX = point\.x/);
+  assert.match(game, /const nameY = point\.y - layout\.cell \*/);
+  assert.match(game, /const barY = point\.y \+ layout\.cell \* \.38/);
   const battleUnit = game.match(/function drawBattleUnit\([\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(battleUnit, /artBox/);
-  assert.match(battleUnit, /nameAnchor/);
+  assert.doesNotMatch(battleUnit, /artBox|nameAnchor|visualBounds/);
 });
 
 test("battle commands are compact action-select controls with a separate target-select context", () => {

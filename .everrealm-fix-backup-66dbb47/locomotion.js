@@ -95,29 +95,6 @@
     const m = STANDARD_MOBILE_UNIT_SPRITE;
     return { sx: bounds[0], sy: Math.floor(index / m.columns) * m.cellHeight + bounds[1], sw: bounds[2], sh: m.anchorY - bounds[1] };
   }
-  function stableVisualBounds(id) {
-    const frames = visualBounds[id];
-    if (!Array.isArray(frames) || !frames.length) return null;
-    const m = STANDARD_MOBILE_UNIT_SPRITE;
-    let left = Infinity;
-    let top = Infinity;
-    let right = -Infinity;
-    for (const bounds of frames) {
-      if (!bounds || bounds.length < 3) continue;
-      left = Math.min(left, Number(bounds[0]));
-      top = Math.min(top, Number(bounds[1]));
-      right = Math.max(right, Number(bounds[0]) + Number(bounds[2]));
-    }
-    if (![left, top, right].every(Number.isFinite)) return null;
-    return {
-      left,
-      top,
-      right,
-      bottom: m.anchorY,
-      width: Math.max(1, right - left),
-      height: Math.max(1, m.anchorY - top),
-    };
-  }
   // Read-only sampling of the resolver's positions. Never changes collision,
   // occupancy, turn costs, final facing, or movement timing.
   function sampleMovement(movement, id, seconds, fallbackFacing = "down") {
@@ -142,5 +119,5 @@
     }
     return { state: moving ? "walk" : "idle", facing, time: moving ? Math.max(0, time - times[start]) * movement.stepDuration : 0 };
   }
-  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, sourceArt, create, update, frame, frameVisualBounds, stableVisualBounds, layout, facingFromDelta, sampleMovement });
+  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, sourceArt, create, update, frame, frameVisualBounds, layout, facingFromDelta, sampleMovement });
 });

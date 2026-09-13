@@ -69,8 +69,6 @@
   let world = overworld;
   const SOUND_KEY = "everrealm-sound";
   const LEGACY_SOUND_KEY = "lanternbound-sound";
-  const BGM_ENABLED_KEY = "everrealm-bgm-enabled-v1";
-  const SFX_ENABLED_KEY = "everrealm-sfx-enabled-v1";
   const BGM_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const ZOOM_KEY = "everrealm-zoom";
@@ -118,7 +116,6 @@
   const volumeMuteButton = document.getElementById("volumeMuteButton");
   const musicVolumeSlider = document.getElementById("musicVolumeSlider");
   const musicVolumeValue = document.getElementById("musicVolumeValue");
-  const soundEffectsMuteButton = document.getElementById("soundEffectsMuteButton");
   const soundEffectsVolumeSlider = document.getElementById("soundEffectsVolumeSlider");
   const soundEffectsVolumeValue = document.getElementById("soundEffectsVolumeValue");
   const inventoryBookBadge = document.getElementById("inventoryBookBadge");
@@ -419,14 +416,12 @@
   let encounterGrace = 1;
   let automaticPortalReady = false;
   let battleToken = 0;
-  const legacySoundPreference = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY);
-  let musicEnabled = readPreference(BGM_ENABLED_KEY, legacySoundPreference) !== "off";
-  let sfxEnabled = readPreference(SFX_ENABLED_KEY, legacySoundPreference) !== "off";
+  let soundEnabled = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY) !== "off";
   let bgmVolume = Core.clamp(Number(readPreference(BGM_VOLUME_KEY, "0.70")), 0, 1);
   if (!Number.isFinite(bgmVolume)) bgmVolume = .7;
   let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
   if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
-  const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
+  const bgm = Bgm.createBgmManager({ enabled: soundEnabled, volume: bgmVolume });
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
@@ -463,12 +458,8 @@
     if (document.visibilityState !== "visible") return;
     pageAudioSuspended = false;
     sound.resume();
-    if (!musicEnabled) {
-      bgm.suspend?.();
-      battleBgmAudio?.pause();
-      return;
-    }
     bgm.resume?.();
+    if (!soundEnabled) return;
     if (mode === "battle" && battle) {
       bgm.suspend?.();
       battleBgmAudio?.play().catch(() => {});
@@ -480,17 +471,17 @@
   }
 
   function unlockGameAudioFromGesture() {
-    if ((!musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
+    if (!soundEnabled || document.visibilityState !== "visible") return;
     const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
     const mapPlaying = mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
-    if (audioGestureUnlocked && (battlePlaying || mapPlaying || !musicEnabled)) return;
+    if (audioGestureUnlocked && (battlePlaying || mapPlaying)) return;
     audioGestureUnlocked = true;
     resumeGameAudio();
   }
 
   function startBattleBgm() {
     bgm.setEnabled(false);
-    if (!battleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
+    if (!battleBgmAudio || !soundEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { battleBgmAudio.currentTime = 0; } catch (_) {}
     battleBgmAudio.play().catch(() => {});
   }
@@ -499,8 +490,8 @@
       battleBgmAudio.pause();
       try { battleBgmAudio.currentTime = 0; } catch (_) {}
     }
-    bgm.setEnabled(musicEnabled);
-    if (musicEnabled) bgm.setMap(currentMapId);
+    bgm.setEnabled(soundEnabled);
+    if (soundEnabled) bgm.setMap(currentMapId);
     if (pageAudioSuspended) bgm.suspend?.();
   }
   if (pageAudioSuspended) {
@@ -572,7 +563,7 @@
       this.suspended = document.visibilityState !== "visible";
     }
     ensure() {
-      if (!sfxEnabled || sfxVolume <= 0 || this.suspended || document.visibilityState !== "visible" || !audioGestureUnlocked) return null;
+      if (!soundEnabled || sfxVolume <= 0 || this.suspended || document.visibilityState !== "visible" || !audioGestureUnlocked) return null;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
       if (!this.context) this.context = new AudioContext();
@@ -585,7 +576,7 @@
     }
     resume() {
       this.suspended = false;
-      if (sfxEnabled && document.visibilityState === "visible" && this.context?.state === "suspended") {
+      if (soundEnabled && document.visibilityState === "visible" && this.context?.state === "suspended") {
         this.context.resume().catch(() => {});
       }
     }
@@ -1440,24 +1431,20 @@
   }
 
   function syncSystemSoundControl() {
-    if (musicVolumeSlider) musicVolumeSlider.value = String(Math.round(bgmVolume * 100));
-    if (musicVolumeValue) musicVolumeValue.textContent = `${Math.round(bgmVolume * 100)}%`;
-    if (soundEffectsVolumeSlider) soundEffectsVolumeSlider.value = String(Math.round(sfxVolume * 100));
-    if (soundEffectsVolumeValue) soundEffectsVolumeValue.textContent = `${Math.round(sfxVolume * 100)}%`;
+    const effectiveMusicVolume = soundEnabled ? bgmVolume : 0;
+    const effectiveSfxVolume = soundEnabled ? sfxVolume : 0;
+    if (musicVolumeSlider) musicVolumeSlider.value = String(Math.round(effectiveMusicVolume * 100));
+    if (musicVolumeValue) musicVolumeValue.textContent = `${Math.round(effectiveMusicVolume * 100)}%`;
+    if (soundEffectsVolumeSlider) soundEffectsVolumeSlider.value = String(Math.round(effectiveSfxVolume * 100));
+    if (soundEffectsVolumeValue) soundEffectsVolumeValue.textContent = `${Math.round(effectiveSfxVolume * 100)}%`;
     if (volumeMuteButton) {
-      volumeMuteButton.setAttribute("aria-pressed", String(!musicEnabled));
-      volumeMuteButton.setAttribute("aria-label", musicEnabled ? "音樂靜音" : "取消音樂靜音");
+      volumeMuteButton.setAttribute("aria-pressed", String(!soundEnabled));
+      volumeMuteButton.setAttribute("aria-label", soundEnabled ? "全部靜音" : "取消全部靜音");
       const icon = volumeMuteButton.querySelector("span");
-      if (icon) icon.textContent = musicEnabled ? "🔊" : "🔇";
+      if (icon) icon.textContent = soundEnabled ? "🔊" : "🔇";
     }
-    if (soundEffectsMuteButton) {
-      soundEffectsMuteButton.setAttribute("aria-pressed", String(!sfxEnabled));
-      soundEffectsMuteButton.setAttribute("aria-label", sfxEnabled ? "音效靜音" : "取消音效靜音");
-      const icon = soundEffectsMuteButton.querySelector("span");
-      if (icon) icon.textContent = sfxEnabled ? "🔊" : "🔇";
-    }
-    systemSettingsPopover?.style.setProperty("--music-volume", String(bgmVolume));
-    systemSettingsPopover?.style.setProperty("--sfx-volume", String(sfxVolume));
+    systemSettingsPopover?.style.setProperty("--music-volume", String(effectiveMusicVolume));
+    systemSettingsPopover?.style.setProperty("--sfx-volume", String(effectiveSfxVolume));
   }
 
   function setBgmVolume(value, persist = true) {
@@ -1480,34 +1467,22 @@
     return sfxVolume;
   }
 
-  function setMusicEnabled(enabled, persist = true) {
-    musicEnabled = Boolean(enabled);
+  function setSoundEnabled(enabled, persist = true) {
+    soundEnabled = Boolean(enabled);
     if (mode === "battle") {
       bgm.setEnabled(false);
       if (battleBgmAudio) {
-        if (musicEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
+        if (soundEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
         else battleBgmAudio.pause();
       }
     } else {
-      bgm.setEnabled(musicEnabled);
-      if (musicEnabled && !pageAudioSuspended) bgm.setMap(currentMapId);
+      bgm.setEnabled(soundEnabled);
     }
     if (persist) {
-      try { localStorage.setItem(BGM_ENABLED_KEY, musicEnabled ? "on" : "off"); } catch (_) {}
+      try { localStorage.setItem(SOUND_KEY, soundEnabled ? "on" : "off"); } catch (_) {}
     }
     syncSystemSoundControl();
-    return musicEnabled;
-  }
-
-  function setSfxEnabled(enabled, persist = true) {
-    sfxEnabled = Boolean(enabled);
-    if (!sfxEnabled) sound.suspend();
-    else if (!pageAudioSuspended) sound.resume();
-    if (persist) {
-      try { localStorage.setItem(SFX_ENABLED_KEY, sfxEnabled ? "on" : "off"); } catch (_) {}
-    }
-    syncSystemSoundControl();
-    return sfxEnabled;
+    return soundEnabled;
   }
 
   function setSystemSettingsOpen(open) {
@@ -7623,26 +7598,14 @@
     ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
     ctx.fillRect(point.x - barWidth / 2, barY, barWidth * Core.clamp(unit.hp / unit.maxHp, 0, 1), barHeight);
 
-    // Player art has its own stable authored anchor. Monster labels use one
-    // stable union/top bound calculated across the whole locomotion atlas rather
-    // than the currently displayed frame. This keeps small monsters (especially
-    // the chick) close to the top of the visible sprite without nameplate bobbing
-    // as Walk frames or facing rows change.
+    // Player art has a stable authored name anchor. Monster locomotion frames
+    // have different opaque bounds, so using their per-frame visual anchor makes
+    // the name drift/fly while walking. Keep enemy labels tied to the interpolated
+    // battle cell instead; they still follow movement without frame-to-frame wobble.
     const fallbackNameY = point.y - actorCell * (unit.boss ? .82 : unit.side === "ally" ? .68 : .76);
     const useArtNameAnchor = unit.side === "ally";
     const nameX = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
-    let nameAnchorY = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY;
-    if (!useArtNameAnchor) {
-      const stableBounds = Locomotion.stableVisualBounds?.(unit.type);
-      const sprite = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
-      const authoredFrame = Art.locomotionWorldFrame?.(unit.type);
-      if (stableBounds && sprite && Number.isFinite(stableBounds.top)) {
-        const renderedScale = monsterScale * (unit.boss ? .98 : .92);
-        const authoredHeight = Number(authoredFrame?.height) || 102.4;
-        const visualScale = renderedScale * authoredHeight / sprite.cellHeight;
-        nameAnchorY = baseline - (sprite.anchorY - stableBounds.top) * visualScale - 4 * visualScale;
-      }
-    }
+    const nameAnchorY = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY;
     const nameY = nameAnchorY - Math.max(2, actorCell * .025);
     ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
     ctx.textAlign = "center";
@@ -10084,19 +10047,18 @@
     systemButton?.focus({ preventScroll: true });
   });
   volumeMuteButton?.addEventListener("click", () => {
-    setMusicEnabled(!musicEnabled);
-  });
-  soundEffectsMuteButton?.addEventListener("click", () => {
-    const enabled = setSfxEnabled(!sfxEnabled);
+    const enabled = setSoundEnabled(!soundEnabled);
     if (enabled) sound.tone(520, .1, { to: 760, gain: .03 });
   });
   musicVolumeSlider?.addEventListener("input", () => {
     const nextVolume = Core.clamp(Number(musicVolumeSlider.value) / 100, 0, 1);
     setBgmVolume(nextVolume);
+    if (nextVolume > 0 && !soundEnabled) setSoundEnabled(true);
   });
   soundEffectsVolumeSlider?.addEventListener("input", () => {
     const nextVolume = Core.clamp(Number(soundEffectsVolumeSlider.value) / 100, 0, 1);
     setSfxVolume(nextVolume);
+    if (nextVolume > 0 && !soundEnabled) setSoundEnabled(true);
   });
   for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   document.addEventListener("pointerdown", unlockGameAudioFromGesture, { capture: true, passive: true });

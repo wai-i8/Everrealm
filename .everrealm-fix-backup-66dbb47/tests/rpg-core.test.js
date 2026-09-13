@@ -189,16 +189,7 @@ test("save sanitizer rejects unknown schemas and corrupt coordinates", () => {
   assert.equal(Core.sanitizeSave({ version: 1, player: { x: Number.NaN, y: 10 } }), null);
 });
 
-test("save sanitizer does not truncate modern large-map positions", () => {
-  const clean = Core.sanitizeSave({
-    version: 1,
-    player: { x: 6123.5, y: 3288.25, level: 1 },
-  });
-  assert.equal(clean.player.x, 6123.5);
-  assert.equal(clean.player.y, 3288.25);
-});
-
-test("save sanitizer preserves finite map coordinates while clamping gameplay values", () => {
+test("save sanitizer clamps values and removes duplicate flags", () => {
   const clean = Core.sanitizeSave({
     version: 1,
     player: {
@@ -217,8 +208,8 @@ test("save sanitizer preserves finite map coordinates while clamping gameplay va
     crystals: ["north", "north", "bogus", "west"],
     openedChests: ["a", "a", "b"],
   });
-  assert.equal(clean.player.x, -500);
-  assert.equal(clean.player.y, 99999);
+  assert.equal(clean.player.x, 40);
+  assert.equal(clean.player.y, 1800);
   assert.equal(clean.player.level, 40);
   assert.equal(clean.player.coins, 0);
   assert.equal(clean.player.potions, 9);

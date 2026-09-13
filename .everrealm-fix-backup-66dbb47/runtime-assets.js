@@ -7,7 +7,7 @@
 
   const scripts = Object.freeze([
     "data/classes.js",
-    "rpg-core.js?v=20260913-01",
+    "rpg-core.js",
     "data/items.js",
     "data/equipment.js",
     "data/quests.js",
@@ -59,8 +59,8 @@
     "cloud-save.js",
     "save-persistence.js",
     "fighter-effects.js",
-    "locomotion.js?v=20260913-01",
-    "footstep-sfx.js?v=20260913-02",
+    "locomotion.js",
+    "footstep-sfx.js?v=20260913-01",
     "character-art.js",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
@@ -72,7 +72,7 @@
     "game/facility-bag-view.js",
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
-    "game.js?v=20260913-01",
+    "game.js?v=20260912-11",
   ]);
 
   return Object.freeze({ scripts });

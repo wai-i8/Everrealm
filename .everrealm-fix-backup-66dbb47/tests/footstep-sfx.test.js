@@ -51,7 +51,7 @@ test("controller waits for movement cadence and avoids immediate repeats", async
 
 test("field uses grass audio and mute/zero volume still suppress playback", () => {
   const plays = [];
-  const prefs = new Map([["everrealm-sfx-enabled-v1", "off"], ["everrealm-bgm-volume-v1", "0.70"]]);
+  const prefs = new Map([["everrealm-sound", "off"], ["everrealm-bgm-volume-v1", "0.70"]]);
   const controller = Footsteps.createFootstepController({
     root: { document: { visibilityState: "visible" } },
     storage: { getItem: (key) => prefs.get(key) ?? null },
@@ -62,7 +62,7 @@ test("field uses grass audio and mute/zero volume still suppress playback", () =
   controller.update({ moving: true, dt: 0.2 });
   assert.equal(plays.length, 0);
 
-  prefs.set("everrealm-sfx-enabled-v1", "on");
+  prefs.set("everrealm-sound", "on");
   prefs.set("everrealm-bgm-volume-v1", "0");
   controller.update({ moving: false, dt: 0.1 });
   controller.update({ moving: true, dt: 0.2 });
