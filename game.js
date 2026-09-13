@@ -1188,6 +1188,11 @@
     setAuthMessage("");
   }
 
+  function syncExploreSidebarVisibility() {
+    const canPlay = isGameplayAuthorized();
+    exploreSidebar.hidden = !(canPlay && ["playing", "facility", "dialogue"].includes(mode));
+  }
+
   function syncAccountStatus(status = savePersistence?.getCloudStatus?.()) {
     const email = authenticatedUser()?.email || authUser?.email || "";
     const signedIn = Boolean(authUser);
@@ -1206,7 +1211,7 @@
       : authStateResolved ? "需要登入才可以開始遊戲" : "正在確認帳戶…";
     systemLogoutButton.hidden = !signedIn;
     continueButton.hidden = !canPlay || !savePersistence?.hasCloudSave?.();
-    exploreSidebar.hidden = !(canPlay && ["playing", "facility"].includes(mode));
+    syncExploreSidebarVisibility();
     stage.dataset.authState = canPlay ? "signed-in" : "signed-out";
   }
 
@@ -2911,6 +2916,7 @@
   function startDialogue(config) {
     mode = "dialogue";
     stage.dataset.gameState = mode;
+    syncExploreSidebarVisibility();
     keys.clear();
     const speakerNpc = world?.npcs?.find((npc) => npc.name === config.speaker || npc.id === config.speaker || npc.displayName === config.speaker);
     const speakerLabel = speakerNpc ? npcDisplayName(speakerNpc) : (config.speaker || "指定角色");
@@ -2992,6 +2998,7 @@
     dialoguePanel.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
+    syncExploreSidebarVisibility();
     canvas.focus({ preventScroll: true });
     if (runCallback) callback?.();
     updateHud(true);
