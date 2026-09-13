@@ -3,7 +3,7 @@
 importScripts("runtime-assets.js");
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260913-03";
+const CACHE_VERSION = "everrealm-pwa-v2-20260913-02";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -27,8 +27,7 @@ const PRECACHE_URLS = [
   `${APP_BASE}assets/ui/mobile-menu/skills-v3.png`,
   `${APP_BASE}assets/ui/mobile-menu/panel-v3.png`,
   `${APP_BASE}assets/ui/mobile-menu/system-v3.png`,
-  `${APP_BASE}assets/items/weak-potion-v1.png`,
-  `${APP_BASE}assets/audio/bgm/victory-v1.mp3`
+  `${APP_BASE}assets/items/weak-potion-v1.png`
 ];
 
 function isEverrealmUrl(url) {

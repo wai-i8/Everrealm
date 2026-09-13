@@ -35,7 +35,6 @@
   const FacilityBagView = window.EverrealmFacilityBagView;
   const FacilityWindowShell = window.EverrealmFacilityWindowShell;
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
-  const BattleVictory = window.EverrealmBattleVictory;
   const {
     normalizeCharacterName,
     statText,
@@ -173,8 +172,6 @@
   const battleEncounterIntro = document.getElementById("battleEncounterIntro");
   const battleFacingPicker = document.getElementById("battleFacingPicker");
   const battleActionDock = document.getElementById("battleActionDock");
-  const battleVictoryOverlay = document.getElementById("battleVictoryOverlay");
-  const battleVictoryContinue = document.getElementById("battleVictoryContinue");
   const classSelectPanel = document.getElementById("classSelectPanel");
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
@@ -432,7 +429,6 @@
   const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
   const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1.mp3") : null;
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/battle-easy-v1.mp3") : null;
-  const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
   // not. Low cover deliberately has four visual variants and picks one stable
@@ -449,7 +445,7 @@
     if (image) image.src = entry.src;
     return { ...entry, image };
   });
-  for (const music of [titleBgmAudio, battleBgmAudio, victoryBgmAudio]) {
+  for (const music of [titleBgmAudio, battleBgmAudio]) {
     if (!music) continue;
     music.loop = true;
     music.preload = "auto";
@@ -469,7 +465,6 @@
   function startTitleBgm({ restart = false } = {}) {
     bgm.setEnabled(false);
     pauseMusicElement(battleBgmAudio);
-    pauseMusicElement(victoryBgmAudio);
     // Login/registration/title music is always enabled by default. A stale
     // in-game music preference from another account must not silence this flow.
     if (!titleBgmAudio || pageAudioSuspended || document.visibilityState !== "visible") return;
@@ -489,7 +484,6 @@
     bgm.suspend?.();
     titleBgmAudio?.pause();
     battleBgmAudio?.pause();
-    victoryBgmAudio?.pause();
   }
 
   function resumeGameAudio() {
@@ -504,23 +498,15 @@
       bgm.suspend?.();
       titleBgmAudio?.pause();
       battleBgmAudio?.pause();
-      victoryBgmAudio?.pause();
       return;
     }
     stopTitleBgm({ reset: false });
     if (mode === "battle" && battle) {
       bgm.setEnabled(false);
-      if (battle.phase === "victory") {
-        battleBgmAudio?.pause();
-        victoryBgmAudio?.play().catch(() => {});
-      } else {
-        victoryBgmAudio?.pause();
-        battleBgmAudio?.play().catch(() => {});
-      }
+      battleBgmAudio?.play().catch(() => {});
       return;
     }
     battleBgmAudio?.pause();
-    victoryBgmAudio?.pause();
     bgm.setEnabled(true);
     bgm.resume?.();
     bgm.setMap(currentMapId);
@@ -529,10 +515,7 @@
   function unlockGameAudioFromGesture() {
     if ((mode !== "title" && !musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
     const titlePlaying = mode === "title" && titleBgmAudio && titleBgmAudio.paused === false;
-    const battlePlaying = mode === "battle" && battle && (
-      (battle.phase === "victory" && victoryBgmAudio && victoryBgmAudio.paused === false)
-      || (battle.phase !== "victory" && battleBgmAudio && battleBgmAudio.paused === false)
-    );
+    const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
     const mapPlaying = mode !== "title" && mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
     if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || (mode !== "title" && !musicEnabled))) return;
     audioGestureUnlocked = true;
@@ -541,25 +524,13 @@
 
   function startBattleBgm() {
     stopTitleBgm({ reset: false });
-    pauseMusicElement(victoryBgmAudio, true);
     bgm.setEnabled(false);
     if (!battleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { battleBgmAudio.currentTime = 0; } catch (_) {}
     battleBgmAudio.play().catch(() => {});
   }
-
-  function startVictoryBgm() {
-    stopTitleBgm({ reset: false });
-    pauseMusicElement(battleBgmAudio, true);
-    bgm.setEnabled(false);
-    if (!victoryBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
-    try { victoryBgmAudio.currentTime = 0; } catch (_) {}
-    victoryBgmAudio.play().catch(() => {});
-  }
-
   function stopBattleBgm() {
     pauseMusicElement(battleBgmAudio, true);
-    pauseMusicElement(victoryBgmAudio, true);
     // closeBattleHud() is also called while authentication/new-game flows are
     // still on the title screen. Do not briefly start map music underneath the
     // title/login track in that state; real battle exits still resume map BGM.
@@ -1462,7 +1433,6 @@
     pendingAbandonContractId = null;
     battleHud.hidden = true;
     battleEncounterIntro.hidden = true;
-    battleVictoryOverlay.hidden = true;
   }
 
   function usesMobileExploreControls() {
@@ -1543,7 +1513,6 @@
     bgm.setVolume?.(bgmVolume);
     if (titleBgmAudio) titleBgmAudio.volume = bgmVolume;
     if (battleBgmAudio) battleBgmAudio.volume = bgmVolume;
-    if (victoryBgmAudio) victoryBgmAudio.volume = bgmVolume;
     if (persist) {
       try { localStorage.setItem(BGM_VOLUME_KEY, bgmVolume.toFixed(2)); } catch (_) {}
     }
@@ -1571,18 +1540,9 @@
     } else if (mode === "battle") {
       stopTitleBgm({ reset: false });
       bgm.setEnabled(false);
-      if (battle?.phase === "victory") {
-        battleBgmAudio?.pause();
-        if (victoryBgmAudio) {
-          if (musicEnabled && !pageAudioSuspended) victoryBgmAudio.play().catch(() => {});
-          else victoryBgmAudio.pause();
-        }
-      } else {
-        victoryBgmAudio?.pause();
-        if (battleBgmAudio) {
-          if (musicEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
-          else battleBgmAudio.pause();
-        }
+      if (battleBgmAudio) {
+        if (musicEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
+        else battleBgmAudio.pause();
       }
     } else {
       stopTitleBgm({ reset: false });
@@ -2244,12 +2204,11 @@
     }
   }
 
-  function gainXp(amount, options = {}) {
-    const deferPresentation = options.deferPresentation === true;
+  function gainXp(amount) {
     if (player.level >= Expansion.LEVEL_CAP) {
       player.xp = 0;
       updateHud();
-      return { level: player.level, xp: player.xp, levelsGained: 0, hpGain: 0 };
+      return;
     }
     const oldStats = playerStats();
     if (amount > 0) addSystemMessage("reward", `獲得 ${Math.round(amount)} EXP`);
@@ -2257,22 +2216,18 @@
     player.level = result.level;
     player.xp = result.xp;
     if (amount > 0) markPersistenceDirty();
-    let hpGain = 0;
     if (result.levelsGained > 0) {
       pendingLevelUps = 0;
       const newStats = playerStats();
       player.hp = newStats.maxHp;
-      hpGain = newStats.maxHp - oldStats.maxHp;
+      sound.level();
+      const hpGain = newStats.maxHp - oldStats.maxHp;
       addSystemMessage("system", `等級提升！LV.${player.level} · HP 已完全恢復`, "good");
-      if (!deferPresentation) {
-        sound.level();
-        showToast(`升到 LV.${player.level} · HP 回滿 · 生命上限 +${hpGain}`, "good");
-        announce(`升到 ${player.level} 級。生命已完全恢復。`);
-        saveImportant(false);
-      }
+      showToast(`升到 LV.${player.level} · HP 回滿 · 生命上限 +${hpGain}`, "good");
+      announce(`升到 ${player.level} 級。生命已完全恢復。`);
+      saveImportant(false);
     }
     updateHud();
-    return { ...result, hpGain };
   }
 
   function openLevelUp() {
@@ -6163,81 +6118,6 @@
     updateBattleUi();
   }
 
-  let battleVictoryPresenter = null;
-
-  function ensureBattleVictoryPresenter() {
-    if (battleVictoryPresenter) return battleVictoryPresenter;
-    battleVictoryPresenter = BattleVictory.createPresenter({
-      root: window,
-      overlay: battleVictoryOverlay,
-      xpRequired: Expansion.xpRequired,
-      levelCap: Expansion.LEVEL_CAP,
-      reducedMotion,
-      onLevelUp: () => {
-        if (sfxEnabled) sound.level();
-      },
-    });
-    return battleVictoryPresenter;
-  }
-
-  function settleBattleVictoryRewards(finished) {
-    if (!finished || finished.victoryResult) return finished?.victoryResult || null;
-    const bonusUnits = finished.enemies.filter((unit) => !unit.primary);
-    const encounterCount = Math.max(1, finished.enemies.length);
-    const rewardLevel = Math.max(finished.source.level || 1, ...finished.enemies.map((unit) => Number(unit.level) || 1));
-    const blueprint = ExpansionWorld.monsterBlueprint(finished.source.type);
-    const baseXp = blueprint?.rewards?.baseXp ?? 100;
-    const earnedXp = ExpansionWorld.battleXpReward(rewardLevel, player.level, encounterCount, baseXp);
-    const earnedCoins = finished.enemies.reduce((sum, unit) => sum + Math.max(0, Math.round(Number(unit.coins) || 0)), 0);
-    const beforeLevel = player.level;
-    const beforeXp = player.xp;
-
-    player.hp = Math.max(1, finished.hero.hp);
-    killEnemy(finished.source, { grantXp: false });
-    for (const unit of bonusUnits) recordDefeatedMonster(unit);
-    if (earnedCoins > 0) {
-      player.coins += earnedCoins;
-      markPersistenceDirty();
-      addSystemMessage("reward", `獲得 ${earnedCoins} 金幣`);
-    }
-    gainXp(earnedXp, { deferPresentation: true });
-
-    const result = {
-      earnedXp,
-      coins: earnedCoins,
-      drops: [],
-      beforeLevel,
-      beforeXp,
-      afterLevel: player.level,
-      afterXp: player.xp,
-    };
-    finished.victoryResult = result;
-    addSystemMessage("combat", `戰鬥結算 · +${earnedXp} EXP${earnedCoins ? ` · +${earnedCoins} 金幣` : ""}`, "good");
-    updateHud(true);
-    saveImportant(false);
-    return result;
-  }
-
-  function exitBattleVictory() {
-    if (!battle || battle.phase !== "victory") return false;
-    if (!battle.victoryResult) settleBattleVictoryRewards(battle);
-    battleVictoryPresenter?.hide();
-    closeBattleHud();
-    mode = "playing";
-    stage.dataset.gameState = mode;
-    encounterGrace = 1;
-    updateHud(true);
-    canvas.focus({ preventScroll: true });
-    return true;
-  }
-
-  function advanceBattleVictory() {
-    if (!battle || battle.phase !== "victory" || battleVictoryOverlay.hidden) return false;
-    const action = ensureBattleVictoryPresenter().advance();
-    if (action.exit) return exitBattleVictory();
-    return action.handled;
-  }
-
   function finishBattleVictory() {
     if (!battle || battle.phase === "victory") return;
     battle.phase = "victory";
@@ -6245,14 +6125,30 @@
     battle.messageDanger = false;
     addSystemMessage("combat", "戰鬥獲勝！", "good");
     const token = battle.token;
-    startVictoryBgm();
+    sound.level();
     updateBattleUi();
     scheduleBattle(() => {
-      if (!battle || battle.token !== token || battle.phase !== "victory") return;
-      const result = settleBattleVictoryRewards(battle);
-      ensureBattleVictoryPresenter().show(result);
-      battleVictoryContinue?.focus({ preventScroll: true });
-    }, reducedMotion ? 40 : 520);
+      if (!battle || battle.token !== token) return;
+      const finished = battle;
+      const bonusUnits = finished.enemies.filter((unit) => !unit.primary);
+      const encounterCount = Math.max(1, finished.enemies.length);
+      const rewardLevel = Math.max(finished.source.level || 1, ...finished.enemies.map((unit) => Number(unit.level) || 1));
+      const baseXp = ExpansionWorld.monsterBlueprint(finished.source.type)?.rewards?.baseXp ?? 100;
+      const earnedXp = ExpansionWorld.battleXpReward(rewardLevel, player.level, encounterCount, baseXp);
+      const bonusCoins = 0;
+      player.hp = Math.max(1, finished.hero.hp);
+      closeBattleHud();
+      mode = "playing";
+      stage.dataset.gameState = mode;
+      killEnemy(finished.source, { grantXp: false });
+      for (const unit of bonusUnits) recordDefeatedMonster(unit);
+      gainXp(earnedXp);
+      encounterGrace = 1;
+      showToast(`戰鬥勝利 · +${earnedXp} XP`, "good");
+      updateHud(true);
+      saveImportant(false);
+      canvas.focus({ preventScroll: true });
+    }, 760);
   }
 
   function finishBattleDefeat() {
@@ -6294,8 +6190,6 @@
   }
 
   function closeBattleHud() {
-    battleVictoryPresenter?.hide();
-    battleVictoryOverlay.hidden = true;
     stopBattleBgm();
     activeBattleTouches.clear();
     battlePinchGesture = null;
@@ -9399,13 +9293,6 @@
         if (code === "Enter" || code === "Space") beginPlayerRound();
         return;
       }
-      if (battle.phase === "victory") {
-        if (code === "Enter" || code === "Space") {
-          event.preventDefault();
-          advanceBattleVictory();
-        }
-        return;
-      }
       if (!["planning_move", "planning_action"].includes(battle.phase)) return;
       if (battle.phase === "planning_move" && battle.awaitingFacing && ["KeyW", "KeyA", "KeyS", "KeyD"].includes(code)) {
         const facing = ({ KeyW: "up", KeyA: "left", KeyS: "down", KeyD: "right" })[code];
@@ -10218,10 +10105,6 @@
   document.getElementById("reviveHereButton").addEventListener("click", reviveHere);
   document.getElementById("respawnButton").addEventListener("click", respawn);
   battleHud.addEventListener("click", (event) => {
-    if (event.target.closest("[data-victory-continue]")) {
-      advanceBattleVictory();
-      return;
-    }
     const facingButton = event.target.closest("[data-battle-facing]");
     if (facingButton && !facingButton.disabled) {
       chooseBattleFacing(facingButton.dataset.battleFacing);
