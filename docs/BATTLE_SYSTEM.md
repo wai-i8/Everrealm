@@ -1875,7 +1875,7 @@ function splitDamageLaterHits(totalDamage, hitCount) {
 
 所有 `hit_count > 1` 嘅傷害技能都由同一個 multi-hit resolver 處理，唔按個別技能寫另一套判定。每一個 Hit 都會獨立擲一次命中率，並播放一個獨立 strike；所以 `hit_count = 2/3/5/6/8` 就分別顯示兩／三／五／六／八段攻擊。每段嘅聲效、MISS／傷害浮字同 Battle Log 都跟住該段時間逐個出現，唔可以整招一次過播一次聲、出晒所有數字或一次過寫晒紀錄。
 
-每段 strike 使用共用固定間隔（正常模式目前約 `0.5s`，reduced-motion 約 `0.18s`），整招 action duration 會按實際仍可執行嘅段數計算：`windup + executedHitCount × strikeInterval`。因此八段技會逐段慢慢播，前段已令目標死亡時，後續空段唔會延長動畫或聲效。
+每段 strike 使用共用固定間隔（正常模式目前約 `0.5s`，reduced-motion 約 `0.18s`），整招 action duration 會按實際仍可執行嘅段數計算：`windup + executedHitCount × strikeInterval`。每段到播放時間先真正套用該段 HP 傷害，所以目標血條、受擊狀態、浮字、Battle Log 同聲效會同步逐段更新。八段技會逐段慢慢播，前段已令目標死亡時，後續空段唔會延長動畫或聲效。
 
 如果前一段已經令路線上再冇可檢查嘅單位，後續 Hit 不會建立空白 strike；動畫、聲效、浮字同 Battle Log 會一齊停止，實際呈現段數以仍然執行到嘅 Hit 為準。
 

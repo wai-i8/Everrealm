@@ -5706,6 +5706,19 @@
     return result;
   }
 
+  function previewBattleDamage(unit, amount) {
+    const hpBefore = Math.max(0, Math.trunc(Number(unit?.hp) || 0));
+    const requestedDamage = Math.max(0, Math.trunc(Number(amount) || 0));
+    const appliedDamage = Math.min(hpBefore, requestedDamage);
+    return {
+      requestedDamage,
+      appliedDamage,
+      hpBefore,
+      hpAfter: hpBefore - appliedDamage,
+      defeated: hpBefore > 0 && hpBefore - appliedDamage === 0,
+    };
+  }
+
   function presentHeroHitEvent(event) {
     if (!battle || !event) return;
     for (const miss of event.misses || []) {
@@ -5713,14 +5726,25 @@
       addSystemMessage("combat", `${event.skillName || "攻擊"}對${miss.targetName || "目標"}未命中`);
     }
     for (const hit of event.hits || []) {
+      const hitResult = hit.target
+        ? applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount, false)
+        : null;
+      if (!hitResult) continue;
+      Tactics.applyInterrupt(
+        battle.actionResolution?.pendingActions?.find((entry) => entry.actorId === hit.target.id),
+        hit.interrupt || 0,
+      );
       if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
       else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...hit.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
       const spread = (hit.hitIndex - (hit.hitCount - 1) / 2) * .18;
       const offsetX = hit.hitCount > 1 ? spread : 0;
       const offsetY = .16 + Math.floor(hit.hitIndex / 2) * .42;
-      battle.effects.push({ cell: { ...hit.cell }, text: `-${hit.requestedDamage}`, color: hit.color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
-      addSystemMessage("combat", `${event.skillName || "攻擊"}對${hit.targetName || "目標"}造成 ${hit.requestedDamage} 傷害`);
+      battle.effects.push({ cell: { ...hit.cell }, text: `-${hitResult.requestedDamage}`, color: hit.color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
+      addSystemMessage("combat", `${event.skillName || "攻擊"}對${hit.targetName || "目標"}造成 ${hitResult.requestedDamage} 傷害`);
     }
+    player.hp = battle.hero.hp;
+    updateHud();
+    updateBattleUi();
     if (event.soundKind === "magic") sound.crystal();
     else sound.swing();
     for (const hit of event.hits || []) sound.hit();
@@ -5906,6 +5930,7 @@
     const statusTargets = [];
     const heroHitResolvers = [];
     const heroHitPresentationEvents = [];
+    const pendingHeroDamageByTarget = new Map();
     let heroMissCount = 0;
     if (heroAction.type === "skill") {
       skill = Skills.getSkill(heroAction.skillId);
@@ -6119,6 +6144,12 @@
           const traceCandidates = (trace) => trace?.candidateUnits
             || trace?.impactedUnits
             || (trace?.actualTarget ? [trace.actualTarget] : []);
+          const predictedHeroHp = (unit) => Math.max(0, (Number(unit?.hp) || 0) - (pendingHeroDamageByTarget.get(unit?.id) || 0));
+          const heroTraceUnits = () => battleUnits().map((unit) => {
+            const hp = predictedHeroHp(unit);
+            return hp === unit.hp ? unit : { ...unit, hp, alive: hp > 0 };
+          });
+          const actualHeroTarget = (candidate) => battleUnits().find((unit) => String(unit.id) === String(candidate?.id)) || candidate;
           const traceNow = () => routedDelivery
             ? Tactics.traceAttackPath({
                 origin: battle.hero.cell,
@@ -6126,7 +6157,7 @@
                 path: resolver.path,
                 facing: battle.hero.facing,
                 grid: battle.grid,
-                units: battleUnits(),
+                units: heroTraceUnits(),
                 actorId: battle.hero.id,
                 deliveryMode: resolver.deliveryMode,
                 blocksByTerrain: skill.blocksByTerrain,
@@ -6154,8 +6185,10 @@
                   hits: [],
                 }
               : null;
-            for (const target of routedTargets) {
+            for (const candidate of routedTargets) {
+              const target = actualHeroTarget(candidate);
               if (!target.alive || target.hp <= 0) continue;
+              if (predictedHeroHp(target) <= 0) continue;
               const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
               if (!hit) continue;
               if (presentation) presentation.performed = true;
@@ -6178,9 +6211,14 @@
               }
               const hitCell = { ...target.cell };
               if (resolver.friendlyFire || target.side !== "ally") {
-                const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount, !presentation);
+                const hitResult = presentation
+                  ? previewBattleDamage({ ...hit.target, hp: predictedHeroHp(hit.target), alive: predictedHeroHp(hit.target) > 0 }, hit.damage)
+                  : applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount, true);
                 if (presentation) {
+                  pendingHeroDamageByTarget.set(hit.target.id, (pendingHeroDamageByTarget.get(hit.target.id) || 0) + hitResult.appliedDamage);
                   presentation.hits.push({
+                    target: hit.target,
+                    damage: hit.damage,
                     cell: hitCell,
                     targetName: hit.target.name,
                     requestedDamage: hitResult.requestedDamage,
@@ -6188,12 +6226,13 @@
                     hitIndex: hit.hitIndex,
                     hitCount: hit.hitCount,
                     position: hit.position,
+                    interrupt: battleNumber(skill.interrupt),
                   });
                 } else addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
-                Tactics.applyInterrupt(
-                  battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
-                  battleNumber(skill.interrupt),
-                );
+                if (!presentation) Tactics.applyInterrupt(
+                    battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
+                    battleNumber(skill.interrupt),
+                  );
                 executedHeroHits.push(hit);
               }
               // A successful unit is the impact for a normal delivery, even
@@ -7979,6 +8018,9 @@
           ? 1
           : (actionProgress * actionHitCount) % 1
         : actionProgress;
+    const actionStrikeIndex = !actionResolved || actionHitCount <= 0
+      ? -1
+      : Math.min(actionHitCount - 1, Math.floor(actionProgress * actionHitCount));
     const visualState = hurt ? "hurt" : stopped ? "stop" : acting ? "attack" : locomotion.state;
     let artBox = null;
     if (unit.side === "ally") {
@@ -7994,6 +8036,7 @@
         locomotion,
         phase: elapsed,
         progress: actionStrikeProgress,
+        actionStrikeIndex,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         // The old selected ring and AP orbit were persistent visual noise; tile
         // overlays/cursor already communicate tactical selection.

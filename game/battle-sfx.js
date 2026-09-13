@@ -148,6 +148,7 @@
     const runtime = {
       activeHeroSkill: null,
       heroActionSoundPlayed: false,
+      heroActionStrikeIndex: -1,
       freshSkill: null,
       freshSkillToken: 0,
       chickWalkState: new Map(),
@@ -186,6 +187,7 @@
         if (battleStartOrder) {
           runtime.activeHeroSkill = runtime.freshSkill || null;
           runtime.heroActionSoundPlayed = false;
+          runtime.heroActionStrikeIndex = -1;
         }
         return originalOrderActionsBySpeed(actions);
       };
@@ -230,10 +232,18 @@
           if (phase === "resolving_action"
             && options.actor === "player"
             && options.state === "attack"
-            && !runtime.heroActionSoundPlayed
             && isFighterSkill(runtime.activeHeroSkill)) {
-            runtime.heroActionSoundPlayed = true;
-            player.play(isDamagingSkill(runtime.activeHeroSkill) ? "fighterPunch" : "fighterUtility");
+            const strikeIndex = Number(options.actionStrikeIndex);
+            if (Number.isInteger(strikeIndex) && strikeIndex >= 0) {
+              if (strikeIndex !== runtime.heroActionStrikeIndex) {
+                runtime.heroActionStrikeIndex = strikeIndex;
+                runtime.heroActionSoundPlayed = true;
+                player.play(isDamagingSkill(runtime.activeHeroSkill) ? "fighterPunch" : "fighterUtility");
+              }
+            } else if (!Number.isInteger(strikeIndex) && !runtime.heroActionSoundPlayed) {
+              runtime.heroActionSoundPlayed = true;
+              player.play(isDamagingSkill(runtime.activeHeroSkill) ? "fighterPunch" : "fighterUtility");
+            }
           }
           return originalArt.drawCharacter(ctx, options);
         },
