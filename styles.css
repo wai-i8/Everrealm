@@ -1085,7 +1085,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay.is-floating-facility-layer > .facility-window { pointer-events: auto; }
 .facility-window {
   position: relative;
-  width: min(66rem, 100%);
   max-height: min(44rem, 100%);
   min-height: min(34rem, 100%);
   display: grid;
@@ -3010,8 +3009,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-node-image: url("assets/ui/ui-skill-node-v1.png");
   --ui-close-image: url("assets/ui/ui-close-v2.png");
   --ui-info-image: url("assets/ui/ui-info-v1.png");
-  --ui-panel-compact-max: 34rem;
-  --ui-panel-medium-max: 48rem;
+  --ui-panel-compact-max: 16rem;
+  --ui-panel-medium-max: 32rem;
   --ui-panel-wide-max: 66rem;
   --ui-skill-badge-width: 3.45rem;
   --ui-skill-badge-height: 1.5rem;
@@ -3163,10 +3162,17 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 /* The facility header is a dark-navy information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */
 .facility-window.ui-window { overflow: hidden; }
-.facility-window.ui-window { width: min(var(--ui-panel-wide-max), 100%); }
-.facility-overlay[data-panel-size="compact"] .facility-window { width: min(var(--ui-panel-compact-max), 100%); min-height: 0; }
-.facility-overlay[data-panel-size="medium"] .facility-window { width: min(var(--ui-panel-medium-max), 100%); min-height: min(30rem, 100%); }
-.facility-overlay[data-panel-size="wide"] .facility-window { width: min(var(--ui-panel-wide-max), 100%); }
+.facility-overlay[data-panel-size="compact"] { --ui-panel-width: var(--ui-panel-compact-max); }
+.facility-overlay[data-panel-size="medium"] { --ui-panel-width: var(--ui-panel-medium-max); }
+.facility-overlay[data-panel-size="wide"] { --ui-panel-width: var(--ui-panel-wide-max); }
+.facility-overlay[data-panel-size] .facility-window.ui-window {
+  width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
+  min-width: 0;
+}
+.facility-overlay[data-panel-size="compact"] .facility-window.ui-window,
+.facility-overlay[data-panel-size="medium"] .facility-window.ui-window {
+  min-height: 0;
+}
 .facility-overlay[data-panel-size="wide"][data-facility-tab="deck"] .facility-window { min-height: 0; }
 .facility-header.ui-header {
   position: relative;
@@ -4349,10 +4355,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   }
 
   .facility-overlay[data-facility-tab="status"] .facility-window {
-    width: min(29rem, calc(100vw - max(.8rem, env(safe-area-inset-left) + env(safe-area-inset-right)))) !important;
     max-height: calc(100vh - max(.7rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
   }
-  .facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
+
+.facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
     min-height: 2.35rem !important;
     padding: .2rem .34rem .2rem .56rem !important;
   }
@@ -4417,9 +4423,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 /* Narrow portrait fallback. */
 @media (max-width: 700px) and (orientation: portrait) {
   .unified-inventory-layout { grid-template-columns: 1fr !important; }
-  .facility-overlay[data-facility-tab="status"] .facility-window {
-    width: min(28rem, calc(100vw - 1rem)) !important;
-  }
   .inventory-icon-grid { max-height: 36vh !important; }
 }
 
@@ -5145,7 +5148,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   }
 
   .facility-overlay[data-facility-tab="bag"] .facility-window {
-    width: calc(100vw - max(.56rem, env(safe-area-inset-left) + env(safe-area-inset-right))) !important;
     height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
     min-height: 0 !important;
     max-height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
@@ -5222,7 +5224,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   padding: clamp(.45rem, 1.7vw, 1.1rem) !important;
 }
 .facility-overlay[data-facility-tab="deck"] .facility-window.ui-window {
-  width: min(50rem, calc(100vw - 1.2rem)) !important;
   min-height: 0 !important;
   max-height: calc(100vh - 1rem) !important;
 }
@@ -5436,7 +5437,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
       max(.28rem, env(safe-area-inset-left)) !important;
   }
   .facility-overlay[data-facility-tab="deck"] .facility-window.ui-window {
-    width: min(100%, 46rem) !important;
     max-height: calc(100vh - max(.56rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
     border-width: 8px !important;
   }
@@ -5486,7 +5486,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     max(.3rem, env(safe-area-inset-left)) !important;
 }
 .facility-overlay[data-facility-tab="deck"] .facility-window.ui-window {
-  width: min(34rem, calc(100vw - max(.6rem, env(safe-area-inset-left) + env(safe-area-inset-right)))) !important;
   min-height: 0 !important;
   height: auto !important;
   max-height: calc(100dvh - max(.6rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
@@ -5724,12 +5723,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   min-height: 0 !important;
   height: auto !important;
   max-height: calc(100vh - 1.1rem) !important;
-}
-.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window {
-  width: min(51rem, calc(100vw - 1.2rem)) !important;
-}
-.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
-  width: min(74rem, calc(100vw - 1.2rem)) !important;
 }
 .facility-overlay[data-facility-tab="guild"] .facility-header.ui-header {
   min-height: 3.35rem;
@@ -6104,9 +6097,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .system-log-entry.is-danger .system-log-text { color: #ffaaaa; }
 
 /* Inventory: equipment column is stable; right side is exactly 5 x 3 per page. */
-.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
-  width: min(70rem, calc(100vw - 2rem)) !important;
-}
 .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
   grid-template-columns: minmax(15rem, 24%) minmax(0, 1fr) !important;
   align-items: stretch !important;
@@ -6167,7 +6157,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 /* Guild main screen is summary-first: one row per commission. */
 .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window {
-  width: min(42rem, calc(100vw - 2rem)) !important;
   min-height: 0 !important;
 }
 .guild-simple-list {
@@ -6215,7 +6204,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .guild-detail-grid dd { margin: .22rem 0 0; color: #f3ead2; font-size: .8rem; font-weight: 750; }
 
 /* General store reuses the equipment-shop visual language without category tabs. */
-.facility-overlay[data-facility-context="general-store"] .facility-window.ui-window { width: min(48rem, calc(100vw - 2rem)) !important; min-height: 0 !important; }
 .general-store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 .general-store-card { min-height: 12rem; }
 .general-store-card .equipment-shop-art { min-height: 5.4rem; }
@@ -6336,9 +6324,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 /* Guild rows are intentionally one-line summaries. Detail is a compact popup
    that sits above the guild window and fits a landscape phone without a long scroll. */
 .guild-commission-detail-panel { z-index: 280 !important; }
-.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window {
-  width: min(31rem, calc(100vw - 1rem)) !important;
-}
 .guild-simple-list { gap: .2rem !important; padding: .08rem !important; }
 .guild-simple-row {
   min-height: 1.75rem !important;
@@ -6416,20 +6401,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 
 /* === 2026-09-11 guild sizing / general-store compact layout follow-up === */
-/* Match Guild's outer window to the compact Status-window footprint even when
-   renderFacility marks the guild panel as medium/wide. */
-.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
-  width: min(32rem, calc(100vw - 2rem)) !important;
-}
-
 /* General Store is a small two-item utility shop, not a full equipment browser. */
-.facility-overlay[data-facility-context="general-store"] .facility-window.ui-window,
-.facility-overlay[data-facility-context="general-store"][data-panel-size="wide"] .facility-window.ui-window {
-  width: min(32rem, calc(100vw - 2rem)) !important;
-  min-height: 0 !important;
-}
 .facility-overlay[data-facility-context="general-store"] .facility-content {
   padding: .68rem !important;
 }
@@ -6490,25 +6462,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .equipment-price .currency-amount strong { font-size: .64rem; }
 
 @media (max-width: 620px) {
-  .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window,
-  .facility-overlay[data-facility-context="general-store"] .facility-window.ui-window,
-  .facility-overlay[data-facility-context="general-store"][data-panel-size="wide"] .facility-window.ui-window {
-    width: min(32rem, calc(100vw - .7rem)) !important;
-  }
   .general-store-card { grid-template-columns: 3rem minmax(0, 1fr) 4.5rem !important; gap: .42rem !important; }
   .general-store-card .equipment-shop-art { width: 2.9rem !important; }
 }
 
 /* === 2026-09-11 four-point polish: compact launcher windows + centred Guild rows === */
-/* Left-launcher Mission and read-only Deck windows use the same compact footprint
-   as Character Status.  The authored city-gate Deck configuration stays wide. */
-.facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window {
-  width: min(32rem, calc(100vw - 2rem)) !important;
-}
-
 .guild-simple-row {
   display: flex !important;
   align-items: center !important;
@@ -6523,10 +6481,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 
 @media (max-width: 620px) {
-  .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window {
-    width: min(32rem, calc(100vw - .7rem)) !important;
-  }
   .guild-simple-row {
     flex-wrap: wrap;
     row-gap: .16rem !important;
@@ -6534,22 +6488,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 
 /* === 2026-09-11 compact-window / audio / inventory / log interaction pass === */
-/* Trial footprint requested for the compact information family: Status, portable
-   Mission, portable read-only Deck and the in-Guild commission list are half
-   the previous ~32rem desktop width. The city-gate Deck configurator is also
-   halved from ~34rem; its two regions stack when that footprint gets too tight. */
-.facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
-.facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
-  width: min(16rem, calc(100vw - .7rem)) !important;
-  min-width: 0 !important;
-}
-.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
-  width: min(17rem, calc(100vw - .7rem)) !important;
-  min-width: 0 !important;
-}
 .facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .deck-view-shell.is-editable {
   width: 100% !important;
 }
@@ -6568,9 +6506,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 /* Inventory stays exactly five columns per page. Each item tile is 1:1 instead
    of a stretched landscape card, and the whole window no longer fills the
    desktop simply because space is available. */
-.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
-  width: min(48rem, calc(100vw - .7rem)) !important;
-}
 .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
   grid-template-columns: minmax(8.5rem, 11rem) minmax(0, 1fr) !important;
   gap: .58rem !important;
@@ -6807,19 +6742,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .dialogue-panel { z-index: 90 !important; }
 
 @media (max-width: 760px) {
-  .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="guild"][data-panel-size="medium"] .facility-window.ui-window,
-  .facility-overlay[data-facility-tab="guild"][data-panel-size="wide"] .facility-window.ui-window {
-    width: min(16rem, calc(100vw - .45rem)) !important;
-  }
-  .facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
-    width: min(17rem, calc(100vw - .45rem)) !important;
-  }
-  .facility-overlay[data-facility-tab="bag"] .facility-window.ui-window {
-    width: min(44rem, calc(100vw - .45rem)) !important;
-  }
   .facility-overlay[data-facility-tab="bag"] .unified-inventory-layout {
     grid-template-columns: minmax(7.5rem, 9rem) minmax(0, 1fr) !important;
   }
@@ -7149,9 +7071,6 @@ html body [aria-disabled="true"] {
 
 /* City-gate panel configurator stays narrow but the learned-skill and current
    panel regions remain side-by-side. */
-.facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .facility-window.ui-window {
-  width: min(17rem, calc(100vw - .7rem)) !important;
-}
 .facility-overlay[data-facility-tab="deck"][data-facility-context="deck"] .deck-manage-layout {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   gap: .3rem !important;

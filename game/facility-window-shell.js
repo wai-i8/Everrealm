@@ -117,6 +117,7 @@
     if (tab === "deck") return context === "deck-view" ? "compact" : "wide";
     if (tab === "status") return "compact";
     if (tab === "missions") return "compact";
+    if (tab === "shop" && context === "general-store") return "medium";
     if (tab === "guild" && hasActiveGuildCommission) return "medium";
     return "wide";
   }
