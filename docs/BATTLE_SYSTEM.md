@@ -1875,6 +1875,8 @@ function splitDamageLaterHits(totalDamage, hitCount) {
 
 所有 `hit_count > 1` 嘅傷害技能都由同一個 multi-hit resolver 處理，唔按個別技能寫另一套判定。每一個 Hit 都會獨立擲一次命中率，並播放一個獨立 strike；所以 `hit_count = 2/3/5/6/8` 就分別顯示兩／三／五／六／八段攻擊。每段嘅聲效、MISS／傷害浮字同 Battle Log 都跟住該段時間逐個出現，唔可以整招一次過播一次聲、出晒所有數字或一次過寫晒紀錄。
 
+如果前一段已經令路線上再冇可檢查嘅單位，後續 Hit 不會建立空白 strike；動畫、聲效、浮字同 Battle Log 會一齊停止，實際呈現段數以仍然執行到嘅 Hit 為準。
+
 ---
 
 ## 22.4 Multi-hit Impact / Attack Path 判定
