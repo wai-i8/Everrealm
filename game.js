@@ -3860,6 +3860,7 @@
     skillBookConfirmPanel.hidden = true;
     sound.crystal();
     showToast(`已學識「${result.skill.name}」；去城門面板配置先可出戰。`, "good");
+    addSystemMessage("reward", `學會新技能：${result.skill.name}`);
     renderFacility();
     saveImportant(false);
     return true;
@@ -6211,7 +6212,6 @@
       afterXp: player.xp,
     };
     finished.victoryResult = result;
-    addSystemMessage("combat", `戰鬥結算 · +${earnedXp} EXP${earnedCoins ? ` · +${earnedCoins} 金幣` : ""}`, "good");
     updateHud(true);
     saveImportant(false);
     return result;
@@ -6820,7 +6820,7 @@
     hud.zone.textContent = name;
   }
 
-  const SYSTEM_LOG_LABELS = Object.freeze({ combat: "戰鬥", reward: "獎勵", quest: "任務", item: "物品", system: "系統" });
+  const SYSTEM_LOG_LABELS = Object.freeze({ combat: "戰鬥", reward: "進度", quest: "進度", item: "進度", system: "系統" });
 
   const systemFeedback = SystemFeedback.create({
     dom: { toastElement, ariaLive, systemLog, systemLogMessages, systemLogTabs, systemLogToggleButton },
@@ -8370,8 +8370,11 @@
     // Keep the player centred, but show enough nearby roads/buildings to orient the player.
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 192 : 144;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
-    const originX = centreX - player.x * scale;
-    const originY = centreY - player.y * scale;
+    const halfViewWorld = visibleTiles * world.tileSize * .5;
+    const cameraWorldX = Core.clamp(player.x, halfViewWorld, world.pixelWidth - halfViewWorld);
+    const cameraWorldY = Core.clamp(player.y, halfViewWorld, world.pixelHeight - halfViewWorld);
+    const originX = centreX - cameraWorldX * scale;
+    const originY = centreY - cameraWorldY * scale;
     const minTileX = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
     const maxTileX = flattenedMapArt ? -1 : Core.clamp(Math.ceil((player.x + visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
     const minTileY = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.y - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.height - 1);
@@ -8524,21 +8527,6 @@
     scenery.sort((left, right) => left.order - right.order);
     for (const item of scenery) item.draw();
 
-    const objective = commissionQuestInfo().target;
-    const objectiveVector = { x: (objective.x - player.x) * scale, y: (objective.y - player.y) * scale };
-    const objectiveLength = Math.hypot(objectiveVector.x, objectiveVector.y) || 1;
-    const objectiveLimit = radius - 12;
-    const objectivePoint = objectiveLength > objectiveLimit
-      ? { x: centreX + objectiveVector.x / objectiveLength * objectiveLimit, y: centreY + objectiveVector.y / objectiveLength * objectiveLimit }
-      : { x: centreX + objectiveVector.x, y: centreY + objectiveVector.y };
-    miniCtx.save();
-    miniCtx.translate(objectivePoint.x, objectivePoint.y);
-    miniCtx.rotate(Math.PI / 4);
-    miniCtx.fillStyle = "#ffc857";
-    miniCtx.shadowColor = "rgba(255,200,87,.8)";
-    miniCtx.shadowBlur = 5;
-    miniCtx.fillRect(-4, -4, 8, 8);
-    miniCtx.restore();
     miniCtx.save();
     miniCtx.translate(centreX, centreY);
     miniCtx.rotate(({ up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 })[player.facing] || 0);

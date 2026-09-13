@@ -1200,7 +1200,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-list-card p, .facility-feature-card p, .equipment-card p, .codex-card p { margin: 0; color: var(--muted); font-size: .61rem; line-height: 1.58; }
 .facility-card-meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; color: var(--muted); font-size: .53rem; }
 .facility-card-meta b { color: var(--cream); font: 750 .52rem/1.35 ui-monospace,monospace; text-align: right; }
-.facility-action-button { min-height: 2.25rem; padding: .45rem .6rem; border: 1px solid rgba(255,200,87,.48); border-radius: .58rem; color: var(--ui-text-on-accent); background: var(--gold); font-size: .61rem; font-weight: 900; cursor: pointer; transition: transform .12s ease,filter .12s ease; }
+.facility-action-button { min-height: 2.25rem; padding: .45rem 1.25rem; border: 1px solid rgba(255,200,87,.48); border-radius: .58rem; color: var(--ui-text-on-accent); background: var(--gold); font-size: .61rem; font-weight: 900; cursor: pointer; transition: transform .12s ease,filter .12s ease; }
 .facility-action-button:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.08); }
 .facility-action-button:disabled { color: var(--muted); border-color: rgba(245,233,202,.16); background: rgba(245,233,202,.07); cursor: not-allowed; }
 .facility-action-row { display: grid; grid-template-columns: 1fr auto; gap: .45rem; }
@@ -7305,7 +7305,7 @@ html body [aria-disabled="true"] {
   height: 2.2rem !important;
   min-height: 2.2rem !important;
   min-width: 0 !important;
-  padding: .3rem .6rem !important;
+  padding: .45rem 1.25rem !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -7401,3 +7401,14 @@ html body [aria-disabled="true"] {
 @media (max-width:520px) { .battle-victory-overlay{padding:.42rem}.battle-victory-window{width:calc(100% - .1rem);max-height:calc(100% - .1rem)}.battle-victory-heading{padding:.9rem .8rem .65rem}.battle-victory-body{padding:.65rem .7rem .72rem}.battle-victory-reward-grid{gap:.4rem}.battle-victory-reward{padding:.5rem}.battle-victory-footer{padding:.58rem .7rem .7rem} }
 @media (max-height:620px) { .battle-victory-overlay{padding:.35rem .6rem}.battle-victory-window{width:min(29rem,calc(100% - .2rem));max-height:calc(100% - .2rem)}.battle-victory-heading{padding:.62rem 1rem .45rem}.battle-victory-title{font-size:clamp(1.45rem,6vh,2.05rem)}.battle-victory-subtitle{margin-top:.25rem;font-size:.62rem}.battle-victory-body{padding:.5rem .75rem .55rem}.battle-victory-reward{padding:.42rem .5rem}.battle-victory-progress{margin-top:.48rem;padding:.5rem}.battle-victory-loot-block{margin-top:.45rem}.battle-victory-footer{padding:.42rem .7rem .5rem}.battle-victory-continue{min-height:2rem;padding-block:.3rem} }
 @media (prefers-reduced-motion:reduce) { .battle-victory-overlay:not(.is-ready) .battle-victory-body { animation:none !important; } }
+
+
+/* v20260913 UI cleanup: shared buttons keep readable text spacing */
+.facility-action-button,
+.secondary-button,
+.primary-button { padding-left: 1.25rem; padding-right: 1.25rem; }
+
+/* confirmation buttons are text only, no decorative arrows */
+.primary-button::after,
+.secondary-button::after,
+.facility-action-button::after { content: none !important; display:none !important; }

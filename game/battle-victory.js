@@ -69,7 +69,7 @@
     function setText(name, value) { const node = element(name); if (node) node.textContent = String(value ?? ""); }
     function setBar(ratio) { const fill = element("xp-fill"); if (fill) fill.style.width = `${Math.round(clamp01(ratio) * 10000) / 100}%`; }
     function setPrompt(ready) {
-      setText("prompt", ready ? "Click / Enter 返回探索" : "Click / Enter 跳過動畫");
+      setText("prompt", ready ? "返回" : "Click / Enter 跳過動畫");
       if (overlay) overlay.dataset.ready = String(Boolean(ready));
     }
     function revealLevelUp() {
@@ -87,7 +87,7 @@
       const progress = progressAt(state.segments, ratio);
       if (!progress) return;
       setText("level", `LV.${progress.level}`);
-      setText("xp-text", progress.level >= levelCap ? "MAX" : `${progress.xp} / ${progress.need} XP`);
+      setText("xp-text", progress.level >= levelCap ? "MAX" : `${progress.xp} / ${progress.need} EXP`);
       setBar(progress.bar);
       if (progress.level > state.beforeLevel || (ratio >= 1 && state.afterLevel > state.beforeLevel)) revealLevelUp();
     }
@@ -142,7 +142,7 @@
       setText("coins", `+${Math.max(0, Math.round(Number(result.coins) || 0))}`);
       setText("level", `LV.${beforeLevel}`);
       const initialNeed = beforeLevel >= levelCap ? 1 : Math.max(1, Math.round(Number(xpRequired(beforeLevel)) || 1));
-      setText("xp-text", beforeLevel >= levelCap ? "MAX" : `${beforeXp} / ${initialNeed} XP`);
+      setText("xp-text", beforeLevel >= levelCap ? "MAX" : `${beforeXp} / ${initialNeed} EXP`);
       setBar(beforeLevel >= levelCap ? 1 : beforeXp / initialNeed);
       const loot = element("loot");
       if (loot) {
@@ -150,7 +150,7 @@
         loot.innerHTML = "";
         if (!drops.length) {
           const item = host?.document?.createElement?.("li");
-          if (item) { item.className = "battle-victory-loot-empty"; item.textContent = "暫無額外戰利品"; loot.appendChild(item); }
+          if (item) { item.className = "battle-victory-loot-empty"; item.textContent = ""; loot.appendChild(item); }
         } else {
           for (const drop of drops) {
             const item = host?.document?.createElement?.("li");
