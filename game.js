@@ -4360,7 +4360,7 @@
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     pendingAbandonContractId = expectedId;
-    document.getElementById("abandonCommissionTitle").textContent = `確定放棄「${active.title}」？`;
+    document.getElementById("abandonCommissionTitle").textContent = `放棄「${active.title}」`;
     document.getElementById("abandonCommissionDescription").textContent = active.type === "hunt"
       ? `目前討伐進度 ${guildCommissionState.progress} / ${active.objective.count} 將會失去；委託會重新開放接受。`
       : active.type === "wish"

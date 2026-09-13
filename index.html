@@ -400,15 +400,14 @@
           </div>
         </section>
 
-        <section id="abandonCommissionPanel" class="overlay modal-overlay skill-book-confirm-panel abandon-commission-panel" role="dialog" aria-modal="true" aria-labelledby="abandonCommissionTitle" data-modal-backdrop-dismiss="abandon-commission" hidden>
+        <section id="abandonCommissionPanel" class="overlay modal-overlay abandon-commission-panel" role="dialog" aria-modal="true" aria-labelledby="abandonCommissionTitle" data-modal-backdrop-dismiss="abandon-commission" hidden>
           <div class="ui-modal-window ui-window--confirm abandon-commission-window">
             <button id="abandonCommissionCloseButton" class="ui-close-button modal-close-button" type="button" data-modal-dismiss="abandon-commission" aria-label="關閉放棄委託視窗" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
-            <p class="modal-kicker danger">放棄委託</p>
-            <h2 id="abandonCommissionTitle">確定放棄此委託？</h2>
+            <h2 id="abandonCommissionTitle">放棄委託</h2>
             <p id="abandonCommissionDescription">目前進度將會失去，之後可以重新接受。</p>
             <div class="modal-actions abandon-commission-actions">
-              <button id="abandonCommissionConfirmButton" class="facility-action-button" type="button">確定放棄</button>
-              <button id="abandonCommissionCancelButton" class="secondary-button" type="button">取消</button>
+              <button id="abandonCommissionConfirmButton" class="primary-button abandon-commission-button" type="button">確定放棄</button>
+              <button id="abandonCommissionCancelButton" class="secondary-button abandon-commission-button" type="button">取消</button>
             </div>
           </div>
         </section>

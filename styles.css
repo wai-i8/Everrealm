@@ -3155,7 +3155,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .skill-detail-panel > .ui-modal-window > h2 { font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -.025em; }
 .skill-detail-panel .skill-detail-range-pattern { width: min(100%, 34rem); margin-inline: auto; }
 .abandon-commission-panel { z-index: 21; }
-.abandon-commission-icon { color: var(--red); border-color: rgba(255,107,107,.5); }
 
 /* The facility header is a dark-navy information band inside the dark stone
    frame. Every content surface below it uses the same restrained inset. */
@@ -5576,7 +5575,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   color: rgba(245, 233, 202, .72) !important;
 }
 
-/* Abandon commission confirmation: no oversized flag or giant title. */
+/* Abandon commission confirmation: compact, single-purpose confirmation. */
 .abandon-commission-window {
   width: min(29rem, calc(100vw - 1.5rem));
   padding: 1.35rem 1.25rem 1.2rem;
@@ -5585,25 +5584,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   background: linear-gradient(155deg, rgba(26, 31, 49, .99), rgba(8, 14, 27, .99));
   box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, .46);
 }
-.abandon-commission-window .modal-kicker {
-  margin: 0 0 .3rem;
-  font-size: .62rem;
-  letter-spacing: .13em;
-}
 .abandon-commission-window h2 {
-  margin: .15rem 2rem .55rem;
-  font-size: clamp(1.22rem, 4vw, 1.65rem) !important;
-  letter-spacing: -.015em !important;
+  margin: 0 2rem .7rem;
+  color: var(--cream);
+  font-size: clamp(1.35rem, 3vw, 1.7rem);
+  line-height: 1.15;
+  letter-spacing: -.015em;
 }
 .abandon-commission-window > p:not(.modal-kicker) {
-  margin: 0 auto .95rem !important;
+  margin: 0 auto .95rem;
   max-width: 25rem;
-  color: var(--ui-text-secondary) !important;
-  font-size: .76rem !important;
+  color: var(--ui-text-secondary);
+  font-size: .76rem;
   line-height: 1.58;
 }
 .abandon-commission-actions {
-  gap: var(--ui-action-gap) !important;
+  gap: var(--ui-action-gap);
   width: 100%;
 }
 .danger-button {
@@ -7178,21 +7174,24 @@ html body [aria-disabled="true"] {
   pointer-events: auto !important;
 }
 
-/* Confirm/Cancel keep the same height and spacing, but shared bitmap buttons
-   size horizontally from their label instead of stretching across the row. */
-.abandon-commission-actions > #abandonCommissionConfirmButton,
-.abandon-commission-actions > #abandonCommissionCancelButton {
-  width: fit-content !important;
-  min-width: 0 !important;
-  height: 2.75rem !important;
-  min-height: 2.75rem !important;
-  padding: .48rem .8rem !important;
-  box-sizing: border-box !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  line-height: 1 !important;
-  white-space: nowrap !important;
+/* Confirm and cancel share one semantic component so their type, hit area and
+   bitmap proportions stay identical even though their labels differ. */
+.abandon-commission-actions > .abandon-commission-button {
+  flex: 0 0 8.5rem;
+  width: 8.5rem;
+  min-width: 8.5rem;
+  max-width: 100%;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: .48rem .8rem;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .72rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 
