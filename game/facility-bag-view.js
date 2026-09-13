@@ -5,6 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const INVENTORY_SLOT_COUNT = 15;
+
   function renderBagFacility({
     content,
     setFacilityFooter,
@@ -62,6 +64,7 @@
       <div class="inventory-item-art">${iconMarkup(item)}${quantityMarkup(item)}${item.isEquipped ? '<span class="inventory-equipped-mark" aria-label="已裝備" title="已裝備">✓</span>' : ""}</div>
       <div class="inventory-item-copy"><strong title="${item.name}">${item.name}</strong></div>
     </button>`).join("");
+    const emptySlots = Array.from({ length: Math.max(0, INVENTORY_SLOT_COUNT - visibleItems.length) }, () => '<div class="inventory-grid-item ui-slot inventory-empty-slot" aria-hidden="true"></div>').join("");
     const filters = Object.entries(categoryLabels).map(([key, label]) => `<button class="inventory-filter" type="button" data-facility-action="inventory-filter" data-inventory-category="${key}" aria-selected="${inventoryCategory === key ? "true" : "false"}">${label}</button>`).join("");
     const pager = pageCount > 1 ? `<nav class="inventory-pager" aria-label="物品分頁"><button type="button" data-facility-action="inventory-prev" ${inventoryPage <= 0 ? "disabled" : ""} aria-label="上一頁">‹</button><span>${inventoryPage + 1} / ${pageCount}</span><button type="button" data-facility-action="inventory-next" ${inventoryPage >= pageCount - 1 ? "disabled" : ""} aria-label="下一頁">›</button></nav>` : "";
     const detailCopy = selectedItem
@@ -75,7 +78,7 @@
         <aside class="bag-loadout-panel" aria-label="角色目前裝備"><div class="paperdoll-board bag-paperdoll-board bag-equipment-grid">${paperdollSlotHtml("head", "頭部", "head", { iconOnly: true })}${paperdollSlotHtml("weapon", "武器", "weapon", { iconOnly: true })}${paperdollSlotHtml("upperBody", "上身", "upperBody", { iconOnly: true })}${paperdollSlotHtml("hands", "手部", "hands", { iconOnly: true })}${paperdollSlotHtml("lowerBody", "下身", "lowerBody", { iconOnly: true })}${paperdollSlotHtml("feet", "腳部", "feet", { iconOnly: true })}</div></aside>
         <section class="bag-items-panel" aria-label="隨身物品">
           <div class="inventory-toolbar"><div class="inventory-filter-bar" role="tablist" aria-label="物品分類">${filters}</div><div class="inventory-money" aria-label="持有金幣">${coinAmountHtml(coins)}</div></div>
-          ${filteredItems.length ? `<div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}</div>${pager}` : `<div class="inventory-empty-grid" aria-label="呢類物品仲係空嘅"></div>`}
+          <div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}${emptySlots}</div>${pager}
         </section>${detail}
       </section>`;
     setFacilityFooter("");

@@ -7056,6 +7056,13 @@ html body [aria-disabled="true"] {
   aspect-ratio: 1 / 1 !important;
   grid-template-rows: minmax(0, 1fr) auto !important;
 }
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item.inventory-empty-slot {
+  cursor: default !important;
+  pointer-events: none !important;
+  border-color: rgba(245,233,202,.12) !important;
+  background: rgba(16,27,48,.28) !important;
+  box-shadow: none !important;
+}
 .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art {
   width: 100% !important;
   height: 100% !important;
