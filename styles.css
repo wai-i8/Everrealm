@@ -3166,7 +3166,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay[data-panel-size="medium"] { --ui-panel-width: var(--ui-panel-medium-max); }
 .facility-overlay[data-panel-size="wide"] { --ui-panel-width: var(--ui-panel-wide-max); }
 .facility-overlay[data-panel-size] .facility-window.ui-window {
-  width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
+  width: fit-content;
+  max-width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
   min-width: 0;
 }
 .facility-overlay[data-panel-size="compact"] .facility-window.ui-window,
