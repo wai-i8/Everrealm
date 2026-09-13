@@ -559,12 +559,22 @@
     const selected = battleDiagonalFighterFrame(settings);
     const atlas = selected.atlas;
     if (!atlas?.ready || !atlas.image) return false;
+    const hasOpaqueBounds = Boolean(atlas.alphaBounds?.[selected.index] || atlas.visualBounds?.[selected.index]);
     const opaque = opaqueAtlasFrame(atlas, selected.index);
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
     const targetHeight = Math.max(1, 256 * scale);
-    const box = fitFrameToBaseline(opaque, { x, y, height: targetHeight, anchorXRatio: .5, anchorYRatio: 1 });
+    // file:// builds can block the alpha scan used to trim transparent atlas
+    // padding. The authored mobile-unit contract places the feet at y=224 in a
+    // 256px cell, so compensate only when we had to fall back to the whole cell.
+    // On HTTP(S), where alpha bounds are available, the baseline is unchanged.
+    const spriteContract = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
+    const fallbackFootInset = hasOpaqueBounds
+      ? 0
+      : Math.max(0, (spriteContract?.cellHeight || 256) - (spriteContract?.anchorY || 224)) * scale;
+    const spriteBaselineY = y + fallbackFootInset;
+    const box = fitFrameToBaseline(opaque, { x, y: spriteBaselineY, height: targetHeight, anchorXRatio: .5, anchorYRatio: 1 });
     const progress = clamp(Number.isFinite(settings.progress) ? settings.progress : .5, 0, 1);
     const vector = ({
       right: { x: .86, y: -.5 },
@@ -594,7 +604,7 @@
       left: drawX,
       right: drawX + box.width,
       top: drawY,
-      bottom: y,
+      bottom: spriteBaselineY,
       nameAnchorX,
       nameAnchorY,
       markerAnchorX: nameAnchorX,
@@ -623,7 +633,7 @@
     const visualCenterX = box.x + (opaque.sx - selected.sx + opaque.sw / 2) * visualScale;
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, visualScale, settings.actor === "player" ? 23 : 15, .34);
+      drawGroundShadow(ctx, x, y, visualScale, settings.actor === "player" ? 28 : 15, .34);
       if (settings.selected) {
         ctx.strokeStyle = settings.selectionColor || "#ffc857";
         ctx.lineWidth = 1.4 * visualScale;

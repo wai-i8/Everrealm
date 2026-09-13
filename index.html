@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260912-05"],
+          ["everrealmStyles", "styles.css?v=20260913-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -300,27 +300,27 @@
           <p>職業會決定初始武器、技能樹同戰鬥動作。</p>
           <div class="class-choice-grid class-choice-grid--six">
             <button class="class-choice-card is-default" type="button" data-class-choice="fighter" aria-current="true">
-              <canvas id="fighterClassCanvas" class="class-choice-preview-canvas" width="220" height="260" aria-hidden="true"></canvas>
+              <img class="class-choice-sprite" src="assets/classes/fighter.png" alt="格鬥士" />
               <strong>格鬥士</strong><small>拳套 · 見習拳套 · 正拳</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="warrior" data-class-locked="true">
-              <img class="class-choice-sprite" src="assets/locomotion/warrior-v1.png" alt="戰士" />
+              <img class="class-choice-sprite" src="assets/classes/warrior.png" alt="戰士" />
               <strong>戰士</strong><small>刀劍 · 近戰攻守</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="elementalist" data-class-locked="true">
-              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <img class="class-choice-sprite" src="assets/classes/elementalist.png" alt="元素使" />
               <strong>元素使</strong><small>元素魔法 · 遠距術式</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="hexer" data-class-locked="true">
-              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <img class="class-choice-sprite" src="assets/classes/hexer.png" alt="咒印師" />
               <strong>咒印師</strong><small>咒印 · 弱化 · 陷阱</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="cleric" data-class-locked="true">
-              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <img class="class-choice-sprite" src="assets/classes/cleric.png" alt="神官" />
               <strong>神官</strong><small>治療 · 守護 · 支援</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="shadow" data-class-locked="true">
-              <span class="class-choice-sprite class-choice-sprite--empty" aria-hidden="true"></span>
+              <img class="class-choice-sprite" src="assets/classes/shadow.png" alt="影行者" />
               <strong>影行者</strong><small>高機動 · 奇襲 · 弱化</small>
             </button>
           </div>

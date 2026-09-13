@@ -3056,6 +3056,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-info-art: 1.45rem;
   --ui-action-gap: .55rem;
   --ui-action-gap-compact: .36rem;
+  /* Bitmap button end-caps are decorative, so text needs a shared safe gutter.
+     Keep this at the component-system level instead of patching longer labels
+     (e.g. 返回標題) one button at a time. */
+  --ui-button-label-pad-inline: 2.25rem;
 }
 
 /* One scalable bitmap-backed frame shared by facility windows and modal
@@ -3296,6 +3300,15 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-action-button:disabled { border-image-source: var(--ui-button-disabled-image) !important; opacity: .78; }
 .facility-action-button.is-quiet,
 .secondary-button { color: var(--cream); }
+
+/* Primary/secondary bitmap buttons size from their label while preserving the
+   ornamental left/right caps. Longer copy therefore grows the control instead
+   of crowding those caps. Facility action buttons keep their denser domain
+   sizing because many of them live in fixed-width grids. */
+.primary-button,
+.secondary-button {
+  padding-inline: var(--ui-button-label-pad-inline) !important;
+}
 
 .facility-tab {
   border: 7px solid transparent !important;
