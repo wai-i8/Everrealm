@@ -8,8 +8,8 @@
   const scripts = Object.freeze([
     "data/classes.js",
     "rpg-core.js?v=20260913-01",
-    "data/items.js",
-    "data/equipment.js?v=20260913-01",
+    "data/items.js?v=20260913-01",
+    "data/equipment.js?v=20260913-02",
     "data/quests.js",
     "data/skills/monster.js",
     "data/monsters.js",
@@ -49,7 +49,7 @@
     "expansion-world.js",
     "guild-commission-core.js",
     "tactics-core.js?v=20260912-01",
-    "skill-core.js?v=20260913-01",
+    "skill-core.js?v=20260913-02",
     "monster-ai.js",
     "audio-core.js?v=20260911-01",
     "main-town-bgm-loop.js?v=20260910-04",
@@ -66,14 +66,14 @@
     "game/ui-presentation-helpers.js",
     "game/system-feedback.js",
     "game/dialogue-ui.js",
-    "game/facility-basic-views.js",
+    "game/facility-basic-views.js?v=20260913-01",
     "game/facility-catalog-views.js",
-    "game/facility-progression-views.js",
+    "game/facility-progression-views.js?v=20260913-01",
     "game/facility-bag-view.js",
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260913-04",
+    "game.js?v=20260913-05",
   ]);
 
   return Object.freeze({ scripts });

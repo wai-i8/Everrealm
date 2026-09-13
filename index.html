@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260913-05"],
+          ["everrealmStyles", "styles.css?v=20260913-06"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -111,7 +111,6 @@
             <button id="inventoryButton" class="explore-menu-button" type="button" aria-label="打開物品欄（I）">
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/inventory-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>物品欄</b><small>I · ITEMS</small></span>
-              <b id="inventoryBookBadge" class="menu-badge" hidden>0</b>
             </button>
             <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開戰技面板">
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/panel-v3.png" alt="" /></span>
@@ -538,7 +537,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260913-04")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260913-05")}"><\/script>`);
       })();
     </script>
 
@@ -574,7 +573,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260913-03", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260913-04", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

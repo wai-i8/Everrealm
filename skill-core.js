@@ -26,8 +26,11 @@
   const SPEED_GRADES = Object.freeze(["S", "A", "B", "C", "D", "E", "F", "PSV"]);
   const DEFAULT_TARGET_ARC = Object.freeze(["front", "left", "right"]);
   const TARGET_ARCS = Object.freeze(["front", "left", "right", "rear", "self"]);
-  const BOOK_STARS = Object.freeze([1, 2, 3]);
-  const MAX_SKILL_BOOK_RANK = 10;
+  // Fighter acquisition data uses fourteen authored guild-book ranks. Keep
+  // the runtime book inventory on the same source scale instead of collapsing
+  // it into a separate three-tier rarity system.
+  const BOOK_STARS = Object.freeze(Array.from({ length: 14 }, (_, index) => index + 1));
+  const MAX_SKILL_BOOK_RANK = 14;
   const AP_BANDS = deepFreeze({
     1: { min: 3, max: 16 },
     2: { min: 10, max: 45 },
@@ -50,12 +53,6 @@
   ])));
   const COMPATIBILITY_STARTER_SKILLS = Object.freeze({ fighter: ["straight_punch"] });
 
-  function fighterBookTier(apCost) {
-    if (apCost <= 16) return 1;
-    if (apCost <= 45) return 2;
-    return 3;
-  }
-
   // Layout follows the supplied chart. Empty cells are intentional: shared
   // prerequisites join across columns, while independent roots have no links.
   const FIGHTER_TREE_GRID = deepFreeze(fighterData?.display?.layout?.grid || []);
@@ -69,18 +66,12 @@
   });
 
   function sourceStar(raw) {
-    // Current Everrealm skill-book pools use the agreed AP bands for command
-    // skills.  The original source's 1–14 reward tier is retained under
-    // acquisition metadata; it is not the three-tier runtime book rarity.
-    if (raw.type !== "PSV") {
-      const ap = Number(raw.original_reference?.ap);
-      if (Number.isFinite(ap)) return fighterBookTier(ap);
-    }
+    // The Fighter source explicitly declares every guild reward-book rank.
+    // `star` is the primary (first-authored) rank used for presentation; the
+    // full `guildBookStars` list below remains authoritative for draw pools.
     const books = raw.original_reference?.acquisition?.guild_reward_books || [];
-    const sourceStar = Number(books[0]?.star_value);
-    if (Number.isFinite(sourceStar)) return Math.min(3, Math.max(1, Math.ceil(sourceStar / 5)));
-    const ap = Number(raw.original_reference?.ap);
-    return Number.isFinite(ap) ? fighterBookTier(ap) : 1;
+    const sourceRank = Math.trunc(Number(books[0]?.star_value));
+    return sourceRank >= 1 && sourceRank <= MAX_SKILL_BOOK_RANK ? sourceRank : 1;
   }
 
   function relativeRangeBounds(cells) {
@@ -483,7 +474,7 @@
       id: legacyId,
       // The old imported catalog labelled rising_knuckle as a two-star
       // manual. Keep that presentation for old callers; canonical `rendan`
-      // uses the current AP-band pool classification.
+      // follows its authored guild reward-book ranks.
       ...(legacyId === "rising_knuckle" ? { star: 2, pool: { ...canonical.pool, star: 2 } } : {}),
       prerequisites: legacyPrerequisites,
       effects: legacyEffects,
@@ -517,9 +508,8 @@
     return safeClass ? SKILL_CATALOG.filter((skill) => skill.classId === safeClass) : [];
   }
 
-  // Guild envelope ranks are owned by the canonical Fighter acquisition data,
-  // not by Guild. They intentionally remain separate from the existing
-  // one-to-three-star runtime book rarity used by the original skill-book UI.
+  // Guild envelope ranks are owned by the canonical Fighter acquisition data.
+  // The same 1–14 rank scale is now shared by envelopes and owned books.
   function getFighterGuildBookPool(star) {
     const safeStar = Math.trunc(Number(star));
     if (safeStar < 1 || safeStar > 14) return [];
@@ -816,7 +806,7 @@
   }
 
   function normalizeBookCounts(source) {
-    const result = { 1: 0, 2: 0, 3: 0 };
+    const result = Object.fromEntries(BOOK_STARS.map((star) => [star, 0]));
     if (!source || typeof source !== "object") return result;
     for (const star of BOOK_STARS) result[star] = wholeNumber(source[star] ?? source[String(star)]);
     return result;
@@ -1275,7 +1265,9 @@
     if (state.books[star] < 1) return { ok: false, reason: "no-book", state, skill: null };
     const paidState = cloneState(state);
     paidState.books[star] -= 1;
-    return openSkillBook(star, seedOrSerial, paidState);
+    const opened = openSkillBook(star, seedOrSerial, paidState);
+    // A class with no pool for a source rank must not lose the owned book.
+    return opened.ok ? opened : { ...opened, state };
   }
 
   function learnSkillFromManual(rawState, skillId, options = {}) {
@@ -1307,7 +1299,10 @@
     if (stateHasSkill(state.unlockedSkillIds, skill.id)) return { ok: false, reason: "already-unlocked", state };
     const learnability = skillLearnability(state, skill.id);
     if (learnability.status !== "canLearn") return { ok: false, reason: learnability.reason, missingPrerequisites: learnability.missingPrerequisites, state };
-    const cost = MASTERY_UNLOCK_COST[skill.star];
+    // Mastery shards predate the 1–14 source book ranks. Preserve the three
+    // existing shard-cost bands while allowing Fighter presentation ranks above 3.
+    const masteryBand = Math.min(3, Math.max(1, Math.ceil((Number(skill.star) || 1) / 5)));
+    const cost = MASTERY_UNLOCK_COST[masteryBand];
     if (state.masteryShards < cost) return { ok: false, reason: "shards", cost, state };
     const next = cloneState(state);
     next.masteryShards -= cost;
@@ -1321,7 +1316,7 @@
     const seen = new Set();
     const summary = {
       total: Array.isArray(catalog) ? catalog.length : 0,
-      byStar: { 1: 0, 2: 0, 3: 0 },
+      byStar: Object.fromEntries(BOOK_STARS.map((star) => [star, 0])),
       shapes: {},
       melee: 0,
       ranged: 0,
@@ -1343,7 +1338,10 @@
       if (!star) {
         errors.push(`${label}: invalid star`);
       } else {
-        summary.byStar[star] += 1;
+        const authoredBookRanks = skill.classId === "fighter" && Array.isArray(skill.guildBookStars) && skill.guildBookStars.length
+          ? [...new Set(skill.guildBookStars.map(validStar).filter(Boolean))]
+          : [star];
+        for (const bookRank of authoredBookRanks) summary.byStar[bookRank] += 1;
         const band = AP_BANDS[star];
         if (passive && skill.apCost !== 0) errors.push(`${label}: passive AP cost must be 0`);
         else if (!passive && skill.classId !== "fighter" && (!Number.isInteger(skill.apCost) || skill.apCost < band.min || skill.apCost > band.max)) {

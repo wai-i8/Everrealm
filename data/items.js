@@ -33,10 +33,16 @@
     { id: "hollow_rune", name: "空殼符片", description: "空殼術士身上剝落的古老符片。", iconIndex: 13, kind: "material", legacyOnly: true },
   ].map(Object.freeze));
 
+  function skillBookRankLabel(rank) {
+    const safeRank = Math.max(1, Math.min(14, Math.trunc(Number(rank) || 1)));
+    return "★".repeat(Math.floor(safeRank / 5)) + "☆".repeat(safeRank % 5);
+  }
+
   const UI_ITEMS = Object.freeze([
-    { id: "skill_book_1", name: "一星技能書", iconIndex: 1, kind: "ui" },
-    { id: "skill_book_2", name: "二星技能書", iconIndex: 2, kind: "ui" },
-    { id: "skill_book_3", name: "三星技能書", iconIndex: 3, kind: "ui" },
+    ...Array.from({ length: 14 }, (_, index) => {
+      const rank = index + 1;
+      return { id: `skill_book_${rank}`, name: `${skillBookRankLabel(rank)} 技能書`, iconIndex: Math.min(rank, 3), kind: "ui" };
+    }),
     { id: "coins", name: "金幣", iconIndex: 15, kind: "currency" },
   ].map(Object.freeze));
 

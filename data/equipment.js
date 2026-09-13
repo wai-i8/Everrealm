@@ -67,7 +67,7 @@
     "legacyOnly": false,
     "icon": {
       "type": "image",
-      "src": "assets/equipment/fighter/novice-gloves-v2.png"
+      "src": "assets/equipment/fighter/novice-gloves-v3.png"
     }
   },
   {

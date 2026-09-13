@@ -122,7 +122,6 @@
   const soundEffectsMuteButton = document.getElementById("soundEffectsMuteButton");
   const soundEffectsVolumeSlider = document.getElementById("soundEffectsVolumeSlider");
   const soundEffectsVolumeValue = document.getElementById("soundEffectsVolumeValue");
-  const inventoryBookBadge = document.getElementById("inventoryBookBadge");
   const missionMenuBadge = document.getElementById("missionMenuBadge");
   const skillMenuBadge = document.getElementById("skillMenuBadge");
   const continueButton = document.getElementById("continueButton");
@@ -2780,6 +2779,8 @@
       return false;
     }
     clearExplorePointerGesture();
+    clearAllFacilityWindows();
+    setSystemSettingsOpen(false);
     closeBattleHud();
     currentMapId = targetMapId;
     world = target;
@@ -3160,14 +3161,8 @@
   }
 
   function updateMenuBadges() {
-    const bookCount = totalOwnedSkillBooks();
-    setTextIfChanged(inventoryBookBadge, bookCount > 99 ? "99+" : String(bookCount));
-    const shouldHide = bookCount <= 0;
-    if (inventoryBookBadge.hidden !== shouldHide) inventoryBookBadge.hidden = shouldHide;
-    const label = bookCount
-      ? `打開物品欄（I），有 ${bookCount} 本未開技能書`
-      : "打開物品欄（I）";
-    if (inventoryButton.getAttribute("aria-label") !== label) inventoryButton.setAttribute("aria-label", label);
+    const inventoryLabel = "打開物品欄（I）";
+    if (inventoryButton.getAttribute("aria-label") !== inventoryLabel) inventoryButton.setAttribute("aria-label", inventoryLabel);
 
     const missionReady = Boolean(activeGuildCommission() && guildCommissionState.status === "ready_to_report");
     if (missionMenuBadge && missionMenuBadge.hidden === missionReady) missionMenuBadge.hidden = !missionReady;
@@ -3248,17 +3243,21 @@
     for (const star of Skills.BOOK_STARS) {
       const count = skillState.books[star] || 0;
       if (!count) continue;
-      const pool = Skills.getSkillsByStar(star, { classId: playerClassId });
-      const apBand = Skills.AP_BANDS[star];
+      const pool = playerClassId === "fighter"
+        ? Skills.getFighterGuildBookPool(star)
+        : Skills.getSkillsByStar(star, { classId: playerClassId });
+      const apBand = Skills.AP_BANDS[star] || null;
       items.push({
         id: `skill_book_${star}`,
-        name: `${star === 1 ? "初階" : star === 2 ? "進階" : "奧義"}技能書`,
+        name: `${Skills.formatSkillBookRank(star)} 技能書`,
         rankLabel: Skills.formatSkillBookRank(star),
         category: `${Skills.formatSkillBookRank(star)} 技能書`,
         categoryKey: "skillbook",
         quantity: count,
         description: `開封後會抽出 ${pool.length} 本對應職業技能書；唔會直接學識。`,
-        detail: `技能消耗範圍 ${apBand.min}–${apBand.max} AP`,
+        detail: playerClassId === "fighter"
+          ? `格鬥士公會技能書 · Rank ${star}`
+          : apBand ? `技能消耗範圍 ${apBand.min}–${apBand.max} AP` : "目前職業沒有對應技能池",
         action: "open-book", actionLabel: "開封", bookStar: star,
         destroyable: true,
       });
@@ -3271,7 +3270,7 @@
       const learnability = classLocked ? { status: "conditionLocked" } : Skills.skillLearnability(skillState, skill.id);
       items.push({
         id: `manual_${skill.id}`,
-        iconItemId: `skill_book_${Core.clamp(Math.round(Number(skill.star) || 1), 1, 3)}`,
+        iconItemId: `skill_book_${skill.classId === "fighter" ? (skill.guildBookStars?.[0] || skill.star || 1) : (skill.star || 1)}`,
         name: `技能書：${skill.name}`,
         rankLabel: skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star),
         category: `${skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star)} 技能書`,
@@ -3795,7 +3794,7 @@
 
   function openGuildSkillBook(star) {
     const result = Skills.openOwnedSkillBook(star, { seed: "mist-harbour-guild-skills", serial: skillState.drawSerial }, skillState);
-    if (!result.ok) return showToast("你冇呢一星級嘅技能書。", "danger");
+    if (!result.ok) return showToast("你冇呢個星級嘅技能書，或者目前職業冇對應技能池。", "danger");
     skillState = result.state;
     sound.crystal();
     const openedBookRank = Skills.formatSkillBookRank(star);
@@ -4530,7 +4529,7 @@
         const state = Skills.normalizeSkillState(skillState);
         if ((state.books[star] || 0) > 0) {
           skillState = { ...state, books: { ...state.books, [star]: state.books[star] - 1 } };
-          itemName = `${skillStars(star)} 技能書`;
+          itemName = `${Skills.formatSkillBookRank(star)} 技能書`;
           destroyed = true;
         }
       } else if (manualMatch) {

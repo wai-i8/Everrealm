@@ -47,18 +47,15 @@
     }
     content.innerHTML = `
       <section class="mission-view" aria-label="目前任務">
-        <article class="mission-card ${view.ready ? "is-ready" : ""}">
-          <div class="mission-card-heading">
+        <div class="mission-summary ${view.ready ? "is-ready" : ""}">
+          <div class="mission-summary-heading">
             <strong>${view.title}</strong>
             <span>${view.ready ? "已完成" : "進行中"}</span>
           </div>
-          <div class="mission-task-row">
-            <div class="mission-objective"><small>目標</small><strong>${view.objectiveText}</strong></div>
-            <div class="mission-progress-row"><small>進度</small><strong>${view.progressText}</strong></div>
-          </div>
-          <div class="mission-progress-bar" role="progressbar" aria-label="任務進度" aria-valuemin="0" aria-valuemax="${view.progressMax}" aria-valuenow="${view.progressValue}"><i style="width:${view.progressPercent}%"></i></div>
+          <div class="mission-summary-line"><small>目標</small><strong>${view.objectiveText}</strong></div>
+          <div class="mission-summary-line"><small>進度</small><strong>${view.progressText}</strong></div>
           ${view.ready ? '<p class="mission-report-note">請返回公會回報任務</p>' : ""}
-        </article>
+        </div>
       </section>`;
     setFacilityFooter("");
   }
