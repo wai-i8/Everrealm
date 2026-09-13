@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'guild-accept-dismiss', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -1267,6 +1267,34 @@ try {
       if ($guildView.mode -ne 'facility' -or $guildView.currentMapId -ne 'guild') { throw 'Guild view did not open.' }
       $guildChrome = (Invoke-GameExpression -Expression 'JSON.stringify({tabs:!!document.getElementById("facilityTabs"),summary:!!document.getElementById("facilitySummary"),cards:document.querySelectorAll("[data-facility-action=accept],[data-facility-action=claim]").length})') | ConvertFrom-Json
       if ($guildChrome.tabs -or $guildChrome.summary -or $guildChrome.cards -lt 1) { throw 'Guild modal retained redundant summary/tabs or failed to render its focused content.' }
+    }
+    'guild-accept-dismiss' {
+      $authSettled = $false
+      for ($attempt = 0; $attempt -lt 30 -and -not $authSettled; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $authSettled = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && document.getElementById("titleAccountText").textContent.includes("需要登入") && !document.getElementById("titleActions").hidden && window.__RPG_DEBUG__.snapshot().mode === "title")')
+      }
+      if (-not $authSettled) { throw 'Anonymous smoke auth state did not settle before the Guild commission flow.' }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.interactWith('guild-request-board'); true" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $board = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,facilityVisible:[...document.querySelectorAll("[data-facility-window-key]")].some((panel)=>!panel.hidden),rows:document.querySelectorAll(".guild-simple-row").length,detailHidden:document.getElementById("guildCommissionDetailPanel").hidden})') | ConvertFrom-Json
+      if ($board.mode -ne 'facility' -or -not $board.facilityVisible -or $board.rows -ne 5 -or -not $board.detailHidden) { throw "Guild commission list did not open in the expected state: $($board | ConvertTo-Json -Compress)" }
+      Invoke-GameExpression -Expression 'document.querySelector(".guild-simple-row").click(); true' | Out-Null
+      $detail = (Invoke-GameExpression -Expression 'JSON.stringify({hidden:document.getElementById("guildCommissionDetailPanel").hidden,accept:!!document.querySelector("[data-guild-detail-action=accept]")})') | ConvertFrom-Json
+      if ($detail.hidden -or -not $detail.accept) { throw 'Guild commission detail did not expose its accept action.' }
+      Invoke-GameExpression -Expression 'document.querySelector("[data-guild-detail-action=accept]").click(); true' | Out-Null
+      Start-Sleep -Milliseconds 120
+      $accepted = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),facilityHidden:document.getElementById("facilityPanel").hidden,detailHidden:document.getElementById("guildCommissionDetailPanel").hidden,windows:document.querySelectorAll("[data-facility-window-key]").length})') | ConvertFrom-Json
+      if ($accepted.snapshot.mode -ne 'playing' -or -not $accepted.facilityHidden -or -not $accepted.detailHidden -or $accepted.windows -ne 0 -or $accepted.snapshot.guildCommission.status -ne 'active') { throw "Accepting a guild commission did not close the interaction: $($accepted | ConvertTo-Json -Compress)" }
+      $acceptScreenshotPath = Join-Path $runtimeOutputPath "smoke-guild-accept-dismiss-$ViewportWidth.png"
+      $acceptCapture = Invoke-Cdp -Method 'Page.captureScreenshot' -Params @{ format = 'png'; fromSurface = $true }
+      [IO.File]::WriteAllBytes($acceptScreenshotPath, [Convert]::FromBase64String($acceptCapture.result.data))
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.openFacility('guild'); document.querySelector('.guild-simple-row').click(); true" | Out-Null
+      Start-Sleep -Milliseconds 80
+      Invoke-GameExpression -Expression 'document.getElementById("guildCommissionDetailCloseButton").click(); true' | Out-Null
+      Start-Sleep -Milliseconds 80
+      $closedDetail = (Invoke-GameExpression -Expression 'JSON.stringify({snapshot:window.__RPG_DEBUG__.snapshot(),facilityVisible:[...document.querySelectorAll("[data-facility-window-key]")].some((panel)=>!panel.hidden),detailHidden:document.getElementById("guildCommissionDetailPanel").hidden,rows:document.querySelectorAll(".guild-simple-row").length})') | ConvertFrom-Json
+      if ($closedDetail.snapshot.mode -ne 'facility' -or -not $closedDetail.facilityVisible -or -not $closedDetail.detailHidden -or $closedDetail.rows -ne 5) { throw "Closing commission detail did not preserve the guild list: $($closedDetail | ConvertTo-Json -Compress)" }
     }
     'shopview' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.setPlayer({level:7,coins:999,pendingLevelUps:0}); window.__RPG_DEBUG__.enterMap('shop'); window.__RPG_DEBUG__.openFacility('shop'); true" | Out-Null
