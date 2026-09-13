@@ -4114,6 +4114,98 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   font-weight: 850;
   text-align: right;
 }
+
+/* ---------------------------------------------------------------------
+   Status: compact read-only identity, meters and combat stats.
+   --------------------------------------------------------------------- */
+.facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
+  min-height: 2.75rem;
+  padding: .28rem .46rem .28rem .72rem;
+  border-bottom: 1px solid rgba(255,200,87,.18);
+}
+.facility-overlay[data-facility-tab="status"] .facility-header h2 { font-size: 1.02rem; }
+.facility-overlay[data-facility-tab="status"] .facility-content {
+  padding: .72rem .82rem .78rem;
+  overflow: visible;
+}
+.status-compact {
+  width: 100%;
+  display: grid;
+  gap: .68rem;
+}
+.status-compact-identity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.status-compact-identity > div {
+  min-width: 0;
+  display: grid;
+  gap: .16rem;
+}
+.status-compact-name {
+  overflow: hidden;
+  color: var(--cream);
+  font-size: 1.05rem;
+  line-height: 1.1;
+  letter-spacing: .035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-compact-class {
+  color: var(--teal);
+  font-size: .66rem;
+  font-weight: 800;
+}
+.status-compact-level {
+  flex: 0 0 auto;
+  padding-top: .04rem;
+  color: var(--gold);
+  font: 850 .86rem/1 ui-monospace, monospace;
+  letter-spacing: .04em;
+}
+.status-compact-meters {
+  display: grid;
+  gap: .52rem;
+}
+.status-compact-meter { min-width: 0; }
+.status-compact-meter-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .7rem;
+  color: var(--muted);
+}
+.status-compact-meter-heading span {
+  font-size: .65rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.status-compact-meter-heading b {
+  color: var(--cream);
+  font: 800 .68rem/1 ui-monospace, monospace;
+  letter-spacing: .045em;
+}
+.status-compact-progress {
+  display: block;
+  width: 100%;
+  height: .38rem;
+  overflow: hidden;
+  margin-top: .26rem;
+  border: 1px solid rgba(245,233,202,.22);
+  border-radius: 999px;
+  background: rgba(4,8,18,.68);
+  box-shadow: inset 0 1px rgba(0,0,0,.34);
+}
+.status-compact-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.status-compact-progress.is-hp i { background: linear-gradient(90deg, var(--red), #ffbf68); }
+.status-compact-progress.is-exp i { background: linear-gradient(90deg, var(--teal), #a9f1d9); }
 .status-compact-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0,1fr));
@@ -6446,7 +6538,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
    Mission, portable read-only Deck and the in-Guild commission list are half
    the previous ~32rem desktop width. The city-gate Deck configurator is also
    halved from ~34rem; its two regions stack when that footprint gets too tight. */
-.facility-overlay[data-facility-tab="status"] .facility-window.ui-window,
 .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
 .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
 .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
@@ -6716,7 +6807,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .dialogue-panel { z-index: 90 !important; }
 
 @media (max-width: 760px) {
-  .facility-overlay[data-facility-tab="status"] .facility-window.ui-window,
   .facility-overlay[data-facility-tab="missions"] .facility-window.ui-window,
   .facility-overlay[data-facility-tab="deck"][data-facility-context="deck-view"] .facility-window.ui-window,
   .facility-overlay[data-facility-tab="guild"] .facility-window.ui-window,
