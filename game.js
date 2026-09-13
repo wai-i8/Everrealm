@@ -93,6 +93,7 @@
   const ctx = canvas.getContext("2d", { alpha: false });
   const miniMap = document.getElementById("miniMap");
   const miniCtx = miniMap.getContext("2d");
+  const miniMapWrap = miniMap.closest(".minimap-wrap");
   const stage = document.getElementById("gameStage");
   const titleScreen = document.getElementById("titleScreen");
   const dialoguePanel = document.getElementById("dialoguePanel");
@@ -605,10 +606,6 @@
   const atmosphereVignetteCache = document.createElement("canvas");
   const atmosphereVignetteCtx = atmosphereVignetteCache.getContext("2d");
   let atmosphereVignetteCacheKey = "";
-  const miniMapBackgroundCache = document.createElement("canvas");
-  const miniMapBackgroundCacheCtx = miniMapBackgroundCache.getContext("2d");
-  let miniMapBackgroundCacheKey = "";
-
   function ensureAtmosphereVignetteCache() {
     const cacheWidth = Math.max(1, Math.round(width));
     const cacheHeight = Math.max(1, Math.round(height));
@@ -626,11 +623,6 @@
     atmosphereVignetteCtx.fillStyle = vignette;
     atmosphereVignetteCtx.fillRect(0, 0, cacheWidth, cacheHeight);
     atmosphereVignetteCacheKey = key;
-  }
-
-  function flattenedMiniMapBackgroundKey(mapWidth, mapHeight) {
-    if (!(world.art?.flattened && world.art?.backgroundScene)) return "";
-    return [currentMapId, world.art.backgroundScene, world.pixelWidth, world.pixelHeight, mapWidth, mapHeight].join("|");
   }
 
   class SoundEngine {
@@ -8359,7 +8351,28 @@
     return tile === world.tileTypes.GRASS ? "grass" : tile === world.tileTypes.PATH ? "path" : tile === world.tileTypes.WATER ? "water" : tile === world.tileTypes.STONE ? "stone" : tile === world.tileTypes.WOOD ? "bridge" : "dungeonStone";
   }
 
+  // Every interior map (guild/shop/clinic/general-store/inn - see maps/interiors/*.js)
+  // is tagged kind:"interior" at its definition, so this one check classifies all of
+  // them at once - no per-map-id list to maintain as new buildings get added.
+  function isInteriorMap() {
+    return world.kind === "interior";
+  }
+
+  let miniMapWrapHidden = null;
+  function setMiniMapWrapHidden(hidden) {
+    if (!miniMapWrap || miniMapWrapHidden === hidden) return;
+    miniMapWrapHidden = hidden;
+    miniMapWrap.style.display = hidden ? "none" : "";
+  }
+
   function drawMiniMap() {
+    if (isInteriorMap()) {
+      // Indoor buildings are small, fully-known rooms - a navigation minimap
+      // doesn't add anything, so hide the whole widget rather than draw one.
+      setMiniMapWrapHidden(true);
+      return;
+    }
+    setMiniMapWrapHidden(false);
     const mapWidth = miniMap.width;
     const mapHeight = miniMap.height;
     const centreX = mapWidth / 2;
@@ -8371,8 +8384,16 @@
     const visibleTiles = ["world", "field"].includes(currentMapId) ? 192 : 144;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
     const halfViewWorld = visibleTiles * world.tileSize * .5;
-    const cameraWorldX = Core.clamp(player.x, halfViewWorld, world.pixelWidth - halfViewWorld);
-    const cameraWorldY = Core.clamp(player.y, halfViewWorld, world.pixelHeight - halfViewWorld);
+    // On maps smaller than the minimap's fixed view window, halfViewWorld can exceed
+    // (mapDimension - halfViewWorld), which would flip min/max and freeze the camera
+    // at a corner regardless of player position. Mirror updateCamera's safeguard by
+    // collapsing both bounds to the map centre in that case.
+    const minCameraX = Math.min(halfViewWorld, world.pixelWidth * .5);
+    const maxCameraX = Math.max(minCameraX, world.pixelWidth - halfViewWorld);
+    const minCameraY = Math.min(halfViewWorld, world.pixelHeight * .5);
+    const maxCameraY = Math.max(minCameraY, world.pixelHeight - halfViewWorld);
+    const cameraWorldX = Core.clamp(player.x, minCameraX, maxCameraX);
+    const cameraWorldY = Core.clamp(player.y, minCameraY, maxCameraY);
     const originX = centreX - cameraWorldX * scale;
     const originY = centreY - cameraWorldY * scale;
     const minTileX = flattenedMapArt ? 0 : Core.clamp(Math.floor((player.x - visibleTiles * world.tileSize * .58) / world.tileSize), 0, world.width - 1);
@@ -8385,7 +8406,7 @@
     miniCtx.arc(centreX, centreY, radius, 0, Core.TAU);
     miniCtx.clip();
 
-    miniCtx.fillStyle = currentMapId === "dungeon" ? "#151c2b" : ["guild", "shop", "clinic", "general-store", "inn"].includes(currentMapId) ? "#3b2b27" : "#173d3c";
+    miniCtx.fillStyle = world.kind === "dungeon" ? "#151c2b" : "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
     if (flattenedMapArt) {
       // Draw the authored flattened scene at local-navigation scale. The circle
@@ -8527,8 +8548,46 @@
     scenery.sort((left, right) => left.order - right.order);
     for (const item of scenery) item.draw();
 
+    // Fog of war: fade the true map edge into the ambient backdrop colour
+    // instead of a hard cut-off. Anchored to the map's actual rectangle (not
+    // the minimap frame), so a small map fogs out well inside the circle,
+    // while a large map only fogs right at its real edge.
+    const fogColourHex = world.kind === "dungeon" ? "#151c2b" : "#173d3c";
+    const fogColourRgb = [1, 3, 5].map((i) => parseInt(fogColourHex.slice(i, i + 2), 16)).join(",");
+    const mapRectHalfWidth = Math.max(1, world.pixelWidth * scale * .5);
+    const mapRectHalfHeight = Math.max(1, world.pixelHeight * scale * .5);
+    const mapRectCentreX = originX + mapRectHalfWidth;
+    const mapRectCentreY = originY + mapRectHalfHeight;
     miniCtx.save();
-    miniCtx.translate(centreX, centreY);
+    miniCtx.translate(mapRectCentreX, mapRectCentreY);
+    miniCtx.scale(mapRectHalfWidth, mapRectHalfHeight);
+    const fog = miniCtx.createRadialGradient(0, 0, .6, 0, 0, 1.05);
+    fog.addColorStop(0, `rgba(${fogColourRgb},0)`);
+    fog.addColorStop(1, `rgba(${fogColourRgb},1)`);
+    miniCtx.fillStyle = fog;
+    // Overscan generously in this normalised space so the fill still reaches
+    // every corner of the square canvas even when the map rect is tiny or
+    // off-centre relative to the minimap frame.
+    const fogOverscanX = (mapWidth * 3) / mapRectHalfWidth;
+    const fogOverscanY = (mapHeight * 3) / mapRectHalfHeight;
+    miniCtx.fillRect(-fogOverscanX, -fogOverscanY, fogOverscanX * 2, fogOverscanY * 2);
+    miniCtx.restore();
+
+    // Darken toward the circular frame itself for a subtle vignette, so the
+    // minimap reads as a porthole into the world rather than a flat sticker.
+    const ringVignette = miniCtx.createRadialGradient(centreX, centreY, radius * .72, centreX, centreY, radius);
+    ringVignette.addColorStop(0, "rgba(0,0,0,0)");
+    ringVignette.addColorStop(1, "rgba(0,0,0,.55)");
+    miniCtx.fillStyle = ringVignette;
+    miniCtx.fillRect(0, 0, mapWidth, mapHeight);
+
+    // Marker tracks the player relative to the (possibly clamped) minimap camera,
+    // matching how the main-screen camera positions the player on screen. When
+    // the camera is centred on the player, the marker sits at the centre; once
+    // the camera clamps near a map edge, the marker drifts off-centre to match.
+    const markerPoint = mapPoint(player.x, player.y);
+    miniCtx.save();
+    miniCtx.translate(markerPoint.x, markerPoint.y);
     miniCtx.rotate(({ up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 })[player.facing] || 0);
     miniCtx.fillStyle = "#65ead7";
     miniCtx.strokeStyle = "#f5e9ca";
@@ -8898,7 +8957,7 @@
     const point = worldToScreen(prop, shakeX, shakeY);
     const scale = camera.zoom;
     if (prop.kind === "questBoard") {
-      const indoor = ["guild", "shop", "clinic", "general-store", "inn", "dungeon"].includes(currentMapId);
+      const indoor = world.kind === "interior" || world.kind === "dungeon";
       const boardDrawer = indoor ? Art.drawInteriorSprite : Art.drawEnvironmentSprite;
       if (prop.boardId === "deck-loadout") drawSkillPanelLabel(prop, shakeX, shakeY);
       boardDrawer(ctx, {
