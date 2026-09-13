@@ -5786,6 +5786,7 @@
       heroSummary: "",
       enemySummaries: [],
       cancelledActors: [],
+      actionHitCount: Math.max(1, Math.floor(Number(heroSkill?.hitResolution?.hit_count) || 1)),
     };
     battle.actingUnitId = actionOrder[0]?.actorId || null;
     battle.actingUnitIds = [];
@@ -5800,6 +5801,10 @@
     resolution.elapsed += dt;
     resolution.actionElapsed += dt;
     const current = resolution.actionOrder?.[resolution.actionIndex] || null;
+    const currentSkill = current?.actorId === battle.hero.id && resolution.heroAction?.type === "skill"
+      ? Skills.getSkill(resolution.heroAction.skillId)
+      : null;
+    resolution.actionHitCount = Math.max(1, Math.floor(Number(currentSkill?.hitResolution?.hit_count) || 1));
     battle.actingUnitId = current?.actorId || null;
     battle.actingUnitIds = [];
 
@@ -5898,6 +5903,7 @@
       if (damageEffect) {
         const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
         const recheck = Boolean(skill.hitResolution?.recheck_attack_path_each_hit);
+        const totalDamageByTarget = new Map();
         const makeHeroHit = (target, hitIndex, attackPath = projectileTrace?.path || heroAction.attackPath) => {
           if (!target) return null;
           const existingDebuff = target.defenceDownUntilRound >= battle.round ? target.defenceDown || 0 : 0;
@@ -5911,13 +5917,17 @@
           const authoredMultiplier = skill.damage
             ? Skills.calculateSkillDamageMultiplier(skill)
             : (damageEffect.scale || skill.power || 1);
-          const totalDamage = Tactics.calculateDamage(battle.hero, target, {
-            defence,
-            multiplier: authoredMultiplier * positional.multiplier,
-            critical: skill.area.shape === "single" && hitIndex === 0 && battleRandom() < playerStats().critChance,
-            minimum: Tactics.MIN_DIRECT_DAMAGE,
-          });
-          const split = Skills.splitDamageLaterHits(totalDamage, hitCount);
+          let split = totalDamageByTarget.get(target);
+          if (!split) {
+            const totalDamage = Tactics.calculateDamage(battle.hero, target, {
+              defence,
+              multiplier: authoredMultiplier * positional.multiplier,
+              critical: skill.area.shape === "single" && battleRandom() < playerStats().critChance,
+              minimum: Tactics.MIN_DIRECT_DAMAGE,
+            });
+            split = Skills.splitDamageLaterHits(totalDamage, hitCount);
+            totalDamageByTarget.set(target, split);
+          }
           return {
             target,
             damage: split[hitIndex] || 0,
@@ -5928,9 +5938,8 @@
           };
         };
         if (projectileTrace) {
-          const initialTargets = projectileTrace.piercing
-            ? projectileTrace.impactedUnits.filter((unit) => skill.friendlyFire || unit.side !== "ally")
-            : projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
+          const initialTargets = projectileTrace.candidateUnits
+            || (projectileTrace.actualTarget ? [projectileTrace.actualTarget] : []);
           heroHitResolvers.push({
             hitCount,
             recheck,
@@ -5951,6 +5960,7 @@
               recheck: false,
               path: [],
               initialTarget: target,
+              initialTargets: [target],
               deliveryMode: skill.deliveryMode,
               arcHeight: skill.arcHeight,
               makeHeroHit,
@@ -6057,13 +6067,16 @@
         // both sides finish acting, so a one-round stance never leaks into
         // the next round.
         battle.evasion = Math.max(battle.evasion || 0, evasionThisRound);
-        const executionHits = [...heroHits];
         for (const resolver of heroHitResolvers) {
           const routedDelivery = ["linear", "arc"].includes(resolver.deliveryMode);
+          const traceCandidates = (trace) => trace?.candidateUnits
+            || trace?.impactedUnits
+            || (trace?.actualTarget ? [trace.actualTarget] : []);
           const traceNow = () => routedDelivery
             ? Tactics.traceAttackPath({
                 origin: battle.hero.cell,
                 target: heroAction.targetCell,
+                path: resolver.path,
                 facing: battle.hero.facing,
                 grid: battle.grid,
                 units: battleUnits(),
@@ -6078,41 +6091,46 @@
               })
             : null;
           const stableTrace = routedDelivery && !resolver.recheck ? traceNow() : null;
-          const trace = resolver.recheck ? traceNow() : stableTrace;
-          const routedTargets = resolver.recheck
-            ? (resolver.piercing ? trace?.impactedUnits : trace?.actualTarget ? [trace.actualTarget] : [])
-            : (resolver.piercing ? resolver.initialTargets : resolver.initialTarget ? [resolver.initialTarget] : []);
-          const targets = routedTargets.filter((target) => resolver.friendlyFire || target.side !== "ally");
-          for (const target of targets) {
-            for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
+          const initialTargets = resolver.initialTargets || (resolver.initialTarget ? [resolver.initialTarget] : []);
+          for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
+            // each_hit re-scans after the previous hit has already changed HP
+            // and occupancy. initial_only keeps its original route candidates.
+            const trace = resolver.recheck ? traceNow() : stableTrace;
+            const routedTargets = resolver.recheck ? traceCandidates(trace) : initialTargets;
+            for (const target of routedTargets) {
+              if (!target.alive || target.hp <= 0) continue;
               const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
-              if (hit) executionHits.push(hit);
+              if (!hit) continue;
+              const hitRoll = Tactics.rollHit({
+                accuracy: battle.hero.accuracy,
+                accuracyMultiplier: skill?.accuracyMultiplier ?? 1,
+                evasion: battleTargetEvasion(target),
+                accuracyPenalties: [(FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) * 100],
+              }, battleRandom);
+              if (!hitRoll.hit) {
+                // A miss is not an impact: keep scanning the same attack path
+                // so an evading front unit does not protect a unit behind it.
+                heroMissCount += 1;
+                battle.effects.push({ cell: { ...target.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
+                addSystemMessage("combat", `${skill?.name || "攻擊"}對${target.name}未命中`);
+                continue;
+              }
+              if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
+              else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...target.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
+              if (resolver.friendlyFire || target.side !== "ally") {
+                const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount);
+                addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
+                Tactics.applyInterrupt(
+                  battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
+                  battleNumber(skill.interrupt),
+                );
+                executedHeroHits.push(hit);
+              }
+              // A successful unit is the impact for a normal delivery, even
+              // when friendly-fire is disabled. Piercing deliveries continue.
+              if (!resolver.piercing) break;
             }
           }
-        }
-        for (const hit of executionHits) {
-          if (!hit.target.alive || hit.target.hp <= 0) continue;
-          const hitRoll = Tactics.rollHit({
-            accuracy: battle.hero.accuracy,
-            accuracyMultiplier: skill?.accuracyMultiplier ?? 1,
-            evasion: battleTargetEvasion(hit.target),
-            accuracyPenalties: [(FighterEffects?.accuracyPenalty(battle.hero, battle.round) || 0) * 100],
-          }, battleRandom);
-          if (!hitRoll.hit) {
-            heroMissCount += 1;
-            battle.effects.push({ cell: { ...hit.target.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
-            addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}未命中`);
-            continue;
-          }
-          if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
-          else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...hit.target.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
-          const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount);
-          addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
-          Tactics.applyInterrupt(
-            battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
-            battleNumber(skill.interrupt),
-          );
-          executedHeroHits.push(hit);
         }
         for (const status of statusTargets) {
           if (!status.target.alive || status.target.hp <= 0) continue;
@@ -7863,6 +7881,12 @@
       : stopped
         ? 1 - Core.clamp((unit.stopFlash || 0) / .48, 0, 1)
         : 0;
+    const actionHitCount = Math.max(1, Number(battle.actionResolution?.actionHitCount) || 1);
+    const actionStrikeProgress = actionHitCount > 1
+      ? actionProgress >= .999
+        ? 1
+        : (actionProgress * actionHitCount) % 1
+      : actionProgress;
     const visualState = hurt ? "hurt" : stopped ? "stop" : acting ? "attack" : locomotion.state;
     let artBox = null;
     if (unit.side === "ally") {
@@ -7877,7 +7901,7 @@
         state: visualState,
         locomotion,
         phase: elapsed,
-        progress: actionProgress,
+        progress: actionStrikeProgress,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         // The old selected ring and AP orbit were persistent visual noise; tile
         // overlays/cursor already communicate tactical selection.
@@ -7894,7 +7918,7 @@
         state: visualState,
         locomotion,
         battleDiagonal: layout.projected,
-        progress: actionProgress,
+        progress: actionStrikeProgress,
         selected: false,
       });
     }

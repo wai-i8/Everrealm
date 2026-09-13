@@ -286,7 +286,7 @@
   function traceAttackPath(options = {}) {
     const origin = cellOf(options.origin || options.caster);
     const target = cellOf(options.target || options.intendedTarget);
-    if (!origin || !target) return { path: [], intendedTarget: null, actualTarget: null, firstImpactCell: null, blocked: false, stoppedReason: "invalid-cell" };
+    if (!origin || !target) return { path: [], intendedTarget: null, actualTarget: null, candidateUnits: [], firstImpactCell: null, blocked: false, stoppedReason: "invalid-cell" };
     const deliveryMode = options.deliveryMode || "linear";
     const path = deliveryMode === "pathless"
       ? []
@@ -298,6 +298,7 @@
       path,
       intendedTarget: copyCell(target),
       actualTarget: null,
+      candidateUnits: [],
       impactedUnits: [],
       firstImpactCell: null,
       blocked: false,
@@ -318,7 +319,7 @@
         && terrainBlocksDelivery(options.grid, cell, deliveryMode, projectileHeight)) {
         result.firstImpactCell = copyCell(cell);
         result.blocked = true;
-        result.stoppedReason = "terrain";
+        result.stoppedReason ||= "terrain";
         result.impactHeight = projectileHeight;
         break;
       }
@@ -328,15 +329,17 @@
         && sameCell(cellOf(candidate), cell)
         && (deliveryMode !== "arc" || arcIntersectsUnit(options.grid, cell, candidate, projectileHeight)));
       if (unit) {
-        if (!result.firstImpactCell) result.firstImpactCell = copyCell(cell);
+        const firstUnitImpact = !result.firstImpactCell;
+        if (firstUnitImpact) result.firstImpactCell = copyCell(cell);
         if (!result.actualTarget) result.actualTarget = unit;
-        result.impactedUnits.push(unit);
+        result.candidateUnits.push(unit);
+        if (result.piercing || result.impactedUnits.length === 0) result.impactedUnits.push(unit);
         result.blocked = true;
         result.blockedBy ||= unit;
-        result.stoppedReason = "unit";
-        result.impactHeight = projectileHeight;
+        result.stoppedReason ||= "unit";
+        if (firstUnitImpact) result.impactHeight = projectileHeight;
         const maxPierce = options.maxPierce == null ? Infinity : Math.max(1, Math.trunc(Number(options.maxPierce) || 1));
-        if (!result.piercing || result.impactedUnits.length >= maxPierce) break;
+        if (result.piercing && result.impactedUnits.length >= maxPierce) break;
       }
     }
     return result;
@@ -1708,10 +1711,11 @@
         maxPierce: action.maxPierce,
         friendlyFire: action.friendlyFire,
       });
-      const hasImpactForAction = action.targetId == null || (action.piercing
-        ? trace.impactedUnits.some((unit) => String(unit.id) === String(action.targetId))
-        : Boolean(trace.actualTarget));
-      const invalidated = trace.stoppedReason === "terrain" || !hasImpactForAction;
+      const candidateUnits = trace.candidateUnits || trace.impactedUnits || [];
+      const hasImpactForAction = action.targetId == null
+        ? Boolean(trace.actualTarget) || trace.stoppedReason !== "terrain"
+        : candidateUnits.some((unit) => String(unit.id) === String(action.targetId));
+      const invalidated = !hasImpactForAction;
       if (invalidated) {
         return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
       }

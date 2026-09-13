@@ -824,7 +824,7 @@
     if ((settings.actor || settings.kind) === "player") {
       const battleDiagonal = drawBattleFighterDiagonal(ctx, settings);
       if (battleDiagonal) return battleDiagonal;
-      if (settings.state === "stop") {
+      if (["attack", "hurt", "stop"].includes(settings.state)) {
         const reaction = drawLocomotionReaction(ctx, settings, settings.classId || "warrior");
         if (reaction) return reaction;
       }

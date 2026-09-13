@@ -1873,6 +1873,8 @@ function splitDamageLaterHits(totalDamage, hitCount) {
 
 所有 Hit 加埋必須**精確等於** `totalDamage`。
 
+所有 `hit_count > 1` 嘅傷害技能都由同一個 multi-hit resolver 處理，唔按個別技能寫另一套判定。每一個 Hit 都會獨立擲一次命中率，並播放一個獨立 strike；所以 `hit_count = 2/3/5/6/8` 就分別顯示兩／三／五／六／八段攻擊。命中率係逐 Hit 計，唔係將整招只擲一次再複製結果。
+
 ---
 
 ## 22.4 Multi-hit Impact / Attack Path 判定
@@ -1915,10 +1917,11 @@ hitJudgementMode: "each_hit"
 1. 保留同一個 original intended target。
 2. 保留同一條 action execution 時生成嘅 ordered attackPath。
 3. **重新用目前 battle state 由 path 第一格開始掃。**
-4. 找目前第一個合法 impact unit / blocker。
-5. 結算嗰一 Hit。
-6. 即時更新死亡、occupancy、HP 等 battle state。
-7. 下一 Hit 再由 path 起點重新掃一次。
+4. 按路線順序收集候選單位，逐個獨立擲命中率。
+5. 命中先係 actual impact；MISS／閃避唔係 impact，繼續掃同一條路線嘅下一隻單位。
+6. 普通非貫通技能命中第一隻單位後截停；friendly-fire 關閉時，成功命中友軍仍然會阻擋，只係唔扣友軍血。貫通技能命中後繼續處理後續候選單位。
+7. 結算嗰一 Hit，並即時更新死亡、occupancy、HP 等 battle state。
+8. 下一 Hit 再由 path 起點重新掃一次。
 
 例如連擊揀左前：
 
@@ -1948,6 +1951,14 @@ Hit 1 → A
 Hit 2 → A
 ```
 
+如果 A 嘅命中率判定 MISS：
+
+```text
+Hit 1 → A MISS
+繼續沿 path → B
+Hit 1 → B（再獨立擲一次命中率）
+```
+
 如果前面所有合法單位都已經消失，而且 path 尾端亦冇合法 impact：
 
 ```text
@@ -1970,7 +1981,9 @@ Hit 2 → A
 
 就使用另一個具名 resolver 行為。
 
-第一版唔應將 `initial_only` 偷換成 `each_hit`；具體後續 Hit target-lock 行為由該技能資料／測試定義。
+第一版唔應將 `initial_only` 偷換成 `each_hit`；`initial_only` 保留初次保存嘅路線候選順序，唔重新生成 path。
+
+`initial_only` 仍然每一 Hit 獨立計命中率，並使用初次保存嘅路線候選順序；MISS 只會沿該固定路線繼續檢查下一個候選，不會重新生成另一條 path。
 
 ---
 
@@ -2475,6 +2488,8 @@ Caster → 後 → 左後
 - 正前 A 第一 Hit 未死 → 第二 Hit 仍然命中 A。
 - 正前 A 第一 Hit 死亡 → 第二 Hit 重新掃 path，命中左前 B。
 - 三／五連擊每 Hit 都按 `each_hit` 模式重新掃同一條 path。
+- 每一 Hit 都獨立計命中率；前排 A MISS 時，該一 Hit 繼續掃到 B。
+- 六／八段奧義同樣由 shared multi-hit resolver 處理，只按資料嘅 `hit_count` 播放 strike、拆傷害同逐段判定。
 - path 已冇合法 impact → 剩餘 Hit miss，唔自動改 target。
 - `initial_only` 技能唔可以錯用 `each_hit` resolver。
 

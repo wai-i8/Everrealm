@@ -176,13 +176,13 @@ raw_multiplier = sqrt(AP / 3)
 final_total_multiplier = raw_multiplier × utility_multiplier
 ```
 
-`kentotsu` is `3 AP = 1.0×`. Only an authored non-damage control/status utility applies `0.8`; multi-hit count, range, speed, delivery and height do not. Fixed HP skills use their explicit `source_defined_fixed_damage` model and never also apply the square-root formula. Multi-hit totals are calculated once, then split with remainder assigned to later hits (`splitDamageLaterHits`).
+`kentotsu` is `3 AP = 1.0×`. Only an authored non-damage control/status utility applies `0.8`; multi-hit count, range, speed, delivery and height do not. Fixed HP skills use their explicit `source_defined_fixed_damage` model and never also apply the square-root formula. Multi-hit totals are calculated once, then split with remainder assigned to later hits (`splitDamageLaterHits`). Every hit then rolls accuracy independently and the action animation repeats once per `hit_count`; this is one shared resolver for all six Fighter multi-hit skills: `rendan` (2), `korendan` (3), `byakkorendan` (5), `lusedes_da` (3), `lusedes_koku` (8), and `lusedes_tan` (6).
 
-`rendan`, `korendan`, and `byakkorendan` use `each_hit` plus `recheck_attack_path_each_hit: true`, keeping the original intended target/path. `lusedes_da`, `lusedes_koku`, and `lusedes_tan` use `initial_only` and do not rescan.
+`rendan`, `korendan`, and `byakkorendan` use `each_hit` plus `recheck_attack_path_each_hit: true`, keeping the original intended target/path. `lusedes_da`, `lusedes_koku`, and `lusedes_tan` use `initial_only` and do not rescan. In either mode, a MISS／evade is not an impact: the current Hit continues to the next unit on the saved route; only a successful non-piercing impact stops the route.
 
 ### Range, height and path
 
-`range_cells_relative` selects the intended target; it never substitutes for attack path. For every facing, runtime rotates `[lateral, depth]` deterministically. Linear skills use shared `facingOrthogonalPriority`: forward-first in the forward half, lateral-first in the rear half, and lateral-only on the same row. `traceAttackPath` checks terrain and the first living unit in order; a friendly unit still blocks even when friendly-fire damage is disabled. Pathless and arc skills do not use ground-cell interception.
+`range_cells_relative` selects the intended target; it never substitutes for attack path. For every facing, runtime rotates `[lateral, depth]` deterministically. Linear skills use shared `facingOrthogonalPriority`: forward-first in the forward half, lateral-first in the rear half, and lateral-only on the same row. `traceAttackPath` returns ordered living route candidates after terrain／arc checks. A candidate that MISSes is skipped for that Hit, so the route can reach a unit behind it; a successful friendly candidate still blocks when friendly-fire damage is disabled. Pathless skills retain their authored effect area.
 
 Height validation compares `target.height - caster.height` against `up` and `down`. `down: unlimited` remains true unlimited semantics. `status: uncertain` is surfaced in the detail UI and rejects non-zero deltas when a height context is supplied; flat `height=0` battlefields remain playable.
 
