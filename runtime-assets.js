@@ -62,6 +62,7 @@
     "locomotion.js?v=20260913-01",
     "footstep-sfx.js?v=20260913-02",
     "character-art.js",
+    "game/battle-sfx.js?v=20260913-01",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
     "game/system-feedback.js",
