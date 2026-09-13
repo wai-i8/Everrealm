@@ -3010,7 +3010,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-info-image: url("assets/ui/ui-info-v1.png");
   --ui-panel-compact-max: 16rem;
   --ui-panel-medium-max: 32rem;
-  --ui-panel-wide-max: 66rem;
+  --ui-panel-standard-max: 54rem;
   --ui-window-min-width: 16rem;
   --ui-skill-badge-width: 3.45rem;
   --ui-skill-badge-height: 1.5rem;
@@ -3165,16 +3165,17 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-window.ui-window { overflow: hidden; }
 .facility-overlay[data-panel-size="compact"] { --ui-panel-width: var(--ui-panel-compact-max); }
 .facility-overlay[data-panel-size="medium"] { --ui-panel-width: var(--ui-panel-medium-max); }
-.facility-overlay[data-panel-size="wide"] { --ui-panel-width: var(--ui-panel-wide-max); }
+.facility-overlay[data-panel-size="standard"] { --ui-panel-width: var(--ui-panel-standard-max); }
 .facility-overlay[data-panel-size] .facility-window.ui-window {
-  width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
-  max-width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
+  width: min(var(--ui-panel-width, var(--ui-panel-standard-max)), calc(100vw - 2rem));
+  max-width: min(var(--ui-panel-width, var(--ui-panel-standard-max)), calc(100vw - 2rem));
 }
 .facility-overlay[data-panel-size="compact"] .facility-window.ui-window,
-.facility-overlay[data-panel-size="medium"] .facility-window.ui-window {
+.facility-overlay[data-panel-size="medium"] .facility-window.ui-window,
+.facility-overlay[data-panel-size="standard"] .facility-window.ui-window {
   min-height: 0;
 }
-.facility-overlay[data-panel-size="wide"][data-facility-tab="deck"] .facility-window { min-height: 0; }
+.facility-overlay[data-panel-size="standard"][data-facility-tab="deck"] .facility-window { min-height: 0; }
 .facility-header.ui-header {
   position: relative;
   display: flex;
@@ -7498,3 +7499,51 @@ html body [aria-disabled="true"] {
 .primary-button::after,
 .secondary-button::after,
 .facility-action-button::after { content: none !important; display:none !important; }
+
+/* Facility sizing is content-bounded: bitmap presence must never determine
+   the window or inventory grid dimensions. */
+.facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+  grid-template-rows: repeat(3, 7rem) !important;
+  grid-auto-rows: 7rem !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+  height: 7rem !important;
+  min-height: 7rem !important;
+  aspect-ratio: auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art {
+  height: 4.6rem !important;
+  min-height: 0 !important;
+  align-self: center !important;
+}
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .equipment-item-art,
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .standalone-item-icon,
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+.facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+  width: min(3.7rem, 78%) !important;
+  height: min(3.7rem, 78%) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: auto !important;
+}
+
+@media (max-width: 820px) {
+  .facility-overlay[data-facility-tab="bag"] .inventory-icon-grid {
+    grid-template-rows: repeat(3, 5.8rem) !important;
+    grid-auto-rows: 5.8rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item {
+    height: 5.8rem !important;
+    min-height: 5.8rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art {
+    height: 3.7rem !important;
+  }
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .equipment-item-art,
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .standalone-item-icon,
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
+  .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
+    width: min(3rem, 78%) !important;
+    height: min(3rem, 78%) !important;
+  }
+}

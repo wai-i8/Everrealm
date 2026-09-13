@@ -72,7 +72,7 @@ decoration，HTML/CSS 才係內容尺寸、對齊同 scroll 嘅 sizing system。
 Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要同時具備：
 
 - `min-width` / `min-height` 只保證最小可讀性；
-- panel width follows its sizing tier; the wide ceiling is `min(66rem, 100vw - 2rem)`；
+- panel width follows its sizing tier; the standard ceiling is `min(54rem, 100vw - 2rem)`；
 - `max-height: min(44rem, 100vh - 2rem)`；
 - header、footer 固定喺 frame 內，content 以 `minmax(0, 1fr)` 伸縮；
 - content 超過 viewport 時只由 content scroll，唔令 frame 或 controls 被推出畫面；
@@ -145,9 +145,9 @@ Panel 唔可以因為 viewport 仲有空位就預設最大寬度；寬度必須�
 
 - `compact`：簡單唯讀資訊、短直向列表、確認；
 - `medium`：較豐富但仍然單一主題嘅資料；
-- `wide`：真正需要兩欄嘅管理、Inventory、Skill Tree 或 configuration。
+- `standard`：需要兩欄但仍然要受控嘅管理畫面，例如 Inventory 同 Deck configuration；
 
-`facility-panel` 以 `data-panel-size` 套用同一套 compact／medium／wide max-width。正常左側 `戰技面板` viewer 使用 compact bounded content region；城門 `戰技配置` 先使用 wide 兩欄 shell。短名單或 slot list 要用 `max-width`、`minmax(0, 1fr)`、Grid/Flex containment，唔可以因 screen space 拉成一大片空白。
+`facility-panel` 以 `data-panel-size` 套用同一套 compact／medium／standard max-width。正常左側 `戰技面板` viewer 使用 compact bounded content region；需要兩欄嘅管理畫面使用 standard bounded shell。短名單或 slot list 要用 `max-width`、`minmax(0, 1fr)`、Grid/Flex containment，唔可以因 screen space 拉成一大片空白。
 
 一個 screen 只保留一個 primary page identity。eyebrow、header、body title 同 footer
 唔可以用稍為不同嘅字眼重複同一個頁名；section label 只可用於真正不同嘅 subsection。
