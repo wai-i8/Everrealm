@@ -307,6 +307,7 @@
   let inventoryPage = 0;
   let equipmentShopCategory = "weapon";
   let shopTradeMode = "buy";
+  let selectedShopItemId = null;
   let weakPotionStepsRemaining = 0;
   let weakPotionDistanceRemainder = 0;
   let pendingCommissionDetailId = null;
@@ -894,6 +895,7 @@
     inventoryPage = 0;
     equipmentShopCategory = "weapon";
     shopTradeMode = "buy";
+    selectedShopItemId = null;
     inventoryFixtureCount = 0;
     weakPotionStepsRemaining = 0;
     weakPotionDistanceRemainder = 0;
@@ -908,10 +910,14 @@
     const starterUpperBody = starterGear.upperBody;
     const knownEquipment = new Set(Expansion.DEFAULT_EQUIPMENT_CATALOG.map((item) => item.id));
     const savedOwned = Array.isArray(data.ownedEquipment) ? data.ownedEquipment.filter((id) => knownEquipment.has(id)) : [];
+    const ownedWithStarters = [...savedOwned];
+    for (const starterId of [starterWeapon, starterUpperBody]) {
+      if (!ownedWithStarters.includes(starterId)) ownedWithStarters.push(starterId);
+    }
     const gearState = Expansion.normalizeEquipmentState({
       coins: player.coins,
       level: player.level,
-      ownedEquipment: [...new Set([starterWeapon, starterUpperBody, ...savedOwned])],
+      ownedEquipment: ownedWithStarters,
       classId: playerClassId,
       equipped: data.equipped || { weapon: starterWeapon, body: starterUpperBody, charm: null },
     });
@@ -3179,6 +3185,8 @@
     const stats = playerStats();
     const maxHp = stats.maxHp;
     const items = [];
+    const equipmentCounts = new Map();
+    for (const id of ownedEquipment) equipmentCounts.set(id, (equipmentCounts.get(id) || 0) + 1);
     const equipmentSlotOrder = { head: 0, weapon: 1, upperBody: 2, lowerBody: 3, hands: 4, feet: 5, charm: 6 };
     const equipmentSlotNames = { head: "頭部", weapon: "武器", upperBody: "上身", lowerBody: "下身", hands: "手部", feet: "腳部", charm: "飾物" };
     for (const item of Expansion.DEFAULT_EQUIPMENT_CATALOG
@@ -3194,7 +3202,7 @@
         id: item.id,
         name: item.name,
         category: `裝備 · ${equipmentSlotNames[item.slot] || item.slot}`,
-        quantity: 1,
+        quantity: equipmentCounts.get(item.id) || 1,
         description: item.description,
         detail: `${statText(item.stats)} · LV.${item.requiredLevel}`,
         equipment: item,
@@ -3419,6 +3427,50 @@
     return 10;
   }
 
+  function shopSellItems() {
+    const sellItems = [];
+    const equipmentCounts = new Map();
+    for (const id of ownedEquipment) equipmentCounts.set(id, (equipmentCounts.get(id) || 0) + 1);
+    for (const item of Expansion.DEFAULT_EQUIPMENT_CATALOG) {
+      const quantity = equipmentCounts.get(item.id) || 0;
+      const sellPrice = equipmentSellPrice(item);
+      if (!quantity || sellPrice <= 0) continue;
+      sellItems.push({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        quantity,
+        equipment: item,
+        isEquipped: Expansion.isEquipmentEquipped({ equipped }, item.id),
+        sellPrice,
+        statText: statText(item.stats),
+      });
+    }
+    if (player.potions > 0) {
+      sellItems.push({
+        id: "healing_potion",
+        name: "小型回復藥",
+        quantity: player.potions,
+        description: GENERAL_STORE_GOODS_BY_ID.get("healing_potion")?.description || "回復 30 HP。",
+        sellPrice: generalStoreSellPrice("healing_potion"),
+      });
+    }
+    for (const [id, quantity] of Object.entries(inventory).filter(([, amount]) => Number(amount) > 0)) {
+      const item = ItemData?.getItem?.(id);
+      if (!item || ["ui", "currency", "quest"].includes(item.kind) || item.sellable === false) continue;
+      sellItems.push({
+        id,
+        name: item.name || inventoryItemName(id),
+        quantity: Number(quantity),
+        description: item.description || materialDescription(id),
+        sellPrice: generalStoreSellPrice(id),
+      });
+    }
+    return sellItems
+      .filter((item) => item.sellPrice > 0)
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-HK"));
+  }
+
   function renderShopFacility() {
     const atShop = currentMapId === "shop";
     const discountRate = guildDiscountRate();
@@ -3435,16 +3487,15 @@
       guildRankName: discountRate ? guildRankInfo().name : "",
       coins: player.coins,
       level: player.level,
-      ownedEquipment,
-      equipped,
+      selectedShopItemId,
       catalog: Expansion.DEFAULT_EQUIPMENT_CATALOG,
       fighterShopItemIdSet: FIGHTER_SHOP_ITEM_ID_SET,
       equipmentMatchesClass,
-      equipmentSellPrice,
-      isEquipmentEquipped: Expansion.isEquipmentEquipped,
       statText,
       equipmentIconHtml,
+      itemIconHtml,
       coinAmountHtml,
+      sellItems: shopSellItems(),
     });
   }
 
@@ -3460,9 +3511,10 @@
       inventory,
       goods: GENERAL_STORE_GOODS,
       goodsById: GENERAL_STORE_GOODS_BY_ID,
-      itemData: ItemData,
-      generalStoreSellPrice,
-      materialDescription,
+      selectedShopItemId,
+      sellItems: shopSellItems(),
+      equipmentIconHtml,
+      statText,
       itemIconHtml,
       coinAmountHtml,
     });
@@ -3485,14 +3537,17 @@
   }
 
   function sellEquipmentItem(itemId) {
-    if (currentMapId !== "shop") return showToast("出售裝備要親身去裝備店。", "danger");
+    if (!['shop', 'general-store'].includes(currentMapId)) return showToast("出售物品要親身去商店。", "danger");
     const item = equipmentItem(itemId);
     if (!item || !ownedEquipment.includes(item.id)) return showToast("你冇呢件裝備。", "danger");
-    if (Expansion.isEquipmentEquipped({ equipped }, item.id)) return showToast("請先卸下裝備。", "danger");
+    const ownedCount = ownedEquipment.filter((id) => id === item.id).length;
+    if (Expansion.isEquipmentEquipped({ equipped }, item.id) && ownedCount <= 1) return showToast("請先卸下裝備。", "danger");
     const sellPrice = equipmentSellPrice(item);
     if (sellPrice <= 0) return showToast("呢件裝備唔可以出售。", "danger");
-    ownedEquipment = ownedEquipment.filter((id) => id !== item.id);
+    const ownedIndex = ownedEquipment.indexOf(item.id);
+    ownedEquipment.splice(ownedIndex, 1);
     player.coins = Math.min(99999, player.coins + sellPrice);
+    selectedShopItemId = null;
     sound.coin();
     showToast(`已出售：${item.name} · +${sellPrice} 金幣`, "good");
     addSystemMessage("item", `出售 ${item.name} · +${sellPrice} 金幣`);
@@ -3502,7 +3557,7 @@
   }
 
   function sellGeneralStoreItem(itemId) {
-    if (currentMapId !== "general-store") return showToast("出售物品要親身去道具店。", "danger");
+    if (!['shop', 'general-store'].includes(currentMapId)) return showToast("出售物品要親身去商店。", "danger");
     const sellPrice = generalStoreSellPrice(itemId);
     if (sellPrice <= 0) return showToast("呢件物品唔可以出售。", "danger");
     const itemName = inventoryItemName(itemId);
@@ -3516,6 +3571,7 @@
       if (inventory[itemId] <= 0) delete inventory[itemId];
     }
     player.coins = Math.min(99999, player.coins + sellPrice);
+    selectedShopItemId = null;
     sound.coin();
     showToast(`已出售：${itemName} · +${sellPrice} 金幣`, "good");
     addSystemMessage("item", `出售 ${itemName} · +${sellPrice} 金幣`);
@@ -4194,6 +4250,7 @@
   function clearAllFacilityWindows() {
     selectedInventoryItemId = null;
     pendingInventoryDestroyItemId = null;
+    selectedShopItemId = null;
     for (const state of facilityWindows.values()) state.panel.remove();
     facilityWindows.clear();
     activeFacilityWindow = null;
@@ -4258,7 +4315,10 @@
     }
 
     const state = createFacilityWindow(normalizedTab, normalizedContext);
-    if (normalizedTab === "shop") shopTradeMode = "buy";
+    if (normalizedTab === "shop") {
+      shopTradeMode = "buy";
+      selectedShopItemId = null;
+    }
     activateFacilityWindow(state);
     const blocksMovement = syncFacilityMovementMode();
     if (blocksMovement) {
@@ -4284,6 +4344,7 @@
       selectedInventoryItemId = null;
       pendingInventoryDestroyItemId = null;
     }
+    if (state.tab === "shop") selectedShopItemId = null;
     if (state.context === "guild" || state.tab === "guild") closeGuildCommissionDetail();
     if (state === activeFacilityWindow) {
       cancelDeckDrag();
@@ -4492,7 +4553,8 @@
     const equipment = equipmentItem(id);
     if (equipment && ownedEquipment.includes(equipment.id)) {
       if (Expansion.isEquipmentEquipped({ equipped }, equipment.id)) return showToast("請先卸下裝備。", "danger");
-      ownedEquipment = ownedEquipment.filter((ownedId) => ownedId !== equipment.id);
+      const ownedIndex = ownedEquipment.indexOf(equipment.id);
+      ownedEquipment.splice(ownedIndex, 1);
       itemName = equipment.name;
       destroyed = true;
     } else if (id === "healing_potion") {
@@ -10093,11 +10155,17 @@
     },
     "shop-category": ({ category }) => {
       equipmentShopCategory = category;
+      selectedShopItemId = null;
       renderShopFacility();
     },
     "shop-trade-mode": ({ mode: tradeMode }) => {
       shopTradeMode = tradeMode;
+      selectedShopItemId = null;
       facilityContext === "general-store" ? renderGeneralStoreFacility() : renderShopFacility();
+    },
+    "select-shop-item": ({ itemId }) => {
+      selectedShopItemId = itemId;
+      renderFacility();
     },
     "commission-detail": ({ offerId }) => renderGuildCommissionDetail(offerId),
     accept: ({ offerId }) => acceptGuildOffer(offerId),

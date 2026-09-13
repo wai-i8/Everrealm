@@ -14,6 +14,7 @@
     const command = { type };
     switch (type) {
       case "select-item":
+      case "select-shop-item":
       case "buy":
       case "equip":
       case "unequip":

@@ -104,7 +104,7 @@
   function normalizeEquipmentState(raw, catalog = DEFAULT_EQUIPMENT_CATALOG) {
     const state = raw && typeof raw === "object" ? raw : {};
     const ownedSource = Array.isArray(state.ownedEquipment) ? state.ownedEquipment : [];
-    const ownedEquipment = [...new Set(ownedSource.map((id) => String(id || "").trim()).filter(Boolean))];
+    const ownedEquipment = ownedSource.map((id) => String(id || "").trim()).filter(Boolean);
     const sourceEquipped = state.equipped && typeof state.equipped === "object" ? state.equipped : {};
     const items = catalog === DEFAULT_EQUIPMENT_CATALOG ? catalog : normalizeEquipmentCatalog(catalog);
     const equipped = {};
@@ -166,9 +166,9 @@
     if (!item) return { ok: false, reason: "not-found", item: null };
     if (item.classId && base.classId && item.classId !== base.classId) return { ok: false, reason: "class", item };
     if (item.purchasable === false) return { ok: false, reason: "not-for-sale", item };
-    if (base.ownedEquipment.includes(item.id)) return { ok: false, reason: "already-owned", item };
     // Required level governs wearing the item, not buying it.  Players may
-    // purchase higher-level equipment in advance and keep it in inventory.
+    // purchase higher-level equipment in advance and keep buying copies while
+    // they can afford them.
     if (base.coins < item.cost) return { ok: false, reason: "coins", item };
     return { ok: true, reason: null, item };
   }
