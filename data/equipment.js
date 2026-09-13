@@ -66,9 +66,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "fighter-equipment",
-      "index": 0
+      "type": "image",
+      "src": "assets/equipment/fighter/novice-gloves-v2.png"
     }
   },
   {

@@ -465,7 +465,9 @@
   function startTitleBgm({ restart = false } = {}) {
     bgm.setEnabled(false);
     pauseMusicElement(battleBgmAudio);
-    if (!titleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
+    // Login/registration/title music is always enabled by default. A stale
+    // in-game music preference from another account must not silence this flow.
+    if (!titleBgmAudio || pageAudioSuspended || document.visibilityState !== "visible") return;
     if (restart) {
       try { titleBgmAudio.currentTime = 0; } catch (_) {}
     }
@@ -488,14 +490,14 @@
     if (document.visibilityState !== "visible") return;
     pageAudioSuspended = false;
     sound.resume();
+    if (mode === "title") {
+      startTitleBgm();
+      return;
+    }
     if (!musicEnabled) {
       bgm.suspend?.();
       titleBgmAudio?.pause();
       battleBgmAudio?.pause();
-      return;
-    }
-    if (mode === "title") {
-      startTitleBgm();
       return;
     }
     stopTitleBgm({ reset: false });
@@ -511,11 +513,11 @@
   }
 
   function unlockGameAudioFromGesture() {
-    if ((!musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
+    if ((mode !== "title" && !musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
     const titlePlaying = mode === "title" && titleBgmAudio && titleBgmAudio.paused === false;
     const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
     const mapPlaying = mode !== "title" && mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
-    if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || !musicEnabled)) return;
+    if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || (mode !== "title" && !musicEnabled))) return;
     audioGestureUnlocked = true;
     resumeGameAudio();
   }
@@ -1288,6 +1290,9 @@
     if (result?.status === "new-account") {
       const registeredName = normalizeCharacterName(pendingRegistrationCharacterName || user.displayName);
       if (registeredName) player.name = registeredName;
+      // A brand-new account starts with music ON even if this browser previously
+      // stored an OFF preference for another player. They can disable it in-game.
+      setMusicEnabled(true);
     } else if (result?.status === "cloud-loaded") {
       pendingRegistrationCharacterName = "";
     }
@@ -3748,7 +3753,11 @@
     if (!result.ok) return showToast("你冇呢一星級嘅技能書。", "danger");
     skillState = result.state;
     sound.crystal();
-    showToast(`抽到 ${Skills.formatSkillBookRank(result.skill.star)}「${result.skill.name}」技能書，已放入物品欄。`, "good");
+    const openedBookRank = Skills.formatSkillBookRank(star);
+    const openedBookMessage = `獲得技能書：${openedBookRank}「${result.skill.name}」`;
+    showToast(`抽到 ${openedBookRank}「${result.skill.name}」技能書，已放入物品欄。`, "good");
+    addSystemMessage("reward", openedBookMessage);
+    announce(openedBookMessage);
     renderFacility();
     saveImportant(false);
   }
@@ -4371,8 +4380,10 @@
     guildCommissionState = consumed.state;
     skillState = granted.state;
     sound.crystal();
+    const envelopeMessage = `獲得格鬥士技能書：${Skills.formatSkillBookRank(safeStar)}「${skill.name}」`;
     showToast(`開封抽到「${skill.name}」技能書；仍須符合格鬥士前置先可以學習。`, "good");
-    announce(`獲得格鬥士技能書：${skill.name}`);
+    addSystemMessage("reward", envelopeMessage);
+    announce(envelopeMessage);
     if (facilityWindows.size) renderFacility();
     updateHud(true);
     saveImportant(false);

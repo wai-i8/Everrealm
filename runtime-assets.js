@@ -9,7 +9,7 @@
     "data/classes.js",
     "rpg-core.js?v=20260913-01",
     "data/items.js",
-    "data/equipment.js",
+    "data/equipment.js?v=20260913-01",
     "data/quests.js",
     "data/skills/monster.js",
     "data/monsters.js",
@@ -34,7 +34,7 @@
     "map/guild-navigation.js",
     "map/field-navigation.generated.js",
     "map/field-navigation.js",
-    "maps/main-town.js",
+    "maps/main-town.js?v=20260913-01",
     "maps/mountain-field.js",
     "maps/mine.js",
     "maps/interiors/guild.js",
@@ -49,7 +49,7 @@
     "expansion-world.js",
     "guild-commission-core.js",
     "tactics-core.js?v=20260912-01",
-    "skill-core.js?v=20260910-12",
+    "skill-core.js?v=20260913-01",
     "monster-ai.js",
     "audio-core.js?v=20260911-01",
     "main-town-bgm-loop.js?v=20260910-04",
@@ -72,7 +72,7 @@
     "game/facility-bag-view.js",
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
-    "game.js?v=20260913-02",
+    "game.js?v=20260913-03",
   ]);
 
   return Object.freeze({ scripts });

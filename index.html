@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260913-03"],
+          ["everrealmStyles", "styles.css?v=20260913-04"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -505,7 +505,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260913-02")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260913-03")}"><\/script>`);
       })();
     </script>
 
@@ -541,7 +541,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260913-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260913-02", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

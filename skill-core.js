@@ -1180,8 +1180,15 @@
   function drawSkillFromBook(bookStar, seedOrSerial, fallbackSerial = 0) {
     const star = validStar(bookStar);
     if (!star) return null;
-    const requestedClass = seedOrSerial && typeof seedOrSerial === "object" ? seedOrSerial.classId : null;
-    const pool = getSkillsByStar(star, requestedClass ? { classId: requestedClass } : null);
+    const requestedClass = seedOrSerial && typeof seedOrSerial === "object"
+      ? normalizeClassId(seedOrSerial.classId, null)
+      : null;
+    // Fighter books are source-authored: the canonical skill data/MD explicitly
+    // records which guild reward-book rank can grant each skill.  Do not infer
+    // Fighter book rarity from AP bands (e.g. 連擊 is ☆☆ despite costing 12 AP).
+    const pool = requestedClass === "fighter"
+      ? getFighterGuildBookPool(star)
+      : getSkillsByStar(star, requestedClass ? { classId: requestedClass } : null);
     if (!pool.length) return null;
     const parts = drawSeedParts(seedOrSerial, fallbackSerial);
     const random = mulberry32(hashString(`${parts.seed}|${star}|${parts.serial}`));

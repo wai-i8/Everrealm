@@ -148,9 +148,12 @@
       canonicalSource: AUTHORING_IMAGE,
     };
     const houses = BUILDINGS.map(makeHouse);
+    const guildFront = authoredAnchor("Guild");
     const spawnPoints = {
-      start: { x: navigationPackage.connectivity.central_seed[0], y: navigationPackage.connectivity.central_seed[1] },
-      guildFront: authoredAnchor("Guild"),
+      // New characters and the title/login background share the same canonical
+      // safe point on the centre brick path directly in front of the Guild.
+      start: { ...guildFront },
+      guildFront,
       shopFront: authoredAnchor("Weapon Shop"),
       clinicFront: authoredAnchor("Hospital / Clinic"),
       generalStoreFront: authoredAnchor("Item / General Store"),
