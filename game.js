@@ -4684,6 +4684,7 @@
   const BATTLE_MOVE_STEP_SECONDS = reducedMotion ? .08 : .24;
   const BATTLE_ACTION_WINDUP_SECONDS = reducedMotion ? .12 : .38;
   const BATTLE_ACTION_LINGER_SECONDS = reducedMotion ? .24 : .7;
+  const BATTLE_ACTION_STRIKE_INTERVAL_SECONDS = reducedMotion ? .18 : .5;
   const BATTLE_SIDE_DAMAGE_BONUS = .15;
   const BATTLE_REAR_DAMAGE_BONUS = .35;
   const BATTLE_MISS_COLOR = "#ffc857";
@@ -5831,17 +5832,25 @@
   function updateActionResolution(dt) {
     const resolution = battle?.actionResolution;
     if (!resolution || battle.phase !== "resolving_action") return;
-    const duration = Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS);
     resolution.elapsed += dt;
     resolution.actionElapsed += dt;
-    advanceHeroHitPresentation(resolution);
     const current = resolution.actionOrder?.[resolution.actionIndex] || null;
     const currentSkill = current?.actorId === battle.hero.id && resolution.heroAction?.type === "skill"
       ? Skills.getSkill(resolution.heroAction.skillId)
       : null;
-    if (!current || !resolution.resolvedActorIds.includes(current.actorId)) {
+    const currentResolved = Boolean(current && resolution.resolvedActorIds.includes(current.actorId));
+    if (!currentResolved) {
       resolution.actionHitCount = Math.max(1, Math.floor(Number(currentSkill?.hitResolution?.hit_count) || 1));
     }
+    const strikeCount = current?.actorId === battle.hero.id && resolution.heroAction?.type === "skill"
+      ? currentResolved ? Math.max(0, Number(resolution.actionHitCount) || 0) : Math.max(1, Number(resolution.actionHitCount) || 1)
+      : 1;
+    const duration = current?.actorId === battle.hero.id && resolution.heroAction?.type === "skill"
+      ? currentResolved && strikeCount <= 0
+        ? Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS)
+        : Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + strikeCount * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS)
+      : Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS);
+    advanceHeroHitPresentation(resolution);
     battle.actingUnitId = current?.actorId || null;
     battle.actingUnitIds = [];
 
@@ -6219,11 +6228,10 @@
         }
         if (heroHitPresentationEvents.length) {
           resolution.actionHitCount = heroHitPresentationEvents.length;
-          const interval = Math.max(.02, BATTLE_ACTION_LINGER_SECONDS / heroHitPresentationEvents.length);
           resolution.heroHitPresentation = {
             events: heroHitPresentationEvents,
             nextIndex: 0,
-            interval,
+            interval: BATTLE_ACTION_STRIKE_INTERVAL_SECONDS,
             nextAt: resolution.actionElapsed,
           };
           advanceHeroHitPresentation(resolution);
@@ -7954,16 +7962,16 @@
     const stopped = !hurt && (unit.stopFlash || 0) > 0;
     const actionResolved = battle.phase === "resolving_action"
       && battle.actionResolution?.resolvedActorIds?.includes(unit.id);
+    const actionHitCount = actionResolved
+      ? Math.max(0, Number(battle.actionResolution?.actionHitCount) || 0)
+      : 1;
     const actionProgress = battle.phase === "resolving_action"
       ? actionResolved
-        ? Core.clamp(((battle.actionResolution?.actionElapsed ?? 0) - BATTLE_ACTION_WINDUP_SECONDS) / Math.max(.01, BATTLE_ACTION_LINGER_SECONDS), 0, 1)
+        ? Core.clamp(((battle.actionResolution?.actionElapsed ?? 0) - BATTLE_ACTION_WINDUP_SECONDS) / Math.max(.01, actionHitCount * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS), 0, 1)
         : 0
       : stopped
         ? 1 - Core.clamp((unit.stopFlash || 0) / .48, 0, 1)
         : 0;
-    const actionHitCount = actionResolved
-      ? Math.max(0, Number(battle.actionResolution?.actionHitCount) || 0)
-      : 1;
     const actionStrikeProgress = actionHitCount <= 0
       ? 0
       : actionHitCount > 1
