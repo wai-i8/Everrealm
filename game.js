@@ -1206,7 +1206,7 @@
       : authStateResolved ? "需要登入才可以開始遊戲" : "正在確認帳戶…";
     systemLogoutButton.hidden = !signedIn;
     continueButton.hidden = !canPlay || !savePersistence?.hasCloudSave?.();
-    exploreSidebar.hidden = !(canPlay && mode !== "title");
+    exploreSidebar.hidden = !(canPlay && mode === "playing");
     stage.dataset.authState = canPlay ? "signed-in" : "signed-out";
   }
 
