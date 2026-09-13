@@ -205,6 +205,16 @@ test("Dialogue is a compact anchored role-only overlay with vertical choices", (
   assert.doesNotMatch(css, /\.dialogue-choice\.selected, \.dialogue-choice:hover\s*\{[^}]*background: var\(--gold\)/);
 });
 
+test("Guild commission detail keeps the list on X but exits the guild after acceptance", () => {
+  const accept = game.match(/function acceptGuildOffer\([\s\S]*?\n  \}\r?\n\r?\n  function claimGuildContract/)?.[0] || "";
+  const detailClose = game.match(/function closeGuildCommissionDetail\(\)[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(game, /guildCommissionDetailCloseButton\?\.addEventListener\("click", closeGuildCommissionDetail\)/);
+  assert.match(detailClose, /guildCommissionDetailPanel\.hidden = true/);
+  assert.doesNotMatch(detailClose, /closeFacility\(/);
+  assert.match(accept, /closeGuildCommissionDetail\(\);\s*closeGuildFacility\(\);/);
+  assert.doesNotMatch(accept, /renderFacility\(\);/);
+});
+
 test("native Main Town camera and click conversion stay in one world space", () => {
   assert.match(mainTownSource, /pixelWidth:\s*navigationPackage\.source\.width/);
   assert.match(mainTownSource, /pixelHeight:\s*navigationPackage\.source\.height/);

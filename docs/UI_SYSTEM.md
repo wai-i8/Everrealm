@@ -227,7 +227,7 @@ Guild 委託主列表使用 compact Status-tier footprint；每個委託 summary
 
 Guild window 可以有非常克制嘅金色 guild accent、委託星級同 progress meter，
 但仍然使用相同 base frame、字級、padding、button 和 scroll rules。正式頁面身份
-為「公會委託」；公會內接受前／詳情頁可以按需要顯示 recommendation、reward 同 contextual action。左側 launcher 開出嘅已接受「任務」卡則只保留任務名稱／狀態、objective、progress 同 progress bar；已完成時底部只顯示提示文字「請返回公會回報任務」，唔顯示建議等級、完成獎勵或可令人誤會會自動傳送嘅回報 button。卡片不可因 decorative frame
+為「公會委託」；公會內接受前／詳情頁可以按需要顯示 recommendation、reward 同 contextual action。玩家撳詳情右上角 X 只關閉詳情並保留委託列表；成功接受委託後則關閉詳情及公會委託視窗，返回探索。左側 launcher 開出嘅已接受「任務」卡則只保留任務名稱／狀態、objective、progress 同 progress bar；已完成時底部只顯示提示文字「請返回公會回報任務」，唔顯示建議等級、完成獎勵或可令人誤會會自動傳送嘅回報 button。卡片不可因 decorative frame
 或固定高度令操作被裁切，窄屏則自然堆疊。Guild action 採深色 inset surface 配暖金細框／hover，
 唔使用大面積金色填滿；文字一律保持 cream／white 高對比。視窗高度由內容決定，唔為短內容保留大幅空白。放棄委託確認框同樣使用 compact content-driven layout。
 

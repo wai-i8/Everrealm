@@ -4298,6 +4298,11 @@
     }
   }
 
+  function closeGuildFacility() {
+    const guildWindow = [...facilityWindows.values()].find((state) => state.tab === "guild" || state.context === "guild");
+    if (guildWindow) closeFacility(guildWindow);
+  }
+
   function setFacilityHelpOpen(open, state = activeFacilityWindow) {
     const popover = state?.helpPopover || facilityHelpPopover;
     const button = state?.helpButton || facilityHelpButton;
@@ -4332,7 +4337,7 @@
     showToast(`已接委託：${result.commission.title}`, "good");
     addSystemMessage("quest", `已接委託：${result.commission.title}`);
     closeGuildCommissionDetail();
-    renderFacility();
+    closeGuildFacility();
     saveImportant(false);
   }
 

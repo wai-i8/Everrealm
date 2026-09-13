@@ -56,7 +56,7 @@
 
 公會委託頁的正式身份是「公會委託」。主畫面只顯示五份固定委託的一行式 summary list：星級、任務名，以及目前活躍任務必要時顯示「進行中／待回報」。唔喺主頁永久顯示「可接委託 N 份／揀一份開始」、目標、推薦等級、進度、報酬等詳細 card。
 
-玩家點其中一行先開獨立可拖 detail popup；detail 先顯示描述、目標、推薦等級、進度、技能書信封 + 金幣報酬，以及接受／放棄／回報 contextual action。主頁及 detail 使用深色/navy content card、克制暖金邊框與 cream 文字；action button 不使用大面積金色填滿配黑字。放棄委託確認視窗保持 compact，清楚顯示會失去目前進度，但不放巨型裝飾 icon 或無用途空白。所有 shared major popup／modal 都遵守 UI System 的 mouse／touch draggable contract，而且 overlay 不 blur 遊戲背景。
+玩家點其中一行先開獨立可拖 detail popup；detail 先顯示描述、目標、推薦等級、進度、技能書信封 + 金幣報酬，以及接受／放棄／回報 contextual action。撳詳情右上角 X 只關閉 detail，保留公會委託列表方便查看其他選項；成功接受委託後則關閉 detail 及整個公會委託視窗，返回探索。主頁及 detail 使用深色/navy content card、克制暖金邊框與 cream 文字；action button 不使用大面積金色填滿配黑字。放棄委託確認視窗保持 compact，清楚顯示會失去目前進度，但不放巨型裝飾 icon 或無用途空白。所有 shared major popup／modal 都遵守 UI System 的 mouse／touch draggable contract，而且 overlay 不 blur 遊戲背景。
 
 同一時間只可進行一份委託；目標完成後仍須返公會回報；五份固定委託都可重複接受。Guild 目前冇額外 help content，因此右上角不顯示 `[i]`；規則亦唔以永久 intro strip 佔位。
 
