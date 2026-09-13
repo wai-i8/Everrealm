@@ -5137,10 +5137,7 @@
     // straight four-cell move needs one click, while A → B → A still keeps and
     // charges the return segment.  Only 「重新移動」 clears prior history.
     const route = battleReachableTiles().find((tile) => tile.nextStep && sameBattleCell(tile, cell));
-    if (!route?.commands) {
-      setBattleMessage("嗰格超出剩餘移動力，或者路線被障礙封住。", true);
-      return false;
-    }
+    if (!route?.commands) return false;
     battle.heroMoveCommands = route.commands.map((command) => ({ ...command, to: command.to ? copyBattleCell(command.to) : undefined }));
     battle.heroMoveDraft = route.path.map(copyBattleCell);
     battle.cursor = copyBattleCell(cell);

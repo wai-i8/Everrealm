@@ -68,9 +68,9 @@
     function element(name) { return overlay?.querySelector?.(`[data-victory-${name}]`) || null; }
     function setText(name, value) { const node = element(name); if (node) node.textContent = String(value ?? ""); }
     function setBar(ratio) { const fill = element("xp-fill"); if (fill) fill.style.width = `${Math.round(clamp01(ratio) * 10000) / 100}%`; }
-    function setPrompt(ready) {
-      setText("prompt", ready ? "返回" : "Click / Enter 跳過動畫");
-      if (overlay) overlay.dataset.ready = String(Boolean(ready));
+    function setPrompt() {
+      setText("prompt", "返回");
+      if (overlay) overlay.dataset.ready = "true";
     }
     function revealLevelUp() {
       if (!state || state.levelUpRevealed || state.afterLevel <= state.beforeLevel) return;
@@ -98,7 +98,7 @@
       renderProgress(1);
       revealLevelUp();
       state.ready = true;
-      setPrompt(true);
+      setPrompt();
       overlay?.classList?.add("is-ready");
       return true;
     }
@@ -138,8 +138,8 @@
         overlay.dataset.ready = "false";
         overlay.classList.remove("is-ready");
       }
-      setText("xp", `+${Math.max(0, Math.round(Number(result.earnedXp) || 0))}`);
-      setText("coins", `+${Math.max(0, Math.round(Number(result.coins) || 0))}`);
+      setText("xp", Math.max(0, Math.round(Number(result.earnedXp) || 0)) > 0 ? `+${Math.max(0, Math.round(Number(result.earnedXp) || 0))}` : "");
+      setText("coins", Math.max(0, Math.round(Number(result.coins) || 0)) > 0 ? `+${Math.max(0, Math.round(Number(result.coins) || 0))}` : "");
       setText("level", `LV.${beforeLevel}`);
       const initialNeed = beforeLevel >= levelCap ? 1 : Math.max(1, Math.round(Number(xpRequired(beforeLevel)) || 1));
       setText("xp-text", beforeLevel >= levelCap ? "MAX" : `${beforeXp} / ${initialNeed} EXP`);
@@ -148,33 +148,28 @@
       if (loot) {
         const drops = Array.isArray(result.drops) ? result.drops.filter(Boolean) : [];
         loot.innerHTML = "";
-        if (!drops.length) {
+        // No placeholder row when empty - the cell just reads blank under its
+        // "戰利品" label, matching how EXP/GOLD go blank instead of showing +0.
+        for (const drop of drops) {
           const item = host?.document?.createElement?.("li");
-          if (item) { item.className = "battle-victory-loot-empty"; item.textContent = ""; loot.appendChild(item); }
-        } else {
-          for (const drop of drops) {
-            const item = host?.document?.createElement?.("li");
-            if (!item) continue;
-            const name = String(drop.name || drop.id || "戰利品");
-            const quantity = Math.max(1, Math.floor(Number(drop.quantity) || 1));
-            item.textContent = `${name} ×${quantity}`;
-            loot.appendChild(item);
-          }
+          if (!item) continue;
+          const name = String(drop.name || drop.id || "戰利品");
+          const quantity = Math.max(1, Math.floor(Number(drop.quantity) || 1));
+          item.textContent = `${name} ×${quantity}`;
+          loot.appendChild(item);
         }
       }
       const badge = element("level-up");
       if (badge) { badge.hidden = true; badge.textContent = ""; }
-      setPrompt(false);
+      setPrompt();
       frame = requestFrame(tick);
       return snapshot();
     }
     function advance() {
       if (!state) return Object.freeze({ handled: false, exit: false, skipped: false });
-      if (!state.ready) {
-        complete();
-        return Object.freeze({ handled: true, exit: false, skipped: true });
-      }
-      return Object.freeze({ handled: true, exit: true, skipped: false });
+      const wasReady = state.ready;
+      if (!wasReady) complete();
+      return Object.freeze({ handled: true, exit: true, skipped: !wasReady });
     }
     function hide() {
       if (frame != null) cancelFrame(frame);
