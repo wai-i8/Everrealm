@@ -9,6 +9,7 @@
     const dom = options.dom || {};
     const state = options.state || {};
     const labels = options.labels || {};
+    const filterGroups = options.filterGroups || {};
     const escapeUiText = options.escapeUiText;
     const storage = options.storage;
     const storageKey = options.storageKey;
@@ -34,7 +35,7 @@
       const filter = state.getFilter();
       const entries = filter === "all"
         ? state.getEntries()
-        : state.getEntries().filter((entry) => entry.type === filter);
+        : state.getEntries().filter((entry) => (filterGroups[filter] || [filter]).includes(entry.type));
       dom.systemLog.dataset.filter = filter;
       const visibleEntries = state.getCollapsed() ? entries.slice(-2) : entries;
       dom.systemLogMessages.innerHTML = visibleEntries.map((entry) => `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}"><span class="system-log-tag">[${labels[entry.type] || "系統"}]</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`).join("");

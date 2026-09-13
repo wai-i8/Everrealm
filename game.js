@@ -6806,6 +6806,7 @@
   const systemFeedback = SystemFeedback.create({
     dom: { toastElement, ariaLive, systemLog, systemLogMessages, systemLogTabs, systemLogToggleButton },
     labels: SYSTEM_LOG_LABELS,
+    filterGroups: { combat: ["combat"], progress: ["reward", "quest", "item"], system: ["system"] },
     escapeUiText,
     storage: { setItem(key, value) { localStorage.setItem(key, value); } },
     storageKey: SYSTEM_LOG_COLLAPSED_KEY,
@@ -10166,7 +10167,7 @@
     const button = event.target.closest("[data-log-filter]");
     if (!button) return;
     const next = button.dataset.logFilter;
-    systemLogFilter = ["all", "combat", "reward", "quest", "item", "system"].includes(next) ? next : "all";
+    systemLogFilter = ["all", "combat", "progress", "system"].includes(next) ? next : "all";
     renderSystemLog();
   });
   systemLogToggleButton?.addEventListener("click", toggleSystemLogCollapsed);
