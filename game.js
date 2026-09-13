@@ -6078,9 +6078,7 @@
         battle.effects.push({ cell: { ...battle.hero.cell }, text: `+${heroHeal}`, color: "#87db82", life: 1, maxLife: 1, burst: true });
         addSystemMessage("item", `使用小型回復藥，恢復 ${heroHeal} HP`);
         sound.heal();
-      } else if (heroExecuted) {
-        battle.effects.push({ cell: { ...battle.hero.cell }, text: "待機", color: "#87db82", life: .9, maxLife: .9 });
-      } else {
+      } else if (!heroExecuted) {
         battle.effects.push({ cell: { ...battle.hero.cell }, text: "行動取消", color: "#ff6b6b", life: 1, maxLife: 1 });
       }
     }
@@ -7740,11 +7738,10 @@
       });
     }
 
-    // The four movement controls already communicate the player's intended
-    // direction, so the extra cyan facing triangle beside the hero is
-    // redundant. Keep the enemy facing marker because it still conveys useful
-    // tactical information.
-    if (unit.side !== "ally") {
+    // Diagonal battle atlases already communicate facing through the artwork;
+    // legacy enemy art still needs the marker as a tactical fallback.
+    const hasAuthoredFacing = layout.projected && Boolean(Locomotion.BATTLE_DIAGONAL_ASSETS?.[unit.type]);
+    if (unit.side !== "ally" && !hasAuthoredFacing) {
       const facing = battleFacingScreenVector(renderFacing, layout);
       const perpendicular = { x: -facing.y, y: facing.x };
       const arrow = {
