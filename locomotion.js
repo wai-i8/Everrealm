@@ -15,6 +15,24 @@
     idleColumn: 0, walkColumns: Object.freeze([1, 2, 3, 4, 5, 6]), walkFps: 10,
   });
 
+  // Projected battle units use the compact four-diagonal action atlas.  The
+  // row map belongs to each asset because the authored chick sheet follows
+  // the approved visual direction order rather than the fighter source order.
+  const BATTLE_DIAGONAL_ASSETS = Object.freeze({
+    fighter: Object.freeze({
+      src: "assets/battle/fighter/fighter-battle-diagonal-v1.png",
+      columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+      rowByFacing: Object.freeze({ right: 0, down: 1, left: 2, up: 3 }),
+      idleColumn: 0, walkColumns: Object.freeze([1, 2]), attackColumn: 3, hurtColumn: 4, walkFps: 8,
+    }),
+    chick: Object.freeze({
+      src: "assets/battle/chick/chick-battle-diagonal-v1.png",
+      columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+      rowByFacing: Object.freeze({ right: 3, down: 0, left: 2, up: 1 }),
+      idleColumn: 0, walkColumns: Object.freeze([1, 2]), attackColumn: 3, hurtColumn: 4, walkFps: 8,
+    }),
+  });
+
   // Alpha bounds are generated from the audited runtime atlases. They are
   // kept beside the shared contract because file-hosted browsers taint an
   // image-backed canvas, making a live getImageData scan unavailable. Each
@@ -142,5 +160,5 @@
     }
     return { state: moving ? "walk" : "idle", facing, time: moving ? Math.max(0, time - times[start]) * movement.stepDuration : 0 };
   }
-  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, sourceArt, create, update, frame, frameVisualBounds, stableVisualBounds, layout, facingFromDelta, sampleMovement });
+  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, BATTLE_DIAGONAL_ASSETS, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, sourceArt, create, update, frame, frameVisualBounds, stableVisualBounds, layout, facingFromDelta, sampleMovement });
 });

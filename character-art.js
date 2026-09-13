@@ -285,7 +285,6 @@
     heroRight: { src: "assets/hero-anim-right-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
     fighter: { src: "assets/fighter-atlas-v2.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     fighterWalk: { src: "assets/fighter-walk-atlas-v4.png", columns: 4, rows: 4, rowCuts: [0, 292 / 1199, 585 / 1199, 869 / 1199, 1], image: null, ready: false, failed: false },
-    fighterBattleDiagonal: { src: "assets/battle/fighter/fighter-battle-diagonal-v1.png", columns: 5, rows: 4, image: null, ready: false, failed: false },
     // Only the smith's left gutter contains the previous actor's pale cloak.
     // Scope the legacy crop to that frame so other NPCs retain their full art.
     npcMap: { src: "assets/npc-map-chibi-v4.png", columns: 4, rows: 3, cellInsets: { 1: { left: 24 } }, image: null, ready: false, failed: false },
@@ -325,6 +324,23 @@
       columns: m.columns,
       rows: m.rows,
       visualBounds: Array.from({ length: m.columns * m.rows }, (_, index) => Locomotion.frameVisualBounds(id, index)),
+      image: null,
+      ready: false,
+      failed: false,
+    };
+  }
+
+  for (const [id, config] of Object.entries(Locomotion.BATTLE_DIAGONAL_ASSETS || {})) {
+    spriteAtlases[`battleDiagonal_${id}`] = {
+      src: config.src,
+      battleDiagonal: true,
+      columns: config.columns,
+      rows: config.rows,
+      rowByFacing: config.rowByFacing,
+      idleColumn: config.idleColumn,
+      walkColumns: config.walkColumns,
+      attackColumn: config.attackColumn,
+      hurtColumn: config.hurtColumn,
       image: null,
       ready: false,
       failed: false,
@@ -540,23 +556,30 @@
     return { atlas: spriteAtlases.npcPortraits, index: npcArtIndices[actor] ?? npcArtIndices.villager };
   }
 
-  function battleDiagonalFighterFrame(settings) {
-    const atlas = spriteAtlases.fighterBattleDiagonal;
-    const facing = settings.facing || settings.locomotion?.facing || "right";
-    const row = ({ right: 0, down: 1, left: 2, up: 3 })[facing] ?? 0;
+  function battleDiagonalFrame(settings, id) {
+    const config = Locomotion.BATTLE_DIAGONAL_ASSETS?.[id];
+    const atlas = spriteAtlases[`battleDiagonal_${id}`];
+    if (!config || !atlas) return null;
+    const requestedFacing = settings.facing || settings.locomotion?.facing || "right";
+    const facing = Object.hasOwn(config.rowByFacing || {}, requestedFacing) ? requestedFacing : "right";
+    const row = config.rowByFacing[facing];
     const state = settings.state || settings.locomotion?.state || "idle";
-    const phase = Number(settings.phase) || Number(settings.locomotion?.time) || 0;
-    let column = 0;
-    if (["walk", "run"].includes(state)) column = 1 + (Math.floor(phase * 8) % 2);
-    else if (state === "attack") column = 3;
-    else if (state === "hurt") column = 4;
-    return { atlas, index: row * atlas.columns + column, facing, state };
+    const phase = Math.max(0, Number(settings.phase) || Number(settings.locomotion?.time) || 0);
+    let column = config.idleColumn;
+    if (["walk", "run"].includes(state)) {
+      const walkColumns = config.walkColumns || [];
+      column = walkColumns.length
+        ? walkColumns[Math.floor(phase * (config.walkFps || 8)) % walkColumns.length]
+        : config.idleColumn;
+    } else if (state === "attack") column = config.attackColumn;
+    else if (state === "hurt") column = config.hurtColumn;
+    return { atlas, index: row * atlas.columns + column, facing, state, config };
   }
 
-  function drawBattleFighterDiagonal(ctx, settings) {
-    if (!(settings?.battleDiagonal || settings?.battleProjected) || settings.classId !== "fighter") return false;
-    if ((settings.actor || settings.kind) !== "player") return false;
-    const selected = battleDiagonalFighterFrame(settings);
+  function drawBattleDiagonalUnit(ctx, settings, id) {
+    if (!(settings?.battleDiagonal || settings?.battleProjected)) return false;
+    const selected = battleDiagonalFrame(settings, id);
+    if (!selected) return false;
     const atlas = selected.atlas;
     if (!atlas?.ready || !atlas.image) return false;
     const hasOpaqueBounds = Boolean(atlas.alphaBounds?.[selected.index] || atlas.visualBounds?.[selected.index]);
@@ -564,12 +587,13 @@
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
-    const targetHeight = Math.max(1, 256 * scale);
+    const authoredFrame = locomotionWorldFrame(id);
+    const targetHeight = Math.max(1, authoredFrame.height * scale);
     // file:// builds can block the alpha scan used to trim transparent atlas
-    // padding. The authored mobile-unit contract places the feet at y=224 in a
-    // 256px cell, so compensate only when we had to fall back to the whole cell.
+    // padding. The battle atlas places the feet at y=224 in a 256px cell, so
+    // compensate only when we had to fall back to the whole cell.
     // On HTTP(S), where alpha bounds are available, the baseline is unchanged.
-    const spriteContract = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
+    const spriteContract = selected.config;
     const fallbackFootInset = hasOpaqueBounds
       ? 0
       : Math.max(0, (spriteContract?.cellHeight || 256) - (spriteContract?.anchorY || 224)) * scale;
@@ -588,7 +612,7 @@
     const drawY = box.y + vector.y * attackOffset;
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, scale, 15, selected.state === "hurt" ? .24 : .34);
+      drawGroundShadow(ctx, x, y, targetHeight / 256, id === "fighter" ? 15 : 12, selected.state === "hurt" ? .24 : .34);
       if (selected.state === "hurt") {
         ctx.globalAlpha *= .84;
         ctx.filter = "brightness(1.12) saturate(.88)";
@@ -598,7 +622,7 @@
       ctx.drawImage(atlas.image, opaque.sx, opaque.sy, opaque.sw, opaque.sh, drawX, drawY, box.width, box.height);
     } finally { ctx.restore(); }
     const nameAnchorX = x;
-    const nameAnchorY = box.y - 4 * scale;
+    const nameAnchorY = box.y - 4 * targetHeight / 256;
     return {
       ...box,
       left: drawX,
@@ -614,6 +638,19 @@
       facing: selected.facing,
       battleDiagonal: true,
     };
+  }
+
+  function drawBattleFighterDiagonal(ctx, settings) {
+    if (!(settings?.battleDiagonal || settings?.battleProjected) || settings.classId !== "fighter") return false;
+    if ((settings.actor || settings.kind) !== "player") return false;
+    return drawBattleDiagonalUnit(ctx, settings, "fighter");
+  }
+
+  function drawBattleMonsterDiagonal(ctx, settings) {
+    if (!(settings?.battleDiagonal || settings?.battleProjected)) return false;
+    const id = settings.type;
+    if (!Locomotion.BATTLE_DIAGONAL_ASSETS?.[id]) return false;
+    return drawBattleDiagonalUnit(ctx, settings, id);
   }
 
   function drawLocomotion(ctx, settings, id) {
@@ -1286,6 +1323,8 @@
   }
 
   function drawBitmapEnemy(ctx, settings) {
+    const battleDiagonal = drawBattleMonsterDiagonal(ctx, settings);
+    if (battleDiagonal) return battleDiagonal;
     const reaction = drawLocomotionReaction(ctx, settings, settings.type);
     if (reaction) return reaction;
     const standard = drawLocomotion(ctx, settings, settings.type);

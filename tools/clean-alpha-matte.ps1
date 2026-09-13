@@ -33,6 +33,13 @@ public static class LanternAlphaCleaner
         return min >= floor && max - min <= spread;
     }
 
+    private static bool IsCheckerBackground(byte b, byte g, byte r)
+    {
+        int min = Math.Min(r, Math.Min(g, b));
+        int max = Math.Max(r, Math.Max(g, b));
+        return min >= 150 && max - min <= 42;
+    }
+
     private static bool TouchesTransparent(byte[] pixels, int stride, int width, int height, int x, int y)
     {
         for (int oy = -1; oy <= 1; oy++)
@@ -75,7 +82,7 @@ public static class LanternAlphaCleaner
                     int id = y * bitmap.Width + x;
                     if (visited[id]) return;
                     int offset = y * data.Stride + x * 4;
-                    if (!IsPaleNeutral(pixels[offset], pixels[offset + 1], pixels[offset + 2], 214, 28)) return;
+                    if (!IsCheckerBackground(pixels[offset], pixels[offset + 1], pixels[offset + 2])) return;
                     visited[id] = true;
                     queue.Enqueue(id);
                 };
@@ -100,7 +107,7 @@ public static class LanternAlphaCleaner
                         int nextId = ny * bitmap.Width + nx;
                         if (visited[nextId]) continue;
                         int next = ny * data.Stride + nx * 4;
-                        if (!IsPaleNeutral(pixels[next], pixels[next + 1], pixels[next + 2], 205, 38)) continue;
+                        if (!IsCheckerBackground(pixels[next], pixels[next + 1], pixels[next + 2])) continue;
                         visited[nextId] = true;
                         queue.Enqueue(nextId);
                     }

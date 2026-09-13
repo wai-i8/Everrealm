@@ -7734,6 +7734,7 @@
         phase: elapsed,
         state: visualState,
         locomotion,
+        battleDiagonal: layout.projected,
         progress: actionProgress,
         selected: false,
       });

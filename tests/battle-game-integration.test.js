@@ -6,6 +6,7 @@ const path = require("node:path");
 const game = fs.readFileSync(path.resolve(__dirname, "..", "game.js"), "utf8");
 const mountainField = fs.readFileSync(path.resolve(__dirname, "..", "maps", "mountain-field.js"), "utf8");
 const characterArt = fs.readFileSync(path.resolve(__dirname, "..", "character-art.js"), "utf8");
+const locomotion = fs.readFileSync(path.resolve(__dirname, "..", "locomotion.js"), "utf8");
 const styles = fs.readFileSync(path.resolve(__dirname, "..", "styles.css"), "utf8");
 
 test("battle movement uses facing-aware timed simultaneous resolution", () => {
@@ -131,13 +132,16 @@ test("projected battle layout normalizes both screen axes to equal length", () =
 test("fighter uses a true battle-only four-diagonal atlas", () => {
   assert.doesNotMatch(game, /battleUnitArtFacing/);
   assert.match(game, /battleDiagonal: layout\.projected/);
-  assert.match(characterArt, /fighterBattleDiagonal/);
-  assert.match(characterArt, /fighter-battle-diagonal-v1\.png/);
-  assert.match(characterArt, /\{ right: 0, down: 1, left: 2, up: 3 \}/);
-  assert.match(characterArt, /column = 1 \+ \(Math\.floor/);
-  assert.match(characterArt, /state === "attack"\) column = 3/);
-  assert.match(characterArt, /state === "hurt"\) column = 4/);
+  assert.match(characterArt, /drawBattleFighterDiagonal/);
+  assert.match(characterArt, /drawBattleMonsterDiagonal/);
+  assert.match(locomotion, /fighter-battle-diagonal-v1\.png/);
+  assert.match(locomotion, /chick-battle-diagonal-v1\.png/);
+  assert.match(locomotion, /\{ right: 0, down: 1, left: 2, up: 3 \}/);
+  assert.match(locomotion, /walkColumns: Object\.freeze\(\[1, 2\]\)/);
+  assert.match(characterArt, /state === "attack"\) column = config\.attackColumn/);
+  assert.match(characterArt, /state === "hurt"\) column = config\.hurtColumn/);
   assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "fighter", "fighter-battle-diagonal-v1.png")), true);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "chick", "chick-battle-diagonal-v1.png")), true);
 });
 
 test("battle skill rows are visually centred", () => {

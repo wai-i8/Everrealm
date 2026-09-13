@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "columns": 5,
+  "rows": 4,
+  "cellWidth": 256,
+  "cellHeight": 256,
+  "anchorX": 128,
+  "anchorY": 224,
+  "rowByFacing": {
+    "right": 3,
+    "down": 0,
+    "left": 2,
+    "up": 1
+  },
+  "screenDirections": {
+    "right": "north-east",
+    "down": "south-east",
+    "left": "south-west",
+    "up": "north-west"
+  },
+  "columnsByState": {
+    "idle": [0],
+    "walk": [1, 2],
+    "attack": [3],
+    "hurt": [4]
+  },
+  "scope": "battle-only Mountain Chick"
+}
