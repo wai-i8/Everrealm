@@ -965,43 +965,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   font-size: .76rem;
   line-height: 1.65;
 }
-.class-choice-grid {
-  width: min(42rem,94vw);
-  display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: .85rem;
-  margin: .65rem 0 1rem;
-}
-.class-choice-card {
-  min-width: 0;
-  display: grid;
-  justify-items: center;
-  gap: .32rem;
-  padding: .75rem .75rem .85rem;
-  border: 1px solid rgba(245,233,202,.36);
-  border-radius: 1rem;
-  color: var(--cream);
-  background: linear-gradient(150deg,rgba(39,53,85,.96),rgba(13,22,42,.98));
-  box-shadow: 4px 5px 0 rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.04);
-  cursor: pointer;
-  transition: transform .14s ease,border-color .14s ease,background .14s ease;
-}
-.class-choice-card:hover,
-.class-choice-card:focus-visible {
-  transform: translateY(-3px);
-  border-color: var(--gold);
-  background: linear-gradient(150deg,rgba(52,66,99,.98),rgba(17,29,51,.98));
-}
-.class-choice-card canvas {
-  width: min(100%,11rem);
-  height: 11.5rem;
-  object-fit: contain;
-  image-rendering: auto;
-  filter: drop-shadow(0 .55rem .4rem rgba(0,0,0,.4));
-}
-.class-choice-card strong { color: var(--gold); font-size: 1rem; }
-.class-choice-card small { color: #c6cada; font-size: .7rem; line-height: 1.5; text-align: center; }
-.class-select-panel > .secondary-button { min-width: 9rem; }
 .skill-book-confirm-panel {
   isolation: isolate;
 }
@@ -1417,13 +1380,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .dialogue-choice { font-size: .68rem; }
   .overlay { padding: 1.2rem .75rem; }
   .modal-actions { flex-direction: column; }
-  .class-select-panel,
   .skill-book-confirm-panel { justify-content: flex-start; padding-top: max(1rem,env(safe-area-inset-top)); }
-  .class-choice-grid { width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .48rem; }
-  .class-choice-card { padding: .5rem .35rem .65rem; border-radius: .75rem; }
-  .class-choice-card canvas { width: 100%; height: min(29vh,8.5rem); }
-  .class-choice-card strong { font-size: .84rem; }
-  .class-choice-card small { font-size: .63rem; }
   .skill-book-confirm-panel::before { min-height: calc(100% - 1rem); }
   .skill-book-confirm-panel > .modal-close-button { top: max(.7rem,env(safe-area-inset-top)); right: .7rem; }
   .skill-book-confirm-icon { width: 3.6rem; height: 3.6rem; font-size: 1.55rem; }
@@ -7198,22 +7155,45 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .system-log-scroll-zone {
   cursor: url("assets/ui/cursor-feather-v1.png") 3 3, default !important;
 }
-.class-choice-grid--six {
-  width: min(68rem, 96vw) !important;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  gap: .55rem !important;
+.class-choice-grid {
+  width: min(42rem,94vw);
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .85rem;
+  margin: .65rem 0 1rem;
 }
-.class-choice-grid--six .class-choice-card {
+.class-choice-grid--six {
+  width: min(68rem, 96vw);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .55rem;
+}
+.class-choice-card {
   position: relative;
   min-width: 0;
-  padding: .55rem .4rem .65rem !important;
+  display: grid;
+  justify-items: center;
+  gap: .32rem;
+  padding: .55rem .4rem .65rem;
   overflow: hidden;
+  border: 1px solid rgba(245,233,202,.36);
+  border-radius: 1rem;
+  color: var(--cream);
+  background: linear-gradient(150deg,rgba(39,53,85,.96),rgba(13,22,42,.98));
+  box-shadow: 4px 5px 0 rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.04);
+  cursor: pointer;
+  transition: transform .14s ease,border-color .14s ease,background .14s ease;
+}
+.class-choice-card:hover,
+.class-choice-card:focus-visible {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+  background: linear-gradient(150deg,rgba(52,66,99,.98),rgba(17,29,51,.98));
 }
 .class-choice-preview-canvas,
 .class-choice-sprite {
   display: block;
-  width: 100% !important;
-  height: clamp(8.5rem, 26vh, 13.5rem) !important;
+  width: 100%;
+  height: clamp(8.5rem, 26vh, 13.5rem);
   object-fit: contain;
   object-position: center center;
   image-rendering: auto;
@@ -7223,6 +7203,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   max-width: 12.5rem;
   justify-self: center;
 }
+.class-choice-card strong { color: var(--gold); font-size: 1rem; }
+.class-choice-card small { color: #c6cada; font-size: .7rem; line-height: 1.5; text-align: center; }
 .class-choice-card.is-default {
   border-color: rgba(82,220,203,.82);
   box-shadow: 0 0 0 1px rgba(82,220,203,.28),4px 5px 0 rgba(0,0,0,.42);
@@ -7239,14 +7221,102 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   font: 800 .5rem/1 system-ui,sans-serif;
   letter-spacing: .04em;
 }
+.class-select-panel > .secondary-button { min-width: 9rem; }
+
+/* Class selection owns its responsive compaction. Short viewports tighten this
+   screen only; other game panels keep their normal scale. */
 @media (max-width: 900px) {
-  .class-choice-grid--six { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
-  .class-choice-preview-canvas, .class-choice-sprite { height: min(24vh,10rem) !important; }
+  .class-choice-grid--six { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .class-choice-preview-canvas, .class-choice-sprite { height: min(24vh,10rem); }
+}
+@media (max-height: 680px) {
+  .class-select-panel {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0,1fr) auto;
+    align-content: stretch;
+    justify-content: stretch;
+    justify-items: center;
+    gap: clamp(.16rem,.65vh,.34rem);
+    min-height: 0;
+    padding-block: clamp(.45rem,1.4vh,.7rem);
+  }
+  .class-select-panel > .modal-kicker { margin: 0; }
+  .class-select-panel h2 { margin: 0; font-size: clamp(1.12rem,4vh,1.55rem); }
+  .class-select-panel > p:not(.modal-kicker) { margin: 0; line-height: 1.28; }
+  .class-choice-grid { height: 100%; min-height: 0; margin: 0; gap: .38rem; }
+  .class-choice-card {
+    min-height: 0;
+    grid-template-rows: minmax(0,1fr) auto auto;
+    align-items: center;
+    gap: .14rem;
+    padding: .28rem .3rem .36rem;
+  }
+  .class-choice-preview-canvas, .class-choice-sprite {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+  .class-choice-card strong { font-size: .82rem; line-height: 1.05; }
+  .class-choice-card small { font-size: .59rem; line-height: 1.2; }
+  .class-select-panel > .secondary-button { padding-block: .34rem; }
 }
 @media (max-width: 520px) {
-  .class-choice-grid--six { grid-template-columns: repeat(2,minmax(0,1fr)) !important; width: 100% !important; }
-  .class-choice-preview-canvas, .class-choice-sprite { height: min(22vh,8.5rem) !important; }
+  .class-select-panel {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0,1fr) auto;
+    align-content: stretch;
+    justify-content: stretch;
+    justify-items: center;
+    gap: clamp(.18rem,.7dvh,.4rem);
+    min-height: 0;
+    padding: max(.45rem,env(safe-area-inset-top)) .55rem max(.45rem,env(safe-area-inset-bottom));
+  }
+  .class-select-panel > .modal-kicker { margin: 0; font-size: clamp(.48rem,1.35dvh,.6rem); }
+  .class-select-panel h2 { margin: 0; font-size: clamp(1.12rem,3.5dvh,1.5rem); }
+  .class-select-panel > p:not(.modal-kicker) {
+    margin: 0;
+    font-size: clamp(.58rem,1.85dvh,.72rem);
+    line-height: 1.25;
+  }
+  .class-choice-grid--six {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-rows: repeat(3,minmax(0,1fr));
+    gap: clamp(.22rem,.7dvh,.42rem);
+  }
+  .class-choice-card {
+    min-height: 0;
+    grid-template-rows: minmax(0,1fr) auto auto;
+    align-items: center;
+    gap: clamp(.08rem,.4dvh,.2rem);
+    padding: clamp(.22rem,.6dvh,.36rem) .28rem clamp(.3rem,.8dvh,.48rem);
+    border-radius: .72rem;
+  }
+  .class-choice-preview-canvas,
+  .class-choice-sprite {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+  .class-choice-card strong { font-size: clamp(.68rem,2.1dvh,.84rem); line-height: 1.05; }
+  .class-choice-card small { font-size: clamp(.48rem,1.55dvh,.61rem); line-height: 1.18; }
+  .class-choice-card.is-locked::after {
+    right: .2rem;
+    top: .2rem;
+    padding: .1rem .2rem;
+    font-size: clamp(.42rem,1.25dvh,.5rem);
+  }
+  .class-select-panel > .secondary-button {
+    min-width: min(9rem,100%);
+    margin: 0;
+    padding-block: clamp(.28rem,.8dvh,.42rem);
+  }
 }
+
 
 /* === 2026-09-12 system-log readability variant: stronger halo shadow (no black outline) === */
 .system-log,
@@ -7567,13 +7637,6 @@ html body [aria-disabled="true"] {
 
 
 /* === 2026-09-12 round-5 fixes: local assets / mission / modal interaction === */
-/* Locked classes without finished artwork keep the authored card spacing but
-   never request a non-existent bitmap. */
-.class-choice-sprite--empty {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 /* mission-objective/progress used to carry grid-area names from the older
    two-column markup.  They now live inside mission-task-row, so reset those
    names or CSS Grid creates implicit tracks and the copy piles on top of itself. */
