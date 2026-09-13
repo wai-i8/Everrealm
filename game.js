@@ -5691,16 +5691,50 @@
     resolvePlayerBattleSkill(skill, cell, target.cell ? target : null);
   }
 
-  function applyBattleHit(unit, amount, color, hitIndex = 0, hitCount = 1) {
+  function applyBattleHit(unit, amount, color, hitIndex = 0, hitCount = 1, showEffect = true) {
     const result = Tactics.applyDamage(unit, amount);
     unit.hp = result.hpAfter;
     unit.alive = !result.defeated;
     unit.hitFlash = .32;
-    const spread = (hitIndex - (hitCount - 1) / 2) * .18;
-    const offsetX = hitCount > 1 ? spread : 0;
-    const offsetY = .16 + Math.floor(hitIndex / 2) * .42;
-    battle.effects.push({ cell: { ...unit.cell }, text: `-${result.requestedDamage}`, color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
+    if (showEffect) {
+      const spread = (hitIndex - (hitCount - 1) / 2) * .18;
+      const offsetX = hitCount > 1 ? spread : 0;
+      const offsetY = .16 + Math.floor(hitIndex / 2) * .42;
+      battle.effects.push({ cell: { ...unit.cell }, text: `-${result.requestedDamage}`, color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
+    }
     return result;
+  }
+
+  function presentHeroHitEvent(event) {
+    if (!battle || !event) return;
+    for (const miss of event.misses || []) {
+      battle.effects.push({ cell: { ...miss.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
+      addSystemMessage("combat", `${event.skillName || "攻擊"}對${miss.targetName || "目標"}未命中`);
+    }
+    for (const hit of event.hits || []) {
+      if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...hit.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
+      else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...hit.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
+      const spread = (hit.hitIndex - (hit.hitCount - 1) / 2) * .18;
+      const offsetX = hit.hitCount > 1 ? spread : 0;
+      const offsetY = .16 + Math.floor(hit.hitIndex / 2) * .42;
+      battle.effects.push({ cell: { ...hit.cell }, text: `-${hit.requestedDamage}`, color: hit.color, life: .9, maxLife: .9, kind: "damage", offsetX, offsetY });
+      addSystemMessage("combat", `${event.skillName || "攻擊"}對${hit.targetName || "目標"}造成 ${hit.requestedDamage} 傷害`);
+    }
+    if (event.soundKind === "magic") sound.crystal();
+    else sound.swing();
+    for (const hit of event.hits || []) sound.hit();
+  }
+
+  function advanceHeroHitPresentation(resolution) {
+    const presentation = resolution?.heroHitPresentation;
+    if (!presentation) return;
+    while (presentation.nextIndex < presentation.events.length
+      && resolution.actionElapsed + 1e-6 >= presentation.nextAt) {
+      presentHeroHitEvent(presentation.events[presentation.nextIndex]);
+      presentation.nextIndex += 1;
+      presentation.nextAt += presentation.interval;
+    }
+    if (presentation.nextIndex >= presentation.events.length) resolution.heroHitPresentation = null;
   }
 
   function showFighterEffectEvents(result) {
@@ -5800,6 +5834,7 @@
     const duration = Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS);
     resolution.elapsed += dt;
     resolution.actionElapsed += dt;
+    advanceHeroHitPresentation(resolution);
     const current = resolution.actionOrder?.[resolution.actionIndex] || null;
     const currentSkill = current?.actorId === battle.hero.id && resolution.heroAction?.type === "skill"
       ? Skills.getSkill(resolution.heroAction.skillId)
@@ -5859,6 +5894,7 @@
     const heroBuffFeedback = [];
     const statusTargets = [];
     const heroHitResolvers = [];
+    const heroHitPresentationEvents = [];
     let heroMissCount = 0;
     if (heroAction.type === "skill") {
       skill = Skills.getSkill(heroAction.skillId);
@@ -6097,6 +6133,16 @@
             // and occupancy. initial_only keeps its original route candidates.
             const trace = resolver.recheck ? traceNow() : stableTrace;
             const routedTargets = resolver.recheck ? traceCandidates(trace) : initialTargets;
+            const presentation = resolver.hitCount > 1
+              ? {
+                  skillName: skill?.name,
+                  soundKind: skill?.tags?.includes("magic") ? "magic" : "attack",
+                  hitIndex,
+                  misses: [],
+                  hits: [],
+                }
+              : null;
+            if (presentation) heroHitPresentationEvents.push(presentation);
             for (const target of routedTargets) {
               if (!target.alive || target.hp <= 0) continue;
               const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
@@ -6111,15 +6157,27 @@
                 // A miss is not an impact: keep scanning the same attack path
                 // so an evading front unit does not protect a unit behind it.
                 heroMissCount += 1;
-                battle.effects.push({ cell: { ...target.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
-                addSystemMessage("combat", `${skill?.name || "攻擊"}對${target.name}未命中`);
+                if (presentation) presentation.misses.push({ cell: { ...target.cell }, targetName: target.name });
+                else {
+                  battle.effects.push({ cell: { ...target.cell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
+                  addSystemMessage("combat", `${skill?.name || "攻擊"}對${target.name}未命中`);
+                }
                 continue;
               }
-              if (hit.hitIndex === 0 && hit.position === "rear") battle.effects.push({ cell: { ...target.cell }, text: "背擊 +35%", color: "#ff9dd3", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
-              else if (hit.hitIndex === 0 && hit.position === "side") battle.effects.push({ cell: { ...target.cell }, text: "側擊 +15%", color: "#a9c9ff", life: 1, maxLife: 1, kind: "positionBonus", offsetY: -.4 });
+              const hitCell = { ...target.cell };
               if (resolver.friendlyFire || target.side !== "ally") {
-                const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount);
-                addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
+                const hitResult = applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount, !presentation);
+                if (presentation) {
+                  presentation.hits.push({
+                    cell: hitCell,
+                    targetName: hit.target.name,
+                    requestedDamage: hitResult.requestedDamage,
+                    color: hit.color,
+                    hitIndex: hit.hitIndex,
+                    hitCount: hit.hitCount,
+                    position: hit.position,
+                  });
+                } else addSystemMessage("combat", `${skill?.name || "攻擊"}對${hit.target.name}造成 ${hitResult.requestedDamage} 傷害`);
                 Tactics.applyInterrupt(
                   battle.actionResolution.pendingActions.find((entry) => entry.actorId === hit.target.id),
                   battleNumber(skill.interrupt),
@@ -6154,6 +6212,16 @@
             specialEffectsApplied = Boolean(result.applied);
             showFighterEffectEvents(result);
           }
+        }
+        if (heroHitPresentationEvents.length) {
+          const interval = Math.max(.02, BATTLE_ACTION_LINGER_SECONDS / heroHitPresentationEvents.length);
+          resolution.heroHitPresentation = {
+            events: heroHitPresentationEvents,
+            nextIndex: 0,
+            interval,
+            nextAt: resolution.actionElapsed,
+          };
+          advanceHeroHitPresentation(resolution);
         }
         continue;
       }
@@ -6248,7 +6316,8 @@
           battle.effects.push({ cell: { ...heroAction.targetCell }, text: "MISS", color: BATTLE_MISS_COLOR, life: 1, maxLife: 1, burst: true });
           addSystemMessage("combat", `${skill.name}未命中`);
         }
-        if (skill.tags.includes("heal")) sound.heal();
+        if (heroHitPresentationEvents.length) { /* each strike owns its sound */ }
+        else if (skill.tags.includes("heal")) sound.heal();
         else if (skill.tags.includes("magic")) sound.crystal();
         else if (executedHeroHits.length) { sound.swing(); sound.hit(); }
         else sound.tone(430, .13, { to: 680, gain: .025 });

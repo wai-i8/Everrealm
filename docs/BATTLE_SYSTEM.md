@@ -1873,7 +1873,7 @@ function splitDamageLaterHits(totalDamage, hitCount) {
 
 所有 Hit 加埋必須**精確等於** `totalDamage`。
 
-所有 `hit_count > 1` 嘅傷害技能都由同一個 multi-hit resolver 處理，唔按個別技能寫另一套判定。每一個 Hit 都會獨立擲一次命中率，並播放一個獨立 strike；所以 `hit_count = 2/3/5/6/8` 就分別顯示兩／三／五／六／八段攻擊。命中率係逐 Hit 計，唔係將整招只擲一次再複製結果。
+所有 `hit_count > 1` 嘅傷害技能都由同一個 multi-hit resolver 處理，唔按個別技能寫另一套判定。每一個 Hit 都會獨立擲一次命中率，並播放一個獨立 strike；所以 `hit_count = 2/3/5/6/8` 就分別顯示兩／三／五／六／八段攻擊。每段嘅聲效、MISS／傷害浮字同 Battle Log 都跟住該段時間逐個出現，唔可以整招一次過播一次聲、出晒所有數字或一次過寫晒紀錄。
 
 ---
 
