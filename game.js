@@ -87,6 +87,7 @@
   const query = new URLSearchParams(window.location.search);
   const testingMode = query.has("smoke") || query.has("autoplay");
   const autoplay = query.has("autoplay");
+  const godModeRequested = testingMode && query.get("god") === "1";
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const canvas = document.getElementById("gameCanvas");
@@ -409,6 +410,7 @@
   const enemySessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
   let autoTarget = null;
   let battle = null;
+  let godModeActive = false;
   const battleCommandPosition = { manual: false, x: 0, y: 0, xRatio: null, yRatio: null, pointerId: null, offsetX: 0, offsetY: 0 };
   try {
     const savedBattleCommandPosition = JSON.parse(localStorage.getItem(BATTLE_COMMAND_POSITION_KEY));
@@ -1002,6 +1004,40 @@
     return results;
   }
 
+  function maintainGodModeState() {
+    if (!godModeActive) return;
+    const stats = playerStats();
+    player.hp = stats.maxHp;
+    player.invulnerable = Number.POSITIVE_INFINITY;
+    if (battle) {
+      battle.hero.hp = battle.hero.maxHp;
+      battle.hero.alive = true;
+      battle.ap = BATTLE_AP_MAX;
+    }
+  }
+
+  function setGodMode(enabled = true, { silent = false } = {}) {
+    if (!testingMode) return { ok: false, reason: "debug-only", active: godModeActive };
+    godModeActive = Boolean(enabled);
+    let skillResult = null;
+    if (godModeActive) {
+      skillResult = Skills.createGodModeSkillState(skillState);
+      if (skillResult.ok) skillState = skillResult.state;
+      maintainGodModeState();
+      markPersistenceDirty();
+    } else {
+      player.invulnerable = 0;
+    }
+    if (facilityWindows.size) renderFacility();
+    updateHud(true);
+    if (!silent && mode === "playing") {
+      showToast(godModeActive
+        ? "DEBUG God Mode 已開：全技能解鎖、技能書齊、無敵、AP 無限"
+        : "DEBUG God Mode 已關閉", "good");
+    }
+    return { ok: true, reason: null, active: godModeActive, skillResult };
+  }
+
   function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "warrior") {
     if (!requireAuthenticatedGameplay()) return false;
     sound.ensure();
@@ -1032,6 +1068,7 @@
     titleScreen.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
+    if (godModeRequested || godModeActive) setGodMode(true, { silent: true });
     syncAccountStatus(savePersistence?.getCloudStatus?.());
     stopTitleBgm();
     bgm.setEnabled(musicEnabled);
@@ -1098,6 +1135,7 @@
     titleScreen.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
+    if (godModeRequested || godModeActive) setGodMode(true, { silent: true });
     syncAccountStatus(savePersistence?.getCloudStatus?.());
     stopTitleBgm();
     bgm.setEnabled(musicEnabled);
@@ -2040,6 +2078,7 @@
     player.attackCooldown = Math.max(0, player.attackCooldown - dt);
     player.attackTimer = Math.max(0, player.attackTimer - dt);
     player.invulnerable = Math.max(0, player.invulnerable - dt);
+    maintainGodModeState();
     const drag = Math.pow(.0008, dt);
     player.knockback.x *= drag;
     player.knockback.y *= drag;
@@ -2294,6 +2333,10 @@
 
   function damagePlayer(amount, source, direction) {
     if (mode !== "playing" || player.invulnerable > 0) return;
+    if (godModeActive) {
+      maintainGodModeState();
+      return;
+    }
     player.hp = Math.max(0, player.hp - amount);
     markPersistenceDirty();
     player.invulnerable = .68;
@@ -4867,6 +4910,7 @@
     sound.boss();
     startBattleBgm();
     announce(`遇上${source.name}。進入格仔回合戰。`);
+    maintainGodModeState();
     beginPlayerRound();
     return true;
   }
@@ -4876,10 +4920,11 @@
     for (const unit of battleUnits()) {
       if (unit.alive) showFighterEffectEvents(FighterEffects?.tickStatuses(unit, battle.round, unit === battle.hero ? learnedFighterPassives() : {}));
     }
+    maintainGodModeState();
     if (!battle.hero.alive || battle.hero.hp <= 0) return finishBattleDefeat();
     if (livingBattleEnemies().length === 0) return finishBattleVictory();
     battle.phase = "planning_move";
-    battle.ap = Math.min(BATTLE_AP_MAX, battle.ap + BATTLE_AP_GAIN);
+    battle.ap = godModeActive ? BATTLE_AP_MAX : Math.min(BATTLE_AP_MAX, battle.ap + BATTLE_AP_GAIN);
     for (const enemy of livingBattleEnemies()) enemy.ap = Math.min(BATTLE_AP_MAX, (enemy.ap || 0) + BATTLE_AP_GAIN);
     battle.hero.moveRange = FighterEffects?.isDisabled(battle.hero, battle.round, "move") ? 0
       : Math.max(0, battle.hero.baseMoveRange + (battle.moveBonusNext || 0) - (FighterEffects?.movementPenalty(battle.hero, battle.round) || 0));
@@ -5440,7 +5485,7 @@
     } else if (action.startsWith("skill:")) {
       const skill = battleSkillFromAction(action);
       if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id)) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id))) return setBattleMessage("呢招未裝備喺技能欄。", true);
-      if (battle.ap < skill.apCost) return setBattleMessage(`${skill.name}要 ${skill.apCost} AP；可以待機儲力。`, true);
+      if (!godModeActive && battle.ap < skill.apCost) return setBattleMessage(`${skill.name}要 ${skill.apCost} AP；可以待機儲力。`, true);
       battle.selectedAction = action;
       battle.message = "請喺棋盤揀發光目標；按 Esc 或右鍵取消。";
       if (skill.targeting.mode === "self") return resolvePlayerBattleSkill(skill, battle.hero.cell, battle.hero);
@@ -5622,8 +5667,8 @@
 
   function resolvePlayerBattleSkill(skill, targetCell, targetUnit = null, pattern = null) {
     if (!battle || battle.phase !== "planning_action") return;
-    if (!skill || battle.ap < skill.apCost) return setBattleMessage("AP 唔夠。", true);
-    battle.ap -= skill.apCost;
+    if (!skill || (!godModeActive && battle.ap < skill.apCost)) return setBattleMessage("AP 唔夠。", true);
+    if (!godModeActive) battle.ap -= skill.apCost;
     const centre = targetCell || battle.hero.cell;
     const attackPath = ["linear", "arc"].includes(skill.deliveryMode)
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, centre, battle.hero.facing)
@@ -5767,6 +5812,7 @@
         return;
       }
 
+      maintainGodModeState();
       resolution.completed = true;
       resolution.applied = true;
       battle.actingUnitId = null;
@@ -6112,7 +6158,7 @@
         hit.damage = counter.damage;
         showFighterEffectEvents(counter);
       }
-      const result = Tactics.applyDamage(battle.hero, hit.damage);
+      const result = Tactics.applyDamage(battle.hero, godModeActive ? 0 : hit.damage);
       hit.appliedDamage = result.appliedDamage;
       hit.damage = result.requestedDamage;
       addSystemMessage("combat", `${hit.enemy.name}對你造成 ${hit.damage} 傷害`, "incoming");
@@ -6122,6 +6168,7 @@
         const effectResult = FighterEffects.applySkillEffects({ skill: hit.plan.skill, caster: hit.enemy, targets: [battle.hero], units: battleUnits(), grid: battle.grid, round: battle.round, random: battleRandom });
         showFighterEffectEvents(effectResult);
       }
+      maintainGodModeState();
       Tactics.applyInterrupt(
         battle.actionResolution.pendingActions.find((entry) => entry.actorId === battle.hero.id),
         battleNumber(hit.plan.skill?.interrupt),
@@ -6374,6 +6421,7 @@
 
   function updateBattle(dt) {
     if (!battle) return;
+    maintainGodModeState();
     playTime += dt;
     screenShake = Math.max(0, screenShake - dt * 28);
     screenFlash = Math.max(0, screenFlash - dt * 3.2);
@@ -9707,7 +9755,7 @@
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
         guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
-        skills: Skills.normalizeSkillState(skillState), automaticPortalReady,
+        skills: Skills.normalizeSkillState(skillState), godMode: godModeActive, automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
         flattenedMapRender: world.art?.flattened && world.art?.backgroundScene ? (() => {
@@ -9983,6 +10031,19 @@
         if (result.ok) skillState = result.state;
         if (facilityWindows.size) renderFacility();
         return window.__RPG_DEBUG__.snapshot();
+      },
+      grantAllSkillBooks: (quantity = 1) => {
+        const result = Skills.grantAllSkillManuals(skillState, quantity);
+        if (result.ok) {
+          skillState = result.state;
+          markPersistenceDirty();
+        }
+        if (facilityWindows.size) renderFacility();
+        return window.__RPG_DEBUG__.snapshot();
+      },
+      godMode: (enabled = true) => {
+        const result = setGodMode(enabled);
+        return result.ok ? window.__RPG_DEBUG__.snapshot() : result;
       },
       openSkillBook: (star) => { openGuildSkillBook(Number(star)); return window.__RPG_DEBUG__.snapshot(); },
       openGuildEnvelope: (star) => { openGuildEnvelope(Number(star)); return window.__RPG_DEBUG__.snapshot(); },

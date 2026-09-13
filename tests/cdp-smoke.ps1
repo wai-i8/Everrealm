@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'guild-accept-dismiss', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'godmode', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'guild-accept-dismiss', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -18,7 +18,7 @@ $profilePath = Join-Path $tempRoot ("codex-everrealm-cdp-" + [Guid]::NewGuid().T
 $port = Get-Random -Minimum 9400 -Maximum 9900
 if (-not $ScreenshotName) { $ScreenshotName = "smoke-$Scenario-$ViewportWidth.png" }
 $screenshotPath = Join-Path $runtimeOutputPath ([IO.Path]::GetFileName($ScreenshotName))
-$query = if ($Scenario -eq 'autoplay') { '?autoplay=1' } elseif ($Scenario -eq 'account-flow') { '?smoke=1&firebase-emulator=1' } else { '?smoke=1' }
+$query = if ($Scenario -eq 'autoplay') { '?autoplay=1' } elseif ($Scenario -eq 'account-flow') { '?smoke=1&firebase-emulator=1' } elseif ($Scenario -eq 'godmode') { '?smoke=1&god=1' } else { '?smoke=1' }
 $pageUrl = 'file:///' + ($projectRoot -replace '\\', '/') + '/index.html' + $query
 $edgeProcess = $null
 $socket = $null
@@ -1241,6 +1241,24 @@ try {
       $areaResolved = Get-GameSnapshot
       $defeatedByArea = @($areaResolved.battle.enemies | Where-Object { -not $_.alive }).Count
       if ($areaResolved.battle.phase -ne 'resolving_action' -or $areaResolved.battle.action.skillId -ne 'starfall_array' -or $areaResolved.battle.ap -ne 170 -or $defeatedByArea -lt 1) { throw 'Three-star area skill did not spend 30 AP or damage its previewed footprint.' }
+    }
+    'godmode' {
+      Invoke-GameExpression -Expression "(()=>{const api=window.__RPG_DEBUG__;api.newGame('fighter');api.enterMap('field');api.startBattle('chick-road-1');return true})()" | Out-Null
+      Start-Sleep -Milliseconds 120
+      $godRound = Get-GameSnapshot
+      $manualCount = ($godRound.skills.manualCounts.PSObject.Properties | Measure-Object -Property Value -Sum).Sum
+      if (-not $godRound.godMode -or $godRound.classId -ne 'fighter' -or $godRound.skills.unlockedSkillIds.Count -ne 65 -or $godRound.skills.deckCapacity -ne 6 -or $godRound.skills.equippedSkillIds.Count -ne 6 -or $manualCount -ne 65 -or $godRound.battle.ap -ne 200) {
+        throw "God Mode did not apply the full Fighter debug state (god=$($godRound.godMode), class=$($godRound.classId), unlocked=$($godRound.skills.unlockedSkillIds.Count), deck=$($godRound.skills.deckCapacity), equipped=$($godRound.skills.equippedSkillIds.Count), manuals=$manualCount, ap=$($godRound.battle.ap))."
+      }
+      Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.prepareBattleVisualActions(); true' | Out-Null
+      $godAction = Get-GameSnapshot
+      if ($godAction.battle.phase -ne 'planning_action') { throw "God Mode battle did not reach action planning (phase=$($godAction.battle.phase), mode=$($godAction.mode))." }
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.setBattleAp(1); window.__RPG_DEBUG__.battleAction('skill:kentotsu'); true" | Out-Null
+      $freeSkill = Get-GameSnapshot
+      if ($freeSkill.battle.selectedAction -ne 'skill:kentotsu') { throw 'God Mode still blocked a skill selection when AP was below cost.' }
+      Invoke-GameExpression -Expression 'window.__RPG_DEBUG__.godMode(false); true' | Out-Null
+      $godOff = Get-GameSnapshot
+      if ($godOff.godMode) { throw 'God Mode did not turn off through the debug API.' }
     }
     'guildmap' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null

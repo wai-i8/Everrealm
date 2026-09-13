@@ -26,6 +26,22 @@ npm start
 npm test
 ```
 
+## 開發用 God Mode
+
+本地 debug 可以開：
+
+`http://localhost:4173/?smoke=1&god=1`
+
+遊戲開始後，Browser DevTools Console 可用：
+
+```js
+window.__RPG_DEBUG__.godMode()
+window.__RPG_DEBUG__.grantAllSkillBooks()
+window.__RPG_DEBUG__.snapshot().skills
+```
+
+`godMode()` 會為當前職業解鎖全部技能、放入每招一本具名技能書、擴充 DECK 至 6 格、補滿 HP、戰鬥無敵及免扣 AP。`godMode(false)` 只會關閉無敵／免 AP；已解鎖技能和技能書會留在當前 debug session，重新開始一局即可重置。呢個入口只喺 `smoke`／`autoplay` URL 啟用，唔屬於正式玩家功能。
+
 Firebase Phase 3 uses public Web App configuration only. Firebase Auth handles
 email/password accounts and Firestore stores each player's sanitized save at
 `players/{uid}`; `firestore.rules` restricts that document to its authenticated

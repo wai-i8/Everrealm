@@ -1258,6 +1258,51 @@
     return { ok: true, reason: null, skill, quantity: amount, state: next };
   }
 
+  function grantAllSkillManuals(rawState, quantity = 1) {
+    const state = normalizeSkillState(rawState);
+    const amount = wholeNumber(quantity);
+    if (amount < 1) return { ok: false, reason: "invalid-quantity", state, skillIds: [] };
+    const skillIds = getSkillsByClass(state.classId).map((skill) => skill.id);
+    const next = cloneState(state);
+    for (const skillId of skillIds) {
+      next.manualCounts[skillId] = Math.min(9999, wholeNumber(next.manualCounts[skillId]) + amount);
+    }
+    return { ok: true, reason: null, classId: state.classId, quantity: amount, skillIds, state: next };
+  }
+
+  function createGodModeSkillState(rawState, options = {}) {
+    const state = normalizeSkillState(rawState);
+    const manualQuantity = wholeNumber(options.manualQuantity, 1, 1, 9999);
+    const classSkills = getSkillsByClass(state.classId);
+    const next = cloneState(state);
+    const skillIds = classSkills.map((skill) => skill.id);
+    next.unlockedSkillIds = skillIds;
+    for (const skillId of skillIds) {
+      next.manualCounts[skillId] = Math.max(wholeNumber(next.manualCounts[skillId]), manualQuantity);
+    }
+    next.masteryShards = 999999;
+    next.deckCapacity = MAX_EQUIPPED_SKILLS;
+    next.deckUpgradeMilestones = Object.keys(DECK_CAPACITY_MILESTONES);
+    next.deckSlots = classSkills
+      .filter((skill) => !skill.tags.includes("passive"))
+      .slice(0, MAX_EQUIPPED_SKILLS)
+      .map((skill) => skill.id);
+    return {
+      ok: true,
+      reason: null,
+      classId: state.classId,
+      skillIds,
+      manualQuantity,
+      state: normalizeSkillState(next, {
+        classId: state.classId,
+        starterSkills: false,
+        ensureStarter: false,
+        ensureEquipped: false,
+        deckCapacity: MAX_EQUIPPED_SKILLS,
+      }),
+    };
+  }
+
   function openOwnedSkillBook(bookStar, seedOrSerial, rawState) {
     const state = normalizeSkillState(rawState);
     const star = validStar(bookStar);
@@ -1428,6 +1473,8 @@
     openSkillBook,
     grantSkillBooks,
     grantSkillManuals,
+    grantAllSkillManuals,
+    createGodModeSkillState,
     openOwnedSkillBook,
     learnSkillFromManual,
     unlockSkillWithShards,
