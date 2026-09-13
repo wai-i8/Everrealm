@@ -12,6 +12,8 @@
     "left": 2,
     "up": 1
   },
+  "visualProfile": "ordinary-monster",
+  "visualEnvelope": { "maxWidth": 184, "maxHeight": 160 },
   "screenDirections": {
     "right": "north-east",
     "down": "south-east",

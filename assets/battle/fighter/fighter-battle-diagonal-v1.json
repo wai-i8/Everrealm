@@ -1,13 +1,15 @@
 {
   "version": 1,
-  "columns": 6,
+  "columns": 5,
   "rows": 4,
   "cellWidth": 256,
   "cellHeight": 256,
   "anchorX": 128,
   "anchorY": 224,
-  "directions": { "up": 0, "right": 1, "down": 2, "left": 3 },
+  "rowByFacing": { "right": 0, "down": 1, "left": 2, "up": 3 },
   "screenDirections": { "up": "north-west", "right": "north-east", "down": "south-east", "left": "south-west" },
-  "columnsByState": { "idle": [0], "walk": [1, 2, 3], "attack": [4], "hurt": [5] },
+  "columnsByState": { "idle": [0], "walk": [1, 2], "attack": [3], "hurt": [4] },
+  "visualProfile": "player",
+  "visualEnvelope": { "maxWidth": 208, "maxHeight": 212 },
   "scope": "battle-only fighter phase 1"
 }

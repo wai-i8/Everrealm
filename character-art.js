@@ -336,6 +336,11 @@
       battleDiagonal: true,
       columns: config.columns,
       rows: config.rows,
+      cellWidth: config.cellWidth,
+      cellHeight: config.cellHeight,
+      anchorX: config.anchorX,
+      anchorY: config.anchorY,
+      visualProfile: config.visualProfile,
       rowByFacing: config.rowByFacing,
       idleColumn: config.idleColumn,
       walkColumns: config.walkColumns,
@@ -356,7 +361,14 @@
       image.decoding = "async";
       image.addEventListener("load", () => {
         const m = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
-        atlas.ready = !atlas.standard || (image.naturalWidth === m.columns * m.cellWidth && image.naturalHeight === m.rows * m.cellHeight);
+        const expectedWidth = atlas.battleDiagonal
+          ? atlas.columns * atlas.cellWidth
+          : m.columns * m.cellWidth;
+        const expectedHeight = atlas.battleDiagonal
+          ? atlas.rows * atlas.cellHeight
+          : m.rows * m.cellHeight;
+        atlas.ready = (!atlas.standard && !atlas.battleDiagonal)
+          || (image.naturalWidth === expectedWidth && image.naturalHeight === expectedHeight);
         atlas.failed = !atlas.ready;
         if (!atlas.background) {
           atlas.alphaBounds = scanAtlasAlphaBounds(atlas);
@@ -582,23 +594,32 @@
     if (!selected) return false;
     const atlas = selected.atlas;
     if (!atlas?.ready || !atlas.image) return false;
-    const hasOpaqueBounds = Boolean(atlas.alphaBounds?.[selected.index] || atlas.visualBounds?.[selected.index]);
-    const opaque = opaqueAtlasFrame(atlas, selected.index);
+    const frame = atlasFrame(atlas, selected.index);
     const x = Number(settings.x) || 0;
     const y = Number(settings.y) || 0;
     const scale = Math.max(.08, Number(settings.scale) || 1);
     const authoredFrame = locomotionWorldFrame(id);
+    const cellWidth = Math.max(1, Number(selected.config.cellWidth) || frame.sw);
+    const cellHeight = Math.max(1, Number(selected.config.cellHeight) || frame.sh);
+    const anchorX = Number.isFinite(selected.config.anchorX) ? selected.config.anchorX : cellWidth / 2;
+    const anchorY = Number.isFinite(selected.config.anchorY) ? selected.config.anchorY : cellHeight;
+    // The normalized battle atlas is a fixed canvas. Preserve the authored
+    // transparent breathing room instead of cropping the alpha bounds and
+    // enlarging every species to the same height at runtime.
+    const visualScale = scale * authoredFrame.height / cellHeight;
+    const box = {
+      x: x - anchorX * visualScale,
+      y: y - anchorY * visualScale,
+      width: frame.sw * visualScale,
+      height: frame.sh * visualScale,
+      left: x - anchorX * visualScale,
+      right: x - anchorX * visualScale + frame.sw * visualScale,
+      top: y - anchorY * visualScale,
+      bottom: y - anchorY * visualScale + frame.sh * visualScale,
+      centerX: x,
+      baselineY: y,
+    };
     const targetHeight = Math.max(1, authoredFrame.height * scale);
-    // file:// builds can block the alpha scan used to trim transparent atlas
-    // padding. The battle atlas places the feet at y=224 in a 256px cell, so
-    // compensate only when we had to fall back to the whole cell.
-    // On HTTP(S), where alpha bounds are available, the baseline is unchanged.
-    const spriteContract = selected.config;
-    const fallbackFootInset = hasOpaqueBounds
-      ? 0
-      : Math.max(0, (spriteContract?.cellHeight || 256) - (spriteContract?.anchorY || 224)) * scale;
-    const spriteBaselineY = y + fallbackFootInset;
-    const box = fitFrameToBaseline(opaque, { x, y: spriteBaselineY, height: targetHeight, anchorXRatio: .5, anchorYRatio: 1 });
     const progress = clamp(Number.isFinite(settings.progress) ? settings.progress : .5, 0, 1);
     const vector = ({
       right: { x: .86, y: -.5 },
@@ -610,25 +631,27 @@
     const hurtShake = selected.state === "hurt" ? Math.sin((Number(settings.phase) || 0) * 48) * targetHeight * .015 : 0;
     const drawX = box.x + vector.x * attackOffset + hurtShake;
     const drawY = box.y + vector.y * attackOffset;
+    const visualProfile = Locomotion.BATTLE_DIAGONAL_VISUAL_PROFILES?.[selected.config.visualProfile];
+    const nameLift = Number(visualProfile?.nameLift) || Math.max(1, cellHeight - 12);
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, targetHeight / 256, id === "fighter" ? 15 : 12, selected.state === "hurt" ? .24 : .34);
+      drawGroundShadow(ctx, x, y, visualScale, id === "fighter" ? 15 : 12, selected.state === "hurt" ? .24 : .34);
       if (selected.state === "hurt") {
         ctx.globalAlpha *= .84;
         ctx.filter = "brightness(1.12) saturate(.88)";
       }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(atlas.image, opaque.sx, opaque.sy, opaque.sw, opaque.sh, drawX, drawY, box.width, box.height);
+      ctx.drawImage(atlas.image, frame.sx, frame.sy, frame.sw, frame.sh, drawX, drawY, box.width, box.height);
     } finally { ctx.restore(); }
     const nameAnchorX = x;
-    const nameAnchorY = box.y - 4 * targetHeight / 256;
+    const nameAnchorY = y - nameLift * visualScale;
     return {
       ...box,
       left: drawX,
       right: drawX + box.width,
       top: drawY,
-      bottom: spriteBaselineY,
+      bottom: y,
       nameAnchorX,
       nameAnchorY,
       markerAnchorX: nameAnchorX,
