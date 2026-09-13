@@ -6205,6 +6205,7 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     encounterGrace = 1;
+    syncAccountStatus(savePersistence?.getCloudStatus?.());
     updateHud(true);
     canvas.focus({ preventScroll: true });
     return true;
