@@ -180,7 +180,7 @@
     const progress = Math.max(0, Math.min(1, (Math.trunc(Number(stepIndex) || 0) + 1) / count));
     const startHeight = terrainHeightAt(grid, origin);
     const targetHeight = terrainHeightAt(grid, target);
-    const apex = Math.max(0, Number(arcHeight) || 0);
+    const apex = arcHeight == null ? 1.5 : Math.max(0, Number(arcHeight) || 0);
     return startHeight + (targetHeight - startHeight) * progress + 4 * apex * progress * (1 - progress);
   }
 
@@ -298,11 +298,13 @@
       path,
       intendedTarget: copyCell(target),
       actualTarget: null,
+      impactedUnits: [],
       firstImpactCell: null,
       blocked: false,
       blockedBy: null,
       stoppedReason: null,
       friendlyFire: options.friendlyFire === true,
+      piercing: options.piercing === true,
       deliveryMode,
       impactHeight: null,
     };
@@ -320,18 +322,21 @@
         result.impactHeight = projectileHeight;
         break;
       }
-      const unit = options.blocksByUnits === false ? null : units.find((candidate) => unitIsAlive(candidate)
+      const canCheckUnits = deliveryMode === "arc" || options.blocksByUnits !== false;
+      const unit = !canCheckUnits ? null : units.find((candidate) => unitIsAlive(candidate)
         && (ignoreUnitId == null || String(candidate.id) !== String(ignoreUnitId))
         && sameCell(cellOf(candidate), cell)
         && (deliveryMode !== "arc" || arcIntersectsUnit(options.grid, cell, candidate, projectileHeight)));
       if (unit) {
-        result.firstImpactCell = copyCell(cell);
-        result.actualTarget = unit;
+        if (!result.firstImpactCell) result.firstImpactCell = copyCell(cell);
+        if (!result.actualTarget) result.actualTarget = unit;
+        result.impactedUnits.push(unit);
         result.blocked = true;
-        result.blockedBy = unit;
+        result.blockedBy ||= unit;
         result.stoppedReason = "unit";
         result.impactHeight = projectileHeight;
-        break;
+        const maxPierce = options.maxPierce == null ? Infinity : Math.max(1, Math.trunc(Number(options.maxPierce) || 1));
+        if (!result.piercing || result.impactedUnits.length >= maxPierce) break;
       }
     }
     return result;
@@ -1628,6 +1633,9 @@
       blocksByTerrain: options.blocksByTerrain,
       blocksByUnits: options.blocksByUnits,
       arcHeight: options.arcHeight == null ? null : Math.max(0, Number(options.arcHeight) || 0),
+      piercing: options.piercing === true,
+      maxPierce: options.maxPierce == null ? null : Math.max(1, Math.trunc(Number(options.maxPierce) || 1)),
+      friendlyFire: options.friendlyFire === true,
       skillDurability: durability,
       accumulatedInterrupt: 0,
       remainingSkillDurability: durability,
@@ -1696,9 +1704,14 @@
         blocksByTerrain: action.blocksByTerrain,
         blocksByUnits: action.blocksByUnits,
         arcHeight: action.arcHeight,
+        piercing: action.piercing,
+        maxPierce: action.maxPierce,
+        friendlyFire: action.friendlyFire,
       });
-      const hitIntendedTarget = action.targetId == null || trace.actualTarget?.id === action.targetId;
-      const invalidated = trace.stoppedReason === "terrain" || !hitIntendedTarget;
+      const hasImpactForAction = action.targetId == null || (action.piercing
+        ? trace.impactedUnits.some((unit) => String(unit.id) === String(action.targetId))
+        : Boolean(trace.actualTarget));
+      const invalidated = trace.stoppedReason === "terrain" || !hasImpactForAction;
       if (invalidated) {
         return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
       }

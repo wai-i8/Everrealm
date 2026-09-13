@@ -2828,6 +2828,7 @@
         "deals_damage": true,
         "delivery_mode": "linear",
         "path_mode": "facingOrthogonalPriority",
+        "friendly_fire": true,
         "utility_effects": [],
         "damage": {
           "formula_applied": true,

@@ -126,6 +126,20 @@
     return !(units || []).some((unit) => unit !== ignored && isAlive(unit) && cellOf(unit)?.x === cell.x && cellOf(unit)?.y === cell.y);
   }
 
+  function terrainHeightAt(grid, cell) {
+    if (!grid || !cell) return 0;
+    const key = `${cell.x},${cell.y}`;
+    const source = grid.heightMap;
+    const value = typeof source === "function"
+      ? source(cell)
+      : source && typeof source === "object" ? source[key] : 0;
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function knockbackHeightAllowed(grid, from, to) {
+    return terrainHeightAt(grid, to) <= terrainHeightAt(grid, from);
+  }
+
   function knockback(caster, target, effect, units, grid, output) {
     const origin = cellOf(caster);
     const from = cellOf(target);
@@ -138,7 +152,7 @@
     let stopped = false;
     for (let step = 0; step < Math.max(0, Math.trunc(effect.amount || 1)); step += 1) {
       const next = { x: to.x + direction.x, y: to.y + direction.y };
-      if (!walkable(grid, next, units, target)) { stopped = true; break; }
+      if (!walkable(grid, next, units, target) || !knockbackHeightAllowed(grid, to, next)) { stopped = true; break; }
       to = next;
     }
     if (to.x !== from.x || to.y !== from.y) {

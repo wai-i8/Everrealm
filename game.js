@@ -5738,6 +5738,9 @@
       blocksByTerrain: heroSkill?.blocksByTerrain,
       blocksByUnits: heroSkill?.blocksByUnits,
       arcHeight: heroSkill?.arcHeight,
+      piercing: heroSkill?.piercing,
+      maxPierce: heroSkill?.maxPierce,
+      friendlyFire: heroSkill?.friendlyFire,
     });
     const enemyPending = battle.enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
@@ -5755,6 +5758,9 @@
         blocksByTerrain: plan.skill?.blocksByTerrain,
         blocksByUnits: plan.skill?.blocksByUnits,
         arcHeight: plan.skill?.arcHeight,
+        piercing: plan.skill?.piercing,
+        maxPierce: plan.skill?.maxPierce,
+        friendlyFire: plan.skill?.friendlyFire,
       });
     });
     const actionOrder = Skills.orderActionsBySpeed([
@@ -5861,7 +5867,7 @@
       const evasionEffect = skill?.effects.find((effect) => effect.type === "evasion");
       const defenceDownEffect = skill?.effects.find((effect) => effect.type === "defense_down");
       const moveDownEffect = skill?.effects.find((effect) => effect.type === "move_down");
-      let affectedEnemies = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
+      let affectedUnits = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
       const projectileTrace = ["linear", "arc"].includes(skill?.deliveryMode)
         ? Tactics.traceAttackPath({
           origin: battle.hero.cell,
@@ -5875,12 +5881,20 @@
           blocksByTerrain: skill.blocksByTerrain,
           blocksByUnits: skill.blocksByUnits,
           arcHeight: skill.arcHeight,
+          piercing: skill.piercing,
+          maxPierce: skill.maxPierce,
+          friendlyFire: skill.friendlyFire,
         })
         : null;
-      // Linear and ballistic deliveries resolve the first terrain/unit impact;
-      // pathless/area skills retain their authored effect area.
-      if (projectileTrace) affectedEnemies = projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
-      effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedEnemies;
+      // Linear and ballistic deliveries resolve terrain/unit impacts along the
+      // actual route; pathless/area skills retain their authored effect area.
+      if (projectileTrace) {
+        const tracedUnits = projectileTrace.piercing
+          ? projectileTrace.impactedUnits
+          : projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
+        affectedUnits = tracedUnits.filter((unit) => skill.friendlyFire || unit.side !== "ally");
+      }
+      effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedUnits;
       if (damageEffect) {
         const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
         const recheck = Boolean(skill.hitResolution?.recheck_attack_path_each_hit);
@@ -5914,17 +5928,24 @@
           };
         };
         if (projectileTrace) {
+          const initialTargets = projectileTrace.piercing
+            ? projectileTrace.impactedUnits.filter((unit) => skill.friendlyFire || unit.side !== "ally")
+            : projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
           heroHitResolvers.push({
             hitCount,
             recheck,
             path: projectileTrace.path,
-            initialTarget: projectileTrace.actualTarget,
+            initialTarget: initialTargets[0] || null,
+            initialTargets,
+            piercing: projectileTrace.piercing,
             deliveryMode: skill.deliveryMode,
             arcHeight: skill.arcHeight,
+            maxPierce: skill.maxPierce,
+            friendlyFire: skill.friendlyFire,
             makeHeroHit,
           });
         } else {
-          for (const target of affectedEnemies) {
+          for (const target of affectedUnits) {
             heroHitResolvers.push({
               hitCount,
               recheck: false,
@@ -5953,7 +5974,7 @@
         heroBuffFeedback.push("迴避力提升");
       }
       if (defenceDownEffect || moveDownEffect) {
-        for (const target of affectedEnemies) statusTargets.push({ target, defenceDownEffect, moveDownEffect });
+        for (const target of affectedUnits) statusTargets.push({ target, defenceDownEffect, moveDownEffect });
       }
     } else if (heroAction.type === "potion") {
       heroHeal = 30;
@@ -6051,14 +6072,22 @@
                 blocksByTerrain: skill.blocksByTerrain,
                 blocksByUnits: skill.blocksByUnits,
                 arcHeight: resolver.arcHeight,
+                piercing: resolver.piercing,
+                maxPierce: resolver.maxPierce,
+                friendlyFire: resolver.friendlyFire,
               })
             : null;
           const stableTrace = routedDelivery && !resolver.recheck ? traceNow() : null;
-          for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
-            const trace = resolver.recheck ? traceNow() : stableTrace;
-            const target = routedDelivery ? trace?.actualTarget : resolver.initialTarget;
-            const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
-            if (hit) executionHits.push(hit);
+          const trace = resolver.recheck ? traceNow() : stableTrace;
+          const routedTargets = resolver.recheck
+            ? (resolver.piercing ? trace?.impactedUnits : trace?.actualTarget ? [trace.actualTarget] : [])
+            : (resolver.piercing ? resolver.initialTargets : resolver.initialTarget ? [resolver.initialTarget] : []);
+          const targets = routedTargets.filter((target) => resolver.friendlyFire || target.side !== "ally");
+          for (const target of targets) {
+            for (let hitIndex = 0; hitIndex < resolver.hitCount; hitIndex += 1) {
+              const hit = resolver.makeHeroHit(target, hitIndex, trace?.path || resolver.path);
+              if (hit) executionHits.push(hit);
+            }
           }
         }
         for (const hit of executionHits) {
