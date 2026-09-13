@@ -1095,7 +1095,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   background:
     linear-gradient(rgba(255,255,255,.025), rgba(255,255,255,0) 10rem),
     linear-gradient(145deg, #202b49, #11192e 70%);
-  box-shadow: 8px 10px 0 rgba(3,6,14,.72), 0 1.5rem 5rem rgba(0,0,0,.55);
 }
 .facility-window::before {
   content: "";
@@ -1419,7 +1418,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .battle-facing-picker .facing-right { left: .73rem; top: -.675rem; }
   .battle-facing-picker .facing-down { left: -.675rem; top: .73rem; }
   .facility-overlay { padding: .35rem; }
-  .facility-window { border-radius: .85rem; box-shadow: 4px 5px 0 rgba(3,6,14,.72); }
+  .facility-window { border-radius: .85rem; }
   .facility-window::before { inset: .24rem; border-radius: .62rem; }
   .facility-summary { grid-template-columns: repeat(3,minmax(0,1fr)); gap: .25rem; padding: .45rem .5rem; }
   .facility-summary article { justify-content: center; min-height: 2.6rem; gap: 0; padding: .35rem .2rem; text-align: center; }
@@ -3038,7 +3037,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   border-image: var(--ui-frame-image) 24 fill / 12px / 0 stretch;
   border-radius: 1.1rem !important;
   background: linear-gradient(145deg, rgba(30,43,69,.98), rgba(8,15,30,.99));
-  box-shadow: 8px 10px 0 rgba(3,6,14,.72), 0 1.5rem 5rem rgba(0,0,0,.55);
+  box-shadow: none !important;
 }
 .ui-window::before,
 .ui-modal-window::before {
@@ -5940,10 +5939,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .facility-window.ui-window.is-ui-window-active,
 .system-settings-window.ui-window.is-ui-window-active {
-  box-shadow:
-    0 1rem 2.6rem rgba(0,0,0,.58),
-    0 0 0 1px rgba(82,220,203,.34),
-    inset 0 1px rgba(255,255,255,.05) !important;
+  box-shadow: none !important;
 }
 
 /* System is a normal draggable window now, not a sidebar-attached popover. */
