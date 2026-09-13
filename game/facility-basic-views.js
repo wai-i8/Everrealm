@@ -30,7 +30,7 @@
         <dl class="status-compact-stats">
           <div><dt>攻擊</dt><dd>${view.attack}</dd></div>
           <div><dt>防禦</dt><dd>${view.defence}</dd></div>
-          <div><dt>移動</dt><dd>${view.moveRange}</dd></div>
+          <div><dt>移動力</dt><dd>${view.moveRange}</dd></div>
         </dl>
       </section>`;
     setFacilityFooter("");

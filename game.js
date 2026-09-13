@@ -3556,7 +3556,7 @@
       xpPercent: Core.clamp((player.xp / xpNeeded) * 100, 0, 100),
       attack: stats.attack,
       defence: stats.defence,
-      moveRange: stats.moveRange,
+      moveRange: battleMoveCapacityForPlayer(stats),
     };
   }
   const renderStatusFacility = () => FacilityBasicViews.renderStatusFacility({
@@ -4563,6 +4563,12 @@
   const BATTLE_SIDE_DAMAGE_BONUS = .15;
   const BATTLE_REAR_DAMAGE_BONUS = .35;
   const BATTLE_MISS_COLOR = "#ffc857";
+
+  function battleMoveCapacityForPlayer(stats) {
+    const baseMoveRange = Math.max(0, Number(stats?.moveRange) || 0);
+    return baseMoveRange + (playerClassId === "fighter" ? BATTLE_FINAL_FACING_RESERVE : 0);
+  }
+
   const MOUNTAIN_BATTLEFIELD = Object.freeze({
     biome: "mountain",
     theme: "mountain",
@@ -4705,7 +4711,7 @@
     suppressBattleTouchTap = false;
     battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
     const stats = playerStats();
-    const battleMoveCapacity = playerClassId === "fighter" ? stats.moveRange + BATTLE_FINAL_FACING_RESERVE : stats.moveRange;
+    const battleMoveCapacity = battleMoveCapacityForPlayer(stats);
     const battlefield = battleFieldContextFor(currentMapId);
     const dimensions = battleDimensionsFor(battlefield);
     const heroSpawn = battleDeploymentCell(battlefield, "ally", 0);
@@ -5524,9 +5530,6 @@
     for (const unit of stoppedUnits) {
       unit.stopFlash = .48;
       battle.effects.push({ cell: { ...unit.cell }, text: "STOP!", color: "#ff6b6b", life: .95, maxLife: .95, burst: true });
-    }
-    if (!stoppedUnits.some((unit) => unit.id === battle.hero.id)) {
-      battle.effects.push({ cell: { ...battle.hero.cell }, text: "停定！", color: "#52dccb", life: .75, maxLife: .75 });
     }
     battle.message = stoppedUnits.length
       ? "移動 STOP；按實際企位揀招。"
