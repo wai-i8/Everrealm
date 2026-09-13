@@ -901,7 +901,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   cursor: pointer;
 }
 .dialogue-next:hover, .dialogue-next:focus-visible { color: var(--cream); border-image-source: var(--ui-button-active-image) !important; }
-.dialogue-next i { color: var(--gold); font-style: normal; animation: nextBounce .7s ease-in-out infinite alternate; }
 .dialogue-choices {
   min-width: 0;
   display: grid;
