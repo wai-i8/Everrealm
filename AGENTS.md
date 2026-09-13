@@ -101,6 +101,7 @@ Do not duplicate the same rule in multiple documents.
 
 ## Working rules
 
+- User authorization boundary: 除非用戶明確要求修改或執行某項動作，否則不得修改專案檔案、執行會改變狀態的指令，或進行外部寫入。對於問答、解釋、查資料、狀態查詢及只讀檢查，只作回覆或只讀操作；不可由上下文或之前的討論自行推斷授權。指示含糊時，先向用戶確認再作修改。
 - Fix root causes; do not hide problems with one-off coordinates, per-frame hacks, teleports, masks or unrelated hard-coding.
 - Avoid unrelated refactors.
 - Reuse shared movement, collision, battle, map and rendering logic instead of duplicating rules.
