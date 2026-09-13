@@ -4681,8 +4681,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 /* The world stays edge-to-edge, while the interaction rail respects each
    device's safe area (iPhone cutouts/Dynamic Island included). Desktop and
    mobile now deliberately share the same icon-only navigation. */
-#exploreSidebar,
-#exploreSidebar.is-collapsed {
+#exploreSidebar:not([hidden]),
+#exploreSidebar.is-collapsed:not([hidden]) {
   --explore-rail-size: clamp(3rem, 10.8vh, 4.25rem);
   z-index: 24 !important;
   left: max(.8rem, calc(env(safe-area-inset-left) + .45rem)) !important;
@@ -4691,7 +4691,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   height: auto !important;
   max-width: var(--explore-rail-size) !important;
   max-height: calc(100% - max(1.1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom) + .7rem)) !important;
-  display: flex !important;
+  display: flex;
   flex-direction: column !important;
   align-items: center !important;
   gap: 0 !important;

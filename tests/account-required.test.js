@@ -19,8 +19,8 @@ test("startup keeps gameplay controls hidden until Firebase Auth and Firestore r
   assert.match(game, /let authStateResolved = false/);
   assert.match(game, /titleActions\.hidden = !canPlay/);
   assert.match(game, /continueButton\.hidden = !canPlay \|\| !savePersistence\?\.hasCloudSave/);
-  assert.match(game, /exploreSidebar\.hidden = !\(canPlay && mode !== "title"\)/);
-  assert.match(stylesCss, /#gameStage > #exploreSidebar\[hidden\]\s*\{[\s\S]*?display: none !important;/);
+  assert.match(game, /exploreSidebar\.hidden = !\(canPlay && mode === "playing"\)/);
+  assert.match(stylesCss, /#exploreSidebar:not\(\[hidden\]\)[\s\S]*?display: flex;/);
   assert.doesNotMatch(game, /const savedGameAvailable = hasSave/);
 });
 
