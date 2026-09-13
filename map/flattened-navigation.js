@@ -133,6 +133,11 @@
       return insideDisk((px, py) => mask[py * width + px] !== 0, x, y, radius, "any");
     }
 
+    function isFeetInRegion(region, position) {
+      if (!position) return false;
+      return isInRegion(region, { x: position.x, y: position.y, radius: FEET_RADIUS });
+    }
+
     function distanceToRegion(region, position) {
       const nearest = nearestPointInRegion(region, position);
       return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
@@ -160,6 +165,7 @@
       isPositionWalkable,
       isRegionAt,
       isInRegion,
+      isFeetInRegion,
       nearestPointInRegion,
       distanceToRegion,
       interactionHitTest,

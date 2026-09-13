@@ -2750,8 +2750,15 @@
   function updateAutomaticPortal() {
     if (mode !== "playing") return false;
     const portal = world.portals.find((candidate) => {
+      if (candidate.navigationRegion && typeof world.navigation?.isFeetInRegion === "function") {
+        return world.navigation.isFeetInRegion(candidate.navigationRegion, player);
+      }
       if (candidate.navigationRegion && typeof world.navigation?.isInRegion === "function") {
-        return world.navigation.isInRegion(candidate.navigationRegion, player);
+        return world.navigation.isInRegion(candidate.navigationRegion, {
+          x: player.x,
+          y: player.y,
+          radius: Number(world.navigation.feetRadiusPx) || 3,
+        });
       }
       if (MapTransitions.transitionTypeFor(candidate) === TRANSITION_TYPES.PHYSICAL_DOOR) {
         // Ordinary doors use the authored feet/threshold rectangle. A nearby
