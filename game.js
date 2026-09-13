@@ -427,7 +427,8 @@
   let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
   if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
   const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
-  const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/everrealm_battle_bgm_v2_seamless_loop.mp3") : null;
+  const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1.mp3") : null;
+  const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/battle-easy-v1.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
   // not. Low cover deliberately has four visual variants and picks one stable
@@ -444,18 +445,42 @@
     if (image) image.src = entry.src;
     return { ...entry, image };
   });
-  if (battleBgmAudio) {
-    battleBgmAudio.loop = true;
-    battleBgmAudio.preload = "auto";
-    battleBgmAudio.volume = bgmVolume;
+  for (const music of [titleBgmAudio, battleBgmAudio]) {
+    if (!music) continue;
+    music.loop = true;
+    music.preload = "auto";
+    music.volume = bgmVolume;
   }
   let pageAudioSuspended = document.visibilityState !== "visible";
   let audioGestureUnlocked = false;
+
+  function pauseMusicElement(element, reset = false) {
+    if (!element) return;
+    element.pause();
+    if (reset) {
+      try { element.currentTime = 0; } catch (_) {}
+    }
+  }
+
+  function startTitleBgm({ restart = false } = {}) {
+    bgm.setEnabled(false);
+    pauseMusicElement(battleBgmAudio);
+    if (!titleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
+    if (restart) {
+      try { titleBgmAudio.currentTime = 0; } catch (_) {}
+    }
+    titleBgmAudio.play().catch(() => {});
+  }
+
+  function stopTitleBgm({ reset = true } = {}) {
+    pauseMusicElement(titleBgmAudio, reset);
+  }
 
   function suspendGameAudio() {
     pageAudioSuspended = true;
     sound.suspend();
     bgm.suspend?.();
+    titleBgmAudio?.pause();
     battleBgmAudio?.pause();
   }
 
@@ -465,39 +490,51 @@
     sound.resume();
     if (!musicEnabled) {
       bgm.suspend?.();
+      titleBgmAudio?.pause();
       battleBgmAudio?.pause();
       return;
     }
-    bgm.resume?.();
+    if (mode === "title") {
+      startTitleBgm();
+      return;
+    }
+    stopTitleBgm({ reset: false });
     if (mode === "battle" && battle) {
-      bgm.suspend?.();
+      bgm.setEnabled(false);
       battleBgmAudio?.play().catch(() => {});
       return;
     }
     battleBgmAudio?.pause();
+    bgm.setEnabled(true);
     bgm.resume?.();
     bgm.setMap(currentMapId);
   }
 
   function unlockGameAudioFromGesture() {
     if ((!musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
+    const titlePlaying = mode === "title" && titleBgmAudio && titleBgmAudio.paused === false;
     const battlePlaying = mode === "battle" && battle && battleBgmAudio && battleBgmAudio.paused === false;
-    const mapPlaying = mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
-    if (audioGestureUnlocked && (battlePlaying || mapPlaying || !musicEnabled)) return;
+    const mapPlaying = mode !== "title" && mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
+    if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || !musicEnabled)) return;
     audioGestureUnlocked = true;
     resumeGameAudio();
   }
 
   function startBattleBgm() {
+    stopTitleBgm({ reset: false });
     bgm.setEnabled(false);
     if (!battleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { battleBgmAudio.currentTime = 0; } catch (_) {}
     battleBgmAudio.play().catch(() => {});
   }
   function stopBattleBgm() {
-    if (battleBgmAudio) {
-      battleBgmAudio.pause();
-      try { battleBgmAudio.currentTime = 0; } catch (_) {}
+    pauseMusicElement(battleBgmAudio, true);
+    // closeBattleHud() is also called while authentication/new-game flows are
+    // still on the title screen. Do not briefly start map music underneath the
+    // title/login track in that state; real battle exits still resume map BGM.
+    if (mode === "title") {
+      bgm.setEnabled(false);
+      return;
     }
     bgm.setEnabled(musicEnabled);
     if (musicEnabled) bgm.setMap(currentMapId);
@@ -968,6 +1005,8 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     syncAccountStatus(savePersistence?.getCloudStatus?.());
+    stopTitleBgm();
+    bgm.setEnabled(musicEnabled);
     bgm.setMap(currentMapId);
     sound.start();
     showLocation("米克雷帝國", true);
@@ -1004,7 +1043,6 @@
     automaticPortalReady = false;
     currentMapId = hasMap(rawSave?.expansion?.currentMapId) ? rawSave.expansion.currentMapId : "world";
     world = maps[currentMapId];
-    bgm.setMap(currentMapId);
     clearExploreMovePath();
     pendingClickInteractionId = null;
     resetPlayer();
@@ -1033,6 +1071,9 @@
     mode = "playing";
     stage.dataset.gameState = mode;
     syncAccountStatus(savePersistence?.getCloudStatus?.());
+    stopTitleBgm();
+    bgm.setEnabled(musicEnabled);
+    bgm.setMap(currentMapId);
     player.invulnerable = 1;
     persistence?.markLoaded(getPersistenceFingerprint());
     sound.start();
@@ -1153,6 +1194,7 @@
     mode = "title";
     stage.dataset.gameState = mode;
     titleScreen.hidden = false;
+    startTitleBgm({ restart: true });
     syncAccountStatus(savePersistence?.getCloudStatus?.());
     updateHud(true);
   }
@@ -1165,6 +1207,7 @@
     mode = "title";
     stage.dataset.gameState = mode;
     titleScreen.hidden = false;
+    startTitleBgm({ restart: true });
     clearExploreMovePath();
     pendingClickInteractionId = null;
     resetPlayer();
@@ -1463,6 +1506,7 @@
   function setBgmVolume(value, persist = true) {
     bgmVolume = Core.clamp(Number(value) || 0, 0, 1);
     bgm.setVolume?.(bgmVolume);
+    if (titleBgmAudio) titleBgmAudio.volume = bgmVolume;
     if (battleBgmAudio) battleBgmAudio.volume = bgmVolume;
     if (persist) {
       try { localStorage.setItem(BGM_VOLUME_KEY, bgmVolume.toFixed(2)); } catch (_) {}
@@ -1482,13 +1526,21 @@
 
   function setMusicEnabled(enabled, persist = true) {
     musicEnabled = Boolean(enabled);
-    if (mode === "battle") {
+    if (mode === "title") {
+      if (musicEnabled && !pageAudioSuspended) startTitleBgm();
+      else {
+        stopTitleBgm({ reset: false });
+        bgm.setEnabled(false);
+      }
+    } else if (mode === "battle") {
+      stopTitleBgm({ reset: false });
       bgm.setEnabled(false);
       if (battleBgmAudio) {
         if (musicEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
         else battleBgmAudio.pause();
       }
     } else {
+      stopTitleBgm({ reset: false });
       bgm.setEnabled(musicEnabled);
       if (musicEnabled && !pageAudioSuspended) bgm.setMap(currentMapId);
     }
@@ -10135,6 +10187,7 @@
   renderSystemLog();
   syncAccountStatus();
   syncSystemSoundControl();
+  startTitleBgm();
   syncExploreZoomControls();
   syncHudCollapse();
   resetEnemies();

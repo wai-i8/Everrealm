@@ -72,7 +72,7 @@
     "game/facility-bag-view.js",
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
-    "game.js?v=20260913-01",
+    "game.js?v=20260913-02",
   ]);
 
   return Object.freeze({ scripts });

@@ -7163,7 +7163,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   margin: .65rem 0 1rem;
 }
 .class-choice-grid--six {
-  width: min(68rem, 96vw);
+  width: min(68rem, 100%);
+  max-width: 100%;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: .55rem;
 }
