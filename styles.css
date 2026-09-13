@@ -1079,6 +1079,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     radial-gradient(circle at 92% 86%, rgba(82,220,203,.1), transparent 20rem),
     rgba(7,11,22,.9);
 }
+/* Floating facility layers are only positioning surfaces. Keep the launcher
+   and other windows reachable outside the active window itself. */
+.facility-overlay.is-floating-facility-layer { pointer-events: none; }
+.facility-overlay.is-floating-facility-layer > .facility-window { pointer-events: auto; }
 .facility-window {
   position: relative;
   width: min(66rem, 100%);
