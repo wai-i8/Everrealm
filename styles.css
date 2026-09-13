@@ -3012,6 +3012,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-panel-compact-max: 16rem;
   --ui-panel-medium-max: 32rem;
   --ui-panel-wide-max: 66rem;
+  --ui-window-min-width: 16rem;
   --ui-skill-badge-width: 3.45rem;
   --ui-skill-badge-height: 1.5rem;
   --ui-control-hit: 2.5rem;
@@ -3031,6 +3032,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .ui-window,
 .ui-modal-window {
   position: relative;
+  min-width: min(var(--ui-window-min-width), calc(100vw - 2rem));
   isolation: isolate;
   border: 12px solid transparent !important;
   border-image: var(--ui-frame-image) 24 fill / 12px / 0 stretch;
@@ -3168,7 +3170,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay[data-panel-size] .facility-window.ui-window {
   width: fit-content;
   max-width: min(var(--ui-panel-width, var(--ui-panel-wide-max)), calc(100vw - 2rem));
-  min-width: 0;
 }
 .facility-overlay[data-panel-size="compact"] .facility-window.ui-window,
 .facility-overlay[data-panel-size="medium"] .facility-window.ui-window {
