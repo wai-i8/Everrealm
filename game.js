@@ -4361,15 +4361,6 @@
     if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     pendingAbandonContractId = expectedId;
     document.getElementById("abandonCommissionTitle").textContent = `放棄「${active.title}」`;
-    document.getElementById("abandonCommissionDescription").textContent = active.type === "hunt"
-      ? `目前討伐進度 ${guildCommissionState.progress} / ${active.objective.count} 將會失去；委託會重新開放接受。`
-      : active.type === "wish"
-        ? guildCommissionState.status === "ready_to_report"
-          ? "願望已經許完但尚未回報；放棄後完成狀態與回報資格都會失去。"
-          : "目前許願委託會取消，之後可以重新接受。"
-        : guildCommissionState.status === "ready_to_report"
-          ? "信件已送達但尚未回報；放棄後送件完成狀態與回報資格都會失去。"
-          : "目前送信進度將會失去；委託會重新開放接受。";
     abandonCommissionPanel.hidden = false;
     resetDraggableWindowPosition(abandonCommissionPanel.querySelector(".ui-modal-window"));
     document.getElementById("abandonCommissionConfirmButton").focus({ preventScroll: true });
