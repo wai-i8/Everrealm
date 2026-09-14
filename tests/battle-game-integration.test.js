@@ -134,19 +134,19 @@ test("fighter uses a true battle-only four-diagonal atlas", () => {
   assert.match(game, /battleDiagonal: layout\.projected/);
   assert.match(characterArt, /drawBattleFighterDiagonal/);
   assert.match(characterArt, /drawBattleMonsterDiagonal/);
-  assert.match(locomotion, /fighter-battle-diagonal-v2\.png/);
+  assert.match(locomotion, /fighter-battle-diagonal-v1\.png/);
   assert.match(locomotion, /chick-battle-diagonal-v1\.png/);
   assert.match(locomotion, /\{ right: 0, down: 1, left: 2, up: 3 \}/);
   assert.match(locomotion, /walkColumns: Object\.freeze\(\[1, 2\]\)/);
-  assert.match(locomotion, /columns: 10, rows: 4/);
-  assert.match(locomotion, /attackColumns: Object\.freeze\(\[3, 4, 5, 6, 7, 8\]\)/);
+  assert.match(locomotion, /columns: 5, rows: 4/);
+  assert.match(locomotion, /attackColumn: 3, hurtColumn: 4/);
   assert.match(locomotion, /attackSourceFacing: Object\.freeze/);
   assert.match(locomotion, /attackMirrorFacing: Object\.freeze/);
-  assert.match(characterArt, /state === "attack" && config\.attackFrames/);
+  assert.match(characterArt, /state === "attack"\) column = config\.attackColumn/);
   assert.match(characterArt, /actionStrikeIndex/);
   assert.match(characterArt, /ctx\.scale\(-1, 1\)/);
   assert.match(characterArt, /state === "hurt"\) column = config\.hurtColumn/);
-  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "fighter", "fighter-battle-diagonal-v2.png")), true);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "fighter", "fighter-battle-diagonal-v1.png")), true);
   assert.equal(fs.existsSync(path.resolve(__dirname, "..", "assets", "battle", "chick", "chick-battle-diagonal-v1.png")), true);
 });
 
