@@ -5553,8 +5553,8 @@
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
     const pickerRadius = touchSizedPicker
-      ? Core.clamp(layout.cell * .54, 38, 46)
-      : Core.clamp(layout.cell * .48, 31, 45);
+      ? Core.clamp(layout.cell * .8, 56, 66)
+      : Core.clamp(layout.cell * .64, 46, 58);
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {

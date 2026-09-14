@@ -791,7 +791,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   text-shadow: 0 2px 3px rgba(0,0,0,.9),0 0 .45rem rgba(255,200,87,.55);
 }
 .battle-facing-picker[data-detached="true"] {
-  width: 8rem; height: 8rem;
+  width: 11rem; height: 11rem;
   transform: translate(-50%,-50%);
 }
 .battle-facing-picker[data-detached="true"] .facing-drag-handle { display: grid; }
@@ -5231,8 +5231,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     margin: 0 !important;
   }
   .battle-facing-picker[data-detached="true"] {
-    width: 8rem !important;
-    height: 8rem !important;
+    width: 11rem !important;
+    height: 11rem !important;
   }
 
   .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
