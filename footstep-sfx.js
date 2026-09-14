@@ -15,6 +15,11 @@
   const DEFAULT_FIRST_DELAY = 0.10;
   const DEFAULT_GAIN = 0.48;
   const TOWN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/town/walk-on-town-v1-01-loop.mp3";
+  const MOUNTAIN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/dirt/walk-on-dirt-v1-01-loop.mp3";
+  const WALK_LOOP_ASSET_BY_MAP = Object.freeze({
+    world: TOWN_WALK_LOOP_ASSET,
+    field: MOUNTAIN_WALK_LOOP_ASSET,
+  });
 
   const FOOTSTEP_ASSETS = Object.freeze({
     stone: Object.freeze([
@@ -106,7 +111,7 @@
 
     function preload() {
       for (const list of Object.values(assets)) for (const src of list) audioTemplate(src);
-      audioTemplate(TOWN_WALK_LOOP_ASSET);
+      for (const src of Object.values(WALK_LOOP_ASSET_BY_MAP)) audioTemplate(src);
     }
 
     function nextIndex(length) {
@@ -135,7 +140,8 @@
     }
 
     function updateTownWalkLoop(nextMoving) {
-      const shouldPlay = nextMoving && currentMapId === "world" && enabled();
+      const asset = WALK_LOOP_ASSET_BY_MAP[currentMapId];
+      const shouldPlay = Boolean(nextMoving && asset && enabled());
       if (!shouldPlay) {
         if (townWalkLoop) townWalkLoop.pause?.();
         if (townWalkLoop) {
@@ -146,7 +152,7 @@
         return false;
       }
 
-      const template = audioTemplate(TOWN_WALK_LOOP_ASSET);
+      const template = audioTemplate(asset);
       if (!template) return false;
       if (!townWalkLoop) {
         townWalkLoop = template;
@@ -171,7 +177,7 @@
         timeToNext = firstDelay;
         return false;
       }
-      if (currentMapId === "world") return updateTownWalkLoop(true);
+      if (WALK_LOOP_ASSET_BY_MAP[currentMapId]) return updateTownWalkLoop(true);
       if (!moving) {
         moving = true;
         timeToNext = firstDelay;
@@ -212,6 +218,7 @@
         interval,
         firstDelay,
         variantCount: variants().length,
+        walkLoopActive: Boolean(townWalkLoop && townWalkLoopPlaying),
         townWalkLoopActive: Boolean(townWalkLoop && townWalkLoopPlaying),
       };
     }
@@ -291,6 +298,8 @@
   return Object.freeze({
     FOOTSTEP_ASSETS,
     TOWN_WALK_LOOP_ASSET,
+    MOUNTAIN_WALK_LOOP_ASSET,
+    WALK_LOOP_ASSET_BY_MAP,
     SURFACE_BY_MAP,
     createFootstepController,
     install,
