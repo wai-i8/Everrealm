@@ -556,6 +556,7 @@
   }
 
   function startBattleBgm() {
+    window.EverrealmFootstepsRuntime?.suspend();
     stopTitleBgm({ reset: false });
     pauseMusicElement(victoryBgmAudio, true);
     bgm.setEnabled(false);
@@ -574,6 +575,7 @@
   }
 
   function stopBattleBgm() {
+    window.EverrealmFootstepsRuntime?.resume();
     pauseMusicElement(battleBgmAudio, true);
     pauseMusicElement(victoryBgmAudio, true);
     // closeBattleHud() is also called while authentication/new-game flows are
