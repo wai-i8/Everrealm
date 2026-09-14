@@ -38,6 +38,7 @@
   --ui-text-on-accent: #171421;
   --ui-text-on-teal: #061923;
   --ui-text-disabled: #b8bfd0;
+  --facility-title-size: 1rem;
   font-family: "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", ui-sans-serif, sans-serif;
   font-synthesis: none;
 }
@@ -3232,8 +3233,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .facility-help-popover p { margin: 0; color: var(--ui-text-secondary); font-size: .72rem; line-height: 1.55; }
 .facility-header .facility-kicker { color: var(--teal); }
-.facility-header h2 { color: var(--cream); }
-.facility-header h2 { margin-block: 0; }
+.facility-header h2 { color: var(--cream); margin-block: 0; font-size: var(--facility-title-size); }
 .facility-window.ui-window::before { opacity: .96; }
 .facility-content,
 .facility-footer { background: rgba(5,9,19,.34); }
@@ -3593,7 +3593,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay[data-facility-tab="skills"] .facility-header h2 {
   margin: 0 !important;
   color: rgba(245,233,202,.93) !important;
-  font-size: .94rem !important;
   font-weight: 850 !important;
   letter-spacing: .08em !important;
 }
@@ -3710,7 +3709,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .facility-overlay[data-facility-tab="bag"] .facility-header h2,
 .facility-overlay[data-facility-tab="missions"] .facility-header h2 {
-  font-size: 1.08rem;
   letter-spacing: .02em;
 }
 .facility-overlay[data-facility-tab="bag"] .facility-content {
@@ -4157,7 +4155,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   padding: .28rem .46rem .28rem .72rem;
   border-bottom: 1px solid rgba(255,200,87,.18);
 }
-.facility-overlay[data-facility-tab="status"] .facility-header h2 { font-size: 1.02rem; }
 .facility-overlay[data-facility-tab="status"] .facility-content {
   padding: .72rem .82rem .78rem;
   overflow: visible;
@@ -4389,9 +4386,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
     min-height: 2.35rem !important;
     padding: .2rem .34rem .2rem .56rem !important;
-  }
-  .facility-overlay[data-facility-tab="status"] .facility-header h2 {
-    font-size: .88rem !important;
   }
   .facility-overlay[data-facility-tab="status"] .facility-content {
     padding: .5rem .6rem .56rem !important;
@@ -5257,7 +5251,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   border-bottom: 1px solid rgba(255,200,87,.16);
 }
 .facility-overlay[data-facility-tab="deck"] .facility-header h2 {
-  font-size: clamp(1rem, 1.8vw, 1.14rem) !important;
   line-height: 1.15;
 }
 .facility-overlay[data-facility-tab="deck"] #facilityHelpButton,
@@ -5468,7 +5461,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     min-height: 2.55rem !important;
     padding: .2rem .3rem .2rem .58rem !important;
   }
-  .facility-overlay[data-facility-tab="deck"] .facility-header h2 { font-size: .92rem !important; }
   .facility-overlay[data-facility-tab="deck"] .facility-content { padding: .48rem !important; }
   .facility-overlay[data-facility-tab="deck"] .deck-manage-layout {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -5751,9 +5743,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-overlay[data-facility-tab="guild"] .facility-header.ui-header {
   min-height: 3.35rem;
   padding: .42rem .7rem .42rem .9rem;
-}
-.facility-overlay[data-facility-tab="guild"] .facility-header h2 {
-  font-size: clamp(1rem, 2vw, 1.32rem) !important;
 }
 .facility-overlay[data-facility-tab="guild"] .facility-tabs,
 .facility-overlay[data-facility-tab="guild"] .facility-summary,
