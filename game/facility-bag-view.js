@@ -25,6 +25,8 @@
     atlasIconHtml,
     coinAmountHtml,
   }) {
+    const facilityWindow = content.closest?.(".facility-window.ui-window");
+    facilityWindow?.querySelector?.(".inventory-detail-layer")?.remove();
     const categoryLabels = { all: "全部", equipment: "裝備", consumable: "消耗品", skillbook: "技能書", material: "素材" };
     const iconMarkup = (item, extraClass = "") => item.equipment
       ? equipmentIconHtml(item.equipment, extraClass)
@@ -81,6 +83,8 @@
           <div class="inventory-icon-grid" role="list" aria-label="所有隨身物品">${itemCards}${emptySlots}</div>${pager}
         </section>${detail}
       </section>`;
+    const detailLayer = content.querySelector?.(".inventory-detail-layer");
+    if (detailLayer && facilityWindow) facilityWindow.appendChild(detailLayer);
     setFacilityFooter("");
   }
 

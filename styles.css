@@ -7388,6 +7388,23 @@ html body [aria-disabled="true"] {
   max-height: none !important;
   overflow: visible !important;
 }
+
+/* The detail layer belongs to the visible inventory window, not the
+   scrollable facility content. Keep it stable while the item grid moves. */
+.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window > .inventory-detail-layer {
+  position: absolute !important;
+  z-index: 30 !important;
+  inset: 3.35rem 0 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  padding: clamp(.7rem, 2vw, 1.2rem);
+  pointer-events: auto !important;
+}
+.facility-overlay[data-facility-tab="bag"] .facility-window.ui-window > .inventory-detail-layer > .inventory-detail-popup {
+  max-height: calc(100% - 1rem) !important;
+  overflow-y: auto !important;
+}
 .inventory-detail-actions .facility-action-button,
 .inventory-detail-actions .secondary-button {
   width: fit-content !important;
@@ -7404,6 +7421,10 @@ html body [aria-disabled="true"] {
 }
 
 @media (max-width: 700px) and (orientation: portrait) {
+  .facility-overlay[data-facility-tab="bag"] .facility-window.ui-window > .inventory-detail-layer {
+    inset: 3.35rem 0 0 !important;
+    justify-content: center;
+  }
   .inventory-detail-popup {
     width: min(20rem, calc(100vw - 1.25rem)) !important;
     max-height: none !important;

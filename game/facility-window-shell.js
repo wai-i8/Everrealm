@@ -189,6 +189,10 @@
     state.panel.addEventListener("pointerdown", () => handlers.activate(state), true);
     state.panel.addEventListener("click", (event) => {
       if (!state.helpPopover?.hidden && !event.target.closest(".facility-help-popover, .ui-info-button")) handlers.closeHelp(state);
+      if (event.target.closest(".inventory-detail-layer")) {
+        handlers.contentClick(event, state);
+        return;
+      }
       const tab = event.target.closest(".facility-tabs [data-facility-tab]");
       if (!tab || !state.tabs?.contains(tab)) return;
       handlers.activate(state);
