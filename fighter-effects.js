@@ -6,8 +6,8 @@
   "use strict";
 
   const STANCES = new Set(["guard", "evasion", "counter", "projectile_counter"]);
-  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "stealth", "action_interference"]);
-  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", stealth: "隱身", action_interference: "行動妨礙" };
+  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "stealth", "action_interference", "burn", "wet", "freeze", "sleep", "petrify", "accuracy_down", "barrier"]);
+  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", stealth: "隱身", action_interference: "行動妨礙", burn: "灼傷", wet: "濕身", freeze: "凍結", sleep: "睡眠", petrify: "石化", accuracy_down: "命中下降", barrier: "屏障" };
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
   const roundNumber = (value) => Math.max(0, Math.trunc(Number(value) || 0));
   const cellOf = (unit) => unit?.cell || unit;
@@ -33,8 +33,7 @@
         else if (effect.stat === "evasion") modifiers.evasion += amount;
         else if (effect.stat === "accuracy") modifiers.accuracy += amount;
         else if (effect.stat === "speed") modifiers.speedBonus += 1;
-        else if (effect.stat === "sleep_recovery") modifiers.immunities.push("sleep");
-        else if (effect.stat === "poison_recovery") modifiers.immunities.push("poison");
+        else if (String(effect.stat).endsWith("_recovery")) modifiers.immunities.push(String(effect.stat).replace(/_recovery$/, ""));
         // Historical category-specific defense names are normalized by
         // skill-core to generic DEF. Keep this branch only as a safe
         // compatibility path for older in-memory skill objects.
@@ -54,7 +53,7 @@
 
   function isDisabled(unit, round = 0, action = "act") {
     if (!isAlive(unit)) return true;
-    if (activeStatus(unit, "paralysis", round) || activeStatus(unit, "sleep", round)) return true;
+    if (activeStatus(unit, "paralysis", round) || activeStatus(unit, "sleep", round) || activeStatus(unit, "freeze", round) || activeStatus(unit, "petrify", round)) return true;
     if (action === "act" && activeStatus(unit, "action_interference", round)) return true;
     return (action === "move" || action === "act") && Boolean(activeStatus(unit, "knockdown", round));
   }
@@ -66,7 +65,7 @@
   }
 
   function accuracyPenalty(unit, round = 0) {
-    return activeStatus(unit, "blind", round) ? .55 : 0;
+    return Math.min(.9, (activeStatus(unit, "blind", round) ? .55 : 0) + (activeStatus(unit, "accuracy_down", round)?.amount || 0));
   }
 
   function isStealthed(unit, round = 0) {
@@ -79,7 +78,8 @@
 
   function damageMultiplier(unit, round = 0) {
     const guard = clamp(activeStatus(unit, "guard", round)?.amount || 0, 0, .85);
-    return 1 - guard;
+    const barrier = clamp(activeStatus(unit, "barrier", round)?.amount || 0, 0, .85);
+    return (1 - guard) * (1 - barrier);
   }
 
   function hpChange(unit, nextHp, kind, output, label) {
@@ -113,6 +113,7 @@
       appliedRound: round,
       sourceId: caster?.id,
       ...(effect.type === "poison" ? { maxHpRatio: clamp(effect.maxHpRatio ?? .05, .01, .25), lastTickRound: round } : {}),
+      ...(effect.type === "barrier" ? { barrierKind: effect.barrierKind || "generic" } : {}),
     };
     output.events.push({ unitId: unit.id, text: LABELS[effect.type] || effect.type, kind: "status", status: effect.type });
     output.applied += 1;
@@ -186,6 +187,7 @@
       }
       for (const target of recipients) {
         if (!isAlive(target)) continue;
+        if (effect.condition && !activeStatus(target, effect.condition, currentRound)) continue;
         const chance = effect.chance ?? (effect.type === "halve_hp" ? .8 : effect.type === "set_hp" ? .55 : 1);
         if (clamp(random(), 0, .999999999) >= clamp(chance, 0, 1)) {
           output.events.push({ unitId: target.id, text: "抵抗", kind: "resist", status: effect.type });
@@ -232,10 +234,10 @@
         continue;
       }
       if (Number(status.untilRound) < currentRound) { delete unit.statusEffects[type]; continue; }
-      if (type === "poison" && isAlive(unit) && currentRound > Number(status.lastTickRound ?? status.appliedRound ?? -1)) {
+      if ((type === "poison" || type === "burn") && isAlive(unit) && currentRound > Number(status.lastTickRound ?? status.appliedRound ?? -1)) {
         status.lastTickRound = currentRound;
-        const damage = Math.max(1, Math.round((unit.maxHp || unit.hp) * (status.maxHpRatio || .05)));
-        hpChange(unit, unit.hp - damage, "poisonDamage", output, `中毒 -${Math.min(unit.hp, damage)}`);
+        const damage = Math.max(1, Math.round((unit.maxHp || unit.hp) * (status.maxHpRatio || (type === "burn" ? .04 : .05))));
+        hpChange(unit, unit.hp - damage, `${type}Damage`, output, `${LABELS[type] || type} -${Math.min(unit.hp, damage)}`);
       }
     }
     return output;

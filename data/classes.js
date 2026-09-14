@@ -20,15 +20,16 @@
   });
 
   const DEFAULT_CLASS_ID = "fighter";
-  const CLASS_IDS = Object.freeze(["warrior", "fighter"]);
+  const CLASS_IDS = Object.freeze(["warrior", "fighter", "elementalist"]);
 
   function buildLevelTable(classId) {
     return Object.freeze(Array.from({ length: LEVEL_CAP }, (_, index) => {
       const steps = index;
       const fighter = classId === "fighter";
+      const elementalist = classId === "elementalist";
       return Object.freeze({
         level: index + 1,
-        maxHp: (88 + steps * (fighter ? 7 : 8) + Math.floor(steps / 5) * (fighter ? 3 : 4)) * HP_SCALE,
+        maxHp: (88 + steps * (fighter ? 7 : elementalist ? 6 : 8) + Math.floor(steps / 5) * (fighter ? 3 : elementalist ? 2 : 4)) * HP_SCALE,
         attack: 0,
         defence: 0,
         moveRange: fighter ? 5 : 3,
@@ -39,11 +40,13 @@
   const CLASS_LEVEL_TABLES = Object.freeze({
     warrior: buildLevelTable("warrior"),
     fighter: buildLevelTable("fighter"),
+    elementalist: buildLevelTable("elementalist"),
   });
 
   const CLASS_DEFINITIONS = Object.freeze({
     warrior: Object.freeze({ id: "warrior", starterEquipment: Object.freeze({ weapon: "novice_blade", upperBody: "traveller_coat" }), starterSkills: Object.freeze(["quick_slash", "lantern_shot", "guard_stance"]) }),
     fighter: Object.freeze({ id: "fighter", starterEquipment: Object.freeze({ weapon: "novice_gloves", upperBody: "traveller_coat" }), starterSkills: Object.freeze(["kentotsu"]) }),
+    elementalist: Object.freeze({ id: "elementalist", starterEquipment: Object.freeze({ weapon: null, upperBody: "traveller_coat" }), starterSkills: Object.freeze(["little_force", "fireball", "wind_edge"]) }),
   });
 
   function normalizeClassId(value) {

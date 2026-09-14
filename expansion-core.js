@@ -130,7 +130,7 @@
     return {
       coins: wholeNumber(state.coins),
       level: Math.max(1, Math.min(LEVEL_CAP, wholeNumber(state.level, 1, 1))),
-      classId: ["warrior", "fighter"].includes(String(state.classId || "")) ? String(state.classId) : null,
+      classId: (classData?.CLASS_IDS || ["warrior", "fighter"]).includes(String(state.classId || "")) ? String(state.classId) : null,
       ownedEquipment,
       equipped,
     };

@@ -3725,7 +3725,7 @@
     const xpNeeded = Core.xpRequired(player.level);
     return {
       displayName: playerDisplayName(),
-      className: playerClassId === "fighter" ? "格鬥士" : "戰士",
+      className: playerClassId === "fighter" ? "格鬥士" : playerClassId === "elementalist" ? "精靈魔導師" : "戰士",
       level: player.level,
       hp,
       maxHp: stats.maxHp,

@@ -5,10 +5,12 @@
     || (typeof require === "function" ? require("./data/skills/warrior.js") : null);
   const fighterData = root.LanternFighterSkillData
     || (typeof require === "function" ? require("./data/skills/fighter.js") : null);
-  const api = factory(classData, warriorData, fighterData);
+  const elementalistData = root.LanternElementalistSkillData
+    || (typeof require === "function" ? require("./data/skills/elementalist.js") : null);
+  const api = factory(classData, warriorData, fighterData, elementalistData);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternSkills = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (classData, warriorData, fighterData) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (classData, warriorData, fighterData, elementalistData) {
   "use strict";
 
   const STARTING_AP = 10;
@@ -57,6 +59,9 @@
   // prerequisites join across columns, while independent roots have no links.
   const FIGHTER_TREE_GRID = deepFreeze(fighterData?.display?.layout?.grid || []);
   const FIGHTER_TREE_POSITIONS = Object.fromEntries(FIGHTER_TREE_GRID.flatMap((row, treeRow) =>
+    row.flatMap((id, treeColumn) => id ? [[id, { treeColumn, treeRow }]] : [])));
+  const ELEMENTALIST_TREE_GRID = deepFreeze(elementalistData?.display?.layout?.grid || []);
+  const ELEMENTALIST_TREE_POSITIONS = Object.fromEntries(ELEMENTALIST_TREE_GRID.flatMap((row, treeRow) =>
     row.flatMap((id, treeColumn) => id ? [[id, { treeColumn, treeRow }]] : [])));
 
   const CLEANSE_STATUS_ALIASES = Object.freeze({
@@ -111,9 +116,9 @@
       : null;
     let shape = "single";
     if (source.type === "passive" || source.type === "self_only") shape = "self";
-    else if (source.type === "area_all_units" || source.type === "area_all_enemy_units") shape = "relative_cells";
+    else if (["area_all_units", "area_all_enemy_units", "area_all_ally_units"].includes(source.type)) shape = "relative_cells";
     else if (source.type === "line_to_selected_target") shape = "line_to_target";
-    else if (source.type === "impact_area_all_units") shape = "impact_area";
+    else if (["impact_area_all_units", "impact_area_all_enemy_units", "impact_area_all_ally_units"].includes(source.type)) shape = "impact_area";
     return {
       shape,
       sourceType: source.type || "selected_target_only",
@@ -162,13 +167,25 @@
       else if (type === "blind") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
       else if (type === "cleanse") effects.push({ type, statuses: cleanseStatuses(utility.statuses) });
       else if (type === "damage_reduction_stance") effects.push({ type: "guard", amount: .38, duration: 1 });
-      else if (type === "auto_cleanse") effects.push({ type: "passive_stat", stat: utility.statuses?.[0] === "poison" ? "poison_recovery" : "sleep_recovery" });
+      else if (type === "auto_cleanse") effects.push({ type: "passive_stat", stat: utility.statuses?.[0] ? `${utility.statuses[0]}_recovery` : "status_recovery" });
       else if (["slash_defense_up", "impact_defense_up", "piercing_defense_up", "heat_defense_up", "mental_defense_up"].includes(type)) effects.push({ type: "passive_stat", stat: "defence", amount: .06 });
       else if (type === "defense_up") effects.push({ type: "passive_stat", stat: "defence", amount: .06 });
       else if (type === "accuracy_up") effects.push({ type: "passive_stat", stat: "accuracy", amount: .06 });
       else if (type === "evasion_up") effects.push({ type: "passive_stat", stat: "evasion", amount: .06 });
       else if (type === "physical_attack_up") effects.push({ type: "passive_stat", stat: "attack", amount: .06 });
       else if (type === "action_speed_up") effects.push({ type: "passive_stat", stat: "speed", amount: .06 });
+      else if (type === "move_down") effects.push({ type, amount: Number(utility.amount) || 0, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "accuracy_down") effects.push({ type, amount: Number(utility.amount) || .35, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (["wet", "freeze", "burn"].includes(type)) effects.push({ type, duration: Math.max(1, Number(utility.duration_turns) || 1), chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, condition: utility.condition || null });
+      else if (type === "physical_barrier" || type === "magic_barrier") effects.push({ type: "barrier", barrierKind: type, amount: Number(utility.amount) || .65, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "magic_attack_up") effects.push({ type: "passive_stat", stat: "attack", amount: .05 });
+      else if (type === "fake_cast") effects.push({ type, duration: Math.max(1, Number(utility.apparent_duration_turns) || 2) });
+      else if (type === "ap_damage") effects.push({ type, multiplier: Number(utility.multiplier) || 0, pvpMultiplier: Number(utility.pvpMultiplier) || 0 });
+      else if (type === "knockdown_trap") effects.push({ type: "knockdown", chance: .75, duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      else if (type === "damage_if_sleeping") effects.push({ type: "conditional_damage", condition: "sleep" });
+      else if (type === "life_steal") effects.push({ type: "heal", maxHpRatio: .18, flat: 0 });
+      else if (["multi_ground_targets", "ground_target", "full_field_area", "delayed_cast"].includes(type)) effects.push({ type: "skill_utility", utilityType: type, ...utility });
+      else effects.push({ type: "skill_utility", utilityType: type, ...utility });
     }
     const selfPoison = utilities.find((utility) => utility.type === "self_poison");
     const poison = effects.find((effect) => effect.type === "poison");
@@ -176,7 +193,7 @@
     return effects.length ? effects : (raw.type === "PSV" ? [{ type: "passive_stat", stat: "utility", amount: .06 }] : []);
   }
 
-  function fighterSkillSpecFromData(raw) {
+  function classSkillSpecFromData(raw, positions, classId) {
     const original = raw.original_reference || {};
     const everrealm = raw.everrealm || {};
     const damage = everrealm.damage || {};
@@ -187,15 +204,17 @@
     const passive = raw.type === "PSV";
     const selectedTarget = area.shape === "single";
     const cleanse = everrealm.action_kind === "cleanse";
-    const selfTargeted = passive || range.type === "self";
-    const areaTargetTeam = area.sourceType === "area_all_units" || area.sourceType === "area_all_enemy_units" ? "enemy" : null;
-    const tags = passive ? ["passive", "utility"] : [range.max != null && range.max > 1 ? "ranged" : "melee", raw.category === "ki_ranged" ? "magic" : "physical"];
+    const selfTargeted = passive || range.type === "self" || everrealm.target_team === "self";
+    const areaTargetTeam = everrealm.target_team === "ally" || everrealm.target_team === "enemy"
+      ? everrealm.target_team
+      : area.sourceType === "area_all_units" || area.sourceType === "area_all_enemy_units" ? "enemy" : null;
+    const tags = passive ? ["passive", "utility"] : [range.max != null && range.max > 1 ? "ranged" : "melee", classId === "elementalist" || raw.category?.includes("magic") ? "magic" : "physical"];
     if (everrealm.deals_damage && Number(hitResolution.hit_count) > 1) tags.push("combo");
     if (cleanse || effects.some((effect) => ["heal", "guard", "evasion", "counter", "projectile_counter", "passive_stat"].includes(effect.type))) tags.push("utility");
     if (area.shape !== "single" && !tags.includes("aoe")) tags.push("aoe");
-    const targetTeam = cleanse ? "ally" : selfTargeted ? "self" : "enemy";
-    const mode = passive || range.type === "self" ? "self" : selectedTarget ? "unit" : "cell";
-    const positions = FIGHTER_TREE_POSITIONS[raw.id] || {};
+    const targetTeam = everrealm.target_team || (cleanse ? "ally" : selfTargeted ? "self" : "enemy");
+    const mode = passive || targetTeam === "self" || range.type === "self" ? "self" : selectedTarget ? "unit" : "cell";
+    const treePosition = positions[raw.id] || {};
     return {
       id: raw.id,
       name: raw.name_zh,
@@ -226,8 +245,8 @@
       prerequisites: Array.isArray(raw.requires) ? [...raw.requires] : [],
       targetArc: selfTargeted ? ["self"] : ["front", "left", "right", "rear"],
       treeGroup: raw.category,
-      treeColumn: positions.treeColumn ?? null,
-      treeRow: positions.treeRow ?? null,
+      treeColumn: treePosition.treeColumn ?? null,
+      treeRow: treePosition.treeRow ?? null,
       type: raw.type,
       category: raw.category,
       sourceNameJa: raw.source_name_ja,
@@ -257,7 +276,16 @@
     };
   }
 
+  function fighterSkillSpecFromData(raw) {
+    return classSkillSpecFromData(raw, FIGHTER_TREE_POSITIONS, "fighter");
+  }
+
+  function elementalistSkillSpecFromData(raw) {
+    return classSkillSpecFromData(raw, ELEMENTALIST_TREE_POSITIONS, "elementalist");
+  }
+
   const FIGHTER_SKILL_SPECS = deepFreeze((fighterData?.skills || []).map(fighterSkillSpecFromData));
+  const ELEMENTALIST_SKILL_SPECS = deepFreeze((elementalistData?.skills || []).map(elementalistSkillSpecFromData));
 
   function fighterRawSkill(spec) {
     return {
@@ -312,12 +340,22 @@
   const RAW_SKILLS = [
     ...(warriorData?.skills || []),
     ...FIGHTER_SKILL_SPECS.map(fighterRawSkill),
+    ...ELEMENTALIST_SKILL_SPECS.map(fighterRawSkill),
   ];
 
   const SKILL_PROGRESSION = deepFreeze({
     ...(warriorData?.progression || {}),
     ...Object.fromEntries(FIGHTER_SKILL_SPECS.map((skill) => [skill.id, {
       classId: "fighter",
+      speedGrade: skill.speedGrade,
+      prerequisites: skill.prerequisites,
+      ...(skill.targetArc ? { targetArc: skill.targetArc } : {}),
+      treeGroup: skill.treeGroup,
+      treeColumn: skill.treeColumn,
+      treeRow: skill.treeRow,
+    }])),
+    ...Object.fromEntries(ELEMENTALIST_SKILL_SPECS.map((skill) => [skill.id, {
+      classId: "elementalist",
       speedGrade: skill.speedGrade,
       prerequisites: skill.prerequisites,
       ...(skill.targetArc ? { targetArc: skill.targetArc } : {}),
@@ -628,7 +666,8 @@
     } else if (area.shape === "single") {
       cells.push(aim);
     } else if (area.shape === "relative_cells" || area.shape === "impact_area") {
-      for (const relative of area.relativeCells || []) cells.push(worldCellFromRelative(from, relative, options.facing || "down"));
+      const areaOrigin = ["selected_target", "impact"].includes(area.coordinateOrigin) ? aim : from;
+      for (const relative of area.relativeCells || []) cells.push(worldCellFromRelative(areaOrigin, relative, options.facing || "down"));
     } else if (area.shape === "line_to_target") {
       const direction = facingRelativeCell(from, aim, options.facing || "down");
       const route = orthogonalRelativePath(direction[0], direction[1]);
@@ -848,7 +887,9 @@
     const oldUnlocks = Array.isArray(source.unlockedSkillIds) ? source.unlockedSkillIds : source.unlocked;
     const valid = uniqueValidSkillIds(oldUnlocks);
     const hasFighter = valid.some((id) => getSkill(id).classId === "fighter");
+    const hasElementalist = valid.some((id) => getSkill(id).classId === "elementalist");
     const hasWarrior = valid.some((id) => getSkill(id).classId === "warrior");
+    if (hasElementalist && !hasFighter && !hasWarrior) return "elementalist";
     return hasFighter && !hasWarrior ? "fighter" : DEFAULT_CLASS_ID;
   }
 
@@ -1398,7 +1439,7 @@
         for (const bookRank of authoredBookRanks) summary.byStar[bookRank] += 1;
         const band = AP_BANDS[star];
         if (passive && skill.apCost !== 0) errors.push(`${label}: passive AP cost must be 0`);
-        else if (!passive && skill.classId !== "fighter" && (!Number.isInteger(skill.apCost) || skill.apCost < band.min || skill.apCost > band.max)) {
+        else if (!passive && !["fighter", "elementalist"].includes(skill.classId) && band && (!Number.isInteger(skill.apCost) || skill.apCost < band.min || skill.apCost > band.max)) {
           errors.push(`${label}: AP cost ${skill.apCost} outside ${star}-star band ${band.min}-${band.max}`);
         }
       }
