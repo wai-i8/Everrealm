@@ -52,7 +52,7 @@
     "skill-core.js?v=20260913-02",
     "monster-ai.js",
     "audio-core.js?v=20260911-01",
-    "main-town-bgm-loop.js?v=20260910-04",
+    "main-town-bgm-loop.js?v=20260914-01",
     "save-system.js",
     "firebase-config.js",
     "firebase-client.js?v=20260911-01",

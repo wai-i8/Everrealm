@@ -7,7 +7,7 @@
 
   const MAIN_TOWN_MAP_ID = "world";
   const MAIN_TOWN_INTRO_URL = "assets/audio/bgm/maintown.mp3?v=20260910-03";
-  const MAIN_TOWN_LOOP_URL = "assets/audio/bgm/maintown-loop.mp3?v=20260910-03";
+  const MAIN_TOWN_LOOP_URL = "assets/audio/bgm/maintown-loop.mp3?v=20260914-01";
   const INTRO_END_SECONDS = 39.636462585034014;
   const MAIN_TOWN_GAIN = 0.58;
   const LOCAL_FILE_MODE = root.location?.protocol === "file:";
