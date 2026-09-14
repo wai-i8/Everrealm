@@ -38,7 +38,7 @@ test("controller waits for movement cadence and avoids immediate repeats", async
     random: () => randomValues[randomIndex++ % randomValues.length],
     storage: { getItem: (key) => storage.get(key) ?? null },
   });
-  controller.setMap("world");
+  controller.setMap("shop");
   controller.update({ moving: true, dt: 0.05 });
   assert.equal(plays.length, 0);
   controller.update({ moving: true, dt: 0.06 });
@@ -47,6 +47,30 @@ test("controller waits for movement cadence and avoids immediate repeats", async
   assert.equal(plays.length, 2);
   assert.notEqual(plays[0].src, plays[1].src);
   assert.ok(plays[0].volume > 0 && plays[0].volume < 0.7);
+});
+
+test("town uses the supplied walking loop while moving and stops when stationary", () => {
+  const plays = [];
+  const controller = Footsteps.createFootstepController({
+    root: { document: { visibilityState: "visible" } },
+    storage: { getItem: (key) => key === "everrealm-sound" ? "on" : null },
+    createAudio: (src) => ({
+      src,
+      paused: true,
+      load() {},
+      play() { this.paused = false; plays.push(src); return Promise.resolve(); },
+      pause() { this.paused = true; },
+    }),
+  });
+  controller.setMap("world");
+  assert.equal(controller.update({ moving: true, dt: 0.1 }), true);
+  controller.update({ moving: true, dt: 1 });
+  assert.equal(plays.length, 1);
+  assert.match(plays[0], /\/town\/walk-on-town-v1-01-loop\.mp3$/);
+  assert.equal(controller.snapshot().townWalkLoopActive, true);
+
+  controller.update({ moving: false, dt: 0.1 });
+  assert.equal(controller.snapshot().townWalkLoopActive, false);
 });
 
 test("field uses grass audio and mute/zero volume still suppress playback", () => {

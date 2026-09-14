@@ -14,6 +14,7 @@
   const DEFAULT_INTERVAL = 0.30;
   const DEFAULT_FIRST_DELAY = 0.10;
   const DEFAULT_GAIN = 0.48;
+  const TOWN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/town/walk-on-town-v1-01-loop.mp3";
 
   const FOOTSTEP_ASSETS = Object.freeze({
     stone: Object.freeze([
@@ -66,6 +67,8 @@
     let timeToNext = firstDelay;
     let lastIndex = -1;
     let suspended = false;
+    let townWalkLoop = null;
+    let townWalkLoopPlaying = false;
 
     function read(key, fallback) {
       try {
@@ -103,6 +106,7 @@
 
     function preload() {
       for (const list of Object.values(assets)) for (const src of list) audioTemplate(src);
+      audioTemplate(TOWN_WALK_LOOP_ASSET);
     }
 
     function nextIndex(length) {
@@ -130,13 +134,44 @@
       return true;
     }
 
+    function updateTownWalkLoop(nextMoving) {
+      const shouldPlay = nextMoving && currentMapId === "world" && enabled();
+      if (!shouldPlay) {
+        if (townWalkLoop) townWalkLoop.pause?.();
+        if (townWalkLoop) {
+          try { townWalkLoop.currentTime = 0; } catch (_) {}
+        }
+        townWalkLoop = null;
+        townWalkLoopPlaying = false;
+        return false;
+      }
+
+      const template = audioTemplate(TOWN_WALK_LOOP_ASSET);
+      if (!template) return false;
+      if (!townWalkLoop) {
+        townWalkLoop = template;
+        townWalkLoopPlaying = false;
+        try { townWalkLoop.loop = true; } catch (_) {}
+        try { townWalkLoop.currentTime = 0; } catch (_) {}
+      }
+      townWalkLoop.volume = clamp01(volume() * gain);
+      if (townWalkLoopPlaying && townWalkLoop.paused === true) townWalkLoopPlaying = false;
+      if (townWalkLoopPlaying) return false;
+      const promise = townWalkLoop.play?.();
+      townWalkLoopPlaying = true;
+      if (promise && typeof promise.catch === "function") promise.catch(() => { townWalkLoopPlaying = false; });
+      return true;
+    }
+
     function update({ moving: nextMoving = false, dt = 0 } = {}) {
       const seconds = Math.max(0, Number(dt) || 0);
       if (!nextMoving || !currentSurface) {
+        updateTownWalkLoop(false);
         moving = false;
         timeToNext = firstDelay;
         return false;
       }
+      if (currentMapId === "world") return updateTownWalkLoop(true);
       if (!moving) {
         moving = true;
         timeToNext = firstDelay;
@@ -150,6 +185,7 @@
     }
 
     function setMap(mapId) {
+      updateTownWalkLoop(false);
       currentMapId = typeof mapId === "string" ? mapId : "";
       currentSurface = surfaceByMap[currentMapId] || null;
       moving = false;
@@ -159,6 +195,7 @@
     }
 
     function suspend() {
+      updateTownWalkLoop(false);
       suspended = true;
       moving = false;
       timeToNext = firstDelay;
@@ -167,7 +204,16 @@
     function resume() { suspended = false; }
 
     function snapshot() {
-      return { currentMapId, currentSurface, moving, suspended, interval, firstDelay, variantCount: variants().length };
+      return {
+        currentMapId,
+        currentSurface,
+        moving,
+        suspended,
+        interval,
+        firstDelay,
+        variantCount: variants().length,
+        townWalkLoopActive: Boolean(townWalkLoop && townWalkLoopPlaying),
+      };
     }
 
     return { preload, play, update, setMap, suspend, resume, snapshot };
@@ -244,6 +290,7 @@
 
   return Object.freeze({
     FOOTSTEP_ASSETS,
+    TOWN_WALK_LOOP_ASSET,
     SURFACE_BY_MAP,
     createFootstepController,
     install,
