@@ -829,9 +829,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 7
+      "type": "image",
+      "src": "assets/equipment/fighter/disciple_handguards.png"
     }
   },
   {
@@ -860,9 +859,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 6
+      "type": "image",
+      "src": "assets/equipment/fighter/disciple_shoes.png"
     }
   },
   {
@@ -951,9 +949,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 7
+      "type": "image",
+      "src": "assets/equipment/fighter/training_bracers.png"
     }
   },
   {
@@ -982,9 +979,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 6
+      "type": "image",
+      "src": "assets/equipment/fighter/training_zori.png"
     }
   },
   {
@@ -1073,9 +1069,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 7
+      "type": "image",
+      "src": "assets/equipment/fighter/conditioning_handguards.png"
     }
   },
   {
@@ -1104,9 +1099,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 6
+      "type": "image",
+      "src": "assets/equipment/fighter/conditioning_shoes.png"
     }
   },
   {
@@ -1166,9 +1160,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 7
+      "type": "image",
+      "src": "assets/equipment/fighter/cloth_bracers.png"
     }
   },
   {
@@ -1197,9 +1190,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 6
+      "type": "image",
+      "src": "assets/equipment/fighter/barefoot_bands.png"
     }
   },
   {
@@ -1259,9 +1251,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 7
+      "type": "image",
+      "src": "assets/equipment/fighter/joint_bracers.png"
     }
   },
   {
@@ -1290,9 +1281,8 @@
     },
     "legacyOnly": false,
     "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 6
+      "type": "image",
+      "src": "assets/equipment/fighter/barefoot_guard.png"
     }
   },
   {
