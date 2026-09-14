@@ -279,8 +279,8 @@
   });
 
   const spriteAtlases = {
-    heroLegacy: { src: "assets/hero-sprites-v3.png", columns: 4, rows: 2, image: null, ready: false, failed: false },
-    heroDown: { src: "assets/hero-anim-down-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
+    heroLegacy: { src: null, columns: 4, rows: 2, image: null, ready: false, failed: false },
+    heroDown: { src: null, columns: 10, rows: 5, image: null, ready: false, failed: false },
     heroUp: { src: null, columns: 10, rows: 5, image: null, ready: false, failed: false },
     heroRight: { src: null, columns: 10, rows: 5, image: null, ready: false, failed: false },
     fighter: { src: "assets/fighter-atlas-v2.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
