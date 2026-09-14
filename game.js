@@ -9279,24 +9279,9 @@
       });
       return;
     }
-    if (["counter", "bookshelf", "table", "bed", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
+    if (["counter", "bookshelf", "table", "weaponRack", "armourRack", "anvil", "screen", "pillar", "goodsCrate"].includes(prop.kind)) {
       const w = Math.max(16, (prop.w || 28) * scale);
       const h = Math.max(12, (prop.h || 22) * scale);
-      if (prop.kind === "bed") {
-        const bedW = Math.max(96, (prop.w || 120) * 1.18 * scale);
-        const bedH = bedW * (1024 / 1536);
-        Art.drawStandaloneSprite(ctx, {
-          sprite: "innBed",
-          x: point.x + w / 2,
-          y: point.y + h + 3 * scale,
-          width: bedW,
-          height: bedH,
-          anchorX: .5,
-          anchorY: 1,
-          flipX: prop.id?.includes("east"),
-        });
-        return;
-      }
       const environmentSprites = { counter: "guildCounter", bookshelf: "indoorBookshelf", weaponRack: "equipmentDisplay", armourRack: "equipmentDisplay", anvil: "indoorForge", goodsCrate: "barrelCrate" };
       const interiorSprites = { table: "guildTable", screen: "fittingScreen", pillar: "pillar" };
       const sprite = environmentSprites[prop.kind] || interiorSprites[prop.kind];

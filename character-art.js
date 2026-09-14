@@ -306,14 +306,6 @@
     monstersCore: { src: "assets/monster-facing-core-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     monstersDepths: { src: "assets/monster-facing-depths-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     markers: { src: "assets/marker-atlas-v1.png", columns: 2, rows: 2, image: null, ready: false, failed: false },
-    guildBuilding: { src: "assets/guild-building-v1.png", standalone: true, image: null, ready: false, failed: false },
-    equipmentShopBuilding: { src: "assets/equipment-shop-v2.png", standalone: true, image: null, ready: false, failed: false },
-    clinicBuilding: { src: "assets/clinic-building-v1.png", standalone: true, image: null, ready: false, failed: false },
-    generalStoreBuilding: { src: "assets/general-store-building-v1.png", standalone: true, image: null, ready: false, failed: false },
-    innBuilding: { src: "assets/inn-building-v1.png", standalone: true, image: null, ready: false, failed: false },
-    innBed: { src: "assets/inn-bed-v1.png", standalone: true, image: null, ready: false, failed: false },
-    mountainCourier: { src: "assets/mountain-delivery-recipient-v1.png", standalone: true, image: null, ready: false, failed: false },
-    mountainCourierPortrait: { src: "assets/mountain-delivery-recipient-portrait-v1.png", standalone: true, image: null, ready: false, failed: false },
   };
 
   for (const [id, src] of Object.entries(Locomotion.assets)) {
