@@ -743,10 +743,9 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   transform: rotate(var(--battle-facing-angle,0deg));
   transform-origin: center;
 }
-/* Projected movement arrows use the exact same isometric basis vectors as the
-   battlefield grid. Do not vertically squash the button/glyph: that changes
-   the apparent arrow angle and makes it look out of parallel with the diamond
-   grid. The arrow is a geometric shape so its optical angle remains exact. */
+/* Projected movement arrows use authored diagonal bitmaps that follow the
+   battlefield projection basis. Each arrow stays in its own layer so pressed
+   feedback can affect only the selected direction. */
 .battle-facing-picker[data-projected="true"] button {
   margin: 0;
   width: 2.3rem;
@@ -757,19 +756,33 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 }
 .battle-facing-picker[data-projected="true"] button:hover,
 .battle-facing-picker[data-projected="true"] button:focus-visible { transform: translate(-50%,-50%) scale(1.08); }
-.battle-facing-picker[data-projected="true"]::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  left: 50%;
-  top: 50%;
-  width: 8rem;
-  height: 8rem;
-  transform: translate(-50%,-50%);
-  background: url("assets/ui/battle-facing-arrows-v1.png") center / contain no-repeat;
-  pointer-events: none;
+.battle-facing-picker[data-projected="true"] .facing-arrow {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  clip-path: none;
+  transform: none;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
+  transition: transform .08s ease, filter .08s ease;
 }
-.battle-facing-picker[data-projected="true"] .facing-arrow { display: none; }
+.battle-facing-picker[data-projected="true"] .facing-up .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-up-v1.png"); }
+.battle-facing-picker[data-projected="true"] .facing-right .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-right-v1.png"); }
+.battle-facing-picker[data-projected="true"] .facing-down .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-down-v1.png"); }
+.battle-facing-picker[data-projected="true"] .facing-left .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-left-v1.png"); }
+.battle-facing-picker[data-projected="true"] button:hover .facing-arrow,
+.battle-facing-picker[data-projected="true"] button:focus-visible .facing-arrow {
+  filter: brightness(1.12) saturate(1.08) drop-shadow(0 2px 3px rgba(0,0,0,.82)) drop-shadow(0 0 4px rgba(255,200,87,.32));
+}
+.battle-facing-picker[data-projected="true"] button:active {
+  transform: translate(-50%,-50%) scale(.98);
+}
+.battle-facing-picker[data-projected="true"] button:active .facing-arrow {
+  transform: translateY(1px) scale(.9);
+  filter: brightness(.72) saturate(.82) drop-shadow(0 1px 1px rgba(0,0,0,.9));
+}
 .battle-facing-picker[data-projected="true"] .facing-drag-handle {
   display: grid;
   z-index: 2;
