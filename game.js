@@ -78,6 +78,7 @@
   const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
+  const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
   const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
   const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
   const INVENTORY_PAGE_SIZE = 15;
@@ -173,6 +174,7 @@
   const battleHud = document.getElementById("battleHud");
   const battleEncounterIntro = document.getElementById("battleEncounterIntro");
   const battleFacingPicker = document.getElementById("battleFacingPicker");
+  const battleFacingDragHandle = battleFacingPicker?.querySelector("[data-battle-facing-drag-handle]");
   const battleActionDock = document.getElementById("battleActionDock");
   const battleVictoryOverlay = document.getElementById("battleVictoryOverlay");
   const battleVictoryContinue = document.getElementById("battleVictoryContinue");
@@ -420,6 +422,17 @@
       battleCommandPosition.manual = true;
       battleCommandPosition.xRatio = Core.clamp(xRatio, 0, 1);
       battleCommandPosition.yRatio = Core.clamp(yRatio, 0, 1);
+    }
+  } catch (_) {}
+  const battleFacingPosition = { manual: false, x: 0, y: 0, xRatio: null, yRatio: null, pointerId: null, offsetX: 0, offsetY: 0 };
+  try {
+    const savedBattleFacingPosition = JSON.parse(localStorage.getItem(BATTLE_FACING_POSITION_KEY));
+    const xRatio = Number(savedBattleFacingPosition?.xRatio);
+    const yRatio = Number(savedBattleFacingPosition?.yRatio);
+    if (Number.isFinite(xRatio) && Number.isFinite(yRatio)) {
+      battleFacingPosition.manual = true;
+      battleFacingPosition.xRatio = Core.clamp(xRatio, 0, 1);
+      battleFacingPosition.yRatio = Core.clamp(yRatio, 0, 1);
     }
   } catch (_) {}
   let encounterGrace = 1;
@@ -5327,6 +5340,134 @@
     return true;
   }
 
+  function battleFacingBounds() {
+    const pickerWidth = Math.max(1, battleFacingPicker?.offsetWidth || 136);
+    const pickerHeight = Math.max(1, battleFacingPicker?.offsetHeight || 136);
+    const margin = Math.max(12, Math.round(Math.min(width, height) * .035));
+    return {
+      pickerWidth,
+      pickerHeight,
+      minX: pickerWidth / 2 + margin,
+      maxX: Math.max(pickerWidth / 2 + margin, width - pickerWidth / 2 - margin),
+      minY: pickerHeight / 2 + margin,
+      maxY: Math.max(pickerHeight / 2 + margin, height - pickerHeight / 2 - margin),
+    };
+  }
+
+  function clampBattleFacingPosition(x, y) {
+    const bounds = battleFacingBounds();
+    return {
+      x: Core.clamp(Number(x) || 0, bounds.minX, bounds.maxX),
+      y: Core.clamp(Number(y) || 0, bounds.minY, bounds.maxY),
+    };
+  }
+
+  function battleFacingPositionOverlapsCommandDock(x, y) {
+    if (!battleActionDock || battleActionDock.hidden) return false;
+    const stageRect = stage.getBoundingClientRect();
+    const dockRect = battleActionDock.getBoundingClientRect();
+    const bounds = battleFacingBounds();
+    const facingRect = {
+      left: stageRect.left + x - bounds.pickerWidth / 2,
+      right: stageRect.left + x + bounds.pickerWidth / 2,
+      top: stageRect.top + y - bounds.pickerHeight / 2,
+      bottom: stageRect.top + y + bounds.pickerHeight / 2,
+    };
+    return !(facingRect.right + 10 <= dockRect.left || facingRect.left - 10 >= dockRect.right
+      || facingRect.bottom + 10 <= dockRect.top || facingRect.top - 10 >= dockRect.bottom);
+  }
+
+  function defaultBattleFacingPosition() {
+    const bounds = battleFacingBounds();
+    const candidates = [
+      { x: bounds.maxX, y: height * .56 },
+      { x: bounds.maxX, y: height * .3 },
+      { x: bounds.maxX, y: height * .8 },
+      { x: bounds.minX, y: height * .56 },
+    ].map((candidate) => clampBattleFacingPosition(candidate.x, candidate.y));
+    return candidates.find((candidate) => !battleFacingPositionOverlapsCommandDock(candidate.x, candidate.y)) || candidates[0];
+  }
+
+  function updateBattleFacingPositionRatios() {
+    const bounds = battleFacingBounds();
+    const spanX = Math.max(1, bounds.maxX - bounds.minX);
+    const spanY = Math.max(1, bounds.maxY - bounds.minY);
+    battleFacingPosition.xRatio = Core.clamp((battleFacingPosition.x - bounds.minX) / spanX, 0, 1);
+    battleFacingPosition.yRatio = Core.clamp((battleFacingPosition.y - bounds.minY) / spanY, 0, 1);
+  }
+
+  function saveBattleFacingPosition() {
+    if (!battleFacingPosition.manual) return;
+    updateBattleFacingPositionRatios();
+    try {
+      localStorage.setItem(BATTLE_FACING_POSITION_KEY, JSON.stringify({
+        xRatio: battleFacingPosition.xRatio,
+        yRatio: battleFacingPosition.yRatio,
+      }));
+    } catch (_) {}
+  }
+
+  function syncBattleFacingPosition() {
+    const bounds = battleFacingBounds();
+    let next;
+    if (battleFacingPosition.manual) {
+      if (battleFacingPosition.pointerId != null) {
+        next = clampBattleFacingPosition(battleFacingPosition.x, battleFacingPosition.y);
+      } else if (Number.isFinite(battleFacingPosition.xRatio) && Number.isFinite(battleFacingPosition.yRatio)) {
+        next = clampBattleFacingPosition(
+          bounds.minX + battleFacingPosition.xRatio * Math.max(1, bounds.maxX - bounds.minX),
+          bounds.minY + battleFacingPosition.yRatio * Math.max(1, bounds.maxY - bounds.minY),
+        );
+      } else {
+        next = defaultBattleFacingPosition();
+        battleFacingPosition.manual = false;
+      }
+    } else {
+      next = defaultBattleFacingPosition();
+    }
+    battleFacingPosition.x = next.x;
+    battleFacingPosition.y = next.y;
+    battleFacingPicker.style.left = `${Math.round(next.x)}px`;
+    battleFacingPicker.style.top = `${Math.round(next.y)}px`;
+    battleFacingPicker.dataset.positionMode = battleFacingPosition.manual ? "saved" : "default";
+  }
+
+  function beginBattleFacingDrag(event) {
+    if (!battle || mode !== "battle" || battleFacingPicker.hidden || battleFacingPicker.dataset.detached !== "true" || event.button !== 0) return;
+    const rect = battleFacingPicker.getBoundingClientRect();
+    battleFacingPosition.pointerId = event.pointerId;
+    battleFacingPosition.offsetX = event.clientX - (rect.left + rect.width / 2);
+    battleFacingPosition.offsetY = event.clientY - (rect.top + rect.height / 2);
+    battleFacingPosition.manual = true;
+    battleFacingPicker.classList.add("is-dragging");
+    try { battleFacingDragHandle?.setPointerCapture?.(event.pointerId); } catch (_) {}
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function moveBattleFacingDrag(event) {
+    if (battleFacingPosition.pointerId !== event.pointerId || battleFacingPicker.dataset.detached !== "true") return;
+    const stageRect = stage.getBoundingClientRect();
+    const next = clampBattleFacingPosition(
+      event.clientX - stageRect.left - battleFacingPosition.offsetX,
+      event.clientY - stageRect.top - battleFacingPosition.offsetY,
+    );
+    battleFacingPosition.x = next.x;
+    battleFacingPosition.y = next.y;
+    updateBattleFacingPositionRatios();
+    syncBattleFacingPosition();
+    event.preventDefault();
+  }
+
+  function finishBattleFacingDrag(event) {
+    if (battleFacingPosition.pointerId == null || (event && event.pointerId !== battleFacingPosition.pointerId)) return;
+    try { battleFacingDragHandle?.releasePointerCapture?.(battleFacingPosition.pointerId); } catch (_) {}
+    battleFacingPosition.pointerId = null;
+    battleFacingPicker.classList.remove("is-dragging");
+    saveBattleFacingPosition();
+    syncBattleFacingPosition();
+  }
+
   function syncBattleFacingPicker() {
     if (!battleFacingPicker) return;
     const visible = Boolean(battle && mode === "battle" && battle.phase === "planning_move" && battle.awaitingFacing);
@@ -5339,29 +5480,23 @@
       ? { up: "左上", right: "右上", down: "右下", left: "左下" }
       : { up: "上", right: "右", down: "下", left: "左" };
     const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-    const touchSizedPicker = coarseBattlePointer || width <= 530;
+    const touchSizedPicker = coarseBattlePointer || width <= 820;
+    const detachedPicker = touchSizedPicker;
+    battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
     const pickerRadius = touchSizedPicker
-      ? Core.clamp(layout.cell * .56, 34, 48)
+      ? Core.clamp(layout.cell * .54, 38, 46)
       : Core.clamp(layout.cell * .48, 31, 45);
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
       const facing = button.dataset.battleFacing;
       const label = labels[facing] || facing;
-      if (projected) {
-        const vector = battleFacingScreenVector(facing, layout);
-        const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
-        button.innerHTML = '<span aria-hidden="true">➤</span>';
-        button.style.left = `${vector.x * pickerRadius}px`;
-        button.style.top = `${vector.y * pickerRadius}px`;
-        button.style.setProperty("--battle-facing-angle", `${angle}deg`);
-      } else {
-        const glyph = ({ up: "▲", right: "▶", down: "▼", left: "◀" })[facing] || "•";
-        button.textContent = glyph;
-        button.style.left = "";
-        button.style.top = "";
-        button.style.removeProperty("--battle-facing-angle");
-      }
+      const vector = battleFacingScreenVector(facing, layout);
+      const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
+      button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
+      button.style.left = detachedPicker ? `calc(50% + ${vector.x * pickerRadius}px)` : `${vector.x * pickerRadius}px`;
+      button.style.top = detachedPicker ? `calc(50% + ${vector.y * pickerRadius}px)` : `${vector.y * pickerRadius}px`;
+      button.style.setProperty("--battle-facing-angle", `${angle}deg`);
       const candidateCommands = [...currentCommands, { type: "face", facing }];
       const candidateCost = battleMoveCost(candidateCommands);
       const actionCost = Math.max(0, candidateCost - currentCost);
@@ -5370,6 +5505,10 @@
       button.classList.toggle("is-unaffordable", !affordable);
       button.setAttribute("aria-label", `面向${label}；消耗 ${formatRemainingMove(actionCost)} 移動力`);
       button.title = affordable ? `消耗 ${formatRemainingMove(actionCost)} 移動力` : "剩餘移動力不足";
+    }
+    if (detachedPicker) {
+      syncBattleFacingPosition();
+      return;
     }
     const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
     const point = battleCellCentre(endpoint, layout);
@@ -10595,6 +10734,10 @@
   battleActionDock?.addEventListener("pointermove", moveBattleCommandDrag);
   battleActionDock?.addEventListener("pointerup", finishBattleCommandDrag);
   battleActionDock?.addEventListener("pointercancel", finishBattleCommandDrag);
+  battleFacingDragHandle?.addEventListener("pointerdown", beginBattleFacingDrag);
+  battleFacingPicker?.addEventListener("pointermove", moveBattleFacingDrag, { passive: false });
+  battleFacingPicker?.addEventListener("pointerup", finishBattleFacingDrag);
+  battleFacingPicker?.addEventListener("pointercancel", finishBattleFacingDrag);
   canvas.addEventListener("pointerdown", handleCanvasPointer);
   canvas.addEventListener("contextmenu", (event) => {
     if (mode === "battle") event.preventDefault();

@@ -711,6 +711,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   cursor: pointer;
   pointer-events: auto;
   transition: color .12s ease,transform .12s ease,text-shadow .12s ease;
+  transform: translate(-50%,-50%);
 }
 .battle-facing-picker button:hover,
 .battle-facing-picker button:focus-visible {
@@ -719,30 +720,48 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   box-shadow: none;
   outline: none;
   text-shadow: 0 2px 3px rgba(0,0,0,.9),0 0 .45rem rgba(255,200,87,.55);
-  transform: scale(1.1);
+  transform: translate(-50%,-50%) scale(1.1);
 }
 .battle-facing-picker > span { display: none; }
-.battle-facing-picker .facing-up { left: -.775rem; top: -2.45rem; }
-.battle-facing-picker .facing-left { left: -2.45rem; top: -.775rem; }
-.battle-facing-picker .facing-right { left: .9rem; top: -.775rem; }
-.battle-facing-picker .facing-down { left: -.775rem; top: .9rem; }
+.battle-facing-picker .facing-drag-handle {
+  left: 50%; top: 50%; z-index: 2; width: 2.25rem; height: 2.25rem; display: none;
+  color: rgba(215,255,250,.86); font-size: 1.15rem; cursor: grab;
+  text-shadow: 0 2px 3px rgba(0,0,0,.85),0 0 .35rem rgba(5,8,18,.9);
+  touch-action: none;
+}
+.battle-facing-picker .facing-drag-handle:hover,
+.battle-facing-picker .facing-drag-handle:focus-visible {
+  color: var(--gold); transform: translate(-50%,-50%) scale(1.12);
+}
+.battle-facing-picker.is-dragging .facing-drag-handle { cursor: grabbing; }
+.battle-facing-picker .facing-arrow {
+  display: block; width: 1.18rem; height: .76rem;
+  background: currentColor;
+  clip-path: polygon(0 36%,55% 36%,55% 0,100% 50%,55% 100%,55% 64%,0 64%);
+  transform: rotate(var(--battle-facing-angle,0deg));
+  transform-origin: center;
+}
 /* Projected movement arrows use the exact same isometric basis vectors as the
    battlefield grid. Do not vertically squash the button/glyph: that changes
    the apparent arrow angle and makes it look out of parallel with the diamond
-   grid. The hit target remains the original 1.55rem square. */
+   grid. The arrow is a geometric shape so its optical angle remains exact. */
 .battle-facing-picker[data-projected="true"] button {
-  margin-left: -.775rem;
-  margin-top: -.775rem;
-}
-.battle-facing-picker[data-projected="true"] button > span {
-  display: block;
-  transform: rotate(var(--battle-facing-angle,0deg));
-  transform-origin: center;
-  font-size: .76rem;
-  line-height: 1;
+  margin: 0;
 }
 .battle-facing-picker[data-projected="true"] button:hover,
-.battle-facing-picker[data-projected="true"] button:focus-visible { transform: scale(1.08); }
+.battle-facing-picker[data-projected="true"] button:focus-visible { transform: translate(-50%,-50%) scale(1.08); }
+.battle-facing-picker[data-detached="true"] {
+  width: 8rem; height: 8rem;
+  transform: translate(-50%,-50%);
+}
+.battle-facing-picker[data-detached="true"] .facing-drag-handle { display: grid; }
+.battle-facing-picker[data-detached="true"] button {
+  width: 2.7rem; height: 2.7rem;
+}
+.battle-facing-picker[data-detached="true"] button:hover,
+.battle-facing-picker[data-detached="true"] button:focus-visible {
+  transform: translate(-50%,-50%) scale(1.08);
+}
 
 .overlay { position: absolute; z-index: 12; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; background: rgba(7,11,22,.78); backdrop-filter: blur(5px); }
 .title-screen { overflow: hidden; background: radial-gradient(circle at 50% 48%, rgba(255,200,87,.1), transparent 18rem), linear-gradient(rgba(7,11,22,.56), rgba(7,11,22,.92)); }
@@ -5168,24 +5187,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-copy strong {
     font-size: .5rem !important;
   }
-  /* Touch targets stay comfortably tappable even before/after a battle pinch.
-     The visible arrow remains compact; only its transparent hit box grows. */
+  /* Touch targets stay comfortably tappable while the detached mobile picker
+     remains visually just the four arrows and its move handle. */
   .battle-facing-picker button {
     width: 2.65rem !important;
     height: 2.65rem !important;
     font-size: .56rem !important;
   }
   .battle-facing-picker[data-projected="true"] button {
-    margin-left: -1.325rem !important;
-    margin-top: -1.325rem !important;
+    margin: 0 !important;
   }
-  .battle-facing-picker[data-projected="true"] button > span {
-    font-size: .86rem !important;
+  .battle-facing-picker[data-detached="true"] {
+    width: 8rem !important;
+    height: 8rem !important;
   }
-  .battle-facing-picker .facing-up { left: -1.325rem; top: -3.25rem; }
-  .battle-facing-picker .facing-left { left: -3.25rem; top: -1.325rem; }
-  .battle-facing-picker .facing-right { left: .6rem; top: -1.325rem; }
-  .battle-facing-picker .facing-down { left: -1.325rem; top: .6rem; }
 
   .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,
   .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .inventory-envelope-icon {
