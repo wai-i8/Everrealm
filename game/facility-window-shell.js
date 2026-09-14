@@ -131,6 +131,7 @@
     tab,
     context,
     availableTabs,
+    coins = 0,
     hasActiveGuildCommission = false,
   }) {
     const copy = facilityCopy(tab, context);
@@ -147,6 +148,16 @@
     }
     const title = panel.querySelector(".facility-header h2");
     if (title) title.textContent = copy[1];
+    const balance = panel.querySelector(".facility-header-balance");
+    if (balance) {
+      const showBalance = tab === "shop";
+      balance.hidden = !showBalance;
+      if (showBalance) {
+        const value = Math.max(0, Math.floor(Number(coins) || 0)).toLocaleString("zh-HK");
+        balance.querySelector("strong")?.replaceChildren(value);
+        balance.setAttribute("aria-label", `${value} 金幣`);
+      }
+    }
     if (helpText) helpText.textContent = copy[2];
     if (helpButton) helpButton.hidden = ["bag", "guild", "shop"].includes(tab) || context === "general-store" || !copy[2];
     for (const tabButton of tabs?.querySelectorAll("[data-facility-tab]") || []) {

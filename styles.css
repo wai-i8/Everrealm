@@ -1930,10 +1930,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .45rem;
   margin: 0 0 .9rem;
-  padding: .42rem;
-  border: 1px solid rgba(245,233,202,.14);
-  border-radius: .72rem;
-  background: rgba(4,9,20,.44);
+  padding: 0;
 }
 .equipment-shop-tab {
   min-height: 2.35rem;
@@ -3210,6 +3207,16 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .facility-heading-copy { min-width: 0; }
 .facility-heading-copy .facility-kicker[hidden] + h2 { margin-top: 0; }
 .facility-header-actions { display: flex; align-items: center; gap: .35rem; flex: 0 0 auto; }
+.facility-header-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  margin-right: .15rem;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.facility-header-balance .coin-icon { width: .78rem; height: .78rem; }
+.facility-header-balance strong { font: 850 .72rem/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .facility-help-popover {
   position: absolute;
   z-index: 4;

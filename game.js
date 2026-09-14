@@ -2724,7 +2724,7 @@
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
     else if (["guildmaster-yin", "guild-clerk-po"].includes(npc.id)) openFacility("guild");
-    else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) openFacility("shop");
+    else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) interactEquipmentShop(npc);
     else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "米克雷帝國今晚比平時熱鬧，多得你周圍探索。"] });
   }
 
@@ -2934,7 +2934,51 @@
   }
 
   function interactGeneralStore(npc) {
-    openFacility("shop", "general-store");
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: ["你好呀！今日想買定賣嘢呀？"],
+      choiceLayout: "compact",
+      choices: [
+        { label: "買嘢", buttonStyle: "primary", action: () => openGeneralStore("buy") },
+        { label: "賣嘢", buttonStyle: "secondary", action: () => openGeneralStore("sell") },
+        { label: "等陣先", buttonStyle: "secondary", action: () => {} },
+      ],
+    });
+  }
+
+  function openGeneralStore(tradeMode = "buy") {
+    const nextTradeMode = tradeMode === "sell" ? "sell" : "buy";
+    const opened = openFacility("shop", "general-store");
+    if (!opened) return false;
+    shopTradeMode = nextTradeMode;
+    selectedShopItemId = null;
+    renderFacility();
+    return true;
+  }
+
+  function openEquipmentShop(tradeMode = "buy") {
+    const nextTradeMode = tradeMode === "sell" ? "sell" : "buy";
+    const opened = openFacility("shop", "shop");
+    if (!opened) return false;
+    shopTradeMode = nextTradeMode;
+    selectedShopItemId = null;
+    renderFacility();
+    return true;
+  }
+
+  function interactEquipmentShop(npc) {
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: ["你好呀！今日想買定賣嘢呀？"],
+      choiceLayout: "compact",
+      choices: [
+        { label: "買裝備", buttonStyle: "primary", action: () => openEquipmentShop("buy") },
+        { label: "賣裝備", buttonStyle: "secondary", action: () => openEquipmentShop("sell") },
+        { label: "等陣先", buttonStyle: "secondary", action: () => {} },
+      ],
+    });
   }
 
   function interactInn(npc) {
@@ -4337,6 +4381,7 @@
       tab: facilityTab,
       context: facilityContext,
       availableTabs,
+      coins: player.coins,
       hasActiveGuildCommission: facilityTab === "guild" && Boolean(activeGuildCommission()),
     });
     setFacilityHelpOpen(false);

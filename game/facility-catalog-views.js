@@ -10,7 +10,7 @@
     { key: "head", label: "頭部", matches: (item) => item.slot === "head" },
     { key: "upper", label: "上身", matches: (item) => item.slot === "upperBody" && !item.occupiesSlots.includes("lowerBody") },
     { key: "lower", label: "下身", matches: (item) => item.slot === "lowerBody" },
-    { key: "martial", label: "武道服", matches: (item) => item.slot === "upperBody" && item.occupiesSlots.includes("lowerBody") },
+    { key: "martial", label: "套裝", matches: (item) => item.slot === "upperBody" && item.occupiesSlots.includes("lowerBody") },
   ]);
   const SHOP_CATEGORY_KEYS = Object.freeze(SHOP_CATEGORIES.map((category) => category.key));
 
@@ -118,7 +118,7 @@
       }));
       const selectedItem = items.find((item) => item.id === selectedShopItemId) || null;
       const cards = items.map(summaryMarkup).join("");
-      content.innerHTML = `${tradeTabs}<section class="equipment-shop-browser" aria-label="出售物品"><div class="facility-section-heading equipment-shop-heading"><div><small>SELL EVERYTHING</small><h3>出售物品</h3></div>${coinAmountHtml(coins, "store-balance")}</div><div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}${detailMarkup(selectedItem)}</div></section>`;
+      content.innerHTML = `<section class="equipment-shop-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}${detailMarkup(selectedItem)}</div></section>`;
       setFacilityFooter("");
       return;
     }
@@ -146,11 +146,9 @@
     const selectedItem = buyItems.find((item) => item.id === selectedShopItemId) || null;
     const cards = buyItems.map(summaryMarkup).join("");
     content.innerHTML = `
-      ${tradeTabs}
       ${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去「裝備店」。</span></div>' : ""}
       <nav class="equipment-shop-tabs" role="tablist" aria-label="裝備分類">${tabs}</nav>
       <section class="equipment-shop-browser" aria-label="${activeCategory.label}">
-        <div class="facility-section-heading equipment-shop-heading"><div><small>FIGHTER EQUIPMENT</small><h3>${activeCategory.label}</h3></div>${coinAmountHtml(coins, "store-balance")}</div>
         <div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>呢個分類暫時冇商品</strong></div>'}${detailMarkup(selectedItem)}</div>
       </section>`;
     setFacilityFooter(`<span aria-hidden="true">⚒</span> ${discountRate ? `${guildRankName}折扣 ${Math.round(discountRate * 100)}% · ` : ""}裝備店`);
@@ -191,12 +189,12 @@
         <div class="equipment-copy"><div class="facility-card-heading"><strong>${selectedItem.name}</strong>${selectedItem.quantity > 1 ? `<span class="facility-chip">×${selectedItem.quantity}</span>` : ""}</div><p>${selectedItem.description || ""}</p>${selectedItem.equipment ? `<small>LV.${selectedItem.equipment.requiredLevel} · ${statText(selectedItem.equipment.stats)}</small>` : selectedItem.quantity > 1 ? `<small>持有 ×${selectedItem.quantity}</small>` : ""}</div>
         <div class="equipment-shop-purchase"><span class="equipment-price">${selectedItem.priceLabel}</span><button class="facility-action-button" type="button" data-facility-action="${selectedItem.action}" data-item-id="${selectedItem.id}" ${selectedItem.disabled ? "disabled" : ""}>${selectedItem.actionLabel}</button></div>
       </article>` : "";
-      content.innerHTML = `${tradeTabs}<section class="equipment-shop-browser general-store-browser" aria-label="出售物品"><div class="facility-section-heading equipment-shop-heading"><div><small>SELL EVERYTHING</small><h3>出售物品</h3></div>${coinAmountHtml(coins, "store-balance")}</div><div class="equipment-grid equipment-shop-compact-grid general-store-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}${detail}</div></section>`;
+      content.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid general-store-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}${detail}</div></section>`;
       setFacilityFooter("");
       return;
     }
     const cards = goods.map((item) => `<article class="equipment-card general-store-card"><div class="equipment-shop-art">${itemIconHtml(item.id, item.name, "equipment-card-atlas-icon", 0)}</div><div class="equipment-copy"><div class="facility-card-heading"><strong>${item.name}</strong></div><p>${item.description}</p></div><div class="equipment-shop-purchase"><span class="equipment-price">${coinAmountHtml(item.price, "store-price")}</span><button class="facility-action-button" type="button" data-facility-action="buy-store-item" data-item-id="${item.id}" ${coins < item.price ? "disabled" : ""}>購買</button></div></article>`).join("");
-    content.innerHTML = `${tradeTabs}<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="facility-section-heading equipment-shop-heading"><div><small>ITEM SHOP</small><h3>道具店</h3></div>${coinAmountHtml(coins, "store-balance")}</div><div class="equipment-grid general-store-grid">${cards}</div></section>`;
+    content.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="道具店"><div class="equipment-grid general-store-grid">${cards}</div></section>`;
     setFacilityFooter("");
   }
 
