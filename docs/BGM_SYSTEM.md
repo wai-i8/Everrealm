@@ -8,11 +8,15 @@ changes, and exposes a mute toggle shared with the exploration sound control.
 
 | zone | maps | asset |
 | --- | --- | --- |
-| Main Town | `world`, `guild`, `shop`, `clinic`, `general-store`, `inn` | `assets/audio/bgm/maintown.wav` |
-| Mountain / Mine | `field`, `dungeon` | `assets/audio/bgm/mountainousareas.wav` |
+| Main Town | `world` | `assets/audio/bgm/maintown-v2-02-loop.mp3` |
+| Mountain / Mine | `field`, `dungeon` | `assets/audio/bgm/mountainousareas-v1-02-loop.mp3` |
+| Guild | `guild` | `assets/audio/bgm/guild-v1-01-loop.mp3` |
+| Hospital | `clinic` | `assets/audio/bgm/hospital-v1-01-loop.mp3` |
+| Other interiors | `shop`, `general-store`, `inn` | `assets/audio/bgm/building.mp3` |
 
-Town interiors deliberately stay on the town track. Field and dungeon share the
-mountain track, so crossing between those maps does not restart the music.
+Field and dungeon share the mountain track, so crossing between those maps does
+not restart the music. Other indoor buildings likewise share the building
+track, while the guild and hospital have their own music zones.
 
 ## Runtime contract
 

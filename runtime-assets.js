@@ -51,8 +51,7 @@
     "tactics-core.js?v=20260912-01",
     "skill-core.js?v=20260913-02",
     "monster-ai.js",
-    "audio-core.js?v=20260911-01",
-    "main-town-bgm-loop.js?v=20260910-04",
+    "audio-core.js?v=20260914-02",
     "save-system.js",
     "firebase-config.js",
     "firebase-client.js?v=20260911-01",
@@ -60,7 +59,7 @@
     "save-persistence.js",
     "fighter-effects.js",
     "locomotion.js?v=20260913-01",
-    "footstep-sfx.js?v=20260914-02",
+    "footstep-sfx.js?v=20260914-03",
     "character-art.js",
     "game/battle-sfx.js?v=20260913-01",
     "game/ui-dom-helpers.js",
@@ -74,7 +73,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260914-01",
+    "game.js?v=20260914-02",
   ]);
 
   return Object.freeze({ scripts });

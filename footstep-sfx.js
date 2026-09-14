@@ -16,9 +16,15 @@
   const DEFAULT_GAIN = 0.48;
   const TOWN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/town/walk-on-town-v1-01-loop.mp3";
   const MOUNTAIN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/dirt/walk-on-dirt-v1-01-loop.mp3";
+  const BUILDING_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/building/walk-on-shop-v1-01-loop.mp3";
   const WALK_LOOP_ASSET_BY_MAP = Object.freeze({
     world: TOWN_WALK_LOOP_ASSET,
     field: MOUNTAIN_WALK_LOOP_ASSET,
+    guild: BUILDING_WALK_LOOP_ASSET,
+    shop: BUILDING_WALK_LOOP_ASSET,
+    clinic: BUILDING_WALK_LOOP_ASSET,
+    "general-store": BUILDING_WALK_LOOP_ASSET,
+    inn: BUILDING_WALK_LOOP_ASSET,
   });
 
   const FOOTSTEP_ASSETS = Object.freeze({
@@ -299,6 +305,7 @@
     FOOTSTEP_ASSETS,
     TOWN_WALK_LOOP_ASSET,
     MOUNTAIN_WALK_LOOP_ASSET,
+    BUILDING_WALK_LOOP_ASSET,
     WALK_LOOP_ASSET_BY_MAP,
     SURFACE_BY_MAP,
     createFootstepController,

@@ -449,8 +449,8 @@
   let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
   if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
   const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
-  const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1.mp3") : null;
-  const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/battle-easy-v1.mp3") : null;
+  const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null;
+  const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3") : null;
   const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
