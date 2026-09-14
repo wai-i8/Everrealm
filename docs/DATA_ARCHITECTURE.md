@@ -21,7 +21,7 @@ Existing stable equipment, monster, skill and quest IDs are not renamed merely f
 
 ## Save/Firebase boundary
 
-Fixed Game Data remains version-controlled with the build. Firebase Auth supplies the account identity and Firestore stores only the existing player-owned version-1 save payload at `players/{uid}`; it does not copy the fixed catalogs. The client removes persistence metadata before reading a cloud payload and the cloud writer adds only the server-managed `updatedAt` field.
+Fixed Game Data remains version-controlled with the build. Firebase Auth supplies the account identity and Firestore stores only the existing player-owned version-1 save payload at `players/{uid}`; the optional `combatScaleVersion: 2` marker records that the global HP/ATK/DEF rebalance has been migrated. It does not copy the fixed catalogs. The client removes persistence metadata before reading a cloud payload and the cloud writer adds only the server-managed `updatedAt` field.
 
 `firebase-client.js` is the small browser SDK boundary, `cloud-save.js` owns the Firestore document contract, and `save-persistence.js` owns cloud resolution, the explicit one-time legacy migration and queued Firestore writes. `game.js` owns gameplay serialization/application but does not define a second cloud schema. Gameplay startup is closed until Firebase Auth has resolved and the authenticated UID has a cloud-ready Firestore session.
 

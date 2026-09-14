@@ -6,7 +6,7 @@
   "use strict";
 
   const INVENTORY_CATEGORIES = Object.freeze(["all", "equipment", "consumable", "skillbook", "material"]);
-  const SHOP_CATEGORIES = Object.freeze(["weapon", "head", "upper", "lower", "martial"]);
+  const SHOP_CATEGORIES = Object.freeze(["weapon", "head", "upper", "lower", "hands", "feet", "martial"]);
 
   function commandFromButton(button) {
     if (!button?.dataset) return null;

@@ -163,13 +163,13 @@ test("experience can grant multiple levels without losing remainder", () => {
   assert.equal(result.xp, 5);
 });
 
-test("HP still grows with level while ATK only grows from explicit upgrades", () => {
+test("HP still grows with level while ATK remains equipment-supplied", () => {
   const base = Core.deriveStats({ level: 1, weaponLevel: 1, upgrades: {} });
   const leveled = Core.deriveStats({ level: 4, weaponLevel: 1, upgrades: {} });
   const grown = Core.deriveStats({ level: 4, weaponLevel: 3, upgrades: { vigor: 2, edge: 2, swift: 2 } });
   assert.ok(grown.maxHp > base.maxHp);
   assert.equal(leveled.attack, base.attack);
-  assert.ok(grown.attack > base.attack);
+  assert.equal(grown.attack, base.attack);
   assert.ok(grown.speed > base.speed);
   assert.ok(grown.dashCooldown < base.dashCooldown);
 });
@@ -219,18 +219,23 @@ test("save sanitizer preserves finite map coordinates while clamping gameplay va
   });
   assert.equal(clean.player.x, -500);
   assert.equal(clean.player.y, 99999);
-  assert.equal(clean.player.level, 40);
+  assert.equal(clean.player.level, 45);
   assert.equal(clean.player.coins, 0);
   assert.equal(clean.player.potions, 9);
   assert.deepEqual(clean.crystals, ["north", "west"]);
   assert.deepEqual(clean.openedChests, ["a", "b"]);
   assert.equal(clean.questStage, 5);
-  assert.equal(clean.pendingLevelUps, 39);
+  assert.equal(clean.pendingLevelUps, 44);
 });
 
 test("old saves default to no pending level-up choices", () => {
   const clean = Core.sanitizeSave({ version: 1, player: { x: 100, y: 100, level: 4 } });
   assert.equal(clean.pendingLevelUps, 0);
+});
+
+test("save sanitizer preserves the combat scale marker", () => {
+  assert.equal(Core.sanitizeSave({ version: 1, player: { x: 100, y: 100 } }).combatScaleVersion, 1);
+  assert.equal(Core.sanitizeSave({ version: 1, combatScaleVersion: 2, player: { x: 100, y: 100 } }).combatScaleVersion, 2);
 });
 
 test("world generator returns the authored flattened navigation town", () => {

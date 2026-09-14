@@ -82,6 +82,9 @@
   const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
   const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
   const INVENTORY_PAGE_SIZE = 15;
+  const COMBAT_SCALE_VERSION = 2;
+  const HP_SCALE = ClassData?.HP_SCALE || 5;
+  const POTION_HEAL = 30 * HP_SCALE;
   const WEAK_POTION_TOTAL_STEPS = 500;
   const WEAK_POTION_WORLD_UNITS_PER_STEP = 32;
   const FIXED_STEP = 1 / 60;
@@ -350,7 +353,7 @@
   const mobileExploreZoomByMap = new Map();
   const FIGHTER_SHOP_ITEM_ID_SET = EquipmentData?.FIGHTER_SHOP_ITEM_ID_SET || new Set();
   const GENERAL_STORE_GOODS = Object.freeze([
-    Object.freeze({ id: "healing_potion", name: "小型回復藥", price: 30, description: "回復 30 HP。" }),
+    Object.freeze({ id: "healing_potion", name: "小型回復藥", price: 30, description: `回復 ${POTION_HEAL} HP。` }),
     Object.freeze({ id: "weak_potion", name: "弱氣之藥", price: 200, description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。" }),
   ]);
   const GENERAL_STORE_GOODS_BY_ID = new Map(GENERAL_STORE_GOODS.map((item) => [item.id, item]));
@@ -703,7 +706,7 @@
       y: world.start.y,
       radius: 12,
       facing: "up",
-      hp: 92,
+      hp: 88 * HP_SCALE,
       level: 1,
       xp: 0,
       coins: 12,
@@ -967,6 +970,7 @@
   function buildSaveData() {
     return {
       version: 1,
+      combatScaleVersion: COMBAT_SCALE_VERSION,
       player: {
         name: playerDisplayName(),
         x: player.x,
@@ -1137,7 +1141,10 @@
     loadExpansionProgress(rawSave?.expansion);
     syncDeckCapacityMilestones({ silent: true });
     const stats = playerStats();
-    player.hp = Core.clamp(player.hp, 1, stats.maxHp);
+    const loadedHp = save.combatScaleVersion >= COMBAT_SCALE_VERSION
+      ? player.hp
+      : Math.round(player.hp * HP_SCALE);
+    player.hp = Core.clamp(loadedHp, 1, stats.maxHp);
     if (isBlocked(player)) {
       player.x = world.start.x;
       player.y = world.start.y;
@@ -2217,7 +2224,7 @@
     if (player.potions <= 0) return showToast("藥水用晒喇。", "danger");
     if (player.hp >= maxHp) return showToast("而家精神得很，留返支藥先。", "good");
     player.potions -= 1;
-    const healed = Math.min(maxHp - player.hp, 30);
+    const healed = Math.min(maxHp - player.hp, POTION_HEAL);
     player.hp += healed;
     markPersistenceDirty();
     spawnBurst(player.x, player.y, "#87db82", 22, 68);
@@ -3326,7 +3333,7 @@
     if (player.potions > 0) items.push({
       id: "healing_potion", name: "小型回復藥", category: "消耗品", quantity: player.potions,
       categoryKey: "consumable",
-      description: "回復 30 HP；探索同戰鬥都用得到。",
+      description: `回復 ${POTION_HEAL} HP；探索同戰鬥都用得到。`,
       detail: player.hp >= maxHp ? "目前生命已全滿" : `目前 HP ${Math.ceil(player.hp)} / ${maxHp}`,
       action: "use-potion", actionLabel: player.hp >= maxHp ? "生命已滿" : "使用", disabled: player.hp >= maxHp,
       destroyable: true,
@@ -3560,7 +3567,7 @@
         id: "healing_potion",
         name: "小型回復藥",
         quantity: player.potions,
-        description: GENERAL_STORE_GOODS_BY_ID.get("healing_potion")?.description || "回復 30 HP。",
+        description: GENERAL_STORE_GOODS_BY_ID.get("healing_potion")?.description || `回復 ${POTION_HEAL} HP。`,
         sellPrice: generalStoreSellPrice("healing_potion"),
       });
     }
@@ -4070,7 +4077,7 @@
     if (player.potions <= 0) return showToast("藥水用晒喇。", "danger");
     if (player.hp >= maxHp) return showToast("而家生命已經全滿。", "good");
     player.potions -= 1;
-    const healed = Math.min(maxHp - player.hp, 30);
+    const healed = Math.min(maxHp - player.hp, POTION_HEAL);
     player.hp += healed;
     markPersistenceDirty();
     sound.heal();
@@ -6260,7 +6267,7 @@
         for (const target of affectedUnits) statusTargets.push({ target, defenceDownEffect, moveDownEffect });
       }
     } else if (heroAction.type === "potion") {
-      heroHeal = 30;
+      heroHeal = POTION_HEAL;
     }
 
     const enemyHits = [];

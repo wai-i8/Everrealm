@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
   const EQUIPMENT_SLOTS = Object.freeze(["head", "weapon", "upperBody", "lowerBody", "hands", "feet", "charm"]);
-  const EQUIPMENT_SHOP_SLOTS = Object.freeze(["weapon", "head", "upperBody", "lowerBody"]);
+  const EQUIPMENT_SHOP_SLOTS = Object.freeze(["weapon", "head", "upperBody", "lowerBody", "hands", "feet"]);
   const LEGACY_EQUIPMENT_SLOT_ALIASES = Object.freeze({ body: "upperBody", armor: "upperBody" });
   const EQUIPMENT_STAT_KEYS = Object.freeze(["attack", "defense", "maxHp", "speed", "critChance", "moveRange", "accuracy", "evasion", "weight"]);
   const RAW_EQUIPMENT_CATALOG = [
@@ -23,7 +23,7 @@
     "classId": "warrior",
     "iconIndex": 0,
     "stats": {
-      "attack": 2,
+      "attack": 10,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -54,7 +54,7 @@
     "classId": "fighter",
     "iconIndex": 0,
     "stats": {
-      "attack": 19,
+      "attack": 95,
       "defense": 0,
       "maxHp": 0,
       "speed": 2,
@@ -84,7 +84,7 @@
     "classId": "fighter",
     "iconIndex": 1,
     "stats": {
-      "attack": 5,
+      "attack": 25,
       "defense": 0,
       "maxHp": 0,
       "speed": 2,
@@ -115,7 +115,7 @@
     "classId": "fighter",
     "iconIndex": 2,
     "stats": {
-      "attack": 12,
+      "attack": 60,
       "defense": 0,
       "maxHp": 0,
       "speed": 8,
@@ -146,7 +146,7 @@
     "classId": "fighter",
     "iconIndex": 3,
     "stats": {
-      "attack": 26,
+      "attack": 130,
       "defense": 3,
       "maxHp": 0,
       "speed": 0,
@@ -177,7 +177,7 @@
     "classId": "fighter",
     "iconIndex": 0,
     "stats": {
-      "attack": 23,
+      "attack": 115,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -207,7 +207,7 @@
     "classId": "fighter",
     "iconIndex": 1,
     "stats": {
-      "attack": 27,
+      "attack": 135,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -237,7 +237,7 @@
     "classId": "fighter",
     "iconIndex": 2,
     "stats": {
-      "attack": 33,
+      "attack": 165,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -267,7 +267,7 @@
     "classId": "fighter",
     "iconIndex": 3,
     "stats": {
-      "attack": 39,
+      "attack": 195,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -298,7 +298,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 2,
+      "defense": 12,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -328,7 +328,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 3,
+      "defense": 14,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -358,7 +358,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 3,
+      "defense": 17,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -388,7 +388,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 4,
+      "defense": 19,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -418,7 +418,7 @@
     "iconIndex": 0,
     "stats": {
       "attack": 0,
-      "defense": 4,
+      "defense": 22,
       "maxHp": 0,
       "speed": 1,
       "critChance": 0,
@@ -447,7 +447,7 @@
     "classId": null,
     "iconIndex": 1,
     "stats": {
-      "attack": 5,
+      "attack": 25,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -478,7 +478,7 @@
     "classId": null,
     "iconIndex": 2,
     "stats": {
-      "attack": 8,
+      "attack": 40,
       "defense": 0,
       "maxHp": 0,
       "speed": 6,
@@ -509,7 +509,7 @@
     "classId": null,
     "iconIndex": 3,
     "stats": {
-      "attack": 14,
+      "attack": 70,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -540,7 +540,7 @@
     "classId": null,
     "iconIndex": 4,
     "stats": {
-      "attack": 22,
+      "attack": 110,
       "defense": 2,
       "maxHp": 0,
       "speed": 0,
@@ -571,7 +571,7 @@
     "classId": null,
     "iconIndex": 5,
     "stats": {
-      "attack": 31,
+      "attack": 155,
       "defense": 0,
       "maxHp": 0,
       "speed": 0,
@@ -757,8 +757,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 2,
-      "defense": 2,
+      "attack": 10,
+      "defense": 12,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -787,8 +787,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 2,
-      "defense": 2,
+      "attack": 10,
+      "defense": 12,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -817,8 +817,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 2,
-      "defense": 2,
+      "attack": 10,
+      "defense": 12,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -827,7 +827,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -848,8 +848,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 2,
-      "defense": 2,
+      "attack": 10,
+      "defense": 12,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -858,7 +858,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -879,8 +879,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 3,
-      "defense": 3,
+      "attack": 15,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -909,8 +909,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 3,
-      "defense": 3,
+      "attack": 15,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -939,8 +939,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 3,
-      "defense": 3,
+      "attack": 15,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -949,7 +949,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -970,8 +970,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 3,
-      "defense": 3,
+      "attack": 15,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -980,7 +980,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1001,8 +1001,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 4,
-      "defense": 4,
+      "attack": 20,
+      "defense": 21,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1031,8 +1031,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 4,
-      "defense": 4,
+      "attack": 20,
+      "defense": 21,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1061,8 +1061,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 4,
-      "defense": 4,
+      "attack": 20,
+      "defense": 21,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1071,7 +1071,7 @@
       "evasion": 0,
       "weight": 2
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1092,8 +1092,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 4,
-      "defense": 4,
+      "attack": 20,
+      "defense": 21,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1102,7 +1102,7 @@
       "evasion": 0,
       "weight": 2
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1125,7 +1125,7 @@
     "iconIndex": 8,
     "stats": {
       "attack": 0,
-      "defense": 3,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1154,8 +1154,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 1,
-      "defense": 0,
+      "attack": 5,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1164,7 +1164,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1185,8 +1185,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 1,
-      "defense": 0,
+      "attack": 5,
+      "defense": 16,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1195,7 +1195,7 @@
       "evasion": 0,
       "weight": 1
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1218,7 +1218,7 @@
     "iconIndex": 8,
     "stats": {
       "attack": 0,
-      "defense": 4,
+      "defense": 22,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1247,8 +1247,8 @@
     "classId": "fighter",
     "iconIndex": 7,
     "stats": {
-      "attack": 3,
-      "defense": 1,
+      "attack": 15,
+      "defense": 22,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1257,7 +1257,7 @@
       "evasion": 0,
       "weight": 2
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1278,8 +1278,8 @@
     "classId": "fighter",
     "iconIndex": 6,
     "stats": {
-      "attack": 3,
-      "defense": 1,
+      "attack": 15,
+      "defense": 22,
       "maxHp": 0,
       "speed": 0,
       "critChance": 0,
@@ -1288,7 +1288,7 @@
       "evasion": 0,
       "weight": 2
     },
-    "legacyOnly": true,
+    "legacyOnly": false,
     "icon": {
       "type": "atlas",
       "atlas": "equipment",
@@ -1423,7 +1423,7 @@
   const ALL_EQUIPMENT_CATALOG = Object.freeze(RAW_EQUIPMENT_CATALOG.map((item) => Object.freeze({ ...item, occupiesSlots: Object.freeze([...(item.occupiesSlots || [item.slot])]), stats: Object.freeze({ ...(item.stats || {}) }), icon: Object.freeze({ ...(item.icon || {}) }) })));
   const EQUIPMENT_CATALOG = Object.freeze(ALL_EQUIPMENT_CATALOG.filter((item) => !item.legacyOnly));
   const LEGACY_EQUIPMENT_CATALOG = Object.freeze(ALL_EQUIPMENT_CATALOG.filter((item) => item.legacyOnly));
-  const FIGHTER_SHOP_ITEM_IDS = Object.freeze(["metal_knuckles", "giz_armguard", "heavy_knuckles", "superheavy_knuckles", "fighter_headband", "topknot_cap", "continental_hat", "fighter_head_guard", "floral_topknot_cap", "disciple_gi", "training_wrap", "conditioning_suit", "disciple_lower", "training_belt", "conditioning_skirt", "white_martial_gi", "colored_martial_gi"]);
+  const FIGHTER_SHOP_ITEM_IDS = Object.freeze(["metal_knuckles", "giz_armguard", "heavy_knuckles", "superheavy_knuckles", "fighter_headband", "topknot_cap", "continental_hat", "fighter_head_guard", "floral_topknot_cap", "disciple_gi", "training_wrap", "conditioning_suit", "disciple_lower", "training_belt", "conditioning_skirt", "white_martial_gi", "colored_martial_gi", "disciple_handguards", "training_bracers", "conditioning_handguards", "cloth_bracers", "joint_bracers", "disciple_shoes", "training_zori", "conditioning_shoes", "barefoot_bands", "barefoot_guard"]);
   const FIGHTER_SHOP_ITEM_ID_SET = new Set(FIGHTER_SHOP_ITEM_IDS);
   function getEquipment(id, options = {}) {
     const source = options.activeOnly ? EQUIPMENT_CATALOG : ALL_EQUIPMENT_CATALOG;

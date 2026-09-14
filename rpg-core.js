@@ -97,7 +97,7 @@
     const swift = Math.max(0, upgrades.swift || 0);
     const weaponLevel = clamp(Math.floor(player.weaponLevel || 1), 1, 4);
     return {
-      maxHp: 88 + (level - 1) * 10 + vigor * 18,
+      maxHp: (88 + (level - 1) * 10 + vigor * 18) * (classData.HP_SCALE || 5),
       // Level controls HP/progression only. Combat ATK/DEF are supplied by
       // the equipment system rather than hidden class/level base values.
       attack: 0,
@@ -480,6 +480,7 @@
       bossDefeated: Boolean(raw.bossDefeated),
       openedChests,
       playTime: clamp(Number(raw.playTime) || 0, 0, 1e8),
+      combatScaleVersion: Math.max(1, Math.floor(Number(raw.combatScaleVersion) || 1)),
     };
   }
 

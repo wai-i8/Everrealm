@@ -1526,7 +1526,8 @@ Player and monster standard direct attacks use the same `Tactics.calculateDamage
 resolver. Unless an explicit damage model overrides it, normal direct damage is:
 
 ```text
-raw = floor((ATK + bonus) × skillMultiplier × criticalMultiplier × guardMultiplier - DEF)
+baseDamage = max(0, ATK + bonus - DEF)
+raw = floor(baseDamage × skillMultiplier × criticalMultiplier × guardMultiplier)
 finalDirectDamage = max(5, raw)
 ```
 

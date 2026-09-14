@@ -68,8 +68,8 @@ test("equipment stats include Weight, Accuracy, Evasion and one explicit Move ow
   const totals = Expansion.equipmentStats({ upperBody: "full", lowerBody: "full", feet: "boots" }, catalog);
   assert.deepEqual(totals, { attack: 4, defense: 3, maxHp: 0, speed: 0, critChance: 0, moveRange: 2, accuracy: 5, evasion: 2, weight: 8 });
   assert.equal(Expansion.classStatsAtLevel("fighter", 1).moveRange, 5);
-  assert.equal(Expansion.classStatsAtLevel("fighter", 40).attack, 14);
-  assert.equal(Expansion.classStatsAtLevel("fighter", 40).defence, 2);
+  assert.equal(Expansion.classStatsAtLevel("fighter", 40).attack, 0);
+  assert.equal(Expansion.classStatsAtLevel("fighter", 40).defence, 0);
   assert.ok(Expansion.classStatsAtLevel("fighter", 40).maxHp > 88);
 });
 

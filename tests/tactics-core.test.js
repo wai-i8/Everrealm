@@ -449,9 +449,11 @@ test("positional attacks give a larger rear bonus than a side bonus", () => {
 
 test("damage calculation handles defence, criticals, guarding, and a minimum", () => {
   assert.equal(Tactics.calculateDamage({ attack: 12 }, { defence: 5 }), 7);
-  assert.equal(Tactics.calculateDamage({ attack: 2 }, { defence: 99 }), 1);
-  assert.equal(Tactics.calculateDamage({ attack: 12 }, { defence: 2 }, { critical: true }), 16);
-  assert.equal(Tactics.calculateDamage({ attack: 12 }, { defence: 2 }, { guarded: true }), 5);
+  assert.equal(Tactics.calculateDamage({ attack: 2 }, { defence: 99 }), 5);
+  assert.equal(Tactics.calculateDamage({ attack: 12 }, { defence: 2 }, { critical: true }), 15);
+  assert.equal(Tactics.calculateDamage({ attack: 12 }, { defence: 2 }, { guarded: true }), 6);
+  assert.equal(Tactics.calculateDamage({ attack: 20 }, { defence: 5 }, { multiplier: 2 }), 30);
+  assert.equal(Tactics.calculateDamage({ attack: 20 }, { defence: 5 }, { bonus: 5, multiplier: 2 }), 40);
 });
 
 test("applying damage is immutable, clamps overkill, and reports defeat", () => {

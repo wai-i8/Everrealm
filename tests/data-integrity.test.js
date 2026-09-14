@@ -14,8 +14,8 @@ const uniqueIds = (rows) => new Set(rows.map((row) => row.id)).size === rows.len
 
 test('central catalogs expose stable unique IDs', () => {
   assert.deepEqual(Classes.CLASS_IDS, ['warrior', 'fighter']);
-  assert.equal(Classes.CLASS_LEVEL_TABLES.warrior.length, 40);
-  assert.equal(Classes.CLASS_LEVEL_TABLES.fighter.length, 40);
+  assert.equal(Classes.CLASS_LEVEL_TABLES.warrior.length, 45);
+  assert.equal(Classes.CLASS_LEVEL_TABLES.fighter.length, 45);
   assert.equal(uniqueIds(Items.ITEM_CATALOG), true);
   assert.equal(uniqueIds(Equipment.ALL_EQUIPMENT_CATALOG), true);
   assert.equal(uniqueIds(Quests.GUILD_COMMISSIONS), true);
@@ -43,6 +43,16 @@ test('monster drops resolve through the item catalog', () => {
   }
 });
 
+test('global combat scale keeps class and monster stats on the same unit scale', () => {
+  assert.equal(Classes.HP_SCALE, 5);
+  assert.deepEqual(Classes.classStatsAtLevel('fighter', 1), {
+    level: 1, maxHp: 440, attack: 0, defence: 0, moveRange: 5,
+  });
+  assert.deepEqual(Monsters.monsterStatsAtLevel('chick', 1), {
+    level: 1, hp: 120, attack: 95, defense: 15, moveRange: 5,
+  });
+});
+
 test('current guild commissions target canonical content IDs', () => {
   assert.deepEqual(Guild.DEFAULT_COMMISSIONS.map((x) => x.id), Quests.GUILD_COMMISSIONS.map((x) => x.id));
   for (const commission of Guild.DEFAULT_COMMISSIONS) {
@@ -51,15 +61,15 @@ test('current guild commissions target canonical content IDs', () => {
 });
 
 test('active equipment is separate from legacy-only save compatibility', () => {
-  assert.equal(Equipment.EQUIPMENT_CATALOG.length, 20);
-  assert.equal(Equipment.LEGACY_EQUIPMENT_CATALOG.length, 26);
+  assert.equal(Equipment.EQUIPMENT_CATALOG.length, 30);
+  assert.equal(Equipment.LEGACY_EQUIPMENT_CATALOG.length, 16);
   for (const id of Equipment.FIGHTER_SHOP_ITEM_IDS) {
     const item = Equipment.getEquipment(id, { activeOnly: true });
     assert.ok(item, `${id} must be active`);
     assert.equal(item.legacyOnly, false);
   }
   assert.equal(Equipment.getEquipment('tide_iron_knuckles').legacyOnly, true);
-  assert.equal(Equipment.getEquipment('training_bracers').legacyOnly, true);
+  assert.equal(Equipment.getEquipment('training_bracers').legacyOnly, false);
   const legacyRuntimeItem = Expansion.DEFAULT_EQUIPMENT_CATALOG.find((item) => item.id === 'tide_iron_knuckles');
   assert.equal(legacyRuntimeItem.purchasable, false);
 });

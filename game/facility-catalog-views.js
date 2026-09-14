@@ -10,6 +10,8 @@
     { key: "head", label: "頭部", matches: (item) => item.slot === "head" },
     { key: "upper", label: "上身", matches: (item) => item.slot === "upperBody" && !item.occupiesSlots.includes("lowerBody") },
     { key: "lower", label: "下身", matches: (item) => item.slot === "lowerBody" },
+    { key: "hands", label: "手部", matches: (item) => item.slot === "hands" },
+    { key: "feet", label: "腳部", matches: (item) => item.slot === "feet" },
     { key: "martial", label: "套裝", matches: (item) => item.slot === "upperBody" && item.occupiesSlots.includes("lowerBody") },
   ]);
   const SHOP_CATEGORY_KEYS = Object.freeze(SHOP_CATEGORIES.map((category) => category.key));

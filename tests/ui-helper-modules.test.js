@@ -379,6 +379,7 @@ test("catalog facility shop view preserves buy and sell action datasets", () => 
     level: 6,
     ownedEquipment: ["owned"],
     equipped: {},
+    selectedShopItemId: "new",
     catalog,
     fighterShopItemIdSet: new Set(["owned", "new"]),
     equipmentMatchesClass: () => true,
@@ -387,16 +388,19 @@ test("catalog facility shop view preserves buy and sell action datasets", () => 
     statText: (stats) => `攻擊 +${stats.attack}`,
     equipmentIconHtml: (item) => `<i data-icon="${item.id}"></i>`,
     coinAmountHtml: (amount, extraClass = "") => `<span class="${extraClass}">${amount}</span>`,
+    sellItems: [{ id: "owned", name: "舊拳套", quantity: 1, equipment: catalog[0], isEquipped: true, sellPrice: 50 }],
   };
 
   CatalogViews.renderShopFacility({ ...common, mode: "buy" });
   assert.match(content.innerHTML, /data-shop-category="weapon" aria-selected="true"/);
-  assert.match(content.innerHTML, /data-facility-action="equip" data-item-id="owned"/);
+  assert.match(content.innerHTML, /data-shop-category="hands"/);
+  assert.match(content.innerHTML, /data-shop-category="feet"/);
+  assert.match(content.innerHTML, /data-facility-action="select-shop-item" data-item-id="owned"/);
   assert.match(content.innerHTML, /data-facility-action="buy" data-item-id="new"/);
   assert.match(content.innerHTML, /原價 200/);
-  assert.equal(footerMessages.at(-1), '<span aria-hidden="true">⚒</span> 500 金幣 · 白銀級折扣 10% · 裝備店');
+  assert.equal(footerMessages.at(-1), '<span aria-hidden="true">⚒</span> 白銀級折扣 10% · 裝備店');
 
-  CatalogViews.renderShopFacility({ ...common, mode: "sell", equipped: { weapon: "owned" } });
+  CatalogViews.renderShopFacility({ ...common, mode: "sell", selectedShopItemId: "owned", equipped: { weapon: "owned" } });
   assert.match(content.innerHTML, /data-facility-action="sell-equipment" data-item-id="owned" disabled>請先卸下<\/button>/);
   assert.equal(footerMessages.at(-1), "");
 });
@@ -971,6 +975,8 @@ test("facility action router normalizes button commands without mutating gamepla
 
   const shopButton = { dataset: { facilityAction: "shop-category", shopCategory: "invalid" } };
   assert.equal(FacilityActionRouter.commandFromButton(shopButton).category, "weapon");
+  assert.equal(FacilityActionRouter.commandFromButton({ dataset: { facilityAction: "shop-category", shopCategory: "hands" } }).category, "hands");
+  assert.equal(FacilityActionRouter.commandFromButton({ dataset: { facilityAction: "shop-category", shopCategory: "feet" } }).category, "feet");
   const sellButton = { dataset: { facilityAction: "shop-trade-mode", shopTradeMode: "sell" } };
   assert.equal(FacilityActionRouter.commandFromButton(sellButton).mode, "sell");
   const bookButton = { dataset: { facilityAction: "open-book", bookStar: "4" } };

@@ -1929,7 +1929,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .equipment-shop-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: .45rem;
   margin: 0 0 .9rem;
   padding: 0;
@@ -2036,7 +2036,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 @media (max-width: 760px) {
   .equipment-shop-tabs {
-    grid-template-columns: repeat(5, minmax(4.2rem, 1fr));
+    grid-template-columns: repeat(7, minmax(4.2rem, 1fr));
     overflow-x: auto;
   }
   .equipment-shop-card {

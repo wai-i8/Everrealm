@@ -21,7 +21,7 @@ test("facility tabs keep portable menus separate from map-only services", () => 
 test("warrior and fighter use fixed HP growth tables with stable generic ATK/DEF", () => {
   for (const classId of ["warrior", "fighter"]) {
     const table = Expansion.CLASS_LEVEL_TABLES[classId];
-    assert.equal(table.length, 40);
+    assert.equal(table.length, 45);
     assert.equal(Object.isFrozen(table), true);
     for (let index = 1; index < table.length; index += 1) {
       assert.ok(table[index].maxHp > table[index - 1].maxHp, `${classId} HP at level ${index + 1}`);
@@ -30,7 +30,7 @@ test("warrior and fighter use fixed HP growth tables with stable generic ATK/DEF
     }
   }
   assert.deepEqual(Expansion.classStatsAtLevel("fighter", 1), {
-    level: 1, maxHp: 88, attack: 14, defence: 2, moveRange: 5,
+    level: 1, maxHp: 440, attack: 0, defence: 0, moveRange: 5,
   });
   assert.equal(Expansion.classStatsAtLevel("warrior", 1).moveRange, 3);
   assert.equal(Expansion.classStatsAtLevel("fighter", 40).moveRange, 5);
@@ -117,9 +117,9 @@ test("equipment stats add canonical and legacy body slots without double countin
     armor: "guild_mail",
     charm: "hunter_fang",
   });
-  assert.equal(stats.attack, 9);
+  assert.equal(stats.attack, 29);
   assert.equal(stats.defense, 3);
-  assert.equal(stats.maxHp, 12);
+  assert.equal(stats.maxHp, 0);
   assert.equal(stats.critChance, 0.04);
   assert.equal(stats.moveRange, 0);
   assert.equal(stats.weight, 7);
@@ -130,32 +130,37 @@ test("equipment stats add canonical and legacy body slots without double countin
 
 test("Fighter V1 equipment is level-gated, class-locked, and supports full-body occupancy", () => {
   const expected = {
-    novice_gloves: ["weapon", 1, 0, { attack: 2, speed: 2 }],
-    tide_iron_knuckles: ["weapon", 1, 95, { attack: 5, speed: 2 }],
-    gale_gauntlets: ["weapon", 7, 360, { attack: 12, speed: 8, critChance: 0.03 }],
-    dragon_knuckles: ["weapon", 15, 980, { attack: 26, defense: 3, critChance: 0.04 }],
-    metal_knuckles: ["weapon", 6, 450, { attack: 10 }],
-    giz_armguard: ["weapon", 12, 1800, { attack: 17 }],
-    heavy_knuckles: ["weapon", 18, 4050, { attack: 25 }],
-    superheavy_knuckles: ["weapon", 24, 7200, { attack: 34 }],
-    disciple_gi: ["upperBody", 5, 781, { attack: 2, defense: 1, maxHp: 2 }],
-    disciple_lower: ["lowerBody", 5, 500, { attack: 1 }],
-    disciple_handguards: ["hands", 5, 469, { attack: 1 }],
-    disciple_shoes: ["feet", 5, 469, { attack: 1 }],
-    training_wrap: ["upperBody", 14, 6125, { attack: 5, defense: 2, maxHp: 5 }],
-    training_belt: ["lowerBody", 14, 3920, { attack: 3, defense: 1 }],
-    training_bracers: ["hands", 14, 3675, { attack: 2, defense: 1 }],
-    training_zori: ["feet", 14, 3675, { attack: 2, defense: 1 }],
-    conditioning_suit: ["upperBody", 23, 16531, { attack: 9, defense: 3, maxHp: 8 }],
-    conditioning_skirt: ["lowerBody", 23, 10580, { attack: 5, defense: 2 }],
-    conditioning_handguards: ["hands", 23, 9919, { attack: 4, defense: 2 }],
-    conditioning_shoes: ["feet", 23, 9919, { attack: 4, defense: 2 }],
-    white_martial_gi: ["upperBody", 10, 4375, { attack: 2, defense: 2, moveRange: 1 }],
-    cloth_bracers: ["hands", 10, 1875, { attack: 1 }],
-    barefoot_bands: ["feet", 10, 1875, { attack: 1 }],
-    colored_martial_gi: ["upperBody", 20, 17500, { attack: 5, defense: 4, moveRange: 1 }],
-    joint_bracers: ["hands", 20, 7500, { attack: 3, defense: 1 }],
-    barefoot_guard: ["feet", 20, 7500, { attack: 3, defense: 1 }],
+    novice_gloves: ["weapon", 1, 0, { attack: 95, speed: 2 }],
+    tide_iron_knuckles: ["weapon", 1, 95, { attack: 25, speed: 2 }],
+    gale_gauntlets: ["weapon", 7, 360, { attack: 60, speed: 8, critChance: 0.03 }],
+    dragon_knuckles: ["weapon", 15, 980, { attack: 130, defense: 3, critChance: 0.04 }],
+    metal_knuckles: ["weapon", 6, 450, { attack: 115 }],
+    giz_armguard: ["weapon", 12, 1800, { attack: 135 }],
+    heavy_knuckles: ["weapon", 18, 4050, { attack: 165 }],
+    superheavy_knuckles: ["weapon", 24, 7200, { attack: 195 }],
+    fighter_headband: ["head", 1, 40, { defense: 12 }],
+    topknot_cap: ["head", 6, 720, { defense: 14 }],
+    continental_hat: ["head", 11, 2420, { defense: 17 }],
+    fighter_head_guard: ["head", 16, 5120, { defense: 19 }],
+    floral_topknot_cap: ["head", 21, 8820, { defense: 22 }],
+    disciple_gi: ["upperBody", 5, 781, { attack: 10, defense: 12, maxHp: 0 }],
+    disciple_lower: ["lowerBody", 5, 500, { attack: 10, defense: 12 }],
+    disciple_handguards: ["hands", 5, 469, { attack: 10, defense: 12 }],
+    disciple_shoes: ["feet", 5, 469, { attack: 10, defense: 12 }],
+    training_wrap: ["upperBody", 14, 6125, { attack: 15, defense: 16, maxHp: 0 }],
+    training_belt: ["lowerBody", 14, 3920, { attack: 15, defense: 16 }],
+    training_bracers: ["hands", 14, 3675, { attack: 15, defense: 16 }],
+    training_zori: ["feet", 14, 3675, { attack: 15, defense: 16 }],
+    conditioning_suit: ["upperBody", 23, 16531, { attack: 20, defense: 21, maxHp: 0 }],
+    conditioning_skirt: ["lowerBody", 23, 10580, { attack: 20, defense: 21 }],
+    conditioning_handguards: ["hands", 23, 9919, { attack: 20, defense: 21 }],
+    conditioning_shoes: ["feet", 23, 9919, { attack: 20, defense: 21 }],
+    white_martial_gi: ["upperBody", 10, 4375, { attack: 0, defense: 16, moveRange: 1 }],
+    cloth_bracers: ["hands", 10, 1875, { attack: 5, defense: 16 }],
+    barefoot_bands: ["feet", 10, 1875, { attack: 5, defense: 16 }],
+    colored_martial_gi: ["upperBody", 20, 17500, { attack: 0, defense: 22, moveRange: 1 }],
+    joint_bracers: ["hands", 20, 7500, { attack: 15, defense: 22 }],
+    barefoot_guard: ["feet", 20, 7500, { attack: 15, defense: 22 }],
   };
   const fighterItems = Expansion.DEFAULT_EQUIPMENT_CATALOG.filter((item) => item.classId === "fighter");
   assert.deepEqual(fighterItems.map((item) => item.id), Object.keys(expected));
@@ -180,12 +185,12 @@ test("Fighter V1 equipment is level-gated, class-locked, and supports full-body 
   assert.equal(full.ok, true);
   assert.equal(full.state.equipped.upperBody, "white_martial_gi");
   assert.equal(full.state.equipped.lowerBody, "white_martial_gi");
-  assert.equal(Expansion.equipmentStats(full.state).attack, 4);
+  assert.equal(Expansion.equipmentStats(full.state).attack, 95);
   const partial = Expansion.equipItem(full.state, "disciple_lower");
   assert.equal(partial.ok, true);
   assert.equal(partial.state.equipped.upperBody, null);
   assert.equal(partial.state.equipped.lowerBody, "disciple_lower");
-  assert.equal(Expansion.equipmentStats(partial.state).attack, 3);
+  assert.equal(Expansion.equipmentStats(partial.state).attack, 105);
   assert.equal(Expansion.equipItem({ ...base, classId: "warrior", ownedEquipment: [...base.ownedEquipment, "metal_knuckles"] }, "metal_knuckles").reason, "class");
 });
 

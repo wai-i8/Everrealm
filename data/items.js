@@ -6,7 +6,7 @@
   "use strict";
 
   const ACTIVE_ITEMS = Object.freeze([
-    { id: "healing_potion", name: "小型回復藥", description: "回復 30 HP。", iconIndex: 0, kind: "consumable" },
+    { id: "healing_potion", name: "小型回復藥", description: "回復 150 HP。", iconIndex: 0, kind: "consumable" },
     { id: "weak_potion", name: "弱氣之藥", description: "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。", iconIndex: 0, iconSrc: "assets/items/weak-potion-v1.png", kind: "consumable" },
     { id: "bright_feather", name: "亮羽", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "fox_fang", name: "霧狐尖牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },

@@ -13,6 +13,9 @@ The Firestore player document keeps the existing version-1 envelope for compatib
 - `expansion.skills` — learned/manual/deck state keyed by skill ID;
 - `expansion.guildCommission` — current commission state/progress;
 - `expansion.monsterKills`, dungeon progression and checkpoint.
+- `combatScaleVersion` — optional balance-migration marker; version `2` means
+  the global HP/ATK/DEF scale has been applied. Saves without it are migrated
+  by multiplying the persisted current HP once on load.
 
 Historical `activeContracts` and `contractRotation` fields are accepted only by virtue of being ignored; new saves no longer write them. Historical hyphenated item IDs are normalized by `data/items.js` when loading and are saved back in canonical snake_case form.
 
@@ -23,6 +26,7 @@ Firebase Auth email/password accounts use `uid` as the player identity. The curr
 ```text
 players/{uid}
   version: 1
+  combatScaleVersion: 2 (after the one-time balance migration)
   player: { name, x, y, hp, level, xp, coins, potions, weaponLevel, upgrades }
   pendingLevelUps
   openedChests[]

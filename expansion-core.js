@@ -19,7 +19,7 @@
   const LEVEL_EXP_REQUIREMENTS = classData?.LEVEL_EXP_REQUIREMENTS || Object.freeze({});
 
   function classStatsAtLevel(classId, level) {
-    return classData?.classStatsAtLevel?.(classId, level) || { level: 1, maxHp: 88, attack: 0, defence: 0, moveRange: 3 };
+    return classData?.classStatsAtLevel?.(classId, level) || { level: 1, maxHp: 88 * (classData?.HP_SCALE || 5), attack: 0, defence: 0, moveRange: 3 };
   }
 
   function starterEquipmentForClass(classId) {

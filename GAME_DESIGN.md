@@ -109,7 +109,7 @@
 
 ### Fighter V1 equipment
 
-格鬥士 V1 商店只顯示五類：武器、頭部、上身、下身、武道服；戰士武器及其他職業裝備不可跨職業使用。現行拳套數值改以《幸福 Online／STRUGARDEN》原作「衝」攻擊作 Everrealm `ATK`：`metal_knuckles`（Lv6，ATK 23，450）、`giz_armguard`（Lv12，ATK 27，1800）、`heavy_knuckles`（Lv18，ATK 33，4050）、`superheavy_knuckles`（Lv24，ATK 39，7200）。格鬥士防具同樣以原作數據轉換：原作衝攻直接成為該件 Everrealm `ATK`；原作衝防以 `round(衝防 / 5)` 成為 Everrealm `DEF`；required level 與購買價亦盡量跟原作表。例：門人系衝攻 `+2`、衝防 `12 → DEF 2`；練武系 `+3`、`16 → DEF 3`；鍛鍊系 `+4`、`21 → DEF 4`；髮髻帽衝防 `14 → DEF 3`。完整原作式五部位平衡基準（頭、上身、下身、手、腳）為 Lv6 約 `ATK 31 / DEF 11`、Lv14 約 `ATK 39 / DEF 15`；目前 V1 商店仍只露出上／下身，手／腳記錄保留為 legacy compatibility，但怪物同級攻防曲線以完整格鬥士裝備基準校準。完整固定資料由 `data/equipment.js` 保存，購買／裝備驗證由 `expansion-core.js` 負責。購買只增加 owned inventory，唔會自動裝備；等級不足仍然可以預先購買，`requiredLevel` 只喺實際裝備時阻擋。裝備店與道具店提供「購買／出售」模式，已裝備物品必須先卸下先可出售。職業不符仍不可裝備。
+格鬥士 V1 商店顯示七類：武器、頭部、上身、下身、手部、腳部、武道服；戰士武器及其他職業裝備不可跨職業使用。現行拳套數值改以《幸福 Online／STRUGARDEN》原作「衝」攻擊作 Everrealm `ATK × 5`：`metal_knuckles`（Lv6，ATK 115，450）、`giz_armguard`（Lv12，ATK 135，1800）、`heavy_knuckles`（Lv18，ATK 165，4050）、`superheavy_knuckles`（Lv24，ATK 195，7200）。格鬥士防具同樣以原作數據轉換：原作衝攻乘 5 成為該件 Everrealm `ATK`；原作衝防完整保留成為 Everrealm `DEF`；required level 與購買價亦盡量跟原作表。例：門人系衝攻 `+2 → ATK +10`、衝防 `12 → DEF 12`；練武系 `+3 → ATK +15`、`16 → DEF 16`；鍛鍊系 `+4 → ATK +20`、`21 → DEF 21`；髮髻帽衝防 `14 → DEF 14`。完整原作式五部位平衡基準（頭、上身、下身、手、腳）為 Lv6 `ATK 155 / DEF 62`、Lv14 `ATK 195 / DEF 81`；怪物同級 ATK、DEF 亦同步乘 5，維持同一攻防尺度。完整固定資料由 `data/equipment.js` 保存，購買／裝備驗證由 `expansion-core.js` 負責。購買只增加 owned inventory，唔會自動裝備；等級不足仍然可以預先購買，`requiredLevel` 只喺實際裝備時阻擋。裝備店與道具店提供「購買／出售」模式，已裝備物品必須先卸下先可出售。職業不符仍不可裝備。
 
 ## 世界與美術一致性
 
@@ -123,7 +123,7 @@
 ## 等級與職業平衡
 
 - 等級上限為 `45`。玩家升級本身**不提供 Base ATK / Base DEF**；`data/classes.js` 由 Lv1–45 全部固定 `attack: 0`、`defence: 0`。ATK／DEF 由裝備、PSV、buff/debuff 及暫時戰鬥效果建立，令攻防成長直接反映玩家實際著咩裝。
-- 等級主要增加 Max HP、解鎖技能／裝備及推進內容；裝備不提供 Max HP bonus，`maxHp` 裝備欄位只作 legacy compatibility 並在 runtime 忽略。現行 deterministic HP curve：格鬥士 `MaxHP = 88 + 7×(Lv-1) + 3×floor((Lv-1)/5)`；戰士 `MaxHP = 88 + 8×(Lv-1) + 4×floor((Lv-1)/5)`。無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，裝備只用 explicit Move modifier 改變可走格數。
+- 等級主要增加 Max HP、解鎖技能／裝備及推進內容；裝備不提供 Max HP bonus，`maxHp` 裝備欄位只作 legacy compatibility 並在 runtime 忽略。現行 deterministic HP curve：格鬥士 `MaxHP = (88 + 7×(Lv-1) + 3×floor((Lv-1)/5)) × 5`；戰士 `MaxHP = (88 + 8×(Lv-1) + 4×floor((Lv-1)/5)) × 5`。玩家、怪物、固定回復量共用 ×5 生命尺度。無裝備基礎戰棋移動為戰士 `3`、格鬥士 `5`，裝備只用 explicit Move modifier 改變可走格數。
 - 升級時 HP 立即回復到新上限，並寫入「等級提升」系統訊息；所有舊存檔的待選升級數歸零。
 - 主職業每級所需 EXP 跟《幸福 Online／STRUGARDEN》必要經驗表；Everrealm 只使用至 Lv45：
 

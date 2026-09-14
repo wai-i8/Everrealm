@@ -30,9 +30,9 @@ but `equipmentStats()` only sums the canonical schema above.
 
 Everrealm Fighter gear uses the original 《幸福 Online／STRUGARDEN》 impact (`衝`) axis as the numeric source, but keeps Everrealm's single ATK/DEF model:
 
-- fist / claw weapons: original `衝` attack becomes Everrealm `attack` directly;
-- Fighter armour offensive bonus: original `衝` attack becomes Everrealm `attack` directly;
-- Fighter armour defence: `defense = round(original 衝 defense / 5)`;
+- fist / claw weapons: original `衝` attack becomes Everrealm `attack × 5`;
+- Fighter armour offensive bonus: original `衝` attack becomes Everrealm `attack × 5`;
+- Fighter armour defence: original `衝防` is retained as the Everrealm `defense` value;
 - `requiredLevel` and shop `cost` follow the corresponding original table where the mapping is confirmed;
 - runtime does **not** retain slash / impact / pierce matrices after conversion.
 
@@ -40,15 +40,15 @@ Current weapon anchors are:
 
 | Item | Required Lv | Cost | Everrealm ATK |
 | --- | ---: | ---: | ---: |
-| `novice_gloves` | 1 | 0 | 19 |
-| `metal_knuckles` | 6 | 450 | 23 |
-| `giz_armguard` | 12 | 1800 | 27 |
-| `heavy_knuckles` | 18 | 4050 | 33 |
-| `superheavy_knuckles` | 24 | 7200 | 39 |
+| `novice_gloves` | 1 | 0 | 95 |
+| `metal_knuckles` | 6 | 450 | 115 |
+| `giz_armguard` | 12 | 1800 | 135 |
+| `heavy_knuckles` | 18 | 4050 | 165 |
+| `superheavy_knuckles` | 24 | 7200 | 195 |
 
-Armour conversion anchors include `topknot_cap` (`衝防 14 → DEF 3`), the Lv5 `disciple` set (`衝攻 +2`, `衝防 12 → ATK +2 / DEF +2`), the Lv14 `training` set (`+3`, `16 → DEF 3`) and the Lv23 `conditioning` set (`+4`, `21 → DEF 4`). These are **conversion-time** rules; the player-facing sheet simply adds the resulting integer equipment stats.
+Armour conversion anchors include `topknot_cap` (`衝防 14 → DEF 14`), the Lv5 `disciple` set (`衝攻 +2`, `衝防 12 → ATK +10 / DEF 12`), the Lv14 `training` set (`衝攻 +3`, `衝防 16 → ATK +15 / DEF 16`) and the Lv23 `conditioning` set (`衝攻 +4`, `衝防 21 → ATK +20 / DEF 21`). These are **conversion-time** rules; the player-facing sheet simply adds the resulting integer equipment stats.
 
-For balance comparisons, the complete original-style five armour slots (head + upper + lower + hands + feet) produce the agreed Fighter anchors of roughly `ATK 31 / DEF 11` at Lv6 and `ATK 39 / DEF 15` at Lv14. The current V1 shop surface still exposes only weapon/head/upper/lower/full-body categories; legacy hand/feet records remain available for save compatibility and balance reference until that shop scope is intentionally changed.
+For balance comparisons, the complete original-style five armour slots (head + upper + lower + hands + feet) produce Fighter anchors of `ATK 155 / DEF 62` at Lv6 and `ATK 195 / DEF 81` at Lv14. The shop exposes weapon, head, upper-body, lower-body, hands, feet and one-piece martial-uniform categories; all ten hand/feet records are now active shop inventory.
 
 Player class levels contribute `0` Base ATK and `0` Base DEF. Equipment is therefore the normal source of the visible attack/defence numbers; class level growth itself does not silently add hidden ATK/DEF.
 

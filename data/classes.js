@@ -6,6 +6,7 @@
   "use strict";
 
   const LEVEL_CAP = 45;
+  const HP_SCALE = 5;
   const LEVEL_EXP_REQUIREMENTS = Object.freeze({
     1: 250, 2: 260, 3: 270, 4: 290, 5: 310,
     6: 340, 7: 370, 8: 410, 9: 450, 10: 500,
@@ -27,7 +28,7 @@
       const fighter = classId === "fighter";
       return Object.freeze({
         level: index + 1,
-        maxHp: 88 + steps * (fighter ? 7 : 8) + Math.floor(steps / 5) * (fighter ? 3 : 4),
+        maxHp: (88 + steps * (fighter ? 7 : 8) + Math.floor(steps / 5) * (fighter ? 3 : 4)) * HP_SCALE,
         attack: 0,
         defence: 0,
         moveRange: fighter ? 5 : 3,
@@ -64,5 +65,5 @@
     return [...CLASS_DEFINITIONS[normalizeClassId(classId)].starterSkills];
   }
 
-  return { LEVEL_CAP, LEVEL_EXP_REQUIREMENTS, DEFAULT_CLASS_ID, CLASS_IDS, CLASS_LEVEL_TABLES, CLASS_DEFINITIONS, normalizeClassId, classStatsAtLevel, starterEquipment, starterSkills };
+  return { LEVEL_CAP, HP_SCALE, LEVEL_EXP_REQUIREMENTS, DEFAULT_CLASS_ID, CLASS_IDS, CLASS_LEVEL_TABLES, CLASS_DEFINITIONS, normalizeClassId, classStatsAtLevel, starterEquipment, starterSkills };
 });

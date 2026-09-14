@@ -1734,7 +1734,8 @@
     const criticalMultiplier = options.critical ? Math.max(1, finiteStat(options.criticalMultiplier, 1.5)) : 1;
     const guardMultiplier = options.guarded ? Math.max(0, finiteStat(options.guardMultiplier, 0.65)) : 1;
     const minimum = Math.max(0, Math.trunc(finiteStat(options.minimum, MIN_DIRECT_DAMAGE)));
-    return Math.max(minimum, Math.floor(Math.max(0, attack + bonus) * multiplier * criticalMultiplier * guardMultiplier - defence));
+    const baseDamage = Math.max(0, attack + bonus - defence);
+    return Math.max(minimum, Math.floor(baseDamage * multiplier * criticalMultiplier * guardMultiplier));
   }
 
   function applyDamage(unit, amount) {
