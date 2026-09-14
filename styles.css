@@ -3032,7 +3032,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-window-min-width: 16rem;
   --ui-skill-badge-width: 3.45rem;
   --ui-skill-badge-height: 1.5rem;
-  --ui-control-hit: 2.5rem;
+  --ui-control-hit: 2rem;
   --ui-close-art: 2rem;
   --ui-info-art: 1.45rem;
   --ui-action-gap: .55rem;
@@ -3201,7 +3201,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   justify-content: space-between;
   gap: .7rem;
   min-height: var(--facility-header-height);
-  padding: .42rem .72rem .42rem .95rem;
+  padding: 0rem 0rem;
   background:
     linear-gradient(90deg, rgba(20,37,67,.98), rgba(8,18,37,.96) 70%, rgba(18,31,57,.98)),
     radial-gradient(circle at 18% -20%, rgba(255,200,87,.15), transparent 13rem);
