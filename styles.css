@@ -7289,21 +7289,16 @@ html body [aria-disabled="true"] {
   text-align: center;
   cursor: pointer;
   appearance: none;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
 }
 .shop-item-summary:hover,
 .shop-item-summary:focus-visible,
 .shop-item-summary.is-selected {
-  border: 0;
-  background: transparent;
-  color: var(--gold);
+  border-color: rgba(255,200,87,.76);
+  background: linear-gradient(145deg,rgba(40,72,92,.9),rgba(12,29,51,.98));
   outline: none;
 }
 .shop-item-summary.is-selected {
-  box-shadow: none;
+  box-shadow: 0 0 0 2px rgba(82,220,203,.2), 0 0 1rem rgba(82,220,203,.13), 3px 4px 0 rgba(0,0,0,.22);
 }
 .shop-item-summary .equipment-shop-art {
   width: 4.2rem;
