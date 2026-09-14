@@ -74,7 +74,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260913-05",
+    "game.js?v=20260914-01",
   ]);
 
   return Object.freeze({ scripts });

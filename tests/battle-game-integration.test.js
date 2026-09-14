@@ -17,6 +17,10 @@ test("battle movement uses facing-aware timed simultaneous resolution", () => {
   assert.match(game, /movement\.unitResults/);
 });
 
+test("pausing exploration stops any active walking loop", () => {
+  assert.match(game, /if \(mode !== "playing"\) \{[\s\S]*?cancelExplorePointerTracking\(\);[\s\S]*?window\.EverrealmFootstepsRuntime\?\.update\?\.\(\{ moving: false \}\);/);
+});
+
 test("resolved facing and STOP feedback come from actual collision results", () => {
   assert.doesNotMatch(game, /enemy\.facing\s*=\s*Tactics\.facingFromStep\(enemy\.cell,\s*battle\.hero\.cell/);
   assert.doesNotMatch(game, /battle\.hero\.facing\s*=\s*movement\.finalHeroFacing/);

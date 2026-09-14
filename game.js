@@ -9833,7 +9833,10 @@
     const rawDelta = Core.clamp((now - previousTime) / 1000 || 0, 0, .12);
     previousTime = now;
     elapsed += rawDelta;
-    if (mode !== "playing") cancelExplorePointerTracking();
+    if (mode !== "playing") {
+      cancelExplorePointerTracking();
+      window.EverrealmFootstepsRuntime?.update?.({ moving: false });
+    }
     if (mode === "playing") {
       accumulator += rawDelta;
       let steps = 0;
