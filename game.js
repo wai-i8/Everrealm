@@ -8298,7 +8298,6 @@
     if (!planExploreMove(destination)) {
       pendingClickInteractionId = null;
       explorePortalIntentId = null;
-      showToast("嗰邊行唔到；撳近少少嘅空地再試。", "danger");
       return;
     }
     spawnBurst(destination.x, destination.y, entity?.type ? "#ff8b62" : "#52dccb", 5, 24);
