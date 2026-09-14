@@ -281,15 +281,15 @@
   const spriteAtlases = {
     heroLegacy: { src: "assets/hero-sprites-v3.png", columns: 4, rows: 2, image: null, ready: false, failed: false },
     heroDown: { src: "assets/hero-anim-down-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
-    heroUp: { src: "assets/hero-anim-up-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
-    heroRight: { src: "assets/hero-anim-right-v3.png", columns: 10, rows: 5, image: null, ready: false, failed: false },
+    heroUp: { src: null, columns: 10, rows: 5, image: null, ready: false, failed: false },
+    heroRight: { src: null, columns: 10, rows: 5, image: null, ready: false, failed: false },
     fighter: { src: "assets/fighter-atlas-v2.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
-    fighterWalk: { src: "assets/fighter-walk-atlas-v4.png", columns: 4, rows: 4, rowCuts: [0, 292 / 1199, 585 / 1199, 869 / 1199, 1], image: null, ready: false, failed: false },
+    fighterWalk: { src: null, columns: 4, rows: 4, rowCuts: [0, 292 / 1199, 585 / 1199, 869 / 1199, 1], image: null, ready: false, failed: false },
     // Only the smith's left gutter contains the previous actor's pale cloak.
     // Scope the legacy crop to that frame so other NPCs retain their full art.
-    npcMap: { src: "assets/npc-map-chibi-v4.png", columns: 4, rows: 3, cellInsets: { 1: { left: 24 } }, image: null, ready: false, failed: false },
-    npcPortraits: { src: "assets/npc-dialogue-portraits-v4.png", columns: 4, rows: 3, cellGutterX: 16, cellInsets: { 2: { right: 32 } }, image: null, ready: false, failed: false },
-    environment: { src: "assets/environment-atlas-v5.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
+    npcMap: { src: null, columns: 4, rows: 3, cellInsets: { 1: { left: 24 } }, image: null, ready: false, failed: false },
+    npcPortraits: { src: null, columns: 4, rows: 3, cellGutterX: 16, cellInsets: { 2: { right: 32 } }, image: null, ready: false, failed: false },
+    environment: { src: null, columns: 4, rows: 5, image: null, ready: false, failed: false },
     terrain: { src: "assets/terrain-atlas-v1.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
     mainTownBackground: { src: "assets/main-town/maintown.jpg", background: true, image: null, ready: false, failed: false },
     fieldBackground: { src: "assets/field/vanmer-mountains.jpg", background: true, image: null, ready: false, failed: false },
@@ -302,10 +302,10 @@
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v3.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleHighTree: { src: "assets/battle/mountain/battle-tree-high-v1.png", standalone: true, image: null, ready: false, failed: false },
     battleLowScrub: { src: "assets/battle/mountain/battle-scrub-low-v1.png", standalone: true, image: null, ready: false, failed: false },
-    interior: { src: "assets/interior-props-v2.png", columns: 4, rows: 3, image: null, ready: false, failed: false },
+    interior: { src: null, columns: 4, rows: 3, image: null, ready: false, failed: false },
     monstersCore: { src: "assets/monster-facing-core-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
-    monstersDepths: { src: "assets/monster-facing-depths-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
-    markers: { src: "assets/marker-atlas-v1.png", columns: 2, rows: 2, image: null, ready: false, failed: false },
+    monstersDepths: { src: null, columns: 4, rows: 5, image: null, ready: false, failed: false },
+    markers: { src: null, columns: 2, rows: 2, image: null, ready: false, failed: false },
   };
 
   for (const [id, src] of Object.entries(Locomotion.assets)) {
@@ -350,7 +350,7 @@
   function loadSpriteAtlases() {
     if (typeof Image !== "function") return;
     for (const atlas of Object.values(spriteAtlases)) {
-      if (atlas.image) continue;
+      if (!atlas.src || atlas.image) continue;
       const image = new Image();
       atlas.image = image;
       image.decoding = "async";
