@@ -305,7 +305,7 @@ test("normal town services use physical door entries and the east passage uses a
     "world-to-guild", "world-to-shop", "world-to-inn", "world-to-clinic", "world-to-general-store",
   ]);
   assert.match(world.houses.find((house) => house.id === "clinic").label, /霧草療癒所/);
-  assert.match(world.houses.find((house) => house.id === "general-store").label, /霧穀雜貨舖/);
+  assert.match(world.houses.find((house) => house.id === "general-store").label, /道具店/);
   assert.match(world.houses.find((house) => house.id === "tea-house").label, /霧燈旅店/);
 });
 

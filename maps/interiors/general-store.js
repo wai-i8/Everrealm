@@ -54,7 +54,7 @@
         entrance: { outward: "south", approachPoint: entry, threshold: { shape: "rect", x: exitRegion.bbox.x, y: exitRegion.bbox.y, w: exitRegion.bbox.width, h: exitRegion.bbox.height }, approachDistance: 0, entryFacing: "up", returnFacing: "down", marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 } },
       },
       map: {
-        id: MAP_IDS.GENERAL_STORE, name: "霧穀雜貨舖", shortName: "雜貨舖", kind: "interior", type: "interior", theme: "general-store", ambient: "market-warm",
+        id: MAP_IDS.GENERAL_STORE, name: "道具店", shortName: "道具店", kind: "interior", type: "interior", theme: "general-store", ambient: "market-warm",
         start: entry, spawnPoints: { entrance: entry, merchant: { x: npcFeet.x, y: npcFeet.y - 13 }, exit: exitPoint }, worldBuildingId: "general-store",
         art: { flattened: true, background: "item", backgroundScene: "item", master: ART, authoring: AUTHORING, sourceDimensions: { width: data.source.width, height: data.source.height }, rendering: data.rendering },
       },

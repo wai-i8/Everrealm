@@ -65,7 +65,7 @@
 
 ### 2.1 服務室內的功能分區與動線
 
-五個主城服務 interior（公會、療癒所、旅店、裝備店、雜貨舖）先按房間用途，再按玩家動線 author：入口 → 主要服務點 → 對應功能區。櫃台／服務 NPC 必須形成可理解的工作組；牆邊優先放置書架、貨架、櫃與儲物，中央地面只保留有用途的候位、展示、治療或休憩家具。主要行走路線要保持清楚，不以無關 props 填滿空位；每張 interior 的功能區語意與 NPC 角色由對應 `docs/maps/*.md` 及 owning runtime map 保存。
+五個主城服務 interior（公會、療癒所、旅店、裝備店、道具店）先按房間用途，再按玩家動線 author：入口 → 主要服務點 → 對應功能區。櫃台／服務 NPC 必須形成可理解的工作組；牆邊優先放置書架、貨架、櫃與儲物，中央地面只保留有用途的候位、展示、治療或休憩家具。主要行走路線要保持清楚，不以無關 props 填滿空位；每張 interior 的功能區語意與 NPC 角色由對應 `docs/maps/*.md` 及 owning runtime map 保存。
 
 ### 2.2 Flattened scene navigation package
 
@@ -100,7 +100,7 @@ Player, NPC and monster authored render dimensions, the base exploration movemen
 
 ## 3. 現有主要世界區域
 
-目前主要探索區域只有三個；公會、裝備店、療癒所、雜貨舖及旅店等室內場景屬主城附屬 interior，唔計成獨立大區域。
+目前主要探索區域只有三個；公會、裝備店、療癒所、道具店及旅店等室內場景屬主城附屬 interior，唔計成獨立大區域。
 
 ### 3.1 主城
 
@@ -110,7 +110,7 @@ Player, NPC and monster authored render dimensions, the base exploration movemen
 - 公會
 - 裝備／商店
 - 療癒所
-- 雜貨舖
+- 道具店
 - 旅店
 - 戰技面板台
 - 任務交收
@@ -937,7 +937,7 @@ Canvas 可以繼續做 renderer。
 
 ## 26. Interior Maps
 
-公會、裝備店、療癒所、雜貨舖及旅店等 interior：
+公會、裝備店、療癒所、道具店及旅店等 interior：
 
 - 使用同一 map registry。
 - 有自己 collision／interaction／exit。
@@ -1124,4 +1124,3 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 最重要原則：
 
 > **探索地圖決定你身處嘅世界；戰鬥棋盤係嗰個世界嘅戰術化版本，而唔係另一個無關嘅 debug room。**
-

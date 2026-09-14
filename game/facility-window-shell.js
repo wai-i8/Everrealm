@@ -114,7 +114,7 @@
   }
 
   function panelSizeFor(tab, context, hasActiveGuildCommission) {
-    if (tab === "deck") return context === "deck-view" ? "compact" : "standard";
+    if (tab === "deck") return context === "deck-view" ? "compact" : "medium";
     if (tab === "status") return "compact";
     if (tab === "missions") return "compact";
     if (tab === "shop" && context === "general-store") return "medium";

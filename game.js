@@ -7277,7 +7277,7 @@
     if (currentMapId === "guild") return "公會";
     if (currentMapId === "shop") return "裝備店";
     if (currentMapId === "clinic") return "霧草療癒所";
-    if (currentMapId === "general-store") return "霧穀雜貨舖";
+    if (currentMapId === "general-store") return "道具店";
     if (currentMapId === "inn") return "霧燈旅店";
     if (currentMapId === "dungeon") {
       const tx = position.x / world.tileSize;
