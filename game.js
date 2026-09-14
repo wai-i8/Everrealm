@@ -8037,6 +8037,7 @@
         phase: elapsed,
         progress: actionStrikeProgress,
         actionStrikeIndex,
+        actionHitCount,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         // The old selected ring and AP orbit were persistent visual noise; tile
         // overlays/cursor already communicate tactical selection.
@@ -8054,6 +8055,8 @@
         locomotion,
         battleDiagonal: layout.projected,
         progress: actionStrikeProgress,
+        actionStrikeIndex,
+        actionHitCount,
         selected: false,
       });
     }

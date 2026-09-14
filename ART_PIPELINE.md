@@ -554,6 +554,8 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 
 舊 `hero-anim-*`／`fighter-atlas-*` 內仍有可用 attack／death／特殊 pose 時，可以喺 migration 期間保留；但 Idle／Walk 正式 runtime 應逐步統一到新 locomotion contract。
 
+格鬥士戰鬥斜角 atlas `fighter-battle-diagonal-v2.png` 係 battle-only 擴展 asset：沿用固定 `256 × 256` cell 同 `128,224` anchor，Column 0 係 Idle、Column 1–2 係 Walk、Column 3–8 依次為 `Windup → Strike A-Mid → Strike A → Strike B-Mid → Strike B → Recovery`、Column 9 係 Hurt。右上（NE）同右下（SE）各有一套正式 attack pose；左下（SW）由 SE 水平鏡像、左上（NW）由 NE 水平鏡像，唔以純上下左右 cardinal pose 代替斜角 artwork。多 hit action 由 runtime 以 hit index 選擇 A／B，唔改變 battle mechanics 或 fixed anchor。
+
 
 ## 戰鬥場景美術規格
 

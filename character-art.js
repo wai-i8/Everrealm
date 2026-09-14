@@ -342,9 +342,12 @@
       anchorY: config.anchorY,
       visualProfile: config.visualProfile,
       rowByFacing: config.rowByFacing,
+      attackSourceFacing: config.attackSourceFacing,
+      attackMirrorFacing: config.attackMirrorFacing,
       idleColumn: config.idleColumn,
       walkColumns: config.walkColumns,
-      attackColumn: config.attackColumn,
+      attackColumns: config.attackColumns,
+      attackFrames: config.attackFrames,
       hurtColumn: config.hurtColumn,
       image: null,
       ready: false,
@@ -574,18 +577,39 @@
     if (!config || !atlas) return null;
     const requestedFacing = settings.facing || settings.locomotion?.facing || "right";
     const facing = Object.hasOwn(config.rowByFacing || {}, requestedFacing) ? requestedFacing : "right";
-    const row = config.rowByFacing[facing];
     const state = settings.state || settings.locomotion?.state || "idle";
     const phase = Math.max(0, Number(settings.phase) || Number(settings.locomotion?.time) || 0);
+    let sourceFacing = facing;
+    let mirror = false;
+    let row = config.rowByFacing[sourceFacing];
     let column = config.idleColumn;
     if (["walk", "run"].includes(state)) {
       const walkColumns = config.walkColumns || [];
       column = walkColumns.length
         ? walkColumns[Math.floor(phase * (config.walkFps || 8)) % walkColumns.length]
         : config.idleColumn;
+    } else if (state === "attack" && config.attackFrames) {
+      sourceFacing = config.attackSourceFacing?.[facing] || facing;
+      mirror = Boolean(config.attackMirrorFacing?.[facing]);
+      row = config.rowByFacing[sourceFacing];
+      const frames = config.attackFrames;
+      const actionStrikeIndex = Number.isFinite(settings.actionStrikeIndex)
+        ? Math.max(-1, Math.floor(settings.actionStrikeIndex))
+        : -1;
+      const actionHitCount = Math.max(0, Number(settings.actionHitCount) || 0);
+      const progress = clamp(Number.isFinite(settings.progress) ? settings.progress : 0, 0, 1);
+      const finalHit = actionStrikeIndex >= 0 && actionHitCount > 0 && actionStrikeIndex >= actionHitCount - 1;
+      const frameName = actionStrikeIndex < 0
+        ? "windup"
+        : finalHit && progress >= .86
+          ? "recovery"
+          : progress < .45
+            ? actionStrikeIndex % 2 === 0 ? "strikeAMid" : "strikeBMid"
+            : actionStrikeIndex % 2 === 0 ? "strikeA" : "strikeB";
+      column = frames[frameName] ?? config.attackColumns?.[0] ?? config.idleColumn;
     } else if (state === "attack") column = config.attackColumn;
     else if (state === "hurt") column = config.hurtColumn;
-    return { atlas, index: row * atlas.columns + column, facing, state, config };
+    return { atlas, index: row * atlas.columns + column, facing, sourceFacing, mirror, state, config };
   }
 
   function drawBattleDiagonalUnit(ctx, settings, id) {
@@ -642,6 +666,10 @@
       }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
+      if (selected.mirror) {
+        ctx.translate(drawX * 2 + box.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(atlas.image, frame.sx, frame.sy, frame.sw, frame.sh, drawX, drawY, box.width, box.height);
     } finally { ctx.restore(); }
     const nameAnchorX = x;
@@ -659,6 +687,7 @@
       atlas: atlas.src,
       frame: selected.index,
       facing: selected.facing,
+      mirror: selected.mirror,
       battleDiagonal: true,
     };
   }

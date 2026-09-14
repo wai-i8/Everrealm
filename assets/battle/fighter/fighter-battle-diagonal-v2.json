@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "columns": 10,
+  "rows": 4,
+  "cellWidth": 256,
+  "cellHeight": 256,
+  "anchorX": 128,
+  "anchorY": 224,
+  "rowByFacing": { "right": 0, "down": 1, "left": 2, "up": 3 },
+  "attackSourceFacing": { "right": "right", "down": "down", "left": "down", "up": "right" },
+  "attackMirrorFacing": { "right": false, "down": false, "left": true, "up": true },
+  "screenDirections": { "up": "north-west", "right": "north-east", "down": "south-east", "left": "south-west" },
+  "columnsByState": {
+    "idle": [0],
+    "walk": [1, 2],
+    "attack": [3, 4, 5, 6, 7, 8],
+    "hurt": [9]
+  },
+  "attackFrames": {
+    "windup": 3,
+    "strikeAMid": 4,
+    "strikeA": 5,
+    "strikeBMid": 6,
+    "strikeB": 7,
+    "recovery": 8
+  },
+  "visualProfile": "player",
+  "visualEnvelope": { "maxWidth": 208, "maxHeight": 212 },
+  "scope": "battle-only fighter attack animation"
+}

@@ -24,11 +24,16 @@
   });
   const BATTLE_DIAGONAL_ASSETS = Object.freeze({
     fighter: Object.freeze({
-      src: "assets/battle/fighter/fighter-battle-diagonal-v1.png",
-      columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+      src: "assets/battle/fighter/fighter-battle-diagonal-v2.png",
+      columns: 10, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
       rowByFacing: Object.freeze({ right: 0, down: 1, left: 2, up: 3 }),
+      attackSourceFacing: Object.freeze({ right: "right", down: "down", left: "down", up: "right" }),
+      attackMirrorFacing: Object.freeze({ right: false, down: false, left: true, up: true }),
       visualProfile: "player",
-      idleColumn: 0, walkColumns: Object.freeze([1, 2]), attackColumn: 3, hurtColumn: 4, walkFps: 8,
+      idleColumn: 0, walkColumns: Object.freeze([1, 2]),
+      attackColumns: Object.freeze([3, 4, 5, 6, 7, 8]),
+      attackFrames: Object.freeze({ windup: 3, strikeAMid: 4, strikeA: 5, strikeBMid: 6, strikeB: 7, recovery: 8 }),
+      hurtColumn: 9, walkFps: 8,
     }),
     chick: Object.freeze({
       src: "assets/battle/chick/chick-battle-diagonal-v1.png",
