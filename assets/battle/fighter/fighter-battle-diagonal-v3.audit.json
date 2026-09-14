@@ -1,0 +1,287 @@
+{
+  "passed": true,
+  "size": [
+    2816,
+    512
+  ],
+  "grid": [
+    11,
+    2
+  ],
+  "cell": [
+    256,
+    256
+  ],
+  "anchor": [
+    128,
+    224
+  ],
+  "hiddenRgbPixels": 0,
+  "frames": [
+    {
+      "row": 0,
+      "column": 0,
+      "bbox": [
+        74,
+        17,
+        191,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "b4104aa2c1c36d2daf867d1bbfeeb5409814c674707811ca117484b52714e03e"
+    },
+    {
+      "row": 0,
+      "column": 1,
+      "bbox": [
+        72,
+        18,
+        190,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "c1adf39b085aa5d8712ff795fb4b19d2d7f09c37585802f606b61dd63e43d4ae"
+    },
+    {
+      "row": 0,
+      "column": 2,
+      "bbox": [
+        72,
+        16,
+        192,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "2a825628985ad14628d326219be4a8b0e634d3210921c992e25a79e43dc0e908"
+    },
+    {
+      "row": 0,
+      "column": 3,
+      "bbox": [
+        54,
+        21,
+        192,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "07849cdbb21018614b96cef7b1a412a5cd2c0473ad10ff6f0d35aca0e8066092"
+    },
+    {
+      "row": 0,
+      "column": 4,
+      "bbox": [
+        62,
+        22,
+        202,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "268350840e8dda0ec5db8fd04a827cf8379ff04bcd55917f74928bc7dbb30e23"
+    },
+    {
+      "row": 0,
+      "column": 5,
+      "bbox": [
+        65,
+        22,
+        241,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "ae5d77c1567cc84c33c244d3f720d0585e77cd2ba97cbe0eed99b05fbe06cc7b"
+    },
+    {
+      "row": 0,
+      "column": 6,
+      "bbox": [
+        57,
+        24,
+        227,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "a8c3b8ade2fc7cc6f58cdcb94877064e703f6194faf1e55bf44fbc15102ea47f"
+    },
+    {
+      "row": 0,
+      "column": 7,
+      "bbox": [
+        71,
+        19,
+        194,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "490876bd9442d2174d84eda5a9a08af2ba2537228b63a906122b9e7e776f84cd"
+    },
+    {
+      "row": 0,
+      "column": 8,
+      "bbox": [
+        73,
+        17,
+        186,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "29edcd173c644a1f044d2910ea6b90a6468695a732eaf33eb6f262c355b3bf0e"
+    },
+    {
+      "row": 0,
+      "column": 9,
+      "bbox": [
+        46,
+        18,
+        176,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "abe578ae6be92987c7ab9c4764d36dc48e4dcd0c1e6f246b86b907d5d20d9ce1"
+    },
+    {
+      "row": 0,
+      "column": 10,
+      "bbox": [
+        46,
+        116,
+        209,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "74b0087f67fad6a25c31677f2766d3e3d863c3e9d4dd45afc0978ecc95f48563"
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "bbox": [
+        76,
+        17,
+        192,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "31b8fd0ec1dbb08a5538eec80f40b60b85309f8414034c1919afc6be3980d239"
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "bbox": [
+        68,
+        12,
+        186,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "7eb7f78a62bd26544a472a83b888dcdef45227264ed5054f24f10e94fd61c045"
+    },
+    {
+      "row": 1,
+      "column": 2,
+      "bbox": [
+        73,
+        17,
+        191,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "7fea73b52a5d671ecbe9d6c5bd5266d9772210ec1aa9d73799d0bb08fd052736"
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "bbox": [
+        44,
+        25,
+        191,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "8618733737f505688aee472c319ac8ec5cd4cf57861a55880cc5f86b4ab62083"
+    },
+    {
+      "row": 1,
+      "column": 4,
+      "bbox": [
+        61,
+        22,
+        207,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "a35a1d693692627657b3ebfcb11fbaacfe88f17f2084dbf47bd775a54309f32b"
+    },
+    {
+      "row": 1,
+      "column": 5,
+      "bbox": [
+        60,
+        22,
+        232,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "88ceb587a2e2062d81e43c6664fba18f63261b562da8e49c8bedcec00abdc61a"
+    },
+    {
+      "row": 1,
+      "column": 6,
+      "bbox": [
+        63,
+        28,
+        222,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "370cb3b90d842b3171835b6d277cc6d8632cd75a0bf18b59c2a63ad6f6c1d93c"
+    },
+    {
+      "row": 1,
+      "column": 7,
+      "bbox": [
+        66,
+        19,
+        188,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "99987dc1f24ce04451ab2715e5a964f2e57823a280a1e4a01726e1d87fbb1214"
+    },
+    {
+      "row": 1,
+      "column": 8,
+      "bbox": [
+        72,
+        18,
+        188,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "0c5f7c8c2e3661bf66ace0d7c3108388ecb7f03406d35fcfbcbc9105275a8c37"
+    },
+    {
+      "row": 1,
+      "column": 9,
+      "bbox": [
+        74,
+        16,
+        205,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "6e47a4b4569892185b6f7620b04945d7dc181a4650d11778360bc5b54c58e6d1"
+    },
+    {
+      "row": 1,
+      "column": 10,
+      "bbox": [
+        50,
+        113,
+        205,
+        224
+      ],
+      "baseline": 224,
+      "sha256": "943251a327d679778ca717a6c8eac33b83917fe16838c3e14f4cb42ebda88350"
+    }
+  ],
+  "source": "assets\\battle\\fighter\\fighter-battle-diagonal-11x2-source.png"
+}
