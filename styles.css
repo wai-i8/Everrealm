@@ -38,6 +38,7 @@
   --ui-text-on-accent: #171421;
   --ui-text-on-teal: #061923;
   --ui-text-disabled: #b8bfd0;
+  --facility-header-height: 2.5rem;
   --facility-title-size: 1rem;
   font-family: "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", ui-sans-serif, sans-serif;
   font-synthesis: none;
@@ -3199,7 +3200,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   align-items: center;
   justify-content: space-between;
   gap: .7rem;
-  min-height: 3.9rem;
+  min-height: var(--facility-header-height);
   padding: .42rem .72rem .42rem .95rem;
   background:
     linear-gradient(90deg, rgba(20,37,67,.98), rgba(8,18,37,.96) 70%, rgba(18,31,57,.98)),
@@ -3450,7 +3451,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   top: .55rem;
   right: .55rem;
   width: auto;
-  min-height: 0;
   padding: 0;
   background: transparent;
 }
@@ -3582,7 +3582,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   left: .55rem !important;
   right: .55rem !important;
   width: auto !important;
-  min-height: 2.65rem !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
@@ -3673,11 +3672,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .facility-overlay[data-facility-tab="skills"] .facility-content {
     padding: 2.95rem .68rem .48rem !important;
   }
-  .facility-overlay[data-facility-tab="skills"] .facility-header.ui-header {
+.facility-overlay[data-facility-tab="skills"] .facility-header.ui-header {
     top: .32rem !important;
     left: .38rem !important;
     right: .38rem !important;
-    min-height: 2.35rem !important;
   }
   .facility-overlay[data-facility-tab="skills"] .skill-tree-node {
     width: clamp(4.35rem, 7.2vw, 5.25rem) !important;
@@ -3704,7 +3702,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 .facility-overlay[data-facility-tab="bag"] .facility-header.ui-header,
 .facility-overlay[data-facility-tab="missions"] .facility-header.ui-header {
-  min-height: 3.35rem;
   padding: .4rem .7rem .4rem 1rem;
 }
 .facility-overlay[data-facility-tab="bag"] .facility-header h2,
@@ -4151,7 +4148,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
    Status: compact read-only identity, meters and combat stats.
    --------------------------------------------------------------------- */
 .facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
-  min-height: 2.75rem;
   padding: .28rem .46rem .28rem .72rem;
   border-bottom: 1px solid rgba(255,200,87,.18);
 }
@@ -4369,7 +4365,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .facility-overlay[data-facility-tab="status"] .facility-header.ui-header,
   .facility-overlay[data-facility-tab="missions"] .facility-header.ui-header,
   .facility-overlay[data-facility-tab="bag"] .facility-header.ui-header {
-    min-height: 2.72rem !important;
     padding: .24rem .46rem .24rem .64rem !important;
   }
 
@@ -4384,7 +4379,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   }
 
 .facility-overlay[data-facility-tab="status"] .facility-header.ui-header {
-    min-height: 2.35rem !important;
     padding: .2rem .34rem .2rem .56rem !important;
   }
   .facility-overlay[data-facility-tab="status"] .facility-content {
@@ -5246,7 +5240,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   max-height: calc(100vh - 1rem) !important;
 }
 .facility-overlay[data-facility-tab="deck"] .facility-header.ui-header {
-  min-height: 3rem !important;
   padding: .3rem .48rem .3rem .76rem !important;
   border-bottom: 1px solid rgba(255,200,87,.16);
 }
@@ -5458,7 +5451,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     border-width: 8px !important;
   }
   .facility-overlay[data-facility-tab="deck"] .facility-header.ui-header {
-    min-height: 2.55rem !important;
     padding: .2rem .3rem .2rem .58rem !important;
   }
   .facility-overlay[data-facility-tab="deck"] .facility-content { padding: .48rem !important; }
@@ -5507,7 +5499,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   max-height: calc(100dvh - max(.6rem, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
 }
 .facility-overlay[data-facility-tab="deck"] .facility-header.ui-header {
-  min-height: 2.35rem !important;
   padding: .16rem .28rem .16rem .55rem !important;
 }
 .facility-overlay[data-facility-tab="deck"] .facility-content {
@@ -5741,7 +5732,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   max-height: calc(100vh - 1.1rem) !important;
 }
 .facility-overlay[data-facility-tab="guild"] .facility-header.ui-header {
-  min-height: 3.35rem;
   padding: .42rem .7rem .42rem .9rem;
 }
 .facility-overlay[data-facility-tab="guild"] .facility-tabs,
