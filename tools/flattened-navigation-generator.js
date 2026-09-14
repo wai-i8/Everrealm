@@ -8,14 +8,14 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 
 const root = path.resolve(__dirname, "..");
-const EXPECTED_WIDTH = 1672;
-const EXPECTED_HEIGHT = 941;
+let EXPECTED_WIDTH = 1672;
+let EXPECTED_HEIGHT = 941;
 const SCENES = Object.freeze({
-  hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", output: "hospital-navigation.generated.js", global: "LanternHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
-  weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", output: "weapon-navigation.generated.js", global: "LanternWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
-  inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", output: "inn-navigation.generated.js", global: "LanternInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
-  item: Object.freeze({ folder: "item", visible: "item.png", authoring: "item_walkable.png", output: "item-navigation.generated.js", global: "LanternItemNavigationGenerated", packageId: "item-navigation-flat-v1" }),
-  guild: Object.freeze({ folder: "guild", visible: "guild.png", authoring: "guild_walkable.png", output: "guild-navigation.generated.js", global: "LanternGuildNavigationGenerated", packageId: "guild-navigation-flat-v1" }),
+  hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "hospital-navigation.generated.js", global: "LanternHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
+  weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "weapon-navigation.generated.js", global: "LanternWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
+  inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "inn-navigation.generated.js", global: "LanternInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
+  item: Object.freeze({ folder: "item", visible: "item.png", authoring: "item_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "item-navigation.generated.js", global: "LanternItemNavigationGenerated", packageId: "item-navigation-flat-v1" }),
+  guild: Object.freeze({ folder: "guild", visible: "guild.png", authoring: "guild_walkable.png", expectedWidth: 3344, expectedHeight: 1882, output: "guild-navigation.generated.js", global: "LanternGuildNavigationGenerated", packageId: "guild-navigation-flat-v2" }),
 });
 
 function fail(scene, message) {
@@ -53,7 +53,9 @@ function readPng(scene, config) {
     else if (type === "IEND") break;
     offset = dataEnd + 4;
   }
-  if (width !== EXPECTED_WIDTH || height !== EXPECTED_HEIGHT) fail(scene, `${config.authoring} must be exactly ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}, got ${width}x${height}`);
+  const expectedWidth = config.expectedWidth || EXPECTED_WIDTH;
+  const expectedHeight = config.expectedHeight || EXPECTED_HEIGHT;
+  if (width !== expectedWidth || height !== expectedHeight) fail(scene, `${config.authoring} must be exactly ${expectedWidth}x${expectedHeight}, got ${width}x${height}`);
   if (bitDepth !== 8) fail(scene, `${config.authoring} must use 8-bit channels, got bit depth ${bitDepth}`);
   if (colorType !== 6) fail(scene, `${config.authoring} must use RGBA color type 6, got ${colorType}`);
   if (interlace !== 0) fail(scene, `${config.authoring} must not be interlaced`);
@@ -96,7 +98,7 @@ function classify(pixel) {
   return 0;
 }
 
-function connectedComponents(mask) {
+function connectedComponents(mask, width, height) {
   const seen = new Uint8Array(mask.length);
   const components = [];
   for (let index = 0; index < mask.length; index += 1) {
@@ -105,24 +107,24 @@ function connectedComponents(mask) {
     seen[index] = 1;
     let head = 0;
     let count = 0;
-    let minX = EXPECTED_WIDTH;
-    let minY = EXPECTED_HEIGHT;
+    let minX = width;
+    let minY = height;
     let maxX = -1;
     let maxY = -1;
     let sumX = 0;
     let sumY = 0;
     while (head < queue.length) {
       const current = queue[head++];
-      const x = current % EXPECTED_WIDTH;
-      const y = Math.floor(current / EXPECTED_WIDTH);
+      const x = current % width;
+      const y = Math.floor(current / width);
       count += 1;
       sumX += x;
       sumY += y;
       minX = Math.min(minX, x); minY = Math.min(minY, y);
       maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
       for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
-        if (nx < 0 || ny < 0 || nx >= EXPECTED_WIDTH || ny >= EXPECTED_HEIGHT) continue;
-        const next = ny * EXPECTED_WIDTH + nx;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const next = ny * width + nx;
         if (!seen[next] && mask[next] === 1) { seen[next] = 1; queue.push(next); }
       }
     }
@@ -162,7 +164,9 @@ function runScene(scene) {
   const config = SCENES[scene];
   if (!config) throw new Error(`Unknown flattened navigation scene: ${scene}`);
   const image = readPng(scene, config);
-  const classes = new Uint8Array(EXPECTED_WIDTH * EXPECTED_HEIGHT);
+  EXPECTED_WIDTH = image.width;
+  EXPECTED_HEIGHT = image.height;
+  const classes = new Uint8Array(image.width * image.height);
   for (let index = 0; index < classes.length; index += 1) {
     const offset = index * 4;
     classes[index] = classify({ r: image.rows[offset], g: image.rows[offset + 1], b: image.rows[offset + 2], a: image.rows[offset + 3] });
@@ -172,7 +176,7 @@ function runScene(scene) {
     magenta: Uint8Array.from(classes, (value) => value === 2 ? 1 : 0),
     cyan: Uint8Array.from(classes, (value) => value === 3 ? 1 : 0),
   };
-  const regions = { npc: connectedComponents(masks.magenta), exit: connectedComponents(masks.cyan) };
+  const regions = { npc: connectedComponents(masks.magenta, image.width, image.height), exit: connectedComponents(masks.cyan, image.width, image.height) };
   if (!regions.npc.length) fail(scene, `${config.authoring} must contain a magenta NPC region`);
   if (!regions.exit.length) fail(scene, `${config.authoring} must contain a cyan exit region`);
   const packageData = {

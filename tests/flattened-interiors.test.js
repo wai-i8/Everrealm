@@ -111,6 +111,7 @@ test("guild exit remains reachable through the bounded fine-search fallback", ()
   assert.ok(path.length > 0, "bounded fallback should produce an exit route");
   const last = path[path.length - 1];
   assert.equal(guild.navigation.isPositionWalkable(last, { radius: guild.navigation.feetRadiusPx }), true);
+  assert.equal(guild.navigation.isInRegion("exit", { ...last, radius: guild.navigation.feetRadiusPx }), true, "bounded fallback must end inside the exact exit region");
   assert.equal(MapTransitions.pointInThreshold(goal, last), true);
 });
 
