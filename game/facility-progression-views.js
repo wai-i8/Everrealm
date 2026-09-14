@@ -80,7 +80,10 @@
       const learned = learnedSkills.map((skill) => `<article class="deck-skill-choice" data-deck-drag-source="library" data-skill-id="${skill.id}" aria-label="${skill.name}">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></article>`).join("");
       return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><h3 id="deckLearnedHeading">技能</h3></div><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>未有已學技能</strong></div>'}</div></section>`;
     })() : "";
-    const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="目前戰技面板"><div class="deck-region-heading"><h3>面板</h3></div><div class="deck-slot-list">${slots}</div></section>`;
+    const currentDeckHeading = canEdit
+      ? '<div class="deck-region-heading"><h3>面板</h3></div>'
+      : '';
+    const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="目前戰技面板">${currentDeckHeading}<div class="deck-slot-list">${slots}</div></section>`;
     content.innerHTML = canEdit
       ? `<div class="deck-view-shell is-editable"><div class="deck-manage-layout">${management}${currentDeck}</div></div>`
       : `<div class="deck-view-shell is-readonly">${currentDeck}</div>`;

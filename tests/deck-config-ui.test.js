@@ -6,6 +6,7 @@ const Skills = require("../skill-core.js");
 
 const root = path.resolve(__dirname, "..");
 const gameSource = fs.readFileSync(path.join(root, "game.js"), "utf8");
+const progressionViewsSource = fs.readFileSync(path.join(root, "game", "facility-progression-views.js"), "utf8");
 const stylesCss = fs.readFileSync(path.join(root, "styles.css"), "utf8");
 
 function extractFunction(source, name) {
@@ -54,13 +55,15 @@ test("slot-targeted equip replaces occupants and moves an already configured ski
 });
 
 test("deck UI is a persistent learned-skill library with pointer drag/drop", () => {
-  const renderSource = extractFunction(gameSource, "renderDeckFacility");
-  assert.match(renderSource, /id="deckLearnedHeading">技能<\/h3>/);
-  assert.match(renderSource, /id="deckCurrentHeading">面板<\/h3>/);
-  assert.match(renderSource, /data-deck-drag-source="library"/);
-  assert.match(renderSource, /data-deck-drag-source="slot"/);
-  assert.doesNotMatch(renderSource, /deck-slot-number|deck-capacity|裝入|卸下|已裝/);
-  assert.doesNotMatch(renderSource, /filter\(\(skill\) => !equipped\.has/);
+  assert.match(progressionViewsSource, /id="deckLearnedHeading">技能<\/h3>/);
+  assert.match(progressionViewsSource, /data-deck-drag-source="library"/);
+  assert.match(progressionViewsSource, /data-deck-drag-source="slot"/);
+  assert.match(progressionViewsSource, /const currentDeckHeading = canEdit/);
+  assert.doesNotMatch(progressionViewsSource, /deck-slot-number|deck-capacity|裝入|卸下|已裝/);
+  assert.doesNotMatch(progressionViewsSource, /filter\(\(skill\) => !equipped\.has/);
+  assert.match(gameSource, /function renderDeckFacilityForState\(state\)/);
+  assert.match(gameSource, /function refreshOpenDeckWindows\(\)/);
+  assert.match(gameSource, /syncActiveFacilityWindowState\(\);\s*refreshOpenDeckWindows\(\);/);
 
   assert.match(gameSource, /facilityContent\.addEventListener\("pointerdown", beginDeckDrag\)/);
   assert.match(gameSource, /facilityContent\.addEventListener\("pointermove", moveDeckDrag\)/);

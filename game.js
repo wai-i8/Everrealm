@@ -3939,21 +3939,35 @@
     learnSkillManualImmediately(skillId);
   }
 
-  function renderDeckFacility() {
-    skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
-    const canEdit = facilityContext === "deck" && currentMapId === "world";
+  function renderDeckFacilityForState(state) {
+    if (!state?.content) return;
+    const canEdit = state.context === "deck" && currentMapId === "world";
     const deckSlots = skillState.deckSlots.map((skillId) => skillId ? Skills.getSkill(skillId) : null);
     const learnedSkills = canEdit
       ? Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"))
       : [];
     FacilityProgressionViews.renderDeckFacility({
-      content: facilityContent,
-      setFacilityFooter,
+      content: state.content,
+      setFacilityFooter: (message) => UiDom.setFacilityFooter(state.footer, message),
       canEdit,
       deckSlots,
       learnedSkills,
       skillBadgeMarkup,
     });
+  }
+
+  function renderDeckFacility() {
+    skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    renderDeckFacilityForState(activeFacilityWindow);
+  }
+
+  function refreshOpenDeckWindows() {
+    if (!facilityWindows.size) return;
+    skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    for (const state of facilityWindows.values()) {
+      if (state.tab !== "deck" || state === activeFacilityWindow) continue;
+      renderDeckFacilityForState(state);
+    }
   }
 
   function openGuildSkillBook(star) {
@@ -4396,6 +4410,7 @@
     else if (facilityTab === "skills") renderSkillsFacility();
     else renderCodexFacility();
     syncActiveFacilityWindowState();
+    refreshOpenDeckWindows();
   }
 
   function openFacility(tab = "bag", requestedContext) {

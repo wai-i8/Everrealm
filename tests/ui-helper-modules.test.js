@@ -533,12 +533,14 @@ test("progression facility deck view preserves editable drag datasets and readon
 
   FacilityProgressionViews.renderDeckFacility({ ...common, canEdit: true });
   assert.match(content.innerHTML, /deck-view-shell is-editable/);
+  assert.match(content.innerHTML, /deck-region-heading"><h3>面板<\/h3>/);
   assert.match(content.innerHTML, /data-deck-slot-index="0" data-deck-drag-source="slot" data-skill-id="jab"/);
   assert.match(content.innerHTML, /data-deck-slot-index="1"[^>]*aria-label="面板 2 空白"/);
   assert.match(content.innerHTML, /data-deck-drag-source="library" data-skill-id="hook"/);
 
   FacilityProgressionViews.renderDeckFacility({ ...common, canEdit: false, learnedSkills: [] });
   assert.match(content.innerHTML, /deck-view-shell is-readonly/);
+  assert.doesNotMatch(content.innerHTML, /deck-region-heading"><h3>面板<\/h3>/);
   assert.doesNotMatch(content.innerHTML, /data-deck-region="learned"/);
   assert.deepEqual(footerMessages, ["", ""]);
 });
