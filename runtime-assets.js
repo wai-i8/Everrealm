@@ -65,7 +65,7 @@
     "cloud-save.js",
     "save-persistence.js",
     "fighter-effects.js",
-    "locomotion.js?v=20260915-03",
+    "locomotion.js?v=20260915-04",
     "footstep-sfx.js?v=20260914-03",
     "character-art.js",
     "game/battle-sfx.js?v=20260915-03",
