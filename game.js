@@ -8466,6 +8466,13 @@
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
       && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
     const renderFacing = battleUnitRenderFacing(unit);
+    const attackFacing = unit.side === "ally" && acting && battle.actionResolution?.heroAction?.targetCell
+      ? Locomotion.facingFromDelta(
+          battle.actionResolution.heroAction.targetCell.x - unit.cell.x,
+          battle.actionResolution.heroAction.targetCell.y - unit.cell.y,
+          renderFacing,
+        )
+      : renderFacing;
     const baseLocomotion = unit.locomotion || Locomotion.create(renderFacing);
     const locomotion = baseLocomotion.facing === renderFacing
       ? baseLocomotion
@@ -8503,7 +8510,7 @@
         scale: heroScale,
         actor: "player",
         classId: playerClassId,
-        facing: renderFacing,
+        facing: attackFacing,
         battleDiagonal: layout.projected,
         state: visualState,
         locomotion,

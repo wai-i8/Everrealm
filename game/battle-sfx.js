@@ -76,8 +76,9 @@
     return String(unit.id || "").toLowerCase().includes("chick");
   }
 
-  function isChickBattleId(id) {
-    return String(id || "").toLowerCase().includes("chick");
+  function isChickBattleId(id, type) {
+    return String(id || "").toLowerCase().includes("chick")
+      || String(type || "").toLowerCase() === "chick";
   }
 
   function createSamplePlayer(root) {
@@ -271,9 +272,9 @@
       const originalSampleMovement = originalLocomotion.sampleMovement.bind(originalLocomotion);
       const wrappedLocomotion = {
         ...originalLocomotion,
-        sampleMovement(movement, id, seconds, fallbackFacing) {
+        sampleMovement(movement, id, seconds, fallbackFacing, unitType) {
           const result = originalSampleMovement(movement, id, seconds, fallbackFacing);
-          if (isChickBattleId(id)) {
+          if (isChickBattleId(id, unitType)) {
             const previous = runtime.chickWalkState.get(id) || "idle";
             const next = result?.state || "idle";
             if (next === "walk" && previous !== "walk") {
