@@ -335,22 +335,9 @@
   const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
   const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
   const EXPLORE_ZOOM_ORDER = Object.freeze(["far", "mid", "near"]);
-  const MOBILE_EXPLORE_ZOOM_MIN = .26;
-  const MOBILE_EXPLORE_ZOOM_MAX = .82;
   // Temporary development tuning: retreat always succeeds until the normal
   // level-difference formula is re-enabled.
   const RETREAT_CHANCE_OVERRIDE = 1;
-  const MOBILE_EXPLORE_ZOOM_DEFAULTS = Object.freeze({
-    world: .34,
-    field: .38,
-    dungeon: .42,
-    guild: .60,
-    shop: .60,
-    clinic: .60,
-    "general-store": .60,
-    inn: .60,
-  });
-  const mobileExploreZoomByMap = new Map();
   const FIGHTER_SHOP_ITEM_ID_SET = EquipmentData?.FIGHTER_SHOP_ITEM_ID_SET || new Set();
   const GENERAL_STORE_GOODS = Object.freeze([
     Object.freeze({ id: "healing_potion", name: "小型回復藥", price: 30, description: `回復 ${POTION_HEAL} HP。` }),
@@ -1531,43 +1518,23 @@
     return window.matchMedia("(hover: none), (pointer: coarse)").matches;
   }
 
-  function mobileZoomStorageKey(mapId = currentMapId) {
-    return `everrealm-mobile-zoom:${mapId}`;
-  }
-
-  function mobileZoomBounds() {
-    return { min: MOBILE_EXPLORE_ZOOM_MIN, max: MOBILE_EXPLORE_ZOOM_MAX };
-  }
-
-  function mobileExploreZoom(mapId = currentMapId) {
-    if (!mobileExploreZoomByMap.has(mapId)) {
-      let saved = NaN;
-      try { saved = Number(localStorage.getItem(mobileZoomStorageKey(mapId))); } catch (_) {}
-      const fallback = MOBILE_EXPLORE_ZOOM_DEFAULTS[mapId] ?? .40;
-      mobileExploreZoomByMap.set(mapId, Number.isFinite(saved) && saved > 0 ? saved : fallback);
-    }
-    const bounds = mobileZoomBounds();
-    return Core.clamp(mobileExploreZoomByMap.get(mapId), bounds.min, bounds.max);
-  }
-
-  function setMobileExploreZoom(value, options = {}) {
-    const bounds = mobileZoomBounds();
-    const next = Core.clamp(Number(value) || mobileExploreZoom(), bounds.min, bounds.max);
-    mobileExploreZoomByMap.set(currentMapId, next);
-    try { localStorage.setItem(mobileZoomStorageKey(), String(next)); } catch (_) {}
-    stage.dataset.mobileZoom = next.toFixed(3);
-    if (options.immediate !== false) {
-      camera.zoom = next;
-      renderPreviousCamera.zoom = next;
-    }
-    return next;
-  }
-
   function targetZoom() {
-    // Camera zoom is global authored presentation scale. Map dimensions only
+    // Camera zoom is shared by every map and input device. Map dimensions only
     // constrain camera position; small interiors must never be auto-enlarged
     // merely to cover the viewport.
-    return usesMobileExploreControls() ? mobileExploreZoom() : EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+    return EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+  }
+
+  function setExploreZoomFromPinch(value) {
+    const requested = Number(value) || targetZoom();
+    const level = EXPLORE_ZOOM_ORDER.reduce((closest, candidate) => (
+      Math.abs(EXPLORE_ZOOM_SCALES[candidate] - requested) < Math.abs(EXPLORE_ZOOM_SCALES[closest] - requested)
+        ? candidate
+        : closest
+    ), "mid");
+    setExploreZoomLevel(level, { announceChange: false, immediate: true });
+    renderPreviousCamera.zoom = targetZoom();
+    return targetZoom();
   }
 
   function syncExploreZoomControls() {
@@ -8600,7 +8567,7 @@
     if (!first || !second) return false;
     const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
     if (distance < 2 || pinch.startDistance < 2) return false;
-    setMobileExploreZoom(pinch.startZoom * (distance / pinch.startDistance));
+    setExploreZoomFromPinch(pinch.startZoom * (distance / pinch.startDistance));
     return true;
   }
 
