@@ -41,7 +41,7 @@
     const sourceValid = data?.source?.width === width && data?.source?.height === height &&
       data?.authoring?.image === expectedImage && data?.authoring?.matching === "exact opaque RGB colors only; all other pixels are non-authored" &&
       data?.feet_radius_px === FEET_RADIUS && typeof data?.movement_rule === "string" && data.movement_rule.includes("feet disk") &&
-      data?.regions?.npc?.length > 0 && data?.regions?.exit?.length > 0;
+      (options.requireNpc === false || data?.regions?.npc?.length > 0) && data?.regions?.exit?.length > 0;
     const ready = Boolean(runtime && sourceValid);
     const scene = options.scene || data?.scene || "flattened";
     const failure = ready

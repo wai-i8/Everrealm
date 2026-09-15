@@ -35,6 +35,8 @@
     "map/guild-navigation.js",
     "map/field-navigation.generated.js",
     "map/field-navigation.js",
+    "map/mountain-second-navigation.generated.js",
+    "map/mountain-second-navigation.js",
     "maps/main-town.js?v=20260913-01",
     "maps/mountain-field.js",
     "maps/mine.js",

@@ -11,6 +11,7 @@ const root = path.resolve(__dirname, "..");
 let EXPECTED_WIDTH = 1672;
 let EXPECTED_HEIGHT = 941;
 const SCENES = Object.freeze({
+  mountain2: Object.freeze({ folder: "field", visible: "vanmer-mountains-2.png", authoring: "vanmer-mountains-2_walkable.png", expectedWidth: 5016, expectedHeight: 5016, output: "mountain-second-navigation.generated.js", global: "LanternMountainSecondNavigationGenerated", packageId: "mountain-second-navigation-flat-v1", requireNpc: false }),
   hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "hospital-navigation.generated.js", global: "LanternHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
   weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "weapon-navigation.generated.js", global: "LanternWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
   inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "inn-navigation.generated.js", global: "LanternInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
@@ -177,7 +178,7 @@ function runScene(scene) {
     cyan: Uint8Array.from(classes, (value) => value === 3 ? 1 : 0),
   };
   const regions = { npc: connectedComponents(masks.magenta, image.width, image.height), exit: connectedComponents(masks.cyan, image.width, image.height) };
-  if (!regions.npc.length) fail(scene, `${config.authoring} must contain a magenta NPC region`);
+  if (config.requireNpc !== false && !regions.npc.length) fail(scene, `${config.authoring} must contain a magenta NPC region`);
   if (!regions.exit.length) fail(scene, `${config.authoring} must contain a cyan exit region`);
   const packageData = {
     scene,
@@ -202,7 +203,7 @@ function runScene(scene) {
   fs.writeFileSync(outputPath, output, "utf8");
   console.log(`Generated ${path.relative(root, outputPath)} from assets/${config.folder}/${config.authoring}`);
   console.log(`Regions: white=${masks.white.reduce((sum, value) => sum + value, 0)}, magenta=${masks.magenta.reduce((sum, value) => sum + value, 0)}, cyan=${masks.cyan.reduce((sum, value) => sum + value, 0)}`);
-  console.log(`NPC anchor=${JSON.stringify(regions.npc[0].anchor)}, exit anchor=${JSON.stringify(regions.exit[0].anchor)}`);
+  console.log(`NPC anchor=${JSON.stringify(regions.npc[0]?.anchor || null)}, exit anchor=${JSON.stringify(regions.exit[0]?.anchor || null)}`);
   return { packageData, masks };
 }
 
