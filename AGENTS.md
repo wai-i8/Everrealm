@@ -117,11 +117,11 @@ Do not duplicate the same rule in multiple documents.
 - When visual verification matters, use screenshots and iterate again if the result is still visibly wrong.
 - Passing automated tests is not enough for a visual task if the runtime still looks incorrect.
 
-### 快速mode
+### 即刻mode
 
-- Only when the user explicitly says `快速mode`, use the fast path for that task: change only the files necessary for the requested fix, do not run tests, do not launch the game for runtime verification, do not update unrelated documentation or perform unrelated cleanup, then commit immediately and report the result briefly.
-- `快速mode` does not waive the mandatory Git preflight before the first edit, a focused source inspection, `git diff --check`, preservation of existing user changes, or the requirement to leave direct-main work clean after the commit.
-- Do not infer `快速mode` from a small change or from the user saying a task is urgent; it must be explicitly requested.
+- Only when the user explicitly says `即刻mode`, use the fast path for that task: change only the files necessary for the requested fix, do not run tests, do not launch the game for runtime verification, do not update unrelated documentation or perform unrelated cleanup, then commit immediately and report the result briefly.
+- `即刻mode` does not waive the mandatory Git preflight before the first edit, a focused source inspection, `git diff --check`, preservation of existing user changes, or the requirement to leave direct-main work clean after the commit.
+- Do not infer `即刻mode` from a small change or from the user saying a task is urgent; it must be explicitly requested.
 
 ### Verification and integration
 
