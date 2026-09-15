@@ -32,7 +32,8 @@ Native flattened artwork uses one direct source-rectangle draw per frame. The sh
 
 凡新增地圖係以一張完整 master artwork 加一張同尺寸 walkable authoring 圖作主畫面探索，預設採用 `compact-full-map` presentation：
 
-- master／authoring 圖仍然保留 native dimensions、原生 pixel 座標、同一個 source space；authoring 圖只供 navigation／interaction resolver 使用，永遠唔直接顯示畀玩家。
+- master／authoring 圖仍然保留 native dimensions、原生 pixel 座標、同一個 source space；山地類地圖嘅目標 source contract 為兩者同樣 `4096 × 4096`，master 使用 JPEG、walkable 使用同尺寸 PNG。authoring 圖只供 navigation／interaction resolver 使用，永遠唔直接顯示畀玩家。
+- walkable PNG 以黑色表示不可行區、白色表示可行區，必要時保留少量語意 interaction 顏色；大面積黑色令檔案壓縮後保持幾十 KB 級別。呢個係 asset storage／load optimization，唔係將 source dimensions 改細。
 - 主畫面要將完整場景等比例縮入細型 gameplay world，玩家可以喺整張縮細地圖上行走；唔以 native image crop、玩家置中鏡頭或只顯示附近局部取代整張圖導航。
 - background、walkable mask、player、NPC、monster、transition、interaction、feet pivot、pathfinding、collision 同 click-to-world 必須共用同一個 source-to-compact transform。walkable mask 可以由 inverse transform 查詢，或者預先編譯成同一 logical world，但兩者必須逐點對齊。
 - 只可以做 uniform scale；唔可以對背景、walkable、角色或物件各自使用唔同縮放、非等比拉伸、獨立 input scale、per-frame offset、mask、teleport 或其他補丁掩蓋座標錯位。
