@@ -5554,6 +5554,7 @@
         const centre = battleCellCentre(endpoint, layout);
         const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
         const triangleHalf = rootFontSize * .36;
+        const edgeInset = rootFontSize * .25;
         const edgePoints = {
           up: [corners[0], corners[1]],
           right: [corners[1], corners[2]],
@@ -5570,8 +5571,8 @@
           };
           const vector = battleFacingScreenVector(facing, layout);
           return [facing, {
-            x: edge.x + vector.x * triangleHalf,
-            y: edge.y + vector.y * triangleHalf,
+            x: edge.x + vector.x * (triangleHalf - edgeInset),
+            y: edge.y + vector.y * (triangleHalf - edgeInset),
             edgeTangent: { x: edgeX / edgeLength, y: edgeY / edgeLength },
           }];
         }));
