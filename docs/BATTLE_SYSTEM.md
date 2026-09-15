@@ -334,7 +334,7 @@ Right Walk
 
 > **玩家選擇嘅目標，只係 intended target；技能實際點樣由施術者去到目標，係由技能嘅「攻擊傳遞方式」決定。**
 
-所有攻擊技能至少要屬於以下三大類之一：
+所有攻擊技能至少要屬於以下三大類之一；`contact`／`leap` 係有路線攻擊嘅近戰變體，唔係第四種免路線例外：
 
 1. **線性攻擊（Linear）**
 2. **拋物線／弧線攻擊（Arc / Ballistic）**
@@ -378,7 +378,7 @@ Right Walk
   arcHeight,
   impactMode,
 
-  friendlyFire,
+  friendlyFire: true,
 
   actionKind,
   dealsDamage,
@@ -464,9 +464,14 @@ UI 可以另外保存／生成原作式：
 
 ```text
 linear
+contact
+leap
 arc
 pathless
+pathless-area
 ```
+
+除非技能明確屬於 `pathless`／`pathless-area` 召喚或遠端效果，所有攻擊型 delivery 都必須有實際攻擊路線。`contact` 只描述近身命中方式，唔代表跳過 `attackPath`；咬、打、拍、斬等近戰同樣要按共同路線規則處理。
 
 ### `linear`
 
@@ -492,6 +497,18 @@ pathless
 - 牆
 - 地形障礙
 
+### `contact`／`leap`
+
+代表近身／撲擊型攻擊。呢類技能可以用 authored relative cells 表達前左、正前、前右、左、右等近身目標，但仍然必須由施術者位置、面向同 intended target 產生 `attackPath`，再按實際路線檢查單位同地形。
+
+例如近身技能揀左前格時，路線仍然係：
+
+```text
+正前 → 左前
+```
+
+如果正前有隊友，隊友就係 first impact；唔可以因為技能標成 `contact` 或 `leap` 就直接命中左前目標。
+
 ### `arc`
 
 代表攻擊沿拋物線／弧線飛行。
@@ -507,7 +524,7 @@ pathless
 
 ### `pathless`
 
-代表效果唔需要由施術者沿空間路線飛去目標。
+代表效果唔需要由施術者沿空間路線飛去目標。`pathless-area` 同樣屬於呢類。
 
 例如：
 
@@ -655,17 +672,9 @@ piercing: false
 
 普通火球都會先撞到 Familiar。
 
-如果：
+Familiar 係第一個 actual impact，會真正受到傷害；普通非貫通 projectile 會喺 Familiar 位置停止。
 
-```js
-friendlyFire: false
-```
-
-則 Familiar 可以擋住攻擊，但唔一定受到傷害；projectile 仍然喺 Familiar 位置停止。
-
-所以：
-
-> **friendlyFire=false 唔代表友軍係透明。**
+本作攻擊規則唔分敵我，所有 route 上第一個撞到嘅單位都係合法 impact target。
 
 
 ### 10.2 共用正交 Attack Path Routing
@@ -937,18 +946,14 @@ Caster → path cell A → intended target B
 
 A 有單位就先處理 A。
 
-原有規則保持：
-
-> `friendlyFire=false` 唔代表友軍係透明。
-
-友軍仍然可以截住條攻擊路線，只係 damage effect 可以因 friendly-fire 規則而唔落喺友軍身上。
+友軍唔係透明：佢會截住條攻擊路線，並且作為第一個 impact target 受到傷害。
 
 
 ---
 
 ## 11. 線性近戰
 
-拳擊、槍刺、劍刺等只要攻擊範圍跨越多過一格，都屬於線性攻擊。
+拳擊、槍刺、劍刺、咬擊、拍擊等近戰攻擊都必須有 attack path。即使資料使用 `deliveryMode: "contact"` 表示近身命中，仍然要由共同 `facingOrthogonalPriority` resolver 產生路線並檢查中途單位。
 
 例如：
 
@@ -969,13 +974,13 @@ stopOnFirstUnit: true
 
 不可隔住 A 直接打 B。
 
-但如果技能只係普通相鄰一格拳擊：
+但如果技能只係普通正前相鄰一格拳擊：
 
 ```text
 玩家 → 怪物
 ```
 
-因為中間冇其他空間，所以自然不存在「中途有人擋住」問題。
+因為 route 只有目標嗰一格，所以自然不存在額外「中途有人擋住」問題；如果目標係左前／右前等需要經過另一格嘅方向，仍然必須檢查嗰格。
 
 ---
 
@@ -1924,7 +1929,7 @@ hitJudgementMode: "each_hit"
 3. **重新用目前 battle state 由 path 第一格開始掃。**
 4. 按路線順序收集候選單位，逐個獨立擲命中率。
 5. 命中先係 actual impact；MISS／閃避唔係 impact，繼續掃同一條路線嘅下一隻單位。
-6. 普通非貫通技能命中第一隻單位後截停；friendly-fire 關閉時，成功命中友軍仍然會阻擋，只係唔扣友軍血。貫通技能命中後繼續處理後續候選單位。
+6. 普通非貫通技能命中第一隻單位後截停；本作固定 `friendlyFire=true`，所以第一個友軍／敵軍 impact 都會受到傷害。貫通技能命中後繼續處理後續候選單位。
 7. 結算嗰一 Hit，並即時更新死亡、occupancy、HP 等 battle state。
 8. 下一 Hit 再由 path 起點重新掃一次。
 
@@ -2141,34 +2146,21 @@ Preview 必須同實際 resolver 共用同一函數。
 
 ## 28. Friendly Fire
 
-第一版：
-
-```text
-friendlyFire = false
-```
-
-係大部分玩家／敵人普通技能預設。
-
-但：
-
-> `friendlyFire=false` 唔等於友軍不存在。
-
-友軍仍然可以：
-
-- 阻擋 projectile
-- 阻擋 line attack
-- 影響位置
-
-只係 impact 發生喺友軍時：
-
-- 不造成 damage
-- projectile／attack 是否停止按 blockMode 決定
-
-將來個別技能可：
+Everrealm 固定採用：
 
 ```text
 friendlyFire = true
 ```
+
+呢條規則適用於所有玩家、怪物、Familiar 同其他 battle unit，唔提供 `friendlyFire=false` 嘅普通技能例外。
+
+所有有 attack path 嘅攻擊都會按路線第一個 impact 結算：
+
+- 隊友、敵人同樣可以阻擋攻擊；
+- 第一個撞到嘅單位會真正受到 damage／skill effect；
+- 普通非貫通攻擊喺第一個 impact 後停止；
+- 貫通攻擊按 `piercing`／`maxPierce` 繼續處理後續單位；
+- `pathless`／`pathless-area` 技能冇中途 route，因此唔會產生 route interception。
 
 ---
 
@@ -2385,9 +2377,9 @@ P F . E
 
 普通 projectile：
 
-> F 阻擋 projectile；
-> friendlyFire=false → F 不受傷；
-> E 亦不受傷。
+> F 係 first impact 並受到傷害；
+> projectile 喺 F 位置停止；
+> E 不受傷。
 
 #### Case D：穿透
 
