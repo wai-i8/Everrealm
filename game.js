@@ -5520,10 +5520,27 @@
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
     const pickerRadius = projected
-      ? 44
+      ? 0
       : touchSizedPicker
         ? Core.clamp(layout.cell * .54, 38, 46)
         : Core.clamp(layout.cell * .48, 31, 45);
+    const projectedFacingOffsets = projected
+      ? (() => {
+        const referenceButton = battleFacingPicker.querySelector("[data-battle-facing]");
+        const buttonWidth = referenceButton?.offsetWidth || 40;
+        const buttonHeight = referenceButton?.offsetHeight || buttonWidth;
+        const verticalGap = Core.clamp(layout.cell * .1, 4, 6);
+        const horizontalGap = verticalGap * (765 / 125);
+        const spanX = buttonWidth + horizontalGap;
+        const spanY = buttonHeight + verticalGap;
+        return {
+          up: { x: -spanX / 2, y: -spanY / 2 },
+          right: { x: spanX / 2, y: -spanY / 2 },
+          down: { x: spanX / 2, y: spanY / 2 },
+          left: { x: -spanX / 2, y: spanY / 2 },
+        };
+      })()
+      : null;
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
@@ -5531,9 +5548,10 @@
       const label = labels[facing] || facing;
       const vector = battleFacingScreenVector(facing, layout);
       const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
+      const position = projectedFacingOffsets?.[facing] || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
       button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
-      button.style.left = detachedPicker ? `calc(50% + ${vector.x * pickerRadius}px)` : `${vector.x * pickerRadius}px`;
-      button.style.top = detachedPicker ? `calc(50% + ${vector.y * pickerRadius}px)` : `${vector.y * pickerRadius}px`;
+      button.style.left = detachedPicker ? `calc(50% + ${position.x}px)` : `${position.x}px`;
+      button.style.top = detachedPicker ? `calc(50% + ${position.y}px)` : `${position.y}px`;
       button.style.setProperty("--battle-facing-angle", `${angle}deg`);
       const candidateCommands = [...currentCommands, { type: "face", facing }];
       const candidateCost = battleMoveCost(candidateCommands);
