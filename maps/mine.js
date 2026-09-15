@@ -13,7 +13,7 @@
   const { makeTiles, withMapCollections } = helpers;
   const { MONSTER_BLUEPRINTS } = monsters;
 
-  const ART = "assets/field/vanmer-mountains-2.png";
+  const ART = "assets/field/vanmer-mountains-2.jpg";
   const AUTHORING = "assets/field/vanmer-mountains-2_walkable.png";
   const navigation = navigationApi.createResolver();
   const data = navigation.data;

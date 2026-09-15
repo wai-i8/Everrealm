@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, "..");
 let EXPECTED_WIDTH = 1672;
 let EXPECTED_HEIGHT = 941;
 const SCENES = Object.freeze({
-  mountain2: Object.freeze({ folder: "field", visible: "vanmer-mountains-2.png", authoring: "vanmer-mountains-2_walkable.png", expectedWidth: 5016, expectedHeight: 5016, output: "mountain-second-navigation.generated.js", global: "LanternMountainSecondNavigationGenerated", packageId: "mountain-second-navigation-flat-v1", requireNpc: false }),
+  mountain2: Object.freeze({ folder: "field", visible: "vanmer-mountains-2.jpg", authoring: "vanmer-mountains-2_walkable.png", expectedWidth: 5016, expectedHeight: 5016, output: "mountain-second-navigation.generated.js", global: "LanternMountainSecondNavigationGenerated", packageId: "mountain-second-navigation-flat-v1", requireNpc: false }),
   hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "hospital-navigation.generated.js", global: "LanternHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
   weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "weapon-navigation.generated.js", global: "LanternWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
   inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "inn-navigation.generated.js", global: "LanternInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
