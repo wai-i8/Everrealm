@@ -5554,19 +5554,26 @@
         const centre = battleCellCentre(endpoint, layout);
         const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
         const triangleHalf = rootFontSize * .36;
-        const edgeMidpoint = (first, second) => ({
-          x: (first.x + second.x) / 2 - centre.x,
-          y: (first.y + second.y) / 2 - centre.y,
-        });
-        const edgeOffsets = {
-          up: edgeMidpoint(corners[0], corners[1]),
-          right: edgeMidpoint(corners[1], corners[2]),
-          down: edgeMidpoint(corners[2], corners[3]),
-          left: edgeMidpoint(corners[3], corners[0]),
+        const edgePoints = {
+          up: [corners[0], corners[1]],
+          right: [corners[1], corners[2]],
+          down: [corners[2], corners[3]],
+          left: [corners[3], corners[0]],
         };
-        return Object.fromEntries(Object.entries(edgeOffsets).map(([facing, edge]) => {
+        return Object.fromEntries(Object.entries(edgePoints).map(([facing, [first, second]]) => {
+          const edgeX = second.x - first.x;
+          const edgeY = second.y - first.y;
+          const edgeLength = Math.hypot(edgeX, edgeY) || 1;
+          const edge = {
+            x: (first.x + second.x) / 2 - centre.x,
+            y: (first.y + second.y) / 2 - centre.y,
+          };
           const vector = battleFacingScreenVector(facing, layout);
-          return [facing, { x: edge.x + vector.x * triangleHalf, y: edge.y + vector.y * triangleHalf }];
+          return [facing, {
+            x: edge.x + vector.x * triangleHalf,
+            y: edge.y + vector.y * triangleHalf,
+            edgeTangent: { x: edgeX / edgeLength, y: edgeY / edgeLength },
+          }];
         }));
       })()
       : null;
@@ -5579,6 +5586,13 @@
         || projectedDesktopFacingOffsets?.[facing]
         || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
       button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
+      const arrow = button.querySelector(".facing-arrow");
+      if (projectedDesktopFacingOffsets?.[facing]?.edgeTangent) {
+        const tangent = projectedDesktopFacingOffsets[facing].edgeTangent;
+        arrow.style.transform = `matrix(${vector.x},${vector.y},${tangent.x},${tangent.y},0,0)`;
+      } else {
+        arrow.style.removeProperty("transform");
+      }
       button.style.left = detachedPicker ? `calc(50% + ${position.x}px)` : `${position.x}px`;
       button.style.top = detachedPicker ? `calc(50% + ${position.y}px)` : `${position.y}px`;
       button.style.setProperty("--battle-facing-angle", `${angle}deg`);
