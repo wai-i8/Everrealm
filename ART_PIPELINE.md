@@ -26,7 +26,17 @@
 
 Main Town runtime 直接以呢個 `7680 × 4320` native world coordinate space 繪製 master art；每個 authored scene pixel 都係一個 world unit，scene 同 paired navigation 必須保留完全相同嘅 native dimensions。玩家、NPC 同 monster 各自擁有 canonical authored entity dimensions：標準玩家 locomotion frame 係 `256 × 256` world units（可見 body 約 `192` units 高），標準 ordinary-monster locomotion frame 保留既有 `102.4 × 102.4` world-unit footprint；呢啲尺寸唔讀取 map、camera 或 source resolution。唔存在 shared `worldScale`、`entityScale`、`unitScale` 或 migration render factor，亦唔可以再加 legacy compact-map scale、CSS 放大或 per-map image transform。戰棋 renderer 只把呢啲 canonical entity dimensions投影到固定 battle-cell layout，唔可以讀取 Main Town 或其他 exploration map dimensions。相機係 viewport window：每幀以 camera center 同 viewport world size 從 native image 取 source crop，直接 draw 到 final Canvas backing output，唔先將全圖 downsample 到中間 gameplay canvas。相機 zoom 必須同 navigation、feet pivot、click-to-world inverse 使用同一個 camera transform；DPR 只按 CSS viewport 放大 backing store／輸出採樣密度，唔改變 world size 或 crop。細地圖若小過 camera viewport，viewport 外只填黑色，唔拉伸 scene。
 
-Native flattened artwork uses one direct source-rectangle draw per frame. The shared renderer keeps zoom-in sampling crisp and only enables filtered sampling when reducing a crop; it never creates a downsampled intermediate, cached resized bitmap or Main-Town-specific resampling path.
+Native flattened artwork uses one direct source-rectangle draw per frame. The shared renderer keeps zoom-in sampling crisp and enables filtered sampling when reducing either a crop or a complete scene for compact full-map exploration; it never creates a cached resized bitmap or an unrelated intermediate gameplay map. Compact presentation is a single uniform map transform, not a per-entity or per-frame art patch.
+
+## Compact full-scene exploration contract
+
+凡新增地圖係以一張完整 master artwork 加一張同尺寸 walkable authoring 圖作主畫面探索，預設採用 `compact-full-map` presentation：
+
+- master／authoring 圖仍然保留 native dimensions、原生 pixel 座標、同一個 source space；authoring 圖只供 navigation／interaction resolver 使用，永遠唔直接顯示畀玩家。
+- 主畫面要將完整場景等比例縮入細型 gameplay world，玩家可以喺整張縮細地圖上行走；唔以 native image crop、玩家置中鏡頭或只顯示附近局部取代整張圖導航。
+- background、walkable mask、player、NPC、monster、transition、interaction、feet pivot、pathfinding、collision 同 click-to-world 必須共用同一個 source-to-compact transform。walkable mask 可以由 inverse transform 查詢，或者預先編譯成同一 logical world，但兩者必須逐點對齊。
+- 只可以做 uniform scale；唔可以對背景、walkable、角色或物件各自使用唔同縮放、非等比拉伸、獨立 input scale、per-frame offset、mask、teleport 或其他補丁掩蓋座標錯位。
+- source image 可以直接由 full-scene source rectangle reduction draw 到 final canvas；唔需要建立另一張 cached／低解析度 gameplay bitmap。DPR 只改 Canvas output resolution，唔改 compact world、movement 或 navigation geometry。
 
 `maintown_walkable.jpg` 以白色定義 walkable ground、青色定義六個固定 transition、粉紅色定義城門 DECK configuration interaction；其他顏色全部 blocked。`tools/generate-main-town-navigation.js`（由 `tools/compile-main-town-navigation.py` 執行 JPG 分類）將 pair deterministic 編譯成 `map/main-town-navigation.generated.js`。generated data 明確標示不可手改；browser runtime 唔載入 authoring JPG、唔使用 Canvas／OffscreenCanvas pixel readback，亦唔由 visible art alpha、舊 bitmap 或物件位置推導 collision。
 
