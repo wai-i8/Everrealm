@@ -88,4 +88,6 @@ test("chick walk sample only starts once per continuous walk", () => {
   root.LanternLocomotion.sampleMovement({}, "battle-chick-road-1", 2, "left");
   root.LanternLocomotion.sampleMovement({}, "battle-chick-road-1", .1, "left");
   assert.equal(log.filter((entry) => entry.src === BattleSfx.ASSETS.chickFootstep).length, 2);
+  root.LanternLocomotion.sampleMovement({}, "battle-mask-encounter-1", .1, "left", "chick");
+  assert.equal(log.filter((entry) => entry.src === BattleSfx.ASSETS.chickFootstep).length, 3);
 });

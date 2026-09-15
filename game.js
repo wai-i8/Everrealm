@@ -6105,7 +6105,7 @@
       const to = timeline[nextIndex]?.renderCells?.[id] || movement.frames[nextIndex]?.[id] || from;
       unit.renderCell = { x: Core.lerp(from.x, to.x, progress), y: Core.lerp(from.y, to.y, progress) };
       unit.facing = timeline[frameIndex]?.facings?.[id] || unit.facing;
-      unit.locomotion = Locomotion.sampleMovement(movement, id, movement.elapsed, unit.facing);
+      unit.locomotion = Locomotion.sampleMovement(movement, id, movement.elapsed, unit.facing, unit.type);
       unit.facing = unit.locomotion.facing;
     }
     if (movement.elapsed >= totalTime * movement.stepDuration) finishMovementResolution();
