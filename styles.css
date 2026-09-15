@@ -743,10 +743,9 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   transform: rotate(var(--battle-facing-angle,0deg));
   transform-origin: center;
 }
-/* Projected movement arrows use authored diagonal bitmaps that follow the
-   battlefield projection basis. Each arrow stays in its own layer so pressed
-   feedback can affect only the selected direction. */
-.battle-facing-picker[data-projected="true"] button {
+/* Mobile projected movement arrows use authored diagonal bitmaps. Each arrow
+   stays in its own layer so pressed feedback affects only that direction. */
+.battle-facing-picker[data-mobile-arrows="true"] button {
   margin: 0;
   width: 2.3rem;
   height: 2.3rem;
@@ -755,9 +754,9 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   text-shadow: none;
   transition: transform .04s linear;
 }
-.battle-facing-picker[data-projected="true"] button:hover,
-.battle-facing-picker[data-projected="true"] button:focus-visible { transform: translate(-50%,-50%) scale(1.08); }
-.battle-facing-picker[data-projected="true"] .facing-arrow {
+.battle-facing-picker[data-mobile-arrows="true"] button:hover,
+.battle-facing-picker[data-mobile-arrows="true"] button:focus-visible { transform: translate(-50%,-50%) scale(1.08); }
+.battle-facing-picker[data-mobile-arrows="true"] .facing-arrow {
   display: block;
   width: 2.5rem;
   height: 2.5rem;
@@ -769,22 +768,22 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
   transition: transform .04s linear, filter .04s linear;
 }
-.battle-facing-picker[data-projected="true"] .facing-up .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-up-v1.png"); }
-.battle-facing-picker[data-projected="true"] .facing-right .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-right-v1.png"); }
-.battle-facing-picker[data-projected="true"] .facing-down .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-down-v1.png"); }
-.battle-facing-picker[data-projected="true"] .facing-left .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-left-v1.png"); }
-.battle-facing-picker[data-projected="true"] button:hover .facing-arrow,
-.battle-facing-picker[data-projected="true"] button:focus-visible .facing-arrow {
+.battle-facing-picker[data-mobile-arrows="true"] .facing-up .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-up-v1.png"); }
+.battle-facing-picker[data-mobile-arrows="true"] .facing-right .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-right-v1.png"); }
+.battle-facing-picker[data-mobile-arrows="true"] .facing-down .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-down-v1.png"); }
+.battle-facing-picker[data-mobile-arrows="true"] .facing-left .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-left-v1.png"); }
+.battle-facing-picker[data-mobile-arrows="true"] button:hover .facing-arrow,
+.battle-facing-picker[data-mobile-arrows="true"] button:focus-visible .facing-arrow {
   filter: brightness(1.12) saturate(1.08) drop-shadow(0 2px 3px rgba(0,0,0,.82)) drop-shadow(0 0 4px rgba(255,200,87,.32));
 }
-.battle-facing-picker[data-projected="true"] button:active {
+.battle-facing-picker[data-mobile-arrows="true"] button:active {
   transform: translate(-50%,-50%) scale(.98);
 }
-.battle-facing-picker[data-projected="true"] button:active .facing-arrow {
+.battle-facing-picker[data-mobile-arrows="true"] button:active .facing-arrow {
   transform: translateY(1px) scale(.9);
   filter: brightness(.72) saturate(.82) drop-shadow(0 1px 1px rgba(0,0,0,.9));
 }
-.battle-facing-picker[data-projected="true"] .facing-drag-handle {
+.battle-facing-picker[data-mobile-arrows="true"] .facing-drag-handle {
   display: grid;
   z-index: 2;
   color: var(--gold);
@@ -5228,7 +5227,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     height: 2.65rem !important;
     font-size: .56rem !important;
   }
-  .battle-facing-picker[data-projected="true"] button {
+  .battle-facing-picker[data-mobile-arrows="true"] button {
     margin: 0 !important;
   }
   .battle-facing-picker[data-detached="true"] {

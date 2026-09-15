@@ -5517,14 +5517,18 @@
       : { up: "上", right: "右", down: "下", left: "左" };
     const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const touchSizedPicker = coarseBattlePointer || width <= 820;
+    const mobileProjectedArrows = projected && touchSizedPicker;
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
-    const pickerRadius = projected
+    battleFacingPicker.dataset.mobileArrows = mobileProjectedArrows ? "true" : "false";
+    const pickerRadius = mobileProjectedArrows
       ? 0
-      : touchSizedPicker
-        ? Core.clamp(layout.cell * .54, 38, 46)
-        : Core.clamp(layout.cell * .48, 31, 45);
-    const projectedFacingOffsets = projected
+      : projected
+        ? 44
+        : touchSizedPicker
+          ? Core.clamp(layout.cell * .54, 38, 46)
+          : Core.clamp(layout.cell * .48, 31, 45);
+    const projectedFacingOffsets = mobileProjectedArrows
       ? (() => {
         const referenceButton = battleFacingPicker.querySelector("[data-battle-facing]");
         const buttonWidth = referenceButton?.offsetWidth || 40;
