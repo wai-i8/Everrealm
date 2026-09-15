@@ -2766,10 +2766,11 @@
     const arrival = MapTransitions.resolveArrival(maps, portal) || { position: null, facing: null };
     const targetPosition = arrival.position;
     if (portal.targetMap === "dungeon" && player.level < (portal.minLevel || 5)) {
+      const targetAreaName = maps[portal.targetMap]?.name || "前方區域";
       return startDialogue({
-        speaker: "沉燈坑道入口",
+        speaker: `${targetAreaName}入口`,
         color: "#ff8b62",
-        lines: [`坑道建議 LV.${portal.minLevel || 5}。你而家 LV.${player.level}，入面嘅霧獸會明顯更強。`],
+        lines: [`${targetAreaName}建議 LV.${portal.minLevel || 5}。你而家 LV.${player.level}，前方霧獸會明顯更強。`],
         choices: [
           { label: "照樣落去", action: () => transitionMap(portal.targetMap, targetPosition, arrival.facing) },
           { label: "準備好先", action: () => {} },
@@ -2847,9 +2848,7 @@
     showLocation(zoneForPosition(player), true);
     screenFlash = .22;
     sound.tone(330, .14, { to: 540, gain: .025 });
-    const dungeonLevels = targetMapId === "dungeon" ? enemies.filter((enemy) => enemy.alive).map((enemy) => enemy.level) : [];
-    const dungeonLevelText = dungeonLevels.length ? ` · 霧獸 LV.${Math.min(...dungeonLevels)}–${Math.max(...dungeonLevels)}` : "";
-    showToast(targetMapId === "dungeon" ? `沉燈坑道${dungeonLevelText}` : target.name, "good");
+    showToast(target.name, "good");
     updateHud(true);
     saveImportant(false);
     canvas.focus({ preventScroll: true });
@@ -8926,7 +8925,7 @@
     const flattenedMapArt = world.art?.flattened && Boolean(world.art?.backgroundScene);
     // A minimap is a local navigation tool, not a thumbnail of the whole map.
     // Keep the player centred, but show enough nearby roads/buildings to orient the player.
-    const visibleTiles = ["world", "field"].includes(currentMapId) ? 192 : 144;
+    const visibleTiles = flattenedMapArt ? 192 : 144;
     const scale = Math.min(mapWidth, mapHeight) / (visibleTiles * world.tileSize);
     const halfViewWorld = visibleTiles * world.tileSize * .5;
     // On maps smaller than the minimap's fixed view window, halfViewWorld can exceed
