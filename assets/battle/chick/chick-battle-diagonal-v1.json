@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "columns": 5,
+  "columns": 6,
   "rows": 4,
   "cellWidth": 256,
   "cellHeight": 256,
   "anchorX": 128,
   "anchorY": 224,
   "rowByFacing": {
-    "right": 3,
-    "down": 0,
-    "left": 2,
-    "up": 1
+    "left": 0,
+    "right": 1,
+    "down": 2,
+    "up": 3
   },
   "visualProfile": "ordinary-monster",
   "visualEnvelope": { "maxWidth": 184, "maxHeight": 160 },
@@ -22,9 +22,10 @@
   },
   "columnsByState": {
     "idle": [0],
-    "walk": [1, 2],
+    "walk": [0, 1, 2],
     "attack": [3],
-    "hurt": [4]
+    "hurt": [4],
+    "downed": [5]
   },
   "scope": "battle-only Mountain Chick"
 }

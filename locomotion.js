@@ -22,6 +22,15 @@
     player: Object.freeze({ maxWidth: 208, maxHeight: 212, nameLift: 212 }),
     "ordinary-monster": Object.freeze({ maxWidth: 184, maxHeight: 160, nameLift: 160 }),
   });
+  const ORDINARY_MONSTER_BATTLE_ROWS = Object.freeze({ left: 0, right: 1, down: 2, up: 3 });
+  const ordinaryMonsterBattleAsset = (id) => Object.freeze({
+    src: `assets/battle/${id}/${id}-battle-diagonal-v1.png`,
+    columns: 6, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+    rowByFacing: ORDINARY_MONSTER_BATTLE_ROWS,
+    visualProfile: "ordinary-monster",
+    idleColumn: 0, walkColumns: Object.freeze([0, 1, 2]), attackColumn: 3, hurtColumn: 4, deathColumn: 5, walkFps: 8,
+  });
+
   const BATTLE_DIAGONAL_ASSETS = Object.freeze({
     fighter: Object.freeze({
       src: "assets/battle/fighter/fighter-battle-diagonal-v2.png",
@@ -38,13 +47,15 @@
       }),
       hurtColumn: 9, walkFps: 8,
     }),
-    chick: Object.freeze({
-      src: "assets/battle/chick/chick-battle-diagonal-v1.png",
-      columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
-      rowByFacing: Object.freeze({ right: 3, down: 0, left: 2, up: 1 }),
-      visualProfile: "ordinary-monster",
-      idleColumn: 0, walkColumns: Object.freeze([1, 2]), attackColumn: 3, hurtColumn: 4, walkFps: 8,
-    }),
+    chick: ordinaryMonsterBattleAsset("chick"),
+    fox: ordinaryMonsterBattleAsset("fox"),
+    raccoon: ordinaryMonsterBattleAsset("raccoon"),
+    blackcat: ordinaryMonsterBattleAsset("blackcat"),
+    frog: ordinaryMonsterBattleAsset("frog"),
+    coyote: ordinaryMonsterBattleAsset("coyote"),
+    turtle: ordinaryMonsterBattleAsset("turtle"),
+    snake: ordinaryMonsterBattleAsset("snake"),
+    bear: ordinaryMonsterBattleAsset("bear"),
   });
 
   // Alpha bounds are generated from the audited runtime atlases. They are
