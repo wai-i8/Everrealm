@@ -37,10 +37,45 @@
   const tiles = makeTiles(width, height, TILES.GRASS);
 
   const npcRegion = data.regions?.npc?.[0] || { bbox: { x: 1731, y: 947, width: 101, height: 101 }, centroid: { x: 1781, y: 997 }, anchor: { x: 1770, y: 938 } };
-  const westExitRegion = data.regions?.exit?.[0] || { bbox: { x: 567, y: 2545, width: 99, height: 215 }, centroid: { x: 616, y: 2650 }, anchor: { x: 721, y: 2650 } };
-  const northTrigger = data.derived?.top_exit_trigger || { x: 3333, y: 0, width: 275, height: 104 };
+  const authoredExitRegions = Array.isArray(data.regions?.exit) ? data.regions.exit.filter(Boolean) : [];
+  const fallbackWestExitRegion = { bbox: { x: 567, y: 2545, width: 99, height: 215 }, centroid: { x: 616, y: 2650 }, anchor: { x: 721, y: 2650 } };
+  const fallbackNorthExitRegion = {
+    bbox: {
+      x: data.derived?.top_exit_trigger?.x || 3333,
+      y: data.derived?.top_exit_trigger?.y || 0,
+      width: data.derived?.top_exit_trigger?.width || 275,
+      height: data.derived?.top_exit_trigger?.height || 104,
+    },
+    centroid: data.derived?.top_exit_center || { x: 3470, y: 44 },
+    anchor: data.derived?.north_spawn || { x: 3470, y: 144 },
+  };
+  // Exit component order is generated from pixel component size and is not a
+  // semantic contract. Bind each transition by where the cyan region actually
+  // sits on the map: left-most = town, top-most remaining = mountain2.
+  const westExitRegion = authoredExitRegions.reduce((best, region) => {
+    const x = Number(region?.centroid?.x);
+    const bestX = Number(best?.centroid?.x);
+    if (!Number.isFinite(x)) return best;
+    if (!best || !Number.isFinite(bestX) || x < bestX) return region;
+    return best;
+  }, null) || fallbackWestExitRegion;
+  const northExitRegion = authoredExitRegions
+    .filter((region) => region !== westExitRegion)
+    .reduce((best, region) => {
+      const y = Number(region?.centroid?.y);
+      const bestY = Number(best?.centroid?.y);
+      if (!Number.isFinite(y)) return best;
+      if (!best || !Number.isFinite(bestY) || y < bestY) return region;
+      return best;
+    }, null) || fallbackNorthExitRegion;
+  const northTrigger = {
+    x: northExitRegion.bbox?.x ?? fallbackNorthExitRegion.bbox.x,
+    y: northExitRegion.bbox?.y ?? fallbackNorthExitRegion.bbox.y,
+    width: northExitRegion.bbox?.width ?? fallbackNorthExitRegion.bbox.width,
+    height: northExitRegion.bbox?.height ?? fallbackNorthExitRegion.bbox.height,
+  };
   const westSpawn = data.derived?.west_spawn || westExitRegion.anchor || { x: 721, y: 2650 };
-  const northSpawn = data.derived?.north_spawn || { x: 3470, y: 144 };
+  const northSpawn = data.derived?.north_spawn || northExitRegion.anchor || { x: 3470, y: 144 };
 
   function createMountainFieldMap() {
     // Road signs are intentionally omitted. The authored mountain artwork is
@@ -103,7 +138,13 @@
       direction: "west",
       mapLabel: "米克雷帝國出口",
       alwaysVisible: true,
-      navigationRegion: "exit",
+      trigger: {
+        shape: "rect",
+        x: westExitRegion.bbox?.x || 567,
+        y: westExitRegion.bbox?.y || 2545,
+        w: westExitRegion.bbox?.width || 99,
+        h: westExitRegion.bbox?.height || 215,
+      },
       entrance: {
         outward: "west",
         approachPoint: westSpawn,
@@ -126,8 +167,8 @@
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
       name: "進入沉燈坑道",
-      x: (data.derived?.top_exit_center?.x || 3470),
-      y: (data.derived?.top_exit_center?.y || 44),
+      x: northExitRegion.centroid?.x ?? (data.derived?.top_exit_center?.x || 3470),
+      y: northExitRegion.centroid?.y ?? (data.derived?.top_exit_center?.y || 44),
       radius: 38,
       targetMap: MAP_IDS.DUNGEON,
       targetSpawn: "entrance",
