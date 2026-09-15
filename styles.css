@@ -795,6 +795,14 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   transform: translate(-50%,-50%);
 }
 .battle-facing-picker[data-detached="true"] .facing-drag-handle { display: grid; }
+.battle-facing-picker[data-detached="true"] .facing-drag-handle {
+  opacity: 0;
+  color: transparent;
+  font-size: 0;
+  text-shadow: none;
+  background: transparent;
+  box-shadow: none;
+}
 .battle-facing-picker[data-detached="true"] button {
   width: 2.7rem; height: 2.7rem;
 }
