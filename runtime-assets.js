@@ -33,13 +33,17 @@
     "map/item-navigation.js",
     "map/guild-navigation.generated.js",
     "map/guild-navigation.js",
+    "map/field-encounters.generated.js?v=20260915-02",
     "map/field-navigation.generated.js",
     "map/field-navigation.js",
     "map/mountain-second-navigation.generated.js",
     "map/mountain-second-navigation.js",
+    "map/mountain-south-navigation.generated.js",
+    "map/mountain-south-navigation.js",
     "maps/main-town.js?v=20260913-01",
-    "maps/mountain-field.js",
+    "maps/mountain-field.js?v=20260915-02",
     "maps/mine.js",
+    "maps/mountain-south.js",
     "maps/interiors/guild.js",
     "maps/interiors/equipment-shop.js",
     "maps/interiors/clinic.js",
@@ -76,7 +80,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260914-02",
+    "game.js?v=20260915-02",
   ]);
 
   return Object.freeze({ scripts });

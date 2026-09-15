@@ -21,6 +21,7 @@
     inn: "building",
     field: "mountainField",
     dungeon: "mountainField",
+    "mountain-south": "mountainField",
   });
 
   function createBgmManager(options = {}) {

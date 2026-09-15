@@ -23,6 +23,7 @@
     GENERAL_STORE: "general-store",
     INN: "inn",
     DUNGEON: "dungeon",
+    MOUNTAIN_SOUTH: "mountain-south",
   });
 
   const TRANSITION_TYPES = Object.freeze({

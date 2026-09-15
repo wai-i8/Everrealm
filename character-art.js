@@ -294,6 +294,7 @@
     mainTownBackground: { src: "assets/main-town/maintown.jpg", background: true, image: null, ready: false, failed: false },
     fieldBackground: { src: "assets/field/vanmer-mountains.jpg", background: true, image: null, ready: false, failed: false },
     mountain2Background: { src: "assets/field/vanmer-mountains-2.jpg", background: true, image: null, ready: false, failed: false },
+    mountainSouthBackground: { src: "assets/field/vanmer-mountains-south.jpg", background: true, image: null, ready: false, failed: false },
     hospitalBackground: { src: "assets/hospital/hospital.png", background: true, image: null, ready: false, failed: false },
     weaponBackground: { src: "assets/weapon/weapon.png", background: true, image: null, ready: false, failed: false },
     innBackground: { src: "assets/inn/inn.png", background: true, image: null, ready: false, failed: false },

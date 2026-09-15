@@ -24,6 +24,52 @@
 
 呢個 Lv 係 species / authored map progression，唔跟玩家等級或 dungeon clear 次數動態提升。怪物 level cap 獨立為 45。
 
+## Random encounter level bands / mask palette
+
+第一張山地（`maps/mountain-field.js`）已改成 **Pokémon 式隨機遇敵**。探索畫面唔再放實體怪；authoring source 係 `assets/field/vanmer-mountains_encounter.png`，runtime 由同一張 mask 生成的 `map/field-encounters.generated.js` 做 pixel-zone lookup，避免瀏覽器載入／canvas 讀圖失敗時靜默停用 encounter。
+
+Encounter mask 只允許以下固定色盤：
+
+| 顏色 | HEX | Encounter Level |
+| --- | --- | ---: |
+| 黑 | `#000000` | 無遇敵 |
+| 紅 | `#FF0000` | Lv1–2 |
+| 朱紅 | `#FF4000` | Lv2–5 |
+| 橙 | `#FF8000` | Lv6–10 |
+| 黃 | `#FFFF00` | Lv11–15 |
+| 黃綠 | `#80FF00` | Lv16–20 |
+| 綠 | `#00FF00` | Lv21–25 |
+| 青 | `#00FFFF` | Lv26–30 |
+| 天藍 | `#0080FF` | Lv31–35 |
+| 藍 | `#0000FF` | Lv36–40 |
+| 紫紅 | `#FF00FF` | Lv41–45 |
+
+### Species encounter level variance
+
+每種怪仍保留自己嘅 canonical base level，但隨機遇敵唔再固定只出 base level。現行規則係：
+
+```text
+minimum encounter level = base level - 2
+maximum encounter level = base level + 3
+minimum floor = Lv1
+```
+
+即係：
+
+| 怪物 | Base Lv | Encounter Lv Range |
+| --- | ---: | ---: |
+| 山野小雞 | 1 | Lv1–4 |
+| 赤尾狐 | 5 | Lv3–8 |
+| 灰紋浣熊 | 10 | Lv8–13 |
+| 荒原野豬 | 15 | Lv13–18 |
+| 霧沼蛙 | 21 | Lv19–24 |
+| 灰原郊狼 | 27 | Lv25–30 |
+| 苔甲龜 | 33 | Lv31–36 |
+| 毒霧蛇 | 39 | Lv37–42 |
+| 岩穴熊 | 45 | Lv43–45（暫受全域 Lv45 cap 限制） |
+
+隨機遇敵流程：先由 encounter mask 顏色決定 **地圖區域的 encounter level band**，再由所有 **與該 band 有交集** 的 canonical 怪物中抽 species，最後再喺交集 level 內抽實際 monster level。HP / ATK / DEF 仍全部沿用 `map/monster-blueprints.js -> levelStats()` 自動換算。
+
 
 ## Canonical combat stats / encounter scaling
 

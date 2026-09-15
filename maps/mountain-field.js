@@ -2,10 +2,11 @@
   const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
   const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
   const navigationApi = root.LanternFieldNavigation || (typeof require === "function" ? require("../map/field-navigation.js") : null);
-  const api = factory(constants, helpers, navigationApi);
+  const encounterApi = root.LanternFieldEncounters || (typeof require === "function" ? require("../map/field-encounters.generated.js") : null);
+  const api = factory(constants, helpers, navigationApi, encounterApi);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.LanternMountainFieldMap = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi, encounterApi) {
   "use strict";
 
   const { TILE, TILES, MAP_IDS, TRANSITION_TYPES } = constants;
@@ -103,23 +104,34 @@
     const npcs = [];
     const boards = [wishPool];
 
-    // Exploration placement only. Battle level and party size come from the
-    // canonical monster catalog; these spawns are ordered roughly from the
-    // west entrance toward the northern climb.
-    const enemySpawns = [
-      { id: "chick-road-1", type: "chick", x: 900, y: 2630, level: 1 },
-      { id: "fox-road-1", type: "fox", x: 1220, y: 2635, level: 5 },
-      { id: "fox-road-2", type: "fox", x: 1420, y: 2610, level: 5 },
-      { id: "raccoon-road-1", type: "raccoon", x: 1640, y: 2620, level: 10 },
-      { id: "raccoon-road-2", type: "raccoon", x: 2080, y: 2615, level: 10 },
-      { id: "wild-boar-road-1", type: "wild_boar", x: 2320, y: 2615, level: 15 },
-      { id: "wild-boar-road-2", type: "wild_boar", x: 3194, y: 2302, level: 15 },
-      { id: "wild-boar-hollow-1", type: "wild_boar", x: 2268, y: 1348, level: 15 },
-      { id: "coyote-climb-1", type: "coyote", x: 2921, y: 1270, level: 27 },
-      { id: "coyote-climb-2", type: "coyote", x: 3490, y: 1280, level: 27 },
-      { id: "coyote-climb-3", type: "coyote", x: 3475, y: 1440, level: 27 },
-      { id: "coyote-north-1", type: "coyote", x: 3515, y: 820, level: 27 },
-    ];
+    // The first mountain field now uses Pokémon-style random encounters.
+    // Visible overworld monsters are removed; battle level bands are authored
+    // in a separate encounter mask PNG.
+    const enemySpawns = [];
+
+    const randomEncounters = {
+      enabled: true,
+      style: "mask",
+      maskImage: "assets/field/vanmer-mountains_encounter.png",
+      resolver: encounterApi,
+      checkDistancePx: 96,
+      chancePerRoll: .18,
+      transitionGraceDistancePx: 180,
+      postEncounterGraceDistancePx: 220,
+      monsterLevelVariance: { minDelta: -2, maxDelta: 3 },
+      zones: [
+        { color: "#FF0000", label: "Lv1–2", levelRange: [1, 2] },
+        { color: "#FF4000", label: "Lv2–5", levelRange: [2, 5] },
+        { color: "#FF8000", label: "Lv6–10", levelRange: [6, 10] },
+        { color: "#FFFF00", label: "Lv11–15", levelRange: [11, 15] },
+        { color: "#80FF00", label: "Lv16–20", levelRange: [16, 20] },
+        { color: "#00FF00", label: "Lv21–25", levelRange: [21, 25] },
+        { color: "#00FFFF", label: "Lv26–30", levelRange: [26, 30] },
+        { color: "#0080FF", label: "Lv31–35", levelRange: [31, 35] },
+        { color: "#0000FF", label: "Lv36–40", levelRange: [36, 40] },
+        { color: "#FF00FF", label: "Lv41–45", levelRange: [41, 45] },
+      ],
+    };
 
     const westExit = {
       id: "field-to-world",
@@ -255,6 +267,7 @@
       boards,
       npcs,
       enemySpawns,
+      randomEncounters,
       chests,
       shrine: null,
       waypoint: null,

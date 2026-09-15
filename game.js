@@ -428,6 +428,32 @@
   let encounterGrace = 1;
   let automaticPortalReady = false;
   let battleToken = 0;
+
+  function createRandomEncounterRuntime() {
+    return {
+      mapId: null,
+      enabled: false,
+      loading: false,
+      ready: false,
+      failed: false,
+      error: null,
+      imagePath: null,
+      loadToken: null,
+      width: 0,
+      height: 0,
+      pixels: null,
+      resolver: null,
+      zones: [],
+      zoneByColor: Object.create(null),
+      checkDistancePx: 96,
+      chancePerRoll: .18,
+      safeDistanceRemaining: 0,
+      distanceSinceRoll: 0,
+      variance: { minDelta: -2, maxDelta: 3, floor: 1, cap: ExpansionWorld.MONSTER_LEVEL_CAP || 45 },
+    };
+  }
+
+  let randomEncounterRuntime = createRandomEncounterRuntime();
   const legacySoundPreference = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY);
   let musicEnabled = readPreference(BGM_ENABLED_KEY, legacySoundPreference) !== "off";
   let sfxEnabled = readPreference(SFX_ENABLED_KEY, legacySoundPreference) !== "off";
@@ -845,6 +871,221 @@
     enemies = world.enemySpawns.map((spawn) => makeEnemy(spawn));
     projectiles = [];
     drops = [];
+    resetRandomEncounterRuntime();
+  }
+
+  function encounterColorKey(r, g, b) {
+    return `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  }
+
+  function normalizeEncounterZone(raw) {
+    const color = String(raw?.color || "").trim().toUpperCase();
+    const range = Array.isArray(raw?.levelRange) ? raw.levelRange : [];
+    const minLevel = Math.max(1, Math.floor(Number(range[0]) || 1));
+    const maxLevel = Math.max(minLevel, Math.floor(Number(range[1]) || minLevel));
+    const rgb = /^#?([0-9A-F]{6})$/i.test(color)
+      ? [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)]
+      : null;
+    if (!rgb) return null;
+    return {
+      color: color.startsWith("#") ? color : `#${color}`,
+      label: String(raw?.label || `Lv${minLevel}-${maxLevel}`),
+      minLevel,
+      maxLevel,
+      rgb,
+    };
+  }
+
+  function resetRandomEncounterRuntime() {
+    randomEncounterRuntime = createRandomEncounterRuntime();
+    const config = world?.randomEncounters;
+    if (!config?.enabled) return;
+    const zones = (Array.isArray(config.zones) ? config.zones : []).map(normalizeEncounterZone).filter(Boolean);
+    const zoneByColor = Object.create(null);
+    for (const zone of zones) zoneByColor[zone.color] = zone;
+    const variance = config.monsterLevelVariance || {};
+    randomEncounterRuntime = {
+      ...randomEncounterRuntime,
+      mapId: currentMapId,
+      enabled: true,
+      imagePath: config.maskImage || null,
+      resolver: config.resolver || null,
+      zones,
+      zoneByColor,
+      checkDistancePx: Math.max(8, Math.round(Number(config.checkDistancePx) || 96)),
+      chancePerRoll: Core.clamp(Number(config.chancePerRoll) || .18, 0, 1),
+      safeDistanceRemaining: Math.max(0, Number(config.transitionGraceDistancePx) || 0),
+      variance: {
+        minDelta: Math.floor(Number(variance.minDelta) || -2),
+        maxDelta: Math.floor(Number(variance.maxDelta) || 3),
+        floor: Math.max(1, Math.floor(Number(variance.floor) || 1)),
+        cap: Math.max(1, Math.floor(Number(variance.cap) || ExpansionWorld.MONSTER_LEVEL_CAP || 45)),
+      },
+    };
+    if (typeof randomEncounterRuntime.resolver?.zoneAtWorldPosition === "function") {
+      randomEncounterRuntime.ready = true;
+      randomEncounterRuntime.loading = false;
+      randomEncounterRuntime.failed = false;
+      return;
+    }
+    if (!config.maskImage || typeof Image !== "function") {
+      randomEncounterRuntime.failed = true;
+      randomEncounterRuntime.error = "encounter-mask-unavailable";
+      return;
+    }
+    const loadToken = `${currentMapId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    randomEncounterRuntime.loading = true;
+    randomEncounterRuntime.loadToken = loadToken;
+    const image = new Image();
+    image.onload = () => {
+      if (randomEncounterRuntime.loadToken !== loadToken) return;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx || !canvas.width || !canvas.height) throw new Error("encounter-mask-context");
+        ctx.drawImage(image, 0, 0);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        randomEncounterRuntime.loading = false;
+        randomEncounterRuntime.ready = true;
+        randomEncounterRuntime.failed = false;
+        randomEncounterRuntime.error = null;
+        randomEncounterRuntime.width = canvas.width;
+        randomEncounterRuntime.height = canvas.height;
+        randomEncounterRuntime.pixels = pixels;
+      } catch (error) {
+        randomEncounterRuntime.loading = false;
+        randomEncounterRuntime.ready = false;
+        randomEncounterRuntime.failed = true;
+        randomEncounterRuntime.error = String(error?.message || error || "encounter-mask-read-failed");
+      }
+    };
+    image.onerror = () => {
+      if (randomEncounterRuntime.loadToken !== loadToken) return;
+      randomEncounterRuntime.loading = false;
+      randomEncounterRuntime.ready = false;
+      randomEncounterRuntime.failed = true;
+      randomEncounterRuntime.error = config.maskImage || "encounter-mask-load-failed";
+    };
+    image.src = config.maskImage;
+  }
+
+  function nearestEncounterZoneByRgb(r, g, b) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const zone of randomEncounterRuntime.zones) {
+      const [zr, zg, zb] = zone.rgb;
+      const distance = (zr - r) ** 2 + (zg - g) ** 2 + (zb - b) ** 2;
+      if (distance < bestDistance) {
+        best = zone;
+        bestDistance = distance;
+      }
+    }
+    return bestDistance <= 1728 ? best : null;
+  }
+
+  function encounterZoneAtWorldPosition(x, y) {
+    if (!randomEncounterRuntime.enabled || !randomEncounterRuntime.ready) return null;
+    if (typeof randomEncounterRuntime.resolver?.zoneAtWorldPosition === "function") {
+      return randomEncounterRuntime.resolver.zoneAtWorldPosition(x, y, world?.pixelWidth, world?.pixelHeight);
+    }
+    if (!randomEncounterRuntime.pixels) return null;
+    const mapWidth = Math.max(1, Number(world?.pixelWidth) || randomEncounterRuntime.width || 1);
+    const mapHeight = Math.max(1, Number(world?.pixelHeight) || randomEncounterRuntime.height || 1);
+    const px = Core.clamp(Math.round((Core.clamp(Number(x) || 0, 0, mapWidth) / mapWidth) * Math.max(0, randomEncounterRuntime.width - 1)), 0, Math.max(0, randomEncounterRuntime.width - 1));
+    const py = Core.clamp(Math.round((Core.clamp(Number(y) || 0, 0, mapHeight) / mapHeight) * Math.max(0, randomEncounterRuntime.height - 1)), 0, Math.max(0, randomEncounterRuntime.height - 1));
+    const index = (py * randomEncounterRuntime.width + px) * 4;
+    const r = randomEncounterRuntime.pixels[index] || 0;
+    const g = randomEncounterRuntime.pixels[index + 1] || 0;
+    const b = randomEncounterRuntime.pixels[index + 2] || 0;
+    const alpha = randomEncounterRuntime.pixels[index + 3] || 0;
+    if (alpha < 8) return null;
+    if (r === 0 && g === 0 && b === 0) return null;
+    return randomEncounterRuntime.zoneByColor[encounterColorKey(r, g, b)] || nearestEncounterZoneByRgb(r, g, b);
+  }
+
+  function monsterEncounterLevelWindow(blueprint) {
+    const variance = randomEncounterRuntime.variance || {};
+    const minLevel = Math.max(variance.floor || 1, blueprint.baseLevel + (variance.minDelta || 0));
+    const maxLevel = Math.max(minLevel, Math.min(variance.cap || ExpansionWorld.MONSTER_LEVEL_CAP || 45, blueprint.baseLevel + (variance.maxDelta || 0)));
+    return [minLevel, maxLevel];
+  }
+
+  function encounterCandidatesForZone(zone) {
+    const allow = Array.isArray(world?.randomEncounters?.allowedMonsters) && world.randomEncounters.allowedMonsters.length
+      ? new Set(world.randomEncounters.allowedMonsters.map((id) => ExpansionWorld.normalizeMonsterId(id)).filter(Boolean))
+      : null;
+    return (ExpansionWorld.CANONICAL_MONSTER_IDS || [])
+      .map((id) => ExpansionWorld.monsterBlueprint(id))
+      .filter(Boolean)
+      .filter((blueprint) => !allow || allow.has(blueprint.id))
+      .map((blueprint) => {
+        const [minLevel, maxLevel] = monsterEncounterLevelWindow(blueprint);
+        return { blueprint, id: blueprint.id, minLevel, maxLevel };
+      })
+      .filter((candidate) => candidate.maxLevel >= zone.minLevel && candidate.minLevel <= zone.maxLevel);
+  }
+
+  function randomIntegerInRange(min, max) {
+    const low = Math.floor(Math.min(min, max));
+    const high = Math.floor(Math.max(min, max));
+    return low + Math.floor(Math.random() * (high - low + 1));
+  }
+
+  function createRandomEncounterSource(zone) {
+    const candidates = encounterCandidatesForZone(zone);
+    if (!candidates.length) return null;
+    const sampledZoneLevel = randomIntegerInRange(zone.minLevel, zone.maxLevel);
+    let eligible = candidates.filter((candidate) => sampledZoneLevel >= candidate.minLevel && sampledZoneLevel <= candidate.maxLevel);
+    if (!eligible.length) eligible = candidates;
+    const chosen = eligible[Math.floor(Math.random() * eligible.length)] || eligible[0];
+    if (!chosen) return null;
+    const minLevel = Math.max(zone.minLevel, chosen.minLevel);
+    const maxLevel = Math.min(zone.maxLevel, chosen.maxLevel);
+    const level = randomIntegerInRange(minLevel, maxLevel);
+    const spawn = {
+      id: `mask-encounter-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      type: chosen.id,
+      x: player.x,
+      y: player.y,
+      level,
+      name: chosen.blueprint.name_zh,
+    };
+    const source = makeEnemy(spawn, { id: spawn.id, x: player.x, y: player.y, level });
+    source.randomEncounter = true;
+    source.encounterZone = zone.label;
+    source.encounterColor = zone.color;
+    return source;
+  }
+
+  function updateRandomEncounters(travelDistance) {
+    if (!(travelDistance > 0) || mode !== "playing" || battle) return false;
+    if (!randomEncounterRuntime.enabled || !randomEncounterRuntime.ready || randomEncounterRuntime.failed) return false;
+    if (randomEncounterRuntime.mapId !== currentMapId) return false;
+    const zone = encounterZoneAtWorldPosition(player.x, player.y);
+    if (!zone) {
+      randomEncounterRuntime.distanceSinceRoll = 0;
+      return false;
+    }
+    if (encounterGrace > 0) return false;
+    if (randomEncounterRuntime.safeDistanceRemaining > 0) {
+      randomEncounterRuntime.safeDistanceRemaining = Math.max(0, randomEncounterRuntime.safeDistanceRemaining - travelDistance);
+      return false;
+    }
+    randomEncounterRuntime.distanceSinceRoll += travelDistance;
+    while (randomEncounterRuntime.distanceSinceRoll >= randomEncounterRuntime.checkDistancePx) {
+      randomEncounterRuntime.distanceSinceRoll -= randomEncounterRuntime.checkDistancePx;
+      if (Math.random() > randomEncounterRuntime.chancePerRoll) continue;
+      const source = createRandomEncounterSource(zone);
+      if (!source) continue;
+      if (startBattle(source)) {
+        randomEncounterRuntime.distanceSinceRoll = 0;
+        randomEncounterRuntime.safeDistanceRemaining = Math.max(0, Number(world?.randomEncounters?.postEncounterGraceDistancePx) || 0);
+        return true;
+      }
+    }
+    return false;
   }
 
   function readPreference(key, fallback, legacyKey = null) {
@@ -2090,9 +2331,10 @@
     const movement = moveEntity(player, dx, dy);
     if (exploreMoveTarget && movement.hitX && movement.hitY) clearExploreMovePath();
     const travelled = { x: player.x - before.x, y: player.y - before.y };
+    let travelDistance = 0;
     player.moving = Math.hypot(travelled.x, travelled.y) > .001;
     if (player.moving) {
-      const travelDistance = Math.hypot(travelled.x, travelled.y);
+      travelDistance = Math.hypot(travelled.x, travelled.y);
       player.explorationDistance += travelDistance;
       player.explorationMoveSeconds += dt;
       updateWeakPotionTravel(travelDistance);
@@ -2102,6 +2344,7 @@
     if (player.moving) player.walkCycle += dt * 8;
 
     if (updateAutomaticPortal()) return;
+    if (player.moving && updateRandomEncounters(travelDistance)) return;
     collectDrops();
     updateNearestInteraction();
     if (pendingClickInteractionId && nearestInteraction?.id === pendingClickInteractionId) {
@@ -4786,10 +5029,11 @@
   }
 
   function battleFieldContextFor(mapId) {
-    if (mapId !== "field" && mapId !== "dungeon") return null;
+    const map = maps[mapId];
+    if (map?.biome !== "mountain") return null;
     const authored = mapId === "dungeon"
-      ? (maps.field?.battlefield || world?.battlefield || {})
-      : (world?.battlefield || {});
+      ? (maps.field?.battlefield || map?.battlefield || {})
+      : (map?.battlefield || {});
     return {
       ...MOUNTAIN_BATTLEFIELD,
       ...authored,
@@ -7316,12 +7560,7 @@
     if (currentMapId === "clinic") return "霧草療癒所";
     if (currentMapId === "general-store") return "道具店";
     if (currentMapId === "inn") return "霧燈旅店";
-    if (currentMapId === "dungeon") {
-      return world?.name || "欣梅爾山地東南部";
-    }
-    if (currentMapId === "field") {
-      return world?.name || "欣梅爾山地東南偏南";
-    }
+    if (world?.biome === "mountain") return world?.name || "欣梅爾山地";
     return "米克雷帝國";
   }
 

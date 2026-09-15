@@ -20,13 +20,29 @@
   const width = Math.ceil(data.source.width / TILE);
   const height = Math.ceil(data.source.height / TILE);
   const tiles = makeTiles(width, height, TILES.WALL);
-  const activeExitRegion = data.regions.exit[0];
-  const reservedExitRegion = data.regions.exit[1] || null;
-  const activeExitPoint = activeExitRegion.centroid;
+  const exitRegions = Array.isArray(data.regions?.exit) ? data.regions.exit.filter(Boolean) : [];
+  // Bind the authored cyan passages by position rather than generated
+  // component order: bottom-most = southeast-field link, left-most = south map.
+  const fieldExitRegion = exitRegions.reduce((best, region) => {
+    const y = Number(region?.centroid?.y);
+    const bestY = Number(best?.centroid?.y);
+    if (!Number.isFinite(y)) return best;
+    if (!best || !Number.isFinite(bestY) || y > bestY) return region;
+    return best;
+  }, null);
+  const southExitRegion = exitRegions
+    .filter((region) => region !== fieldExitRegion)
+    .reduce((best, region) => {
+      const x = Number(region?.centroid?.x);
+      const bestX = Number(best?.centroid?.x);
+      if (!Number.isFinite(x)) return best;
+      if (!best || !Number.isFinite(bestX) || x < bestX) return region;
+      return best;
+    }, null);
   // Transition cyan is only the threshold. Arrival points sit safely inside
   // the adjacent authored white road, matching the first mountain field.
   const entranceSpawn = { x: 4716, y: 4383 };
-  const reservedExitSpawn = { x: 524, y: 1036 };
+  const southEntranceSpawn = { x: 524, y: 1036 };
 
   function monsterSpawn(id, type, x, y) {
     const blueprint = MONSTER_BLUEPRINTS[type];
@@ -43,14 +59,16 @@
   }
 
   function createMineMap() {
+    if (!fieldExitRegion || !southExitRegion) throw new Error("mountain2 cyan exits are unavailable");
+
     const exit = {
       id: "dungeon-to-field",
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
       name: "返回欣梅爾山地東南偏南",
-      x: activeExitPoint.x,
-      y: activeExitPoint.y,
+      x: fieldExitRegion.centroid.x,
+      y: fieldExitRegion.centroid.y,
       radius: 38,
       targetMap: MAP_IDS.FIELD,
       targetSpawn: "dungeonFront",
@@ -62,10 +80,36 @@
       alwaysVisible: true,
       trigger: {
         shape: "rect",
-        x: activeExitRegion.bbox.x,
-        y: activeExitRegion.bbox.y,
-        w: activeExitRegion.bbox.width,
-        h: activeExitRegion.bbox.height,
+        x: fieldExitRegion.bbox.x,
+        y: fieldExitRegion.bbox.y,
+        w: fieldExitRegion.bbox.width,
+        h: fieldExitRegion.bbox.height,
+      },
+    };
+
+    const southExit = {
+      id: "dungeon-to-mountain-south",
+      kind: "portal",
+      interactionMode: "passage",
+      transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
+      name: "前往欣梅爾山地南部",
+      x: southExitRegion.centroid.x,
+      y: southExitRegion.centroid.y,
+      radius: 38,
+      targetMap: MAP_IDS.MOUNTAIN_SOUTH,
+      targetSpawn: "eastEntrance",
+      targetPosition: null,
+      targetFacing: "left",
+      prompt: "前往欣梅爾山地南部",
+      direction: "west",
+      mapLabel: "欣梅爾山地南部",
+      alwaysVisible: true,
+      trigger: {
+        shape: "rect",
+        x: southExitRegion.bbox.x,
+        y: southExitRegion.bbox.y,
+        w: southExitRegion.bbox.width,
+        h: southExitRegion.bbox.height,
       },
     };
 
@@ -112,10 +156,14 @@
       start: entranceSpawn,
       spawnPoints: {
         entrance: entranceSpawn,
+        southEntrance: southEntranceSpawn,
         waypoint: { x: shrine.x, y: shrine.y },
-        reservedExit: reservedExitRegion ? reservedExitSpawn : null,
       },
-      exits: [exit],
+      spawnFacings: {
+        entrance: "up",
+        southEntrance: "right",
+      },
+      exits: [exit, southExit],
       houses: [],
       trees: [],
       rocks: [],
@@ -139,7 +187,7 @@
       routeLayout: {
         style: "authored-mountain-road",
         entrySide: "east-south",
-        reservedExitSide: "west-north",
+        southExitSide: "west-north",
         solidOutsideRoute: true,
       },
       forestLayout: {

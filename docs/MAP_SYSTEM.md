@@ -36,7 +36,7 @@
 | `map/*` | 共用常數、map-building helpers、registry、door anchor 與 transition linking |
 | `game.js` | 地圖 registry 的 gameplay consumer；只執行已解析的 transition，不 author 或 patch 地圖 |
 
-目前 registry 由 `map/map-registry.js` 建立 `world`、`field`、`dungeon`、`guild`、`shop`、`clinic`、`general-store`、`inn`，再交給 `map/map-transitions.js` 完成互相連接。`world.js` 與 `expansion-world.js` 只保留舊 API 的薄兼容入口，真正的 runtime 定義不在其中。
+目前 registry 由 `map/map-registry.js` 建立 `world`、`field`、`dungeon`、`mountain-south`、`guild`、`shop`、`clinic`、`general-store`、`inn`，再交給 `map/map-transitions.js` 完成互相連接。`world.js` 與 `expansion-world.js` 只保留舊 API 的薄兼容入口，真正的 runtime 定義不在其中。
 
 修改 shared map behavior 時，先讀本文件；修改特定地圖時，讀本文件加上對應 `docs/maps/*.md`；修改 exact runtime layout 時，只編輯該地圖的 owning JS。永久語意／layout rule 改動要同步更新對應 Markdown。
 
@@ -219,6 +219,7 @@ special
 | `world` | `maps/main-town.js` |
 | `field` | `maps/mountain-field.js` |
 | `dungeon` | `maps/mine.js` |
+| `mountain-south` | `maps/mountain-south.js` |
 | `guild` | `maps/interiors/guild.js` |
 | `shop` | `maps/interiors/equipment-shop.js` |
 | `clinic` | `maps/interiors/clinic.js` |
@@ -236,7 +237,7 @@ special
 - 讀取主城 authored navigation package 的 building trigger、threshold、approach anchor。
 - 將 exact authored doorway contract 解析成 physical `interactionMode: "door"` transition；舊 bitmap sprite anchor 只保留畀 legacy map consumers。
 - 建立主城五個服務入口與室內 `*-to-world` 回程的對應。
-- 將 `field ↔ world`、`field ↔ dungeon` 保持為 physical gate/cave passage。
+- 將 `field ↔ world`、`field ↔ dungeon`、`dungeon ↔ mountain-south` 保持為 physical passage。
 - 以 `targetSpawn` 優先解析 arrival；`targetPosition` 只作兼容 fallback。
 - 建築門口 transition 另保存可見 doorway anchor、精準 threshold、approach point、`returnSpawn`、`returnPosition` 與 `returnFacing`；城外返回位置由 owning map 明確提供，不能用通用 `door.y + 34` 類像素偏移推算。
 
