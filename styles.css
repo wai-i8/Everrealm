@@ -737,9 +737,9 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 }
 .battle-facing-picker.is-dragging .facing-drag-handle { cursor: grabbing; }
 .battle-facing-picker .facing-arrow {
-  display: block; width: 1.18rem; height: .76rem;
+  display: block; width: .72rem; height: .72rem;
   background: currentColor;
-  clip-path: polygon(0 36%,55% 36%,55% 0,100% 50%,55% 100%,55% 64%,0 64%);
+  clip-path: polygon(100% 50%,0 0,0 100%);
   transform: rotate(var(--battle-facing-angle,0deg));
   transform-origin: center;
 }
