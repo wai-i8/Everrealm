@@ -23,6 +23,10 @@
   const activeExitRegion = data.regions.exit[0];
   const reservedExitRegion = data.regions.exit[1] || null;
   const activeExitPoint = activeExitRegion.centroid;
+  // Transition cyan is only the threshold. Arrival points sit safely inside
+  // the adjacent authored white road, matching the first mountain field.
+  const entranceSpawn = { x: 4716, y: 4383 };
+  const reservedExitSpawn = { x: 524, y: 1036 };
 
   function monsterSpawn(id, type, x, y) {
     const blueprint = MONSTER_BLUEPRINTS[type];
@@ -74,8 +78,6 @@
       monsterSpawn("turtle-mountain-2-2", "turtle", 2949, 1981),
       monsterSpawn("snake-mountain-2-1", "snake", 3518, 2788),
       monsterSpawn("snake-mountain-2-2", "snake", 3898, 3260),
-      monsterSpawn("bear-mountain-2-1", "bear", 4210, 3820),
-      monsterSpawn("bear-mountain-2-2", "bear", 4680, 4660),
     ];
 
     const shrine = {
@@ -107,11 +109,11 @@
       width,
       height,
       tiles,
-      start: activeExitPoint,
+      start: entranceSpawn,
       spawnPoints: {
-        entrance: activeExitPoint,
+        entrance: entranceSpawn,
         waypoint: { x: shrine.x, y: shrine.y },
-        reservedExit: reservedExitRegion?.centroid || null,
+        reservedExit: reservedExitRegion ? reservedExitSpawn : null,
       },
       exits: [exit],
       houses: [],
