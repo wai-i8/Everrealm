@@ -5547,12 +5547,37 @@
       : null;
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
+    const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
+    const projectedDesktopFacingOffsets = projected && !detachedPicker
+      ? (() => {
+        const corners = battleCellCorners(endpoint, layout, battleRenderHeight(endpoint));
+        const centre = battleCellCentre(endpoint, layout);
+        const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const triangleHalf = rootFontSize * .36;
+        const edgeMidpoint = (first, second) => ({
+          x: (first.x + second.x) / 2 - centre.x,
+          y: (first.y + second.y) / 2 - centre.y,
+        });
+        const edgeOffsets = {
+          up: edgeMidpoint(corners[0], corners[1]),
+          right: edgeMidpoint(corners[1], corners[2]),
+          down: edgeMidpoint(corners[2], corners[3]),
+          left: edgeMidpoint(corners[3], corners[0]),
+        };
+        return Object.fromEntries(Object.entries(edgeOffsets).map(([facing, edge]) => {
+          const vector = battleFacingScreenVector(facing, layout);
+          return [facing, { x: edge.x + vector.x * triangleHalf, y: edge.y + vector.y * triangleHalf }];
+        }));
+      })()
+      : null;
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
       const facing = button.dataset.battleFacing;
       const label = labels[facing] || facing;
       const vector = battleFacingScreenVector(facing, layout);
       const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
-      const position = projectedFacingOffsets?.[facing] || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
+      const position = projectedFacingOffsets?.[facing]
+        || projectedDesktopFacingOffsets?.[facing]
+        || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
       button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
       button.style.left = detachedPicker ? `calc(50% + ${position.x}px)` : `${position.x}px`;
       button.style.top = detachedPicker ? `calc(50% + ${position.y}px)` : `${position.y}px`;
@@ -5570,7 +5595,6 @@
       syncBattleFacingPosition();
       return;
     }
-    const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
     const point = battleCellCentre(endpoint, layout);
     const edge = touchSizedPicker ? 62 : 66;
     battleFacingPicker.style.left = `${Core.clamp(point.x, edge, width - edge)}px`;
