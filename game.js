@@ -4787,8 +4787,10 @@
   }
 
   function battleFieldContextFor(mapId) {
-    if (mapId !== "field") return null;
-    const authored = world?.battlefield || {};
+    if (mapId !== "field" && mapId !== "dungeon") return null;
+    const authored = mapId === "dungeon"
+      ? (maps.field?.battlefield || world?.battlefield || {})
+      : (world?.battlefield || {});
     return {
       ...MOUNTAIN_BATTLEFIELD,
       ...authored,
@@ -7316,21 +7318,10 @@
     if (currentMapId === "general-store") return "道具店";
     if (currentMapId === "inn") return "霧燈旅店";
     if (currentMapId === "dungeon") {
-      const tx = position.x / world.tileSize;
-      const ty = position.y / world.tileSize;
-      if (ty <= 9 && tx >= 29) return "坑道 · 深霧核心";
-      if (ty <= 9) return "坑道 · 封存庫";
-      if (ty <= 18) return tx < 12 ? "坑道 · 苔石窟" : tx > 27 ? "坑道 · 殘燈迴廊" : "坑道 · 沉沒中庭";
-      return "沉燈坑道 · 入口";
+      return world?.name || "欣梅爾山地東南部";
     }
     if (currentMapId === "field") {
-      const tx = position.x / world.tileSize;
-      const ty = position.y / world.tileSize;
-      if (ty <= 5) return "霧梅爾山地 · 坑道口";
-      if (ty <= 16) return "霧梅爾山地 · 北徑";
-      if (tx >= 30) return "霧梅爾山地 · 山路彎";
-      if (tx <= 7) return "霧梅爾山地 · 西口";
-      return "霧梅爾山地 · 林間道";
+      return world?.name || "欣梅爾山地東南偏南";
     }
     return "米克雷帝國";
   }

@@ -129,7 +129,7 @@
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
-      name: "前往霧梅爾山地",
+      name: "前往欣梅爾山地東南偏南",
       mapLabel: "東側出口",
       alwaysVisible: true,
       markerSize: 38,

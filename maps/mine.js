@@ -44,7 +44,7 @@
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
-      name: "返回霧梅爾山地",
+      name: "返回欣梅爾山地東南偏南",
       x: activeExitPoint.x,
       y: activeExitPoint.y,
       radius: 38,
@@ -52,7 +52,7 @@
       targetSpawn: "dungeonFront",
       targetPosition: null,
       targetFacing: "down",
-      prompt: "返回霧梅爾山地",
+      prompt: "返回欣梅爾山地東南偏南",
       direction: "east",
       mapLabel: "山地出口",
       alwaysVisible: true,
@@ -93,8 +93,8 @@
 
     const map = withMapCollections({
       id: MAP_IDS.DUNGEON,
-      name: "霧梅爾山地北部",
-      shortName: "霧梅爾山地北部",
+      name: "欣梅爾山地東南部",
+      shortName: "欣梅爾山地東南部",
       kind: "dungeon",
       type: "dungeon",
       biome: "mountain",

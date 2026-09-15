@@ -174,8 +174,8 @@
 
     const map = withMapCollections({
       id: MAP_IDS.FIELD,
-      name: "霧梅爾山地東南部",
-      shortName: "霧梅爾山地",
+      name: "欣梅爾山地東南偏南",
+      shortName: "欣梅爾山地東南偏南",
       kind: "field",
       type: "world",
       biome: "mountain",
