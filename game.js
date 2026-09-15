@@ -5533,7 +5533,7 @@
         const referenceButton = battleFacingPicker.querySelector("[data-battle-facing]");
         const buttonWidth = referenceButton?.offsetWidth || 40;
         const buttonHeight = referenceButton?.offsetHeight || buttonWidth;
-        const verticalGap = Core.clamp(layout.cell * .1, 4, 6);
+        const verticalGap = 0;
         const horizontalGap = verticalGap * (765 / 125);
         const spanX = buttonWidth + horizontalGap;
         const spanY = buttonHeight + verticalGap;
