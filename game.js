@@ -5530,13 +5530,19 @@
           : Core.clamp(layout.cell * .48, 31, 45);
     const projectedFacingOffsets = mobileProjectedArrows
       ? (() => {
-        const referenceButton = battleFacingPicker.querySelector("[data-battle-facing]");
-        const buttonWidth = referenceButton?.offsetWidth || 40;
-        const buttonHeight = referenceButton?.offsetHeight || buttonWidth;
+        const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const renderedArrowWidth = rootFontSize * 2.5;
+        const arrowAspectRatios = {
+          up: 1527 / 793,
+          right: 2708 / 782,
+          down: 1504 / 783,
+          left: 1528 / 778,
+        };
+        const renderedArrowHeight = (facing) => renderedArrowWidth / arrowAspectRatios[facing];
         const verticalGap = 0;
         const horizontalGap = verticalGap * (765 / 125);
-        const spanX = buttonWidth + horizontalGap;
-        const spanY = buttonHeight + verticalGap;
+        const spanX = renderedArrowWidth + horizontalGap;
+        const spanY = (renderedArrowHeight("up") + renderedArrowHeight("left")) / 2 + verticalGap;
         return {
           up: { x: -spanX / 2, y: -spanY / 2 },
           right: { x: spanX / 2, y: -spanY / 2 },
