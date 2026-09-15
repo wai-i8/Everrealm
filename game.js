@@ -5504,30 +5504,30 @@
       }
       plan.facing = enemy.facing;
       plan.move = copyBattleCell(enemy.cell);
-      const skill = plan.skill || enemy.skill;
-      if (!skill || skill.dealsDamage === false || skill.actionKind === "guard") {
-        plan.willAttack = false;
-        plan.targetCells = [];
-        continue;
-      }
-      const legalTarget = MonsterAI?.validateSkillFrom
-        ? MonsterAI.validateSkillFrom(skill, enemy, enemy.cell, enemy.facing, battle.hero, battle.grid, battleUnits())
-        : Skills.validateSkillTarget(skill, enemy.cell, battle.hero.cell, {
+      const action = MonsterAI?.planCurrentAttack
+        ? MonsterAI.planCurrentAttack({
             grid: battle.grid,
-            battlefield: battle.battlefield,
-            heightMap: battle.battlefield?.heightMap,
-            facing: enemy.facing,
-            actorTeam: "enemy",
-            actorId: enemy.id,
-            targetUnit: { ...battle.hero, team: "ally" },
-          }).ok;
-      plan.willAttack = legalTarget && (enemy.ap || 0) >= (plan.apCost || skill.apCost || 0);
+            enemy,
+            targets: [battle.hero],
+            units: battleUnits(),
+            skills: enemy.skills,
+          })
+        : null;
+      const skill = action?.skill || null;
+      plan.skill = skill;
+      plan.skillId = skill?.id || null;
+      plan.skillName = skill?.name || enemy.skills?.[0]?.name || enemy.skillName || "普通攻擊";
+      plan.apCost = skill?.apCost || 0;
+      plan.speedGrade = skill?.speedGrade || enemy.speedGrade || "C";
+      plan.reason = action?.reason || "move";
+      plan.setupSkillId = null;
+      plan.willAttack = Boolean(action?.attackTargetId && skill);
       plan.targetCells = plan.willAttack
         ? Skills.patternCells(skill, enemy.cell, battle.hero.cell, {
             grid: battle.grid,
             battlefield: battle.battlefield,
             heightMap: battle.battlefield?.heightMap,
-            facing: enemy.facing,
+            facing: action.attackFacing || enemy.facing,
           })
         : [];
     }

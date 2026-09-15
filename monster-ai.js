@@ -307,6 +307,57 @@
       || a.cell.x - b.cell.x;
   }
 
+  // Re-evaluate only attacks from the unit's actual post-movement cell. This
+  // is intentionally separate from planEnemyAction: movement has already
+  // resolved, so a stale setup skill must not prevent a newly legal attack.
+  function planCurrentAttack({ grid, enemy, targets = [], units = [], skills = [] } = {}) {
+    if (!grid || !alive(enemy)) return null;
+    const livingTargets = targets.filter(alive);
+    if (!livingTargets.length) return null;
+    const target = [...livingTargets].sort((a, b) => Tactics.manhattan(enemy.cell, a.cell) - Tactics.manhattan(enemy.cell, b.cell) || String(a.id).localeCompare(String(b.id)))[0];
+    const allUnits = [...new Map([enemy, ...units, ...livingTargets].filter(Boolean).map((unit) => [unit.id, unit])).values()];
+    const facing = enemy.facing || "down";
+    const currentAp = Math.max(0, finite(enemy.ap, 0));
+    const candidates = [];
+    for (const skill of (skills || []).filter(Boolean)) {
+      if (skill.dealsDamage === false || skill.actionKind === "guard" || currentAp < finite(skill.apCost, 0)) continue;
+      if (!validateSkillFrom(skill, enemy, enemy.cell, facing, target, grid, allUnits)) continue;
+      candidates.push({
+        kind: "attack",
+        skill,
+        target,
+        cell: copyCell(enemy.cell),
+        path: [copyCell(enemy.cell)],
+        commands: [],
+        facing,
+        attackOrigin: copyCell(enemy.cell),
+        attackFacing: facing,
+        previewCell: copyCell(enemy.cell),
+        cost: 0,
+        score: 100 + skillValue(skill, enemy, target),
+      });
+    }
+    const chosen = candidates.sort(comparePlan)[0];
+    if (!chosen) return null;
+    return {
+      type: "attack",
+      move: copyCell(enemy.cell),
+      path: [copyCell(enemy.cell)],
+      commands: [],
+      facing: chosen.facing,
+      attackOrigin: chosen.attackOrigin,
+      attackFacing: chosen.attackFacing,
+      previewCell: chosen.previewCell,
+      targetId: target.id,
+      attackTargetId: target.id,
+      skill: chosen.skill,
+      setupSkill: null,
+      movementCost: 0,
+      score: chosen.score,
+      reason: "attack",
+    };
+  }
+
   function planEnemyAction({ grid, enemy, targets = [], units = [], skills = [], apGain = 10 } = {}) {
     if (!grid || !alive(enemy)) return null;
     const livingTargets = targets.filter(alive);
@@ -358,5 +409,5 @@
     };
   }
 
-  return { planEnemyAction, validateSkillFrom, skillValue, estimateSkillDamage, reachableStates };
+  return { planEnemyAction, planCurrentAttack, validateSkillFrom, skillValue, estimateSkillDamage, reachableStates };
 });

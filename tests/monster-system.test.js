@@ -171,6 +171,23 @@ test('high-AP ranged upgrade stages on actual authored skill geometry, not a dis
   assert.equal(MonsterAI.validateSkillFrom(boarPlan.setupSkill, boar, boarPlan.move, boarPlan.facing, boarHero, grid, [boar, boarHero]), true);
 });
 
+test('post-movement attack replan chooses a currently affordable fox attack', () => {
+  const grid = Tactics.createGrid(9, 7, []);
+  const fox = unit('fox-near', 'enemy', 3, 3, { moveRange: 6, ap: 10, facing: 'left' });
+  const hero = unit('hero-near', 'ally', 2, 3);
+  const plan = MonsterAI.planCurrentAttack({
+    grid,
+    enemy: fox,
+    targets: [hero],
+    units: [fox, hero],
+    skills: Blueprints.monsterBlueprint('fox').skills,
+  });
+  assert.equal(plan.type, 'attack');
+  assert.equal(plan.skill.id, 'quick_bite');
+  assert.deepEqual(plan.move, fox.cell);
+  assert.equal(plan.attackTargetId, hero.id);
+});
+
 test('snake stages for venom spit at 10 AP and uses it once AP is sufficient', () => {
   const grid = Tactics.createGrid(9, 7, []);
   const hero = unit('hero', 'ally', 6, 3);

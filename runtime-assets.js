@@ -57,7 +57,7 @@
     "guild-commission-core.js",
     "tactics-core.js?v=20260912-01",
     "skill-core.js?v=20260915-01",
-    "monster-ai.js",
+    "monster-ai.js?v=20260915-01",
     "audio-core.js?v=20260914-02",
     "save-system.js",
     "firebase-config.js",
@@ -80,7 +80,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260915-04",
+    "game.js?v=20260915-05",
   ]);
 
   return Object.freeze({ scripts });
