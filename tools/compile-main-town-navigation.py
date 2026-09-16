@@ -188,6 +188,11 @@ def compile_package() -> tuple[dict, dict]:
     )
     bridge = ndimage.binary_dilation(shared_edge, iterations=6)
     walkable = (main_white | authored_regions | bridge).astype(np.uint8)
+    # The pink/purple deck region is an authored interaction target, not a
+    # place where the player's feet should stand. Keep only white/cyan as the
+    # walkable allowlist so all authored interactions share the same approach
+    # contract as flattened interior NPC/object regions.
+    walkable[pink_labels == deck["label"]] = 0
     collision = np.zeros_like(walkable)
     clearance = ndimage.distance_transform_edt(walkable)
     walkable_labels, _ = ndimage.label(walkable, structure=np.ones((3, 3), dtype=np.uint8))
@@ -251,7 +256,7 @@ def compile_package() -> tuple[dict, dict]:
         },
         "coordinate_system": "original image pixels; origin top-left; x right, y down; rectangles half-open [x,x+width), [y,y+height)",
         "rendering": "flattened; no foreground or depth sorting; authoring image is never rendered",
-        "movement_rule": "A feet disk must be completely inside the compiled white walkable region, an authored cyan transition region, or the authored pink deck region. Only a <=3 px JPEG anti-alias seam directly shared by those authored regions is normalized. Every other pixel is blocked. Navigation data is an allowlist and never falls back to tiles or visible art.",
+        "movement_rule": "A feet disk must be completely inside the compiled white walkable region or an authored cyan transition region. The authored pink/purple interaction region is occupied and not walkable. Only a <=3 px JPEG anti-alias seam directly shared by those authored regions is normalized. Every other pixel is blocked. Navigation data is an allowlist and never falls back to tiles or visible art.",
         "feet_radius_px": FEET_RADIUS,
         "building_triggers": building_triggers,
         "east_exit": {**east_bbox, "region_id": "east-exit", "region_value": 6, "destination": "Mountain Field", "portal_id": "world-to-field"},

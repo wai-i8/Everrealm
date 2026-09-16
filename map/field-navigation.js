@@ -128,7 +128,7 @@
       return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
     }
 
-    function interactionHitTest(region, position, padding = SERVICE_INTERACTION_HIT_PADDING_PX) {
+    function interactionHitTest(region, position, padding = 0) {
       const mask = maskFor(region);
       const x = Number(position?.x);
       const y = Number(position?.y);

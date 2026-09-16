@@ -2339,9 +2339,11 @@
     if (player.moving && updateRandomEncounters(travelDistance)) return;
     collectDrops();
     updateNearestInteraction();
+    const pendingInteractionEntity = pendingClickInteractionId ? findInteractionEntity(pendingClickInteractionId) : null;
     const pendingInteractionArrived = pendingClickInteractionId && pendingClickInteractionPoint && !exploreMoveTarget && !exploreMovePath.length &&
       Core.distance(player, pendingClickInteractionPoint) <= Math.max(10, (Number(world.navigation?.feetRadiusPx) || 3) * 3);
-    if (pendingClickInteractionId && (nearestInteraction?.id === pendingClickInteractionId || pendingInteractionArrived)) {
+    if (pendingClickInteractionId && (nearestInteraction?.id === pendingClickInteractionId || (pendingInteractionArrived && pendingInteractionEntity))) {
+      if (pendingInteractionArrived) nearestInteraction = pendingInteractionEntity;
       pendingClickInteractionId = null;
       pendingClickInteractionPoint = null;
       clearExploreMovePath();
@@ -2895,6 +2897,9 @@
       .map((entity) => ({ entity, distance: interactionDistanceToEntity(entity) }))
       .filter((item) => {
         if (item.entity.kind === "questBoard" && item.entity.navigationRegion && typeof world.navigation?.isInRegion === "function") {
+          if (world.navigation.authoritative && authoritativeInteractionRegion(item.entity)) {
+            return item.distance <= interactionReachForEntity(item.entity);
+          }
           return world.navigation.isInRegion(item.entity.navigationRegion, player) ||
             Core.distance(player, item.entity.approachPoint || item.entity) <= (Number(item.entity.interactionRadius) || 80);
         }
@@ -2920,6 +2925,16 @@
     if (entity.kind === "questBoard") return entity.boardId === "deck-loadout" ? "面板配置" : "查看公會委託";
     if (entity.kind === "wishPool") return "喺古怪水池許願";
     return "睇下";
+  }
+
+  function findInteractionEntity(id) {
+    if (!id) return null;
+    const candidates = [
+      ...(world.npcs || []), ...(world.boards || []), ...(world.signs || []),
+      ...(world.chests || []), ...(world.portals || []),
+      ...(world.shrine ? [world.shrine] : []),
+    ];
+    return candidates.find((entity) => entity?.id === id) || null;
   }
 
   function interact() {
@@ -8782,9 +8797,9 @@
     }
     const candidates = [
       ...world.npcs.filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
-      ...world.boards,
-      ...world.signs,
-      ...(world.shrine ? [world.shrine] : []),
+      ...(world.boards || []).filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
+      ...(world.signs || []).filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
+      ...(world.shrine && !(world.navigation?.authoritative && authoritativeInteractionRegion(world.shrine)) ? [world.shrine] : []),
       ...world.portals,
       ...enemies.filter((enemy) => enemy.alive),
     ];
@@ -8839,12 +8854,13 @@
       }
       pendingClickInteractionId = null;
     } else if (entity && !entity.type && entity.kind !== "portal") {
-      if (entity.approachPoint) {
+      if (entity.approachPoint && !authoritativeInteractionRegion(entity)) {
         destination = { x: entity.approachPoint.x, y: entity.approachPoint.y };
         pendingClickInteractionId = entity.id;
       } else {
         const authoredApproach = authoritativeInteractionApproachPoint(entity);
         if (authoredApproach) destination = authoredApproach;
+        else if (entity.approachPoint) destination = { x: entity.approachPoint.x, y: entity.approachPoint.y };
         else {
           const away = Core.normalize({ x: player.x - entity.x, y: player.y - entity.y });
           destination = { x: entity.x + away.x * 34, y: entity.y + away.y * 34 };

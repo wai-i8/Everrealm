@@ -32,7 +32,7 @@
   },
   "coordinate_system": "original image pixels; origin top-left; x right, y down; rectangles half-open [x,x+width), [y,y+height)",
   "rendering": "flattened; no foreground or depth sorting; authoring image is never rendered",
-  "movement_rule": "A feet disk must be completely inside the compiled white walkable region, an authored cyan transition region, or the authored pink deck region. Only a <=3 px JPEG anti-alias seam directly shared by those authored regions is normalized. Every other pixel is blocked. Navigation data is an allowlist and never falls back to tiles or visible art.",
+  "movement_rule": "A feet disk must be completely inside the compiled white walkable region or an authored cyan transition region. The authored pink/purple interaction region is occupied and not walkable. Only a <=3 px JPEG anti-alias seam directly shared by those authored regions is normalized. Every other pixel is blocked. Navigation data is an allowlist and never falls back to tiles or visible art.",
   "feet_radius_px": 3,
   "building_triggers": [
     {

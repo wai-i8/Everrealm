@@ -80,7 +80,7 @@ Hospital、Guild、Equipment Shop、Inn、Item／General Store 同 Main Town 使
 | `guild` | `assets/guild/guild.png` | `assets/guild/guild_walkable.png` | `map/guild-navigation.generated.js` |
 | `world` Main Town | `assets/main-town/maintown.jpg` | `assets/main-town/maintown_walkable.jpg` | `map/main-town-navigation.generated.js` |
 
-Flattened 室內 pair 必須保持各自 master／authoring 圖完全相同嘅原生 pixel coordinate space；`1672 × 941` 係舊基準尺寸，但高解析度室內可以直接使用自己嘅 native dimensions（例如 Guild `3344 × 1882`、General Store `2508 × 2508`），唔可以 resize 返舊尺寸。Main Town pair 必須保持 `7680 × 4320`。室內 generator 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅 `[255,0,255]` 係 NPC occupancy／interaction region、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。Main Town JPG compiler 以 supplied authoring image 的近色分類：白色係 walkable、六個青色 component 係固定 transition、粉紅色 `[255,0,255]` component 係 deck configuration interaction，其他像素 blocked。兩者都輸出 hash、connected-component bbox／centroid／feet anchor 同 RLE runtime mask；generated file 明確標示不可手改。
+Flattened 室內 pair 必須保持各自 master／authoring 圖完全相同嘅原生 pixel coordinate space；`1672 × 941` 係舊基準尺寸，但高解析度室內可以直接使用自己嘅 native dimensions（例如 Guild `3344 × 1882`、General Store `2508 × 2508`），唔可以 resize 返舊尺寸。Main Town pair 必須保持 `7680 × 4320`。室內 generator 以 exact opaque RGB 讀取 authoring source：白色 `[255,255,255]` 係 walkable allowlist、洋紅／紫色 `[255,0,255]` 係 NPC 或其他 semantic interaction region（region 本身唔可行走）、青色 `[0,255,255]` 係 exit region；其他像素全部唔係 authored movement data。Main Town JPG compiler 以 supplied authoring image 的近色分類：白色係 walkable、六個青色 component 係固定 transition、粉紅／紫色 `[255,0,255]` component 係 interaction region（region 本身唔可行走），其他像素 blocked。兩者都輸出 hash、connected-component bbox／centroid／feet anchor 同 RLE runtime mask；generated file 明確標示不可手改。
 
 完整戶外場景（例如山地）亦使用同尺寸 master／walkable pair。山地類 source contract 為兩張同樣 `4096 × 4096` 嘅圖：可見 master 使用 JPEG；walkable 使用同尺寸 PNG，黑色係不可行區、白色係可行區，必要時再以少量語意顏色標示 interaction／exit。walkable PNG 係導航 source，唔係玩家可見圖；大面積黑色只係令 PNG 檔案容易壓縮、載入較快，唔代表 source pixel dimensions 被縮細。
 
@@ -94,7 +94,7 @@ For a compact full-map scene, one source pixel is not automatically one gameplay
 
 Player, NPC and monster authored render dimensions, the base exploration movement speed (`330` world units per second), and the global Far/Mid/Near camera presets (`0.46176` / `0.592` / `0.72224`) remain global contracts. A compact map may map those values into its smaller logical world, but the same map-level transform must apply to background, entity, feet pivot, collision, interaction, movement and click conversion. Source resolution must not create a hidden travel-time multiplier, and a compact map must not be enlarged merely to cover the viewport. Native crop camera behaviour remains available only to maps whose presentation contract explicitly chooses it.
 
-所有 flattened scene 共享 `feet_radius_px: 3` source contract。compact full-map scene 嘅 feet disk 必須經同一個 source-to-compact transform 完整落喺 compiled authored allowlist；室內係 white／cyan 並避開 magenta，Main Town 係 white／cyan／pink 及 compiler 只在 painted region 邊界做有限 JPEG seam normalization。越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。Main Town click-to-move 使用 1px line-clear sampling 同四向 waypoints；compact map 亦必須喺其 logical world 使用對應嘅 authoritative line-clear，避免縮放後穿過 walkable mask 邊界。呢個 transform 係 map-level contract，唔係 per-entity 或逐 frame 特例。
+所有 flattened scene 共享 `feet_radius_px: 3` source contract。compact full-map scene 嘅 feet disk 必須經同一個 source-to-compact transform 完整落喺 compiled authored allowlist；室內係 white／cyan 並避開 magenta／紫色 interaction region，Main Town 係 white／cyan 並避開 pink／紫色 interaction region，compiler 只在 painted region 邊界做有限 JPEG seam normalization。越界、非 authored、缺失或 malformed generated data 一律 blocked。pathfinding、movement substeps、authored-hotspot click、exit arrival 同一個 resolver，唔可以回退到 tile、Canvas pixel readback、`fetch()` 或視覺圖 alpha 推導。Main Town click-to-move 使用 1px line-clear sampling 同四向 waypoints；compact map 亦必須喺其 logical world 使用對應嘅 authoritative line-clear，避免縮放後穿過 walkable mask 邊界。呢個 transform 係 map-level contract，唔係 per-entity 或逐 frame 特例。
 
 門、出口同 NPC interaction 仍然存在於 semantic map data，但 runtime 不再畫 talk diamond、quest mark、door／portal marker、浮動入口 label 或 HUD talk prompt；玩家仍可點擊 authored hotspot／門口，或用正常互動鍵完成同一個 action。Transition metadata 只負責 hit region、path、target spawn 同 facing，唔負責再疊畫一層標記。 山地／主城亦唔再放置 runtime 道路指示牌；導航由地形、路徑同 semantic interaction 本身表達。
 
@@ -132,7 +132,7 @@ Player, NPC and monster authored render dimensions, the base exploration movemen
 
 主城目前有五個服務建築入口：`world-to-guild`、`world-to-shop`、`world-to-clinic`、`world-to-general-store`、`world-to-inn`。五個入口均進入對應嘅真實室內 map；室內設有櫃台／貨架／床／餐桌等家具、專屬核心 NPC 同對應服務，並由 `*-to-world` 實體出口返回主城。門口只保留 semantic physical-door contract，唔再畫 marker。
 
-主城入口、東側 passage 同粉紅 deck interaction 由 `assets/main-town/maintown_walkable.jpg` authored；`assets/main-town/maintown.jpg` 只係顯示圖。`maps/main-town.js` 將 exact colour-component rectangle／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable allowlist 係白色主路網加 authored cyan／pink interaction regions；唔可以再由舊 bitmap `doorAnchor`、建築中心點或 visible art 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
+主城入口、東側 passage 同粉紅／紫色 deck interaction 由 `assets/main-town/maintown_walkable.jpg` authored；`assets/main-town/maintown.jpg` 只係顯示圖。`maps/main-town.js` 將 exact colour-component rectangle／anchor 接入共用 `map/map-transitions.js`。建築視覺係 flattened master art，walkable allowlist 係白色主路網加 authored cyan transition regions；粉紅／紫色 interaction region 只作 interaction target，唔係玩家 standable area。唔可以再由舊 bitmap `doorAnchor`、建築中心點或 visible art 推導主城導航。東側 `world-to-field` 保留清楚嘅 physical passage，唔使用大型 East Gate bitmap 或魔法圓陣。
 
 主城 navigation package 由 JPG authoring input 經 `tools/generate-main-town-navigation.js`／`tools/compile-main-town-navigation.py` 編譯成 `map/main-town-navigation.generated.js`。零 build／`file://` browser runtime 直接同步使用 generated data，唔會以 Canvas、OffscreenCanvas、`fetch()` 或 XHR 讀取 JPG／JSON。`map/main-town-navigation.js` 擁有唯一主城 walkability／region resolver：白色係完整可行走來源，六個 cyan region 係固定 transition，pink region 係 deck configuration；任何未明確 authored 嘅位置都 blocked。runtime data 缺失或初始化失敗時必須 fail closed，唔得 fallback 到舊 grass／tile／house collision。
 
@@ -404,25 +404,27 @@ Biome data 最低：
 
 ## 9. Interaction Point
 
-NPC、門、工作台、委託板等都使用 interaction point／range。現行地圖暫停使用 runtime 寶箱。Flattened interior service NPC 使用 shared authored-region contract：以 `1672 × 941` authoring scene 為基準，service reach 為 `160 px`、命中 padding 為 `18 px`；較高解析度但同 authored scale 嘅 flattened scene 會按 source resolution 等比例放大（例如 `3344 × 1882` 公會使用 `320 px` reach／`36 px` padding）。距離以玩家 feet pivot 到 region 最近點計算；region 內部點擊、任一側接近及矩形／非矩形 region 都必須使用同一個 nearest-point resolver，唔可以退回單一 centroid 距離或 per-NPC 半徑。 山地原有 magenta semantic region 亦沿用同一種 authored-region approach，現作為 invisible `mountain-wish-pool` 互動區；它唔係 NPC，玩家在 2★「代客許願」期間到該區互動一次就完成 objective。
+NPC、門、工作台、委託板、水池、面板配置及其他可點擊物件，都使用同一套 authored interaction contract。紫色／洋紅色 `[255,0,255]` component 係唯一 semantic interaction region；Main Town 現有 JPG compiler 稱為 pink，但係同一個 RGB 語意。region 只係 interaction target，唔可以用大半徑代替，亦唔可以因為 NPC／物件隔住黑色 blocked 位就擴大 clickable area。region 本身預設唔係玩家 standable area；玩家亦唔需要行入 region。
+
+每個 authored interaction entity 必須提供 `navigationRegion`，如一張 source 有多個同類 component，另提供對應 `navigationRegionIndex`。該 map resolver 必須提供 `nearestPointInRegion()`／`distanceToRegion()` 同 exact `interactionAtWorldPoint()`；新 NPC 或物件唔可以只加 `interactionRadius`／`interactionHitRadius` 去補救位置問題。
 
 ```js
 {
   targetId,
-  interactionPoint,
-  interactionRadius,
-  interactionRegion,
-  serviceReachPx: 160,
-  hitPaddingPx: 18
+  navigationRegion,
+  navigationRegionIndex,
+  interactionPoint: "nearest-reachable-white-position"
 }
 ```
 
 玩家點擊後：
 
-1. 檢查已在互動距離內？
-2. 否 → 使用探索 pathfinding 行去最近合法 interaction position。
-3. 到達後先觸發。
-4. 如果中途場景切換／玩家取消 → 中止。
+1. 只由 exact authored purple／magenta region（或現有 Main Town pink 同義 region）識別 target；唔使用額外 clickable padding。
+2. Resolver 先搵 region 最近點，再由共用 exploration pathfinding 搵最近嘅白色可行走位置；黑色／非 authored 位唔會被穿過。
+3. 玩家行到最近可達白色位置後，runtime 以 pending target id 恢復正確 NPC／物件並立即觸發 interaction，即使玩家唔能夠直線行入 region。
+4. 如果中途場景切換、玩家取消或完全冇可達白色位置，就中止 pending interaction。
+
+呢套 nearest-reachable interaction 係全 game 共用規則，唔應該按 NPC、服務室、物件或 source resolution 寫特別半徑。Exit 仍然保留 cyan transition region 同 physical-door／passage contract；紫色／洋紅色只用於 NPC 及一般 semantic interaction object。
 
 Production 工作台嘅「可以製作」條件由 `docs/PRODUCTION_SYSTEM.md` 定義；本文件只負責佢喺地圖邊度、點樣接近及互動。
 

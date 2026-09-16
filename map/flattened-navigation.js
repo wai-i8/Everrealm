@@ -159,7 +159,7 @@
       return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
     }
 
-    function interactionHitTest(region, position, padding = serviceInteractionHitPaddingPx, regionIndex = null) {
+    function interactionHitTest(region, position, padding = 0, regionIndex = null) {
       return distanceToRegion(region, position, regionIndex) <= Math.max(0, Number(padding) || 0);
     }
 

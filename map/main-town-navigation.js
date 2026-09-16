@@ -102,7 +102,7 @@
           if (dx * dx + dy * dy > radiusSquared) continue;
           if (px < 0 || py < 0 || px >= EXPECTED_WIDTH || py >= EXPECTED_HEIGHT) return false;
           const index = py * EXPECTED_WIDTH + px;
-          if (walkable[index] === 0 || collision[index] !== 0) return false;
+          if (runtime.masks.triggers[index] === DECK_REGION_VALUE || walkable[index] === 0 || collision[index] !== 0) return false;
         }
       }
       return true;
@@ -121,6 +121,49 @@
       if (region === "east" || region === "east-exit") return Number(data?.east_exit?.region_value) || 6;
       const building = data?.building_triggers?.find((entry) => entry.region_id === region || entry.name === region);
       return Number(building?.region_value) || 0;
+    }
+
+    function regionRectangle(region) {
+      if (region === "deck" || region === "deck-configuration") {
+        const deck = data?.deck_interaction;
+        return deck ? { x: deck.x, y: deck.y, width: deck.width, height: deck.height } : null;
+      }
+      if (region === "east" || region === "east-exit") {
+        const east = data?.east_exit;
+        return east ? { x: east.x, y: east.y, width: east.width, height: east.height } : null;
+      }
+      const building = data?.building_triggers?.find((entry) => entry.region_id === region || entry.name === region);
+      return building?.rectangle || null;
+    }
+
+    function nearestPointInRegion(region, position) {
+      const value = regionValue(region);
+      const rectangle = regionRectangle(region);
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      if (!ready || !value || !rectangle || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const minX = Math.max(0, Math.floor(rectangle.x));
+      const minY = Math.max(0, Math.floor(rectangle.y));
+      const maxX = Math.min(EXPECTED_WIDTH - 1, Math.ceil(rectangle.x + rectangle.width) - 1);
+      const maxY = Math.min(EXPECTED_HEIGHT - 1, Math.ceil(rectangle.y + rectangle.height) - 1);
+      let best = null;
+      for (let py = minY; py <= maxY; py += 1) {
+        for (let px = minX; px <= maxX; px += 1) {
+          if (runtime.masks.triggers[py * EXPECTED_WIDTH + px] !== value) continue;
+          const distanceSquared = (px - x) ** 2 + (py - y) ** 2;
+          if (!best || distanceSquared < best.distanceSquared) best = { x: px, y: py, distanceSquared };
+        }
+      }
+      return best;
+    }
+
+    function distanceToRegion(region, position) {
+      const nearest = nearestPointInRegion(region, position);
+      return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
+    }
+
+    function interactionHitTest(region, position, padding = 0) {
+      return distanceToRegion(region, position) <= Math.max(0, Number(padding) || 0);
     }
 
     function isInRegion(region, position) {
@@ -167,6 +210,9 @@
       isWorldPositionWalkable,
       triggerValueAt,
       isInRegion,
+      nearestPointInRegion,
+      distanceToRegion,
+      interactionHitTest,
       interactionAtWorldPoint,
     });
   }
@@ -182,6 +228,9 @@
     isWorldPositionWalkable: resolver.isWorldPositionWalkable,
     triggerValueAt: resolver.triggerValueAt,
     isInRegion: resolver.isInRegion,
+    nearestPointInRegion: resolver.nearestPointInRegion,
+    distanceToRegion: resolver.distanceToRegion,
+    interactionHitTest: resolver.interactionHitTest,
     interactionAtWorldPoint: resolver.interactionAtWorldPoint,
     createResolver,
   });
