@@ -201,15 +201,17 @@
                 <strong id="selectedUnitName">阿巡</strong>
                <b id="selectedUnitLevel">LV. 1</b>
              </div>
-             <div class="battle-stat-row">
-               <span>HP</span>
-               <div class="battle-stat-bar"><i id="selectedUnitHpFill" style="width: 100%"></i></div>
-               <b id="selectedUnitHpText">88 / 88</b>
-             </div>
-             <div class="battle-stat-row battle-ap-row">
-               <span>AP</span>
-               <div class="battle-stat-bar battle-ap-bar"><i id="selectedUnitApFill" style="width: 100%"></i></div>
-               <b id="selectedUnitApText">0 / 0</b>
+             <div class="selected-unit-meters" aria-label="角色戰鬥資源">
+               <div class="battle-stat-row">
+                 <span class="sr-only">HP</span>
+                 <div class="battle-stat-bar" aria-hidden="true"><i id="selectedUnitHpFill" style="width: 100%"></i></div>
+                 <b id="selectedUnitHpText" class="sr-only">88 / 88</b>
+               </div>
+               <div class="battle-stat-row battle-ap-row">
+                 <span class="sr-only">AP</span>
+                 <div class="battle-stat-bar battle-ap-bar" aria-hidden="true"><i id="selectedUnitApFill" style="width: 100%"></i></div>
+                 <b id="selectedUnitApText" class="sr-only">0 / 0</b>
+               </div>
              </div>
            </div>
           </aside>
