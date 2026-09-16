@@ -93,14 +93,16 @@ test("exploration publishing is throttled while battle state heartbeats remain i
 
 test("remote players interpolate toward the latest exploration position", () => {
   const remote = {
-    targetX: 100,
-    targetY: 0,
+    snapshots: [],
     renderX: 0,
     renderY: 0,
+    renderTime: 1000,
     facing: "right",
     initialized: true,
     locomotion: { state: "idle", facing: "right", time: 0 },
   };
+  Multiplayer.appendRemoteSnapshot(remote, { x: 0, y: 0, facing: "right", state: "exploring", updatedAt: 1 }, 1000);
+  Multiplayer.appendRemoteSnapshot(remote, { x: 100, y: 0, facing: "right", state: "exploring", updatedAt: 2 }, 1125);
   Multiplayer.interpolateRemotePlayer(remote, 0.1);
   assert.ok(remote.renderX > 0 && remote.renderX < 100);
   assert.equal(remote.x, remote.renderX);

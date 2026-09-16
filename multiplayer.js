@@ -204,31 +204,23 @@
   function interpolateRemotePlayer(entry, dt, locomotion = defaultLocomotion) {
     const seconds = Math.max(0, Number(dt) || 0);
     if (!Array.isArray(entry.snapshots) || !entry.snapshots.length) {
-      const dx = (Number(entry.targetX) || 0) - (Number(entry.renderX) || 0);
-      const dy = (Number(entry.targetY) || 0) - (Number(entry.renderY) || 0);
-      const distance = Math.hypot(dx, dy);
-      if (!entry.initialized || distance > REMOTE_DISCONTINUITY_DISTANCE) {
-        entry.renderX = entry.targetX;
-        entry.renderY = entry.targetY;
-        entry.initialized = true;
-      } else {
-        const amount = Math.min(1, seconds / (REMOTE_INTERPOLATION_DELAY_MS / 1000));
-        entry.renderX += dx * amount;
-        entry.renderY += dy * amount;
-      }
+      // A transient underflow holds the last rendered pose. Never substitute
+      // the raw latest target here and then resume delayed interpolation.
+      entry.renderX = Number.isFinite(Number(entry.renderX)) ? Number(entry.renderX) : Number(entry.x) || 0;
+      entry.renderY = Number.isFinite(Number(entry.renderY)) ? Number(entry.renderY) : Number(entry.y) || 0;
       entry.x = entry.renderX;
       entry.y = entry.renderY;
-      entry.moving = distance > .35;
+      entry.moving = false;
       entry.lastRenderSample = {
-        timeline: "legacy-target-fallback",
-        renderTime: null,
+        timeline: "buffer-underflow-hold",
+        renderTime: Number.isFinite(entry.renderTime) ? entry.renderTime : null,
         snapshotA: null,
         snapshotB: null,
         alpha: null,
         bufferedX: entry.renderX,
         bufferedY: entry.renderY,
-        rawLatestX: entry.targetX,
-        rawLatestY: entry.targetY,
+        rawLatestX: null,
+        rawLatestY: null,
         finalX: entry.renderX,
         finalY: entry.renderY,
         extrapolated: false,
