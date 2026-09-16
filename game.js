@@ -5437,15 +5437,12 @@
       levelLabel.textContent = `LV. ${level}`;
       identity.append(name, levelLabel);
 
-      const hpLabel = document.createElement("span");
-      hpLabel.className = "battle-enemy-hp-label";
-      hpLabel.textContent = "HP";
       const hpBar = document.createElement("span");
       hpBar.className = "battle-enemy-hp-bar";
       const hpFill = document.createElement("i");
       hpFill.style.width = `${hpRatio * 100}%`;
       hpBar.append(hpFill);
-      row.append(identity, hpLabel, hpBar);
+      row.append(identity, hpBar);
       return row;
     });
     battleUi.enemyRows.replaceChildren(...rows);
@@ -5457,6 +5454,14 @@
     const enemy = battle.enemies.find((unit) => String(unit.id) === String(enemyId));
     if (!enemy) return;
     battle.selectedEnemyId = enemy.id;
+    syncBattleEnemyRowSelection();
+  }
+
+  function clearBattleEnemySelection() {
+    if (!battle || battle.selectedEnemyId == null) return;
+    battle.selectedEnemyId = null;
+    const focusedRow = document.activeElement?.closest?.("[data-battle-enemy-id]");
+    focusedRow?.blur();
     syncBattleEnemyRowSelection();
   }
 
@@ -8993,6 +8998,7 @@
 
   function handleCanvasPointer(event) {
     if (mode === "battle") {
+      clearBattleEnemySelection();
       const battleTouch = event.pointerType === "touch" && usesMobileExploreControls();
       if (!battleTouch) return handleBattlePointer(event);
       event.preventDefault();
@@ -11131,6 +11137,7 @@
       selectBattleEnemy(enemyRow.dataset.battleEnemyId);
       return;
     }
+    clearBattleEnemySelection();
     const facingButton = event.target.closest("[data-battle-facing]");
     if (facingButton && !facingButton.disabled) {
       chooseBattleFacing(facingButton.dataset.battleFacing);
