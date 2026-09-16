@@ -185,8 +185,6 @@
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
   const abandonCommissionPanel = document.getElementById("abandonCommissionPanel");
-  const battlePortraitCanvas = document.getElementById("selectedUnitPortraitCanvas");
-  const battlePortraitCtx = battlePortraitCanvas.getContext("2d");
   const battleUi = {
     encounterTitle: document.getElementById("battleEncounterTitle"),
     encounterSubtitle: document.getElementById("battleEncounterSubtitle"),
@@ -199,7 +197,6 @@
     hpText: document.getElementById("selectedUnitHpText"),
     apFill: document.getElementById("selectedUnitApFill"),
     apText: document.getElementById("selectedUnitApText"),
-    statuses: document.getElementById("selectedUnitStatuses"),
     potionCount: document.getElementById("battlePotionCount"),
     hint: document.getElementById("battleHint"),
   };
@@ -7277,30 +7274,6 @@
     battleUi.apFill.style.width = `${Core.clamp(battle.ap / BATTLE_AP_MAX, 0, 1) * 100}%`;
     battleUi.apText.textContent = `${battle.ap} / ${BATTLE_AP_MAX}`;
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
-    battlePortraitCtx.clearRect(0, 0, battlePortraitCanvas.width, battlePortraitCanvas.height);
-    Art.drawPortrait(battlePortraitCtx, {
-      x: 0,
-      y: 0,
-      width: battlePortraitCanvas.width,
-      height: battlePortraitCanvas.height,
-      actor: "player",
-      classId: playerClassId,
-      expression: battle.hero.hitFlash > 0 ? "hurt" : battle.phase === "victory" ? "happy" : "determined",
-      background: "#315d66",
-      backgroundEnd: "#111a31",
-    });
-    battleUi.statuses.innerHTML = "";
-    const statuses = [
-      { text: `面向 ${battleFacingDisplayLabel(battle.phase === "planning_move" ? battleMoveDraftState().facing : battle.hero.facing)}`, good: true },
-      battle.guard ? { text: `技能減傷 -${Math.round((battle.guardReduction || 0) * 100)}%`, good: true } : null,
-      battle.moveBonusNext ? { text: `下輪移動 +${battle.moveBonusNext}`, good: true } : null,
-    ].filter(Boolean);
-    for (const status of statuses) {
-      const chip = document.createElement("span");
-      chip.className = `unit-status ${status.good ? "is-good" : ""}`;
-      chip.textContent = status.text;
-      battleUi.statuses.appendChild(chip);
-    }
     battleUi.hint.textContent = battle.message;
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
     battleUi.hint.hidden = !battle.messageDanger;
