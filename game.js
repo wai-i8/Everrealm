@@ -8576,9 +8576,8 @@
       ? -1
       : Math.min(actionHitCount - 1, Math.floor(actionProgress * actionHitCount));
     const visualState = hurt ? "hurt" : stopped ? "stop" : acting ? "attack" : locomotion.state;
-    let artBox = null;
     if (unit.side === "ally") {
-      artBox = Art.drawCharacter(ctx, {
+      Art.drawCharacter(ctx, {
         x: point.x,
         y: baseline,
         scale: heroScale,
@@ -8598,7 +8597,7 @@
         selected: false,
       });
     } else {
-      artBox = Art.drawEnemy(ctx, {
+      Art.drawEnemy(ctx, {
         x: point.x,
         y: baseline,
         scale: monsterScale * (unit.boss ? .98 : .92),
@@ -8640,43 +8639,6 @@
       ctx.restore();
     }
 
-    const barWidth = actorCell * (unit.boss ? .76 : .56);
-    const barY = point.y + actorCell * (layout.projected ? .31 : .38);
-    const barHeight = Math.max(5, actorCell * .085);
-    ctx.fillStyle = "rgba(5,8,18,.86)";
-    ctx.fillRect(point.x - barWidth / 2 - 1, barY - 1, barWidth + 2, barHeight + 2);
-    ctx.fillStyle = unit.side === "ally" ? "#52dccb" : unit.boss ? "#ff6b91" : "#ff6b6b";
-    ctx.fillRect(point.x - barWidth / 2, barY, barWidth * Core.clamp(unit.hp / unit.maxHp, 0, 1), barHeight);
-
-    // Player art has its own stable authored anchor. Monster labels use one
-    // stable union/top bound calculated across the whole locomotion atlas rather
-    // than the currently displayed frame. This keeps small monsters (especially
-    // the chick) close to the top of the visible sprite without nameplate bobbing
-    // as Walk frames or facing rows change.
-    const fallbackNameY = point.y - actorCell * (unit.boss ? .82 : unit.side === "ally" ? .68 : .76);
-    const useArtNameAnchor = unit.side === "ally";
-    const nameX = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorX) ? artBox.nameAnchorX : point.x;
-    let nameAnchorY = useArtNameAnchor && Number.isFinite(artBox?.nameAnchorY) ? artBox.nameAnchorY : fallbackNameY;
-    if (!useArtNameAnchor) {
-      const stableBounds = Locomotion.stableVisualBounds?.(unit.type);
-      const sprite = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
-      const authoredFrame = Art.locomotionWorldFrame?.(unit.type);
-      if (stableBounds && sprite && Number.isFinite(stableBounds.top)) {
-        const renderedScale = monsterScale * (unit.boss ? .98 : .92);
-        const authoredHeight = Number(authoredFrame?.height) || 102.4;
-        const visualScale = renderedScale * authoredHeight / sprite.cellHeight;
-        nameAnchorY = baseline - (sprite.anchorY - stableBounds.top) * visualScale - 4 * visualScale;
-      }
-    }
-    const nameY = nameAnchorY - Math.max(2, actorCell * .025);
-    ctx.font = `900 ${Math.max(14, actorCell * .19)}px ui-sans-serif, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.strokeStyle = "rgba(3,6,14,.96)";
-    ctx.lineWidth = Math.max(3, actorCell * .055);
-    ctx.strokeText(unit.name, nameX, nameY);
-    ctx.fillStyle = "#fff4d0";
-    ctx.fillText(unit.name, nameX, nameY);
   }
 
   function drawBattleEffects(layout) {
@@ -10051,7 +10013,7 @@
       : state === "attack"
         ? 1 - Core.clamp(player.attackTimer / .19, 0, 1)
         : undefined;
-    Art.drawCharacter(ctx, {
+    const artBox = Art.drawCharacter(ctx, {
       x: point.x,
       y: point.y + 13 * camera.zoom,
       scale: camera.zoom,
@@ -10066,6 +10028,35 @@
       expression: player.attackTimer > 0 ? "determined" : "happy",
     });
     if (player.attackTimer > 0) drawSlash(point.x, point.y);
+    ctx.restore();
+    if (mode === "playing") drawPlayerExplorationMeters(point, artBox, camera.zoom);
+  }
+
+  function drawPlayerExplorationMeters(point, artBox, scale) {
+    const stats = playerStats();
+    const hpRatio = Core.clamp(player.hp / stats.maxHp, 0, 1);
+    const xpNeeded = Expansion.xpRequired(player.level);
+    const xpRatio = player.level >= Expansion.LEVEL_CAP
+      ? 1
+      : Core.clamp(player.xp / xpNeeded, 0, 1);
+    const baseline = Number.isFinite(artBox?.bottom)
+      ? artBox.bottom
+      : point.y + 13 * scale;
+    const barWidth = Math.max(28, 54 * scale);
+    const barHeight = Math.max(4, 5 * scale);
+    const gap = Math.max(1, 2 * scale);
+    const x = point.x - barWidth / 2;
+
+    ctx.save();
+    const drawMeter = (y, ratio, color) => {
+      ctx.fillStyle = "rgba(5,8,18,.86)";
+      ctx.fillRect(x - 1, y - 1, barWidth + 2, barHeight + 2);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, barWidth * ratio, barHeight);
+    };
+    const hpY = baseline + Math.max(3, 4 * scale);
+    drawMeter(hpY, hpRatio, "#ff6b6b");
+    drawMeter(hpY + barHeight + gap, xpRatio, "#52dccb");
     ctx.restore();
   }
 

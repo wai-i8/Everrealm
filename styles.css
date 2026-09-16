@@ -502,7 +502,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-turn-header strong { margin-top: .15rem; font-size: .78rem; letter-spacing: .06em; }
 .battle-phase-label { margin-top: .16rem; color: var(--muted); font-size: .68rem; }
 .selected-unit-card {
-  left: .8rem; top: .8rem; bottom: auto; width: 14rem; min-height: 3.2rem; display: block; padding: .5rem .58rem;
+  left: .8rem; top: .8rem; bottom: auto; width: 14rem; min-height: 2.75rem; display: block; padding: .38rem .48rem;
 }
 .battle-enemy-card {
   right: max(.8rem,calc(env(safe-area-inset-right) + .35rem)); top: .8rem; width: 14rem; padding: .5rem .58rem;
@@ -1427,7 +1427,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .battle-encounter-intro h2 { font-size: 1.3rem; }
   .battle-turn-header { top: .4rem; padding-block: .4rem .48rem; }
   .battle-turn-order { right: .4rem; top: .4rem; width: 6.7rem; }
-  .selected-unit-card { left: .4rem; top: .4rem; bottom: auto; width: 14rem; min-height: 3.2rem; padding: .42rem .48rem; }
+  .selected-unit-card { left: .4rem; top: .4rem; bottom: auto; width: 14rem; min-height: 2.75rem; padding: .38rem .48rem; }
   .battle-enemy-card { right: max(.4rem,calc(env(safe-area-inset-right) + .25rem)); top: .4rem; width: 14rem; padding: .42rem .48rem; }
   .battle-unit-portrait { width: 4.7rem; height: 4.7rem; transform: scale(.76); transform-origin: left center; margin-right: -1rem; }
   .battle-action-dock { width: max-content; max-width: min(17rem,calc(100% - .7rem)); padding: .36rem; }
@@ -1508,7 +1508,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .battle-turn-order ol::-webkit-scrollbar { display: none; }
   .battle-turn-order li { flex: 0 0 1.55rem; grid-template-columns: 1.45rem; justify-content: center; padding: .05rem; }
   .turn-avatar { width: 1.45rem; height: 1.45rem; }
-  .selected-unit-card { top: 3.7rem; bottom: auto; width: min(14rem,calc(100% - .7rem)); min-height: 3.2rem; }
+  .selected-unit-card { top: 3.7rem; bottom: auto; width: min(14rem,calc(100% - .7rem)); min-height: 2.75rem; }
   .battle-enemy-card { top: .4rem; right: max(.35rem,calc(env(safe-area-inset-right) + .25rem)); width: min(14rem,calc(100% - .7rem)); }
   .battle-unit-portrait { transform: scale(.64); margin-right: -1.5rem; }
   .selected-unit-copy > strong { margin: .2rem 0 .35rem; font-size: .78rem; }
