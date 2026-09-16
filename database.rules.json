@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['online', 'mapId', 'lastSeen', 'connectionId']) && newData.child('online').val() == true && newData.child('mapId').isString() && newData.child('lastSeen').isNumber() && newData.child('connectionId').isString()"
+      }
+    },
+    "maps": {
+      "$mapId": {
+        "players": {
+          ".read": "auth != null",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.hasChildren(['uid', 'name', 'classId', 'x', 'y', 'facing', 'state', 'updatedAt']) && newData.child('uid').val() == $uid && newData.child('name').isString() && newData.child('classId').isString() && newData.child('x').isNumber() && newData.child('y').isNumber() && (newData.child('facing').val() == 'up' || newData.child('facing').val() == 'right' || newData.child('facing').val() == 'down' || newData.child('facing').val() == 'left') && (newData.child('state').val() == 'exploring' || newData.child('state').val() == 'battle') && newData.child('updatedAt').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

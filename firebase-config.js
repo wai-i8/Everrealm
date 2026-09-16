@@ -10,5 +10,6 @@
     storageBucket: "everrealm-f5a7d.firebasestorage.app",
     messagingSenderId: "602615453715",
     appId: "1:602615453715:web:2b69658e29fc91a30847e6",
+    databaseURL: "https://everrealm-f5a7d-default-rtdb.firebaseio.com/",
   });
 })(typeof globalThis !== "undefined" ? globalThis : this);

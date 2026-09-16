@@ -150,7 +150,13 @@ button { font: inherit; }
 .game-stage[data-game-state="playing"] #gameCanvas { cursor: url("assets/ui/cursor-feather-v1.png") 3 3, default; }
 .game-stage[data-game-state="playing"] #gameCanvas[data-explore-cursor="interact"] { cursor: url("assets/ui/cursor-interact-v1.png") 12 2, pointer; }
 
-.game-stage:is([data-game-state="battle"], [data-game-state="dead"]) :is(.explore-sidebar,.minimap-wrap,.location-banner,.interaction-prompt) {
+.game-stage:is([data-game-state="battle"], [data-game-state="dead"]) :is(.explore-sidebar,.minimap-wrap,.world-clock,.location-banner,.interaction-prompt) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.game-stage:is([data-game-state="title"], [data-auth-state="signed-out"]) .world-clock {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -222,7 +228,23 @@ button { font: inherit; }
 .quest-hud strong { display: block; font-size: .78rem; margin-bottom: .25rem; }
 .quest-hud p { margin: 0; color: var(--ui-text-secondary); font-size: .7rem; line-height: 1.5; }
 .quest-hud small { display: block; margin-top: .45rem; color: var(--teal); font-size: .67rem; }
-.minimap-wrap { right: .8rem; top: .8rem; width: 9.4rem; height: 9.4rem; overflow: visible; border: 0; border-radius: 50%; background: transparent; box-shadow: none; backdrop-filter: none; }
+.world-clock {
+  right: .8rem;
+  top: .8rem;
+  width: 9.4rem;
+  min-height: 2.1rem;
+  display: grid;
+  place-items: center;
+  padding: .35rem .55rem;
+  color: var(--cream);
+  background: rgba(14,21,39,.94);
+  border: 1px solid rgba(255,200,87,.5);
+  box-shadow: 3px 3px 0 rgba(3,6,14,.45), inset 0 0 0 1px rgba(245,233,202,.08);
+  font: 850 .7rem/1 ui-monospace, monospace;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.minimap-wrap { right: .8rem; top: 3.35rem; width: 9.4rem; height: 9.4rem; overflow: visible; border: 0; border-radius: 50%; background: transparent; box-shadow: none; backdrop-filter: none; }
 #miniMap { position: absolute; inset: 11%; width: 78%; height: 78%; display: block; border-radius: 50%; image-rendering: auto; opacity: .96; }
 .minimap-art-frame { position: absolute; z-index: 2; inset: -3%; width: 106%; height: 106%; object-fit: contain; pointer-events: none; }
 .minimap-wrap > span { position: absolute; z-index: 3; left: 50%; bottom: -.08rem; transform: translateX(-50%); max-width: 7rem; overflow: hidden; padding: .18rem .42rem; border: 1px solid rgba(255,200,87,.4); border-radius: 999px; background: rgba(9,14,27,.9); color: var(--cream); font-size: .62rem; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
@@ -1408,7 +1430,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .portrait { flex-basis: 2.2rem; height: 2.2rem; }.portrait::before { transform: scale(.8); transform-origin: center; }.portrait::after { transform: scale(.8); transform-origin: bottom; }
   .name-row strong { font-size: .68rem; }.bar { height: .6rem; }.xp-bar { height: .4rem; }
   .resource-hud { top: 4.1rem; left: .45rem; padding: .33rem .45rem; gap: .55rem; }
-  .minimap-wrap { right: .45rem; top: .45rem; width: 7rem; height: 7rem; }
+  .world-clock { right: .45rem; top: .45rem; width: 7rem; min-height: 1.8rem; padding: .3rem .35rem; font-size: .6rem; }
+  .minimap-wrap { right: .45rem; top: 2.85rem; width: 7rem; height: 7rem; }
   .quest-hud { right: .45rem; top: 5.8rem; width: 11.7rem; padding: .5rem .55rem; }
   .quest-hud strong { font-size: .72rem; }.quest-hud p { font-size: .67rem; }.quest-hud small { font-size: .64rem; }
   .dialogue-panel { bottom: 1rem; width: calc(100% - 1rem); }.dialogue-body { min-height: 8rem; padding: .8rem .75rem .6rem; }.dialogue-body p { font-size: .76rem; }
@@ -1466,7 +1489,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .explore-sidebar .quest-heading { gap: .16rem; }
   .explore-sidebar .quest-heading button { padding-inline: .16rem; font-size: .59rem; }
   .explore-sidebar .quest-hud strong { overflow: hidden; font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
-  .minimap-wrap { display: block; right: .45rem; top: .45rem; width: 5.65rem; height: 5.65rem; }
+  .world-clock { right: .45rem; top: .45rem; width: 5.65rem; min-height: 1.65rem; padding: .25rem .2rem; font-size: .51rem; letter-spacing: .01em; }
+  .minimap-wrap { display: block; right: .45rem; top: 2.55rem; width: 5.65rem; height: 5.65rem; }
   .minimap-wrap > span { bottom: -.08rem; font-size: .56rem; }
   .quest-hud { top: .45rem; right: .45rem; width: 10.2rem; }
   .quest-hud p, .quest-hud small { display: none; }

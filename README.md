@@ -42,15 +42,17 @@ window.__RPG_DEBUG__.snapshot().skills
 
 `godMode()` 會為當前職業解鎖全部技能、放入每招一本具名技能書、擴充 DECK 至 6 格、補滿 HP、戰鬥無敵及免扣 AP。`godMode(false)` 只會關閉無敵／免 AP；已解鎖技能和技能書會留在當前 debug session，重新開始一局即可重置。呢個入口只喺 `smoke`／`autoplay` URL 啟用，唔屬於正式玩家功能。
 
-Firebase Phase 3 uses public Web App configuration only. Firebase Auth handles
-email/password accounts and Firestore stores each player's sanitized save at
-`players/{uid}`; `firestore.rules` restricts that document to its authenticated
-owner. This phase intentionally does not configure or deploy Hosting, Realtime
-Database, Cloud Functions or Admin credentials. After reviewing the rules, a
-maintainer may deploy only the Firestore configuration with:
+Firebase Auth handles email/password accounts and Firestore stores each player's
+sanitized permanent save at `players/{uid}`; `firestore.rules` restricts that
+document to its authenticated owner. Phase 2 additionally uses the existing
+Firebase project's Realtime Database only for transient presence, same-map
+player coordinates/facing/state, and server-time offset. It does not move save
+data to RTDB and does not add Hosting, Cloud Functions or Admin credentials.
+After reviewing the rules, a maintainer may deploy the current Firebase rules
+with:
 
 ```powershell
-firebase deploy --only firestore:rules,firestore:indexes --project everrealm-f5a7d
+firebase deploy --only firestore:rules,firestore:indexes,database --project everrealm-f5a7d
 ```
 
 ## Project structure
@@ -65,6 +67,7 @@ firebase deploy --only firestore:rules,firestore:indexes --project everrealm-f5a
 - `docs/`：大型獨立系統嘅詳細規格。
 - `docs/DATA_ARCHITECTURE.md`：固定 Game Data ownership、stable ID／legacy migration 同 Firebase boundary。
 - `docs/PLAYER_DATA_SCHEMA.md`：玩家永久 state／save boundary，同日後 Firestore／RTDB 分工。
+- `docs/REALTIME_SYSTEM.md`：Phase 2 RTDB presence、same-map players、WorldTime epoch and security boundary。
 - `firebase-config.js`、`firebase-client.js`、`cloud-save.js`、`save-persistence.js`：Firebase Auth、`players/{uid}` Firestore 存檔，以及本機 legacy／帳戶 ownership-safe migration。
 - `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `data/skills/fighter.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。

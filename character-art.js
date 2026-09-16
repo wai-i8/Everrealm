@@ -307,6 +307,7 @@
     battleMountainGround: { src: "assets/battle/mountain/mountain-battle-ground-v3.png", columns: 1, rows: 1, image: null, ready: false, failed: false },
     battleHighTree: { src: "assets/battle/mountain/battle-tree-high-v1.png", standalone: true, image: null, ready: false, failed: false },
     battleLowScrub: { src: "assets/battle/mountain/battle-scrub-low-v1.png", standalone: true, image: null, ready: false, failed: false },
+    battleState: { src: "assets/ui/battle-state-crossed-swords-v1.png", standalone: true, image: null, ready: false, failed: false },
     interior: { src: null, columns: 4, rows: 3, image: null, ready: false, failed: false },
     monstersCore: { src: "assets/monster-facing-core-v1.png", columns: 4, rows: 5, image: null, ready: false, failed: false },
     monstersDepths: { src: null, columns: 4, rows: 5, image: null, ready: false, failed: false },
@@ -1374,6 +1375,10 @@
     });
   }
 
+  function drawBattleStateIcon(ctx, options) {
+    return drawStandaloneSprite(ctx, { ...(options || {}), sprite: "battleState" });
+  }
+
   function drawBitmapEnemy(ctx, settings) {
     const battleDiagonal = drawBattleMonsterDiagonal(ctx, settings);
     if (battleDiagonal) return battleDiagonal;
@@ -1804,5 +1809,6 @@
     drawHospitalBackground,
     drawInteriorSprite,
     drawMarker,
+    drawBattleStateIcon,
   });
 });

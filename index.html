@@ -140,6 +140,8 @@
           </section>
         </aside>
 
+        <div id="worldClock" class="world-clock hud-card" aria-label="世界時間" aria-live="polite">Day --   --:--</div>
+
         <aside class="minimap-wrap hud-card" aria-label="小地圖">
           <canvas id="miniMap" width="180" height="180" aria-hidden="true"></canvas>
           <img class="minimap-art-frame" src="assets/minimap-frame-v1.png" alt="" aria-hidden="true" />
@@ -566,7 +568,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260914-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260916-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

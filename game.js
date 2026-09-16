@@ -36,6 +36,8 @@
   const FacilityWindowShell = window.EverrealmFacilityWindowShell;
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const BattleVictory = window.EverrealmBattleVictory;
+  const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
+  const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const {
     normalizeCharacterName,
     statText,
@@ -100,6 +102,7 @@
   const miniMap = document.getElementById("miniMap");
   const miniCtx = miniMap.getContext("2d");
   const miniMapWrap = miniMap.closest(".minimap-wrap");
+  const worldClock = document.getElementById("worldClock");
   const stage = document.getElementById("gameStage");
   const titleScreen = document.getElementById("titleScreen");
   const dialoguePanel = document.getElementById("dialoguePanel");
@@ -621,6 +624,84 @@
   let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
 
   const player = createPlayer();
+
+  let worldTimeLoadStarted = false;
+  let worldClockText = "";
+  let realtimeStartPromise = null;
+  let realtimeSessionToken = 0;
+
+  function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
+    return {
+      uid: authenticatedUid(),
+      mapId: currentMapId,
+      name: playerDisplayName(),
+      classId: playerClassId,
+      x: player.x,
+      y: player.y,
+      facing: player.facing,
+      state,
+    };
+  }
+
+  function ensureWorldTimeLoaded() {
+    if (!worldTime || worldTimeLoadStarted) return;
+    worldTimeLoadStarted = true;
+    void worldTime.load();
+  }
+
+  function syncWorldClock() {
+    if (!worldClock) return;
+    const next = worldTime?.getTime()?.display || "Day --   --:--";
+    if (next === worldClockText) return;
+    worldClockText = next;
+    worldClock.textContent = next;
+  }
+
+  function startRealtimeSession() {
+    const uid = authenticatedUid();
+    if (!uid || !multiplayer) return;
+    const token = ++realtimeSessionToken;
+    realtimeStartPromise = multiplayer.start({
+      uid,
+      getPlayer: () => realtimePlayerSnapshot(),
+    }).then((started) => {
+      if (token !== realtimeSessionToken) {
+        if (started) void multiplayer.stop();
+        return false;
+      }
+      return started;
+    }).catch((error) => {
+      console.warn("Everrealm multiplayer unavailable.", error);
+      return false;
+    });
+  }
+
+  function stopRealtimeSession() {
+    realtimeSessionToken += 1;
+    realtimeStartPromise = null;
+    if (multiplayer?.isActive?.()) void multiplayer.stop();
+  }
+
+  function syncRealtimeState(state) {
+    if (!multiplayer) return;
+    if (multiplayer.isActive?.()) {
+      multiplayer.setState(state);
+      return;
+    }
+    void realtimeStartPromise?.then((started) => {
+      if (started && multiplayer.isActive?.()) multiplayer.setState(state);
+    });
+  }
+
+  function syncRealtimeMap() {
+    if (!multiplayer?.isActive?.()) return;
+    void multiplayer.setMap(currentMapId);
+  }
+
+  function syncRealtimeExploration() {
+    if (!multiplayer?.isActive?.() || mode !== "playing") return;
+    multiplayer.updateLocal(realtimePlayerSnapshot("exploring"));
+  }
 
   // The simulation intentionally stays on its canonical 60 Hz fixed step, but
   // browsers/displays can present at other refresh rates (for example 72/75/120
@@ -1334,6 +1415,8 @@
     updateHud(true);
     canvas.focus({ preventScroll: true });
     if (!testingMode) saveImportant(false);
+    ensureWorldTimeLoaded();
+    startRealtimeSession();
     if (registeredName) pendingRegistrationCharacterName = "";
   }
 
@@ -1405,6 +1488,8 @@
     if (!options.silent) showToast(`歡迎返嚟，${playerDisplayName()}。`, "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
+    ensureWorldTimeLoaded();
+    startRealtimeSession();
     return true;
   }
 
@@ -1516,6 +1601,9 @@
   }
 
   function returnToTitleWithoutSave() {
+    stopRealtimeSession();
+    worldTime?.destroy?.();
+    worldTimeLoadStarted = false;
     closeBattleHud();
     hideAllOverlays();
     mode = "title";
@@ -1527,6 +1615,9 @@
   }
 
   function clearGameplayState() {
+    stopRealtimeSession();
+    worldTime?.destroy?.();
+    worldTimeLoadStarted = false;
     closeBattleHud();
     hideAllOverlays();
     currentMapId = "world";
@@ -2613,6 +2704,7 @@
     mode = "dead";
     player.deathStartedAt = elapsed;
     stage.dataset.gameState = mode;
+    syncRealtimeState("battle");
     keys.clear();
     sound.death();
     battleHud.hidden = true;
@@ -2635,7 +2727,6 @@
     deathPanel.hidden = true;
     mode = "playing";
     stage.dataset.gameState = mode;
-
     if (returnToTown) {
       // Use the normal map-transition path so BGM, pathing, portal state,
       // particles and camera all reset exactly as they do on any other return.
@@ -2651,6 +2742,8 @@
       saveImportant(false);
       canvas.focus({ preventScroll: true });
     }
+
+    syncRealtimeState("exploring");
 
     const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
     const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
@@ -3108,6 +3201,7 @@
     sound.tone(330, .14, { to: 540, gain: .025 });
     showToast(target.name, "good");
     updateHud(true);
+    syncRealtimeMap();
     saveImportant(false);
     canvas.focus({ preventScroll: true });
     return true;
@@ -5232,6 +5326,7 @@
     };
     mode = "battle";
     stage.dataset.gameState = mode;
+    syncRealtimeState("battle");
     keys.clear();
     interactionPrompt.hidden = true;
     battleHud.hidden = false;
@@ -7156,6 +7251,7 @@
     closeBattleHud();
     mode = "playing";
     stage.dataset.gameState = mode;
+    syncRealtimeState("exploring");
     encounterGrace = 1;
     syncAccountStatus(savePersistence?.getCloudStatus?.());
     updateHud(true);
@@ -7219,6 +7315,7 @@
     closeBattleHud();
     mode = "playing";
     stage.dataset.gameState = mode;
+    syncRealtimeState("exploring");
     encounterGrace = 1.4;
     addSystemMessage("combat", "撤退成功。", "good");
     showToast("撤退成功", "good");
@@ -7537,6 +7634,7 @@
     updateEffects(dt);
     updateCamera(dt);
     updateHud();
+    syncRealtimeExploration();
     if (autoplay && mode === "levelup") chooseUpgrade("edge");
   }
 
@@ -9797,6 +9895,9 @@
     for (const npc of world.npcs) if (inView(npc, 100)) renderables.push(npc);
     for (const enemy of enemies) if (enemy.alive && inView(enemy, 130)) renderables.push(enemy);
     for (const drop of drops) if (drop.life > 0 && inView(drop, 60)) renderables.push(drop);
+    for (const remote of multiplayer?.getRenderPlayers?.(currentMapId) || []) {
+      if (inView(remote, 130)) renderables.push(remote);
+    }
     renderables.push({ ...player, kind: "player" });
     renderables.sort((a, b) => depthFor(a) - depthFor(b));
     for (const entity of renderables) drawWorldEntity(entity, shakeX, shakeY);
@@ -9821,6 +9922,7 @@
     else if (entity.kind === "npc") drawNpc(entity, shakeX, shakeY);
     else if (entity.kind === "portal") drawPortal(entity, shakeX, shakeY);
     else if (entity.kind === "player") drawPlayer(shakeX, shakeY);
+    else if (entity.kind === "remote-player") drawRemotePlayer(entity, shakeX, shakeY);
     else if (["coin", "potion"].includes(entity.kind)) drawDrop(entity, shakeX, shakeY);
     else if (entity.type && enemyTypes[entity.type]) drawEnemy(entity, shakeX, shakeY);
     else drawMapProp(entity, shakeX, shakeY);
@@ -10114,6 +10216,38 @@
     if (mode === "playing") drawPlayerExplorationMeters(point, artBox, camera.zoom);
   }
 
+  function drawRemotePlayer(remote, shakeX, shakeY) {
+    const point = worldToScreen(remote, shakeX, shakeY);
+    const scale = camera.zoom;
+    const artBox = Art.drawCharacter(ctx, {
+      x: point.x,
+      y: point.y + 13 * scale,
+      scale,
+      actor: "player",
+      classId: remote.classId || "warrior",
+      facing: remote.facing,
+      state: remote.moving ? "walk" : "idle",
+      locomotion: remote.locomotion,
+      phase: elapsed,
+      expression: "happy",
+    });
+    const nameX = artBox?.nameAnchorX ?? point.x;
+    const nameY = artBox?.nameAnchorY ?? point.y - 56 * scale;
+    if (remote.state === "battle") {
+      const iconSize = Core.clamp(28 * scale, 17, 34);
+      Art.drawBattleStateIcon(ctx, {
+        x: nameX,
+        y: nameY - 5 * scale,
+        width: iconSize,
+        height: iconSize,
+        anchorX: .5,
+        anchorY: 1,
+        alpha: .96,
+      });
+    }
+    drawNpcName(nameX, nameY, remote.name);
+  }
+
   function drawPlayerExplorationMeters(point, artBox, scale) {
     const stats = playerStats();
     const hpRatio = Core.clamp(player.hp / stats.maxHp, 0, 1);
@@ -10275,6 +10409,8 @@
     const rawDelta = Core.clamp((now - previousTime) / 1000 || 0, 0, .12);
     previousTime = now;
     elapsed += rawDelta;
+    syncWorldClock();
+    multiplayer?.tick?.(rawDelta);
     if (mode !== "playing") {
       cancelExplorePointerTracking();
       window.EverrealmFootstepsRuntime?.update?.({ moving: false });
@@ -11299,7 +11435,10 @@
   window.addEventListener("pageshow", () => {
     if (document.visibilityState === "visible") resumeGameAudio();
   });
-  window.addEventListener("beforeunload", () => { if (mode !== "title" && isGameplayAuthorized()) persistence?.flush(); });
+  window.addEventListener("beforeunload", () => {
+    if (mode !== "title" && isGameplayAuthorized()) persistence?.flush();
+    void multiplayer?.stop?.();
+  });
   window.addEventListener("resize", resize, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
