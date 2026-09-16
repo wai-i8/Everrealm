@@ -52,7 +52,7 @@ After reviewing the rules, a maintainer may deploy the current Firebase rules
 with:
 
 ```powershell
-firebase deploy --only firestore:rules,firestore:indexes,database --project everrealm-f5a7d
+firebase deploy --only firestore:rules,database --project everrealm-f5a7d
 ```
 
 The developer-only WorldTime seed uses the Firebase Admin SDK with Application
@@ -66,7 +66,8 @@ npm run seed:world
 ```
 
 The command creates `world/config` only when it is absent, reads it back and
-verifies the authoritative fixed epoch. It refuses to overwrite an existing
+verifies the authoritative fixed epoch. If the document already exists, it
+prints its values and performs no write. It refuses to overwrite an existing
 world unless `npm run seed:world -- --force` is explicitly used.
 
 ## Project structure

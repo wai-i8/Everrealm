@@ -6,7 +6,6 @@ const WORLD_CONFIG_PATH = "world/config";
 const EPOCH_ISO = "2026-09-16T14:00:00.000Z";
 const REAL_SECONDS_PER_GAME_HOUR = 150;
 const MINUTES_PER_DAY = 24 * 60;
-const MINUTE_MS = REAL_SECONDS_PER_GAME_HOUR * 1000 / 60;
 
 function parseArguments(argv) {
   const unknown = argv.filter((argument) => argument !== "--force");
@@ -32,6 +31,18 @@ function timestampMillis(value) {
   return NaN;
 }
 
+function printableConfig(config) {
+  const epoch = timestampMillis(config?.epochRealTime);
+  return {
+    version: config?.version ?? null,
+    epochRealTime: Number.isFinite(epoch) ? new Date(epoch).toISOString() : null,
+    epochGameDay: config?.epochGameDay ?? null,
+    epochGameHour: config?.epochGameHour ?? null,
+    epochGameMinute: config?.epochGameMinute ?? null,
+    realSecondsPerGameHour: config?.realSecondsPerGameHour ?? null,
+  };
+}
+
 function verifyConfig(actual, expected) {
   const actualKeys = Object.keys(actual || {}).sort();
   const expectedKeys = Object.keys(expected).sort();
@@ -50,11 +61,20 @@ function verifyConfig(actual, expected) {
   return true;
 }
 
-function currentWorldTime(now = Date.now()) {
-  const epoch = Date.parse(EPOCH_ISO);
-  const elapsedMinutes = Math.max(0, Math.floor((now - epoch) / MINUTE_MS));
-  const day = Math.floor(elapsedMinutes / MINUTES_PER_DAY) + 1;
-  const minuteOfDay = elapsedMinutes % MINUTES_PER_DAY;
+function currentWorldTime(config = expectedConfig(), now = Date.now()) {
+  const epoch = timestampMillis(config?.epochRealTime);
+  const realSecondsPerGameHour = Number(config?.realSecondsPerGameHour);
+  if (!Number.isFinite(epoch) || !Number.isFinite(realSecondsPerGameHour) || realSecondsPerGameHour <= 0) {
+    throw new Error("Cannot calculate current Everrealm time from an invalid world/config.");
+  }
+  const minuteMs = realSecondsPerGameHour * 1000 / 60;
+  const elapsedMinutes = Math.max(0, Math.floor((now - epoch) / minuteMs));
+  const baseMinutes = (Math.max(1, Number(config?.epochGameDay) || 1) - 1) * MINUTES_PER_DAY
+    + (Math.max(0, Number(config?.epochGameHour) || 0) * 60)
+    + Math.max(0, Number(config?.epochGameMinute) || 0);
+  const totalMinutes = baseMinutes + elapsedMinutes;
+  const day = Math.floor(totalMinutes / MINUTES_PER_DAY) + 1;
+  const minuteOfDay = totalMinutes % MINUTES_PER_DAY;
   const hour = Math.floor(minuteOfDay / 60);
   const minute = minuteOfDay % 60;
   return {
@@ -85,7 +105,36 @@ async function main() {
   try {
     const existing = await reference.get();
     if (existing.exists && !force) {
-      throw new Error("world/config already exists. Refusing to overwrite it; use --force only for an intentional reset.");
+      const existingData = existing.data() || {};
+      let verified = false;
+      let verificationError = null;
+      try {
+        verifyConfig(existingData, expected);
+        verified = true;
+      } catch (error) {
+        verificationError = error.message;
+      }
+      let currentEverrealmTime = null;
+      let currentEverrealmTimeError = null;
+      try {
+        currentEverrealmTime = currentWorldTime(existingData).display;
+      } catch (error) {
+        currentEverrealmTimeError = error.message;
+      }
+      console.log(JSON.stringify({
+        projectId: PROJECT_ID,
+        path: WORLD_CONFIG_PATH,
+        exists: true,
+        overwritten: false,
+        verified,
+        verificationError,
+        values: printableConfig(existingData),
+        expectedValues: printableConfig(expected),
+        currentEverrealmTime,
+        currentEverrealmTimeError,
+        message: "world/config already exists; no write performed.",
+      }, null, 2));
+      return;
     }
     if (existing.exists) await reference.set(expected);
     else await reference.create(expected);
@@ -94,19 +143,13 @@ async function main() {
     if (!verified.exists) throw new Error("world/config was not found after seeding.");
     verifyConfig(verified.data(), expected);
 
-    const calculated = currentWorldTime();
+    const calculated = currentWorldTime(expected);
     console.log(JSON.stringify({
       projectId: PROJECT_ID,
       path: WORLD_CONFIG_PATH,
       epochRealTime: EPOCH_ISO,
       epochRealTimeType: "Firestore Timestamp",
-      values: {
-        version: expected.version,
-        epochGameDay: expected.epochGameDay,
-        epochGameHour: expected.epochGameHour,
-        epochGameMinute: expected.epochGameMinute,
-        realSecondsPerGameHour: expected.realSecondsPerGameHour,
-      },
+      values: printableConfig(expected),
       verified: true,
       currentEverrealmTime: calculated.display,
     }, null, 2));

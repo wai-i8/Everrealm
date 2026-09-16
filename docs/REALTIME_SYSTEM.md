@@ -73,13 +73,13 @@ serverNow = Date.now() + serverTimeOffset
 
 Current time is derived from `serverNow - epochRealTime`. One game minute is 2.5 real seconds, one game hour is 150 real seconds, and one real hour is one Everrealm day. The client never writes the current minute or hour back to Firebase.
 
-The initial seed should use the exact UTC top-of-hour timestamp:
+The launch seed uses this exact UTC top-of-hour timestamp:
 
 ```text
-2026-09-16T00:00:00.000Z
+2026-09-16T14:00:00.000Z
 ```
 
-as a Firestore Timestamp for `epochRealTime`, producing `Day 1   00:00`. If the project owner chooses a different top-of-hour before seeding, only the Firestore document needs to change; runtime code does not contain a second epoch.
+as a Firestore Timestamp for `epochRealTime`, producing `Day 1   00:00`. The developer-only seed command refuses to overwrite an existing document unless `--force` is explicitly supplied for an approved reset.
 
 The public API is `getTime()`, `getDay()`, `getHour()` and `getMinute()`. `isNight()` and day/night lighting are intentionally not part of this system.
 
