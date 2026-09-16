@@ -11,7 +11,7 @@
     "data/items.js?v=20260913-01",
     "data/equipment.js?v=20260913-02",
     "data/quests.js",
-    "data/skills/monster.js",
+    "data/skills/monster.js?v=20260916-01",
     "data/monsters.js",
     "data/skills/warrior.js",
     "data/skills/fighter.js",

@@ -174,7 +174,7 @@
       range: { min: 1, max: 1, type: "relative_cells", sourcePattern: "■■■\n■↑■\n■■■", rangeDescription: "以自身為中心，攻擊周圍8格。" },
       rangeCellsRelative: SURROUND_EIGHT,
       area: { shape: "relative_cells", relativeCells: SURROUND_EIGHT, sourcePattern: "■■■\n■↑■\n■■■", areaDescription: "自身周圍8格全部屬於攻擊區。" },
-      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true, effects: [{ type: "knockback", amount: 1 }], aiValue: 104,
+      deliveryMode: "contact", actionKind: "attack", dealsDamage: true, effects: [{ type: "knockback", amount: 1 }], aiValue: 104,
     }),
 
     venom_fang: freezeSkill({
@@ -208,7 +208,7 @@
       range: { min: 1, max: 2, type: "relative_cells", sourcePattern: "口■口\n■■■\n口↑口", rangeDescription: "攻擊前左、前、前右，以及正前方第2格，共4格。" },
       rangeCellsRelative: BEAR_QUAKE,
       area: { shape: "relative_cells", relativeCells: BEAR_QUAKE, sourcePattern: "口■口\n■■■\n口↑口", areaDescription: "前方4格震擊區。" },
-      deliveryMode: "pathless-area", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 128,
+      deliveryMode: "linear", actionKind: "attack", dealsDamage: true, effects: [], aiValue: 128,
     }),
   });
 
