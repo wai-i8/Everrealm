@@ -54,7 +54,7 @@ test("active NPCs expose functional map labels without changing identity or rout
   }
   assert.deepEqual(maps.world.npcs, [], "Main Town street NPCs must remain absent");
   assert.match(game, /function npcDisplayName\(npc\)/);
-  assert.match(game, /drawNpcName\(anchorX, nameY, npcDisplayName\(npc\)\)/);
+  assert.match(game, /drawNpcName\(anchorX, nameY, npc\.nameLabel \|\| npcDisplayName\(npc\)\)/);
   assert.match(game, /if \(entity\.kind === "npc"\) return `同\$\{npcDisplayName\(entity\)\}傾偈`/);
   assert.match(game, /speaker: npc\.name/);
   assert.match(game, /const speakerLabel = speakerNpc \? npcDisplayName\(speakerNpc\)/);

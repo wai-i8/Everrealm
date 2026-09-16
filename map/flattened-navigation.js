@@ -81,17 +81,20 @@
       return region === "npc" ? runtime?.masks.magenta : region === "exit" ? runtime?.masks.cyan : null;
     }
 
-    function regionEntries(region) {
-      return data?.regions?.[region] || [];
+    function regionEntries(region, regionIndex = null) {
+      const entries = data?.regions?.[region] || [];
+      return Number.isInteger(regionIndex) && regionIndex >= 0
+        ? (entries[regionIndex] ? [entries[regionIndex]] : [])
+        : entries;
     }
 
-    function nearestPointInRegion(region, position) {
+    function nearestPointInRegion(region, position, regionIndex = null) {
       const mask = maskFor(region);
       const x = Number(position?.x);
       const y = Number(position?.y);
       if (!ready || !mask || !Number.isFinite(x) || !Number.isFinite(y)) return null;
       let best = null;
-      for (const entry of regionEntries(region)) {
+      for (const entry of regionEntries(region, regionIndex)) {
         const bbox = entry?.bbox;
         if (!bbox || !Number.isFinite(bbox.x) || !Number.isFinite(bbox.y) || !Number.isFinite(bbox.width) || !Number.isFinite(bbox.height)) continue;
         const minX = Math.max(0, Math.floor(bbox.x));
@@ -124,6 +127,19 @@
       return Boolean(mask && valueAt(mask, position?.x, position?.y));
     }
 
+    function regionIndexAt(region, position) {
+      const mask = maskFor(region);
+      const x = Math.floor(Number(position?.x));
+      const y = Math.floor(Number(position?.y));
+      if (!ready || !mask || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= width || y >= height || !mask[y * width + x]) return null;
+      const entries = data?.regions?.[region] || [];
+      for (let index = 0; index < entries.length; index += 1) {
+        const bbox = entries[index]?.bbox;
+        if (bbox && x >= bbox.x && y >= bbox.y && x < bbox.x + bbox.width && y < bbox.y + bbox.height) return index;
+      }
+      return null;
+    }
+
     function isInRegion(region, position) {
       const mask = maskFor(region);
       if (!mask || !position) return false;
@@ -138,13 +154,13 @@
       return isInRegion(region, { x: position.x, y: position.y, radius: FEET_RADIUS });
     }
 
-    function distanceToRegion(region, position) {
-      const nearest = nearestPointInRegion(region, position);
+    function distanceToRegion(region, position, regionIndex = null) {
+      const nearest = nearestPointInRegion(region, position, regionIndex);
       return nearest ? Math.sqrt(nearest.distanceSquared) : Infinity;
     }
 
-    function interactionHitTest(region, position, padding = serviceInteractionHitPaddingPx) {
-      return distanceToRegion(region, position) <= Math.max(0, Number(padding) || 0);
+    function interactionHitTest(region, position, padding = serviceInteractionHitPaddingPx, regionIndex = null) {
+      return distanceToRegion(region, position, regionIndex) <= Math.max(0, Number(padding) || 0);
     }
 
     function interactionAtWorldPoint(position) {
@@ -164,6 +180,7 @@
       },
       isPositionWalkable,
       isRegionAt,
+      regionIndexAt,
       isInRegion,
       isFeetInRegion,
       nearestPointInRegion,

@@ -2829,18 +2829,22 @@
   function authoritativeInteractionRegion(entity) {
     if (!entity || !world.navigation?.authoritative) return null;
     if (entity.navigationRegion) return entity.navigationRegion;
-    // Flattened interiors author the service counter as a single `npc` region.
-    // Older map objects did not copy that region id onto the NPC itself, which
-    // made canvas clicks fall back to the NPC feet behind the counter and then
-    // fail pathfinding. Treat that authored region as the NPC's source of truth.
+    // Older flattened maps did not copy the authored `npc` region id onto the
+    // semantic entity, which made canvas clicks fall back to the entity feet
+    // behind the counter and then fail pathfinding.
     if (entity.kind === "npc" && world.navigation.data?.regions?.npc?.length && typeof world.navigation.interactionHitTest === "function") return "npc";
     return null;
+  }
+
+  function authoritativeInteractionRegionIndex(entity) {
+    const value = Number(entity?.navigationRegionIndex);
+    return Number.isInteger(value) && value >= 0 ? value : null;
   }
 
   function interactionDistanceToEntity(entity) {
     const region = authoritativeInteractionRegion(entity);
     if (region && typeof world.navigation.distanceToRegion === "function") {
-      return world.navigation.distanceToRegion(region, player);
+      return world.navigation.distanceToRegion(region, player, authoritativeInteractionRegionIndex(entity));
     }
     return Core.distance(player, entity);
   }
@@ -2931,6 +2935,7 @@
     if (npc.id === "clinic-healer-siu-moon") interactHealer(npc);
     else if (npc.id === "store-merchant-gin") interactGeneralStore(npc);
     else if (npc.id === "inn-keeper") interactInn(npc);
+    else if (["guild-eris", "guild-roxy"].includes(npc.id)) interactGuildSocialNpc(npc);
     else if (["guildmaster-yin", "guild-clerk-po"].includes(npc.id)) openFacility("guild");
     else if (["merchant-gin", "armorer-yuet"].includes(npc.id)) interactEquipmentShop(npc);
     else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "米克雷帝國今晚比平時熱鬧，多得你周圍探索。"] });
@@ -3193,6 +3198,23 @@
       speaker: npc.name,
       color: npc.color,
       lines: ["歡迎來到旅館！不過我哋仲準備緊，暫時未正式營業呢。"],
+    });
+  }
+
+  function interactGuildSocialNpc(npc) {
+    const isEris = npc.id === "guild-eris";
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: isEris
+        ? [
+          "坐低先，冒險唔係鬥邊個行得最快。睇清楚同伴、地形，同埋自己想去邊度。",
+          "如果你打算接委託，記住返嚟同接待員報告；如果只係想聽故事，火爐今晚都未熄。",
+        ]
+        : [
+          "呢張椅留畀會長，但公會從來唔係一個人嘅地方。每個完成委託、帶人返屋企嘅冒險者，都令呢度更像一個家。",
+          "等你有一日成為大家信任嘅人，我會親自替你留一張最舒服嘅椅。",
+        ],
     });
   }
 
@@ -8739,13 +8761,24 @@
   function clickedExploreEntity(screenX, screenY) {
     if (world.navigation?.authoritative && typeof world.navigation.interactionAtWorldPoint === "function") {
       const authoredPoint = screenToWorldPoint(screenX, screenY);
+      const authoredRegionIndex = typeof world.navigation.regionIndexAt === "function"
+        ? world.navigation.regionIndexAt("npc", authoredPoint)
+        : null;
+      if (Number.isInteger(authoredRegionIndex)) {
+        const authoredNpc = world.npcs.find((entity) => authoritativeInteractionRegion(entity) === "npc" && authoritativeInteractionRegionIndex(entity) === authoredRegionIndex);
+        if (authoredNpc) return authoredNpc;
+      }
       const authoredInteractionId = world.navigation.interactionAtWorldPoint(authoredPoint);
       if (authoredInteractionId) {
         const authoredInteraction = [...world.npcs, ...world.boards].find((entity) => entity.id === authoredInteractionId);
         if (authoredInteraction) return authoredInteraction;
       }
       if (typeof world.navigation.interactionHitTest === "function" && world.navigation.interactionHitTest("npc", authoredPoint)) {
-        const paddedInteraction = [...world.npcs, ...world.boards].find((entity) => authoritativeInteractionRegion(entity) === "npc");
+        const paddedInteraction = world.npcs
+          .filter((entity) => authoritativeInteractionRegion(entity) === "npc")
+          .map((entity) => ({ entity, distance: world.navigation.distanceToRegion("npc", authoredPoint, authoritativeInteractionRegionIndex(entity)) }))
+          .filter((item) => item.distance <= (Number(world.navigation.serviceInteractionHitPaddingPx) || 32))
+          .sort((left, right) => left.distance - right.distance)[0]?.entity;
         if (paddedInteraction) return paddedInteraction;
       }
     }
@@ -8770,7 +8803,8 @@
     const navigation = world.navigation;
     const region = authoritativeInteractionRegion(entity);
     if (!region || !navigation?.authoritative || typeof navigation.nearestPointInRegion !== "function") return null;
-    const regionPoint = navigation.nearestPointInRegion(region, player);
+    const regionIndex = authoritativeInteractionRegionIndex(entity);
+    const regionPoint = navigation.nearestPointInRegion(region, player, regionIndex);
     if (!regionPoint) return null;
     const reach = Math.max(24, interactionReachForEntity(entity) - 8);
     const baseAngle = Math.atan2(player.y - regionPoint.y, player.x - regionPoint.x);
@@ -8786,7 +8820,7 @@
           y: Core.clamp(regionPoint.y + Math.sin(angle) * radius, navigationRadius, world.pixelHeight - navigationRadius),
         };
         if (isBlocked({ ...candidate, radius: navigationRadius })) continue;
-        if (typeof navigation.distanceToRegion === "function" && navigation.distanceToRegion(region, candidate) > reach) continue;
+        if (typeof navigation.distanceToRegion === "function" && navigation.distanceToRegion(region, candidate, regionIndex) > reach) continue;
         candidates.push({ candidate, playerDistance: Core.distance(player, candidate), regionDistance: Core.distance(regionPoint, candidate) });
       }
     }
@@ -9964,7 +9998,7 @@
       // Anchor the label to the authored magenta NPC region so higher-resolution
       // interiors do not place the name over the character's face.
       const region = authoritativeInteractionRegion(npc);
-      const authored = region ? world.navigation?.data?.regions?.[region]?.[0] : null;
+      const authored = region ? world.navigation?.data?.regions?.[region]?.[authoritativeInteractionRegionIndex(npc) ?? 0] : null;
       if (authored?.bbox) {
         const labelGapPx = Math.max(2, Number(npc.nameLabelGapPx) || 8);
         const fontSize = Core.clamp(8.5 * camera.zoom, 10, 14);
@@ -9976,9 +10010,9 @@
         const labelY = anchorMode === "region-top"
           ? labelTop.y - labelGapPx * scale - fontSize * .5
           : labelTop.y - 12 * scale;
-        drawNpcName(labelTop.x, labelY, npcDisplayName(npc));
+        drawNpcName(labelTop.x, labelY, npc.nameLabel || npcDisplayName(npc));
       } else {
-        drawNpcName(point.x, point.y - 69 * scale, npcDisplayName(npc));
+        drawNpcName(point.x, point.y - 69 * scale, npc.nameLabel || npcDisplayName(npc));
       }
       return;
     }
@@ -10001,22 +10035,42 @@
     const nameY = artBox?.nameAnchorY ?? point.y - 56 * scale;
     const markerX = (artBox?.markerAnchorX ?? anchorX) + (Number(npc.markerOffsetX) || 0) * scale;
     const markerY = artBox?.markerAnchorY ?? point.y - 88 * scale;
-    drawNpcName(anchorX, nameY, npcDisplayName(npc));
+    drawNpcName(anchorX, nameY, npc.nameLabel || npcDisplayName(npc));
   }
 
   function drawNpcName(x, y, name) {
-    if (!name) return;
+    const label = typeof name === "string" ? { text: name } : name || {};
+    const text = String(label.text || "");
+    const prefix = String(label.prefix || "");
+    const strong = String(label.name || "");
+    if (!text && !prefix && !strong) return;
     const fontSize = Core.clamp(8.5 * camera.zoom, 10, 14);
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `800 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
     ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(7,11,22,.92)";
     ctx.lineWidth = Math.max(2.5, fontSize * .34);
-    ctx.strokeText(name, x, y);
     ctx.fillStyle = "#f5e9ca";
-    ctx.fillText(name, x, y);
+    if (text) {
+      ctx.font = `800 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    } else {
+      const gap = prefix && strong ? Math.max(2, fontSize * .22) : 0;
+      ctx.font = `650 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
+      const prefixWidth = ctx.measureText(prefix).width;
+      ctx.font = `850 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
+      const strongWidth = ctx.measureText(strong).width;
+      let cursor = x - (prefixWidth + gap + strongWidth) / 2;
+      ctx.font = `650 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
+      ctx.strokeText(prefix, cursor + prefixWidth / 2, y);
+      ctx.fillText(prefix, cursor + prefixWidth / 2, y);
+      cursor += prefixWidth + gap;
+      ctx.font = `850 ${fontSize}px "Noto Sans HK", "Microsoft JhengHei", sans-serif`;
+      ctx.strokeText(strong, cursor + strongWidth / 2, y);
+      ctx.fillText(strong, cursor + strongWidth / 2, y);
+    }
     ctx.restore();
   }
 

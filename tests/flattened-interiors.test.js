@@ -33,12 +33,13 @@ function route(map, goal) {
   });
 }
 
-test("four supplied flattened interior pairs preserve the exact 1672x941 contract", () => {
+test("four supplied flattened interior pairs preserve their exact source contracts", () => {
   for (const scene of scenes) {
     const visiblePath = path.join(root, "assets", scene.folder, scene.visible);
     const authoringPath = path.join(root, "assets", scene.folder, scene.authoring);
-    assert.deepEqual(dimensions(visiblePath), { width: 1672, height: 941 }, `${scene.id} visible art dimensions`);
-    assert.deepEqual(dimensions(authoringPath), { width: 1672, height: 941 }, `${scene.id} authoring dimensions`);
+    const expectedDimensions = scene.id === "guild" ? { width: 3344, height: 1882 } : { width: 1254, height: 1254 };
+    assert.deepEqual(dimensions(visiblePath), expectedDimensions, `${scene.id} visible art dimensions`);
+    assert.deepEqual(dimensions(authoringPath), expectedDimensions, `${scene.id} authoring dimensions`);
     const authoring = fs.readFileSync(authoringPath);
     const nav = Maps[scene.id].navigation;
     assert.equal(nav.source.sha256, crypto.createHash("sha256").update(authoring).digest("hex"), `${scene.id} authoring hash`);
@@ -47,28 +48,34 @@ test("four supplied flattened interior pairs preserve the exact 1672x941 contrac
   }
 });
 
-test("each flattened interior uses exact white/magenta/cyan masks and one core NPC", () => {
+test("each flattened interior uses exact white/magenta/cyan masks and authored NPC entities", () => {
   for (const scene of scenes) {
     const map = Maps[scene.id];
     const nav = map.navigation;
-    const npcRegion = nav.data.regions.npc[0];
+    const expectedNpcIds = scene.id === "guild" ? ["guild-eris", "guild-roxy", "guildmaster-yin"] : [scene.npc];
+    const npcRegions = nav.data.regions.npc;
+    const npcRegion = npcRegions[0];
     const exitRegion = nav.data.regions.exit[0];
     assert.equal(nav.ready, true, `${scene.id} resolver should be ready`);
     assert.equal(nav.data.authoring.matching, "exact opaque RGB colors only; all other pixels are non-authored");
     assert.deepEqual(nav.data.authoring.colors, { white: [255, 255, 255], magenta: [255, 0, 255], cyan: [0, 255, 255] });
-    assert.equal(nav.data.regions.npc.length, 1, `${scene.id} should have one authored NPC region`);
+    assert.equal(npcRegions.length, expectedNpcIds.length, `${scene.id} should have the expected authored NPC regions`);
     assert.equal(nav.data.regions.exit.length, 1, `${scene.id} should have one authored exit region`);
-    assert.equal(map.npcs.length, 1, `${scene.id} should expose one semantic NPC`);
-    assert.equal(map.npcs[0].id, scene.npc);
-    assert.equal(map.npcs[0].x, npcRegion.anchor.x);
-    assert.equal(map.npcs[0].y + 13, npcRegion.anchor.y);
+    assert.deepEqual(map.npcs.map((npc) => npc.id), expectedNpcIds);
+    for (const [index, npc] of map.npcs.entries()) {
+      if (scene.id === "guild") assert.equal(npc.navigationRegionIndex, index);
+      assert.equal(npc.x, npcRegions[index].anchor.x);
+      assert.equal(npc.y + 13, npcRegions[index].anchor.y);
+      if (scene.id === "guild") assert.equal(map.navigation.regionIndexAt("npc", npcRegions[index].centroid), index);
+    }
     assert.ok(map.furniture.every((item) => item.render === false && item.solid === false));
     assert.ok(map.decorations.every((item) => item.render === false && item.solid === false));
     assert.equal(map.exits[0].navigationRegion, "exit");
     assert.equal(map.navigation.isRegionAt("npc", npcRegion.centroid), true);
     assert.equal(map.navigation.interactionAtWorldPoint(npcRegion.centroid), scene.npc);
-    assert.equal(map.navigation.serviceInteractionReachPx, 160);
-    assert.equal(map.navigation.serviceInteractionHitPaddingPx, 18);
+    const sourceScale = scene.id === "guild" ? 2 : 1;
+    assert.equal(map.navigation.serviceInteractionReachPx, 160 * sourceScale);
+    assert.equal(map.navigation.serviceInteractionHitPaddingPx, 32 * sourceScale);
     const nearestNpcPixel = map.navigation.nearestPointInRegion("npc", npcRegion.centroid);
     assert.ok(nearestNpcPixel);
     assert.equal(map.navigation.distanceToRegion("npc", nearestNpcPixel), 0);
@@ -82,6 +89,21 @@ test("each flattened interior uses exact white/magenta/cyan masks and one core N
     assert.equal(map.navigation.isPositionWalkable({ x: 0, y: 0 }, { radius: 3 }), false);
     assert.ok(route(map, exitRegion.centroid).length > 0, `${scene.id} exit should be reachable by the shared resolver`);
   }
+});
+
+test("guild social NPCs keep separate authored regions and dialogue labels", () => {
+  const guild = Maps.guild;
+  assert.deepEqual(guild.npcs.map((npc) => ({ id: npc.id, label: npc.nameLabel })), [
+    { id: "guild-eris", label: { prefix: "資深冒險者", name: "艾莉絲" } },
+    { id: "guild-roxy", label: { prefix: "公會會長", name: "洛琪希" } },
+    { id: "guildmaster-yin", label: undefined },
+  ]);
+  const eris = guild.navigation.data.regions.npc[0];
+  const roxy = guild.navigation.data.regions.npc[1];
+  assert.notDeepEqual(eris.bbox, roxy.bbox);
+  assert.equal(guild.navigation.distanceToRegion("npc", eris.anchor, 0), 0);
+  assert.equal(guild.navigation.distanceToRegion("npc", eris.anchor, 1) > 0, true);
+  assert.equal(guild.navigation.distanceToRegion("npc", roxy.anchor, 1), 0);
 });
 
 test("guild exit remains reachable through the bounded fine-search fallback", () => {

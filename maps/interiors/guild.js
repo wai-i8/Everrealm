@@ -14,7 +14,9 @@
   const AUTHORING = "assets/guild/guild_walkable.png";
   const navigation = navigationApi.createResolver();
   const data = navigation.data;
-  const npcRegion = data.regions.npc[0];
+  const erisRegion = data.regions.npc[0];
+  const roxyRegion = data.regions.npc[1];
+  const npcRegion = data.regions.npc[2];
   const exitRegion = data.regions.exit[0];
   const npcFeet = npcRegion.anchor;
   const exitPoint = exitRegion.centroid;
@@ -38,9 +40,23 @@
     ];
     const boards = [{ id: "guild-request-board", kind: "questBoard", name: "公會委託", x: 4 * TILE + TILE / 2, y: 5 * TILE + TILE / 2, radius: 22, prompt: "查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission", render: false }];
     const npcs = [{
+      id: "guild-eris", name: "Eris", displayName: "資深冒險者 艾莉絲", role: "資深冒險者", kind: "npc",
+      x: erisRegion.anchor.x, y: erisRegion.anchor.y - 13, radius: 12,
+      navigationRegion: "npc", navigationRegionIndex: 0,
+      nameLabel: { prefix: "資深冒險者", name: "艾莉絲" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
+      interactionHitRadius: 128, color: "#efbd59", facing: "down", zone: "waiting-lounge",
+      chatter: "火爐邊嘅位留畀願意聽故事嘅冒險者。", render: false,
+    }, {
+      id: "guild-roxy", name: "Roxy", displayName: "公會會長 洛琪希", role: "公會會長", kind: "npc",
+      x: roxyRegion.anchor.x, y: roxyRegion.anchor.y - 13, radius: 12,
+      navigationRegion: "npc", navigationRegionIndex: 1,
+      nameLabel: { prefix: "公會會長", name: "洛琪希" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
+      interactionHitRadius: 128, color: "#e0b3ff", facing: "down", zone: "waiting-lounge",
+      chatter: "歡迎返到公會。每一段旅程，都由一個細小決定開始。", render: false,
+    }, {
       id: "guildmaster-yin", name: "妍姐", displayName: "公會接待員", role: "公會接待員／委託回報", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
-      navigationRegion: "npc",
+      navigationRegion: "npc", navigationRegionIndex: 2,
       nameLabelGapPx: 8,
       interactionHitRadius: 128,
       color: "#efbd59", facing: "down", actor: "guildmaster", gender: "female", age: 32,
@@ -62,7 +78,7 @@
     });
     map.exits[0].navigationRegion = "exit";
     map.pixelWidth = data.source.width; map.pixelHeight = data.source.height;
-    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, serviceInteractionReachPx: navigation.serviceInteractionReachPx, serviceInteractionHitPaddingPx: navigation.serviceInteractionHitPaddingPx, sourceImage: AUTHORING, generatedRuntime: "map/guild-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, isInRegion: navigation.isInRegion, nearestPointInRegion: navigation.nearestPointInRegion, distanceToRegion: navigation.distanceToRegion, interactionHitTest: navigation.interactionHitTest, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
+    map.navigation = { data, ready: navigation.ready, failure: navigation.failure, packageId: data.package_id, source: { ...data.source }, coordinateSystem: data.coordinate_system, rendering: data.rendering, movementRule: data.movement_rule, feetRadiusPx: navigation.feetRadiusPx, serviceInteractionReachPx: navigation.serviceInteractionReachPx, serviceInteractionHitPaddingPx: navigation.serviceInteractionHitPaddingPx, sourceImage: AUTHORING, generatedRuntime: "map/guild-navigation.generated.js", resolver: navigation, isPositionWalkable: navigation.isPositionWalkable, isRegionAt: navigation.isRegionAt, regionIndexAt: navigation.regionIndexAt, isInRegion: navigation.isInRegion, nearestPointInRegion: navigation.nearestPointInRegion, distanceToRegion: navigation.distanceToRegion, interactionHitTest: navigation.interactionHitTest, interactionAtWorldPoint: navigation.interactionAtWorldPoint, status: navigation.status, authoritative: true };
     return map;
   }
   return { createGuildMap };

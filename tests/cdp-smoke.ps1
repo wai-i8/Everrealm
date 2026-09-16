@@ -1,5 +1,5 @@
 ﻿param(
-  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'godmode', 'guildmap', 'shopmap', 'dungeonmap', 'guildview', 'guild-accept-dismiss', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
+  [ValidateSet('title', 'auth-ui', 'account-flow', 'movement', 'town-movement', 'interior-movement', 'town', 'town-plaza', 'town-native', 'town-reference', 'town-near', 'town-mid', 'town-far', 'town-guild', 'town-services', 'town-tree', 'town-gate', 'town-exit', 'town-doors', 'town-entrance', 'town-equipment', 'clinic', 'clinic-return', 'clinic-authoring', 'general-store', 'inn', 'service-reach', 'latestui', 'finalui', 'batch2b-views', 'artwalk', 'locomotion', 'spritecollision', 'entrance', 'fightertree', 'forestmap', 'dialogue', 'levelup', 'savelevel', 'resume', 'battle', 'mountain-art', 'mountain-recipient', 'skillbattle', 'godmode', 'guildmap', 'guild-npcs', 'shopmap', 'dungeonmap', 'guildview', 'guild-accept-dismiss', 'shopview', 'skills', 'portal', 'expansion', 'guild-abandon', 'guild-commission', 'monster-facing', 'bgm', 'autoplay')]
   [string]$Scenario = 'autoplay',
   [int]$ViewportWidth = 1440,
   [int]$ViewportHeight = 960,
@@ -88,8 +88,10 @@ function Invoke-WorldPointerClick {
   $expression = @'
 (()=>{
   const api=window.__RPG_DEBUG__,canvas=document.getElementById("gameCanvas"),rect=canvas.getBoundingClientRect(),snap=api.snapshot();
-  const clientX=rect.left+rect.width/2+(__WORLD_X__-snap.x)*snap.cameraZoom;
-  const clientY=rect.top+rect.height/2+(__WORLD_Y__-snap.y)*snap.cameraZoom;
+  const cameraX=snap.flattenedMapRender?snap.flattenedMapRender.source.x+snap.flattenedMapRender.source.width/2:snap.x;
+  const cameraY=snap.flattenedMapRender?snap.flattenedMapRender.source.y+snap.flattenedMapRender.source.height/2:snap.y;
+  const clientX=rect.left+rect.width/2+(__WORLD_X__-cameraX)*snap.cameraZoom;
+  const clientY=rect.top+rect.height/2+(__WORLD_Y__-cameraY)*snap.cameraZoom;
   const init={pointerId:77,button:0,clientX,clientY,bubbles:true,cancelable:true,pointerType:"mouse"};
   canvas.dispatchEvent(new PointerEvent("pointerdown",init));
   canvas.dispatchEvent(new PointerEvent("pointerup",{...init,button:0}));
@@ -1265,6 +1267,32 @@ try {
       Start-Sleep -Milliseconds 160
       $guildMap = Get-GameSnapshot
       if ($guildMap.mode -ne 'playing' -or $guildMap.currentMapId -ne 'guild') { throw 'Guild map did not remain visible.' }
+    }
+    'guild-npcs' {
+      $authReady = $false
+      for ($attempt = 0; $attempt -lt 40 -and -not $authReady; $attempt += 1) {
+        Start-Sleep -Milliseconds 100
+        $authReady = [bool](Invoke-GameExpression -Expression 'Boolean(window.__RPG_READY__ && !document.getElementById("titleActions").hidden && window.__RPG_DEBUG__)')
+      }
+      if (-not $authReady) { throw 'Guild NPC smoke could not settle the test account gate.' }
+      $anchors = (Invoke-GameExpression -Expression 'JSON.stringify(window.LanternGuildNavigation.data.regions.npc.slice(0,2).map((region)=>region.anchor))') | ConvertFrom-Json
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame('fighter'); window.__RPG_DEBUG__.enterMap('guild'); window.__RPG_DEBUG__.teleport($($anchors[0].x),$($anchors[0].y)); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      Invoke-WorldPointerClick -WorldX ([int]$anchors[0].x) -WorldY ([int]$anchors[0].y) | Out-Null
+      Start-Sleep -Milliseconds 100
+      $erisDialogue = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,speaker:document.getElementById("speakerName").textContent,text:document.getElementById("dialogueText").textContent})') | ConvertFrom-Json
+      if ($erisDialogue.mode -ne 'dialogue' -or $erisDialogue.speaker -ne '資深冒險者 艾莉絲' -or $erisDialogue.text -notmatch '坐低先') { throw "Eris authored click did not open the expected dialogue: $($erisDialogue | ConvertTo-Json -Compress)" }
+      Invoke-GameExpression -Expression "for(let i=0;i<4;i++)document.getElementById('dialogueNext').click(); true" | Out-Null
+      Invoke-GameExpression -Expression "window.__RPG_DEBUG__.teleport($($anchors[1].x),$($anchors[1].y)); true" | Out-Null
+      Start-Sleep -Milliseconds 100
+      Invoke-WorldPointerClick -WorldX ([int]$anchors[1].x) -WorldY ([int]$anchors[1].y) | Out-Null
+      Start-Sleep -Milliseconds 100
+      $roxyDialogue = (Invoke-GameExpression -Expression 'JSON.stringify({mode:window.__RPG_DEBUG__.snapshot().mode,speaker:document.getElementById("speakerName").textContent,text:document.getElementById("dialogueText").textContent})') | ConvertFrom-Json
+      if ($roxyDialogue.mode -ne 'dialogue' -or $roxyDialogue.speaker -ne '公會會長 洛琪希' -or $roxyDialogue.text -notmatch '呢張椅') { throw "Roxy authored click did not open the expected dialogue: $($roxyDialogue | ConvertTo-Json -Compress)" }
+      Invoke-GameExpression -Expression "for(let i=0;i<4;i++)document.getElementById('dialogueNext').click(); window.__RPG_DEBUG__.teleportTo('guildmaster-yin'); true" | Out-Null
+      Start-Sleep -Milliseconds 180
+      $guildNpcMap = Get-GameSnapshot
+      if ($guildNpcMap.mode -ne 'playing' -or $guildNpcMap.currentMapId -ne 'guild') { throw 'Guild NPC smoke did not return to the playable guild scene.' }
     }
     'shopmap' {
       Invoke-GameExpression -Expression "window.__RPG_DEBUG__.newGame(); window.__RPG_DEBUG__.enterMap('shop'); window.__RPG_DEBUG__.teleportTo('merchant-gin'); true" | Out-Null
