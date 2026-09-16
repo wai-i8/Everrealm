@@ -140,7 +140,7 @@
           </section>
         </aside>
 
-        <div id="worldClock" class="world-clock hud-card" aria-label="世界時間" aria-live="polite">Day --   --:--</div>
+        <div id="worldClock" class="world-clock hud-card" aria-label="世界時間" aria-live="polite">101年 --月--日   --:--</div>
 
         <aside class="minimap-wrap hud-card" aria-label="小地圖">
           <canvas id="miniMap" width="180" height="180" aria-hidden="true"></canvas>
@@ -536,7 +536,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260916-10")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260916-11")}"><\/script>`);
       })();
     </script>
 
@@ -572,7 +572,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260916-02", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260916-03", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

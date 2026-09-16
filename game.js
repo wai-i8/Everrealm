@@ -36,6 +36,7 @@
   const FacilityWindowShell = window.EverrealmFacilityWindowShell;
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const BattleVictory = window.EverrealmBattleVictory;
+  const PlayerStateActions = window.EverrealmPlayerStateActions;
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const Chat = window.EverrealmChat;
@@ -657,7 +658,7 @@
 
   function syncWorldClock() {
     if (!worldClock) return;
-    const next = worldTime?.getTime()?.display || "Day --   --:--";
+    const next = worldTime?.getTime()?.display || "101年 --月--日   --:--";
     if (next === worldClockText) return;
     worldClockText = next;
     worldClock.textContent = next;
@@ -2495,10 +2496,8 @@
   }
 
   function useWeakPotion() {
-    const count = Math.max(0, Math.floor(Number(inventory.weak_potion) || 0));
-    if (!count) return showToast("你身上冇弱氣之藥。", "danger");
-    inventory.weak_potion = count - 1;
-    if (inventory.weak_potion <= 0) delete inventory.weak_potion;
+    const consumed = PlayerStateActions.consumeInventoryItem(inventory, "weak_potion", 1);
+    if (!consumed.ok) return showToast("你身上冇弱氣之藥。", "danger");
     weakPotionStepsRemaining = WEAK_POTION_TOTAL_STEPS;
     weakPotionDistanceRemainder = 0;
     markPersistenceDirty();
@@ -2540,12 +2539,11 @@
 
   function usePotion() {
     if (mode !== "playing") return;
-    const maxHp = playerStats().maxHp;
-    if (player.potions <= 0) return showToast("藥水用晒喇。", "danger");
-    if (player.hp >= maxHp) return showToast("而家精神得很，留返支藥先。", "good");
-    player.potions -= 1;
-    const healed = Math.min(maxHp - player.hp, POTION_HEAL);
-    player.hp += healed;
+    const result = PlayerStateActions.consumeHealingPotion(player, { maxHp: playerStats().maxHp, healAmount: POTION_HEAL });
+    if (!result.ok && result.reason === "empty") return showToast("藥水用晒喇。", "danger");
+    if (!result.ok && result.reason === "full") return showToast("而家精神得很，留返支藥先。", "good");
+    if (!result.ok) return;
+    const healed = result.healed;
     markPersistenceDirty();
     spawnBurst(player.x, player.y, "#87db82", 22, 68);
     addDamageNumber(player.x, player.y - 18, `+${healed}`, "#87db82", true);
@@ -3360,8 +3358,8 @@
       return;
     }
     openedChests.add(chest.id);
-    player.coins += chest.reward.coins || 0;
-    player.potions = Math.min(9, player.potions + (chest.reward.potions || 0));
+    PlayerStateActions.grantCoins(player, chest.reward.coins || 0);
+    PlayerStateActions.grantHealingPotions(player, chest.reward.potions || 0, { maxPotions: 9 });
     const treasureEquipment = {
       "mistguard-boots": "wayfarer_compass",
       "echo-blade": "lantern_sabre",
@@ -3996,10 +3994,9 @@
   function buyGeneralStoreItem(itemId) {
     const item = GENERAL_STORE_GOODS_BY_ID.get(itemId);
     if (!item || currentMapId !== "general-store") return showToast("呢件商品而家買唔到。", "danger");
-    if (player.coins < item.price) return showToast("金幣唔夠。", "danger");
-    player.coins -= item.price;
-    if (itemId === "healing_potion") player.potions = Math.min(9, player.potions + 1);
-    else inventory.weak_potion = Math.min(999, (inventory.weak_potion || 0) + 1);
+    const purchase = PlayerStateActions.buyGeneralStoreItem({ player, inventory, itemId, price: item.price });
+    if (!purchase.ok && purchase.reason === "coins") return showToast("金幣唔夠。", "danger");
+    if (!purchase.ok) return showToast("呢件商品而家買唔到。", "danger");
     markPersistenceDirty();
     sound.coin();
     showToast(`買到 ${item.name}`, "good");
@@ -4019,7 +4016,7 @@
     if (sellPrice <= 0) return showToast("呢件裝備唔可以出售。", "danger");
     const ownedIndex = ownedEquipment.indexOf(item.id);
     ownedEquipment.splice(ownedIndex, 1);
-    player.coins = Math.min(99999, player.coins + sellPrice);
+    PlayerStateActions.grantCoins(player, sellPrice, { maxCoins: 99999 });
     selectedShopItemId = null;
     sound.coin();
     showToast(`已出售：${item.name} · +${sellPrice} 金幣`, "good");
@@ -4034,16 +4031,8 @@
     const sellPrice = generalStoreSellPrice(itemId);
     if (sellPrice <= 0) return showToast("呢件物品唔可以出售。", "danger");
     const itemName = inventoryItemName(itemId);
-    if (itemId === "healing_potion") {
-      if (player.potions <= 0) return showToast("你冇呢件物品。", "danger");
-      player.potions -= 1;
-    } else {
-      const amount = Math.max(0, Math.floor(Number(inventory[itemId]) || 0));
-      if (amount <= 0) return showToast("你冇呢件物品。", "danger");
-      inventory[itemId] = amount - 1;
-      if (inventory[itemId] <= 0) delete inventory[itemId];
-    }
-    player.coins = Math.min(99999, player.coins + sellPrice);
+    const sale = PlayerStateActions.sellGeneralStoreItem({ player, inventory, itemId, sellPrice });
+    if (!sale.ok) return showToast("你冇呢件物品。", "danger");
     selectedShopItemId = null;
     sound.coin();
     showToast(`已出售：${itemName} · +${sellPrice} 金幣`, "good");
@@ -4431,12 +4420,11 @@
   }
 
   function useBagPotion() {
-    const maxHp = playerStats().maxHp;
-    if (player.potions <= 0) return showToast("藥水用晒喇。", "danger");
-    if (player.hp >= maxHp) return showToast("而家生命已經全滿。", "good");
-    player.potions -= 1;
-    const healed = Math.min(maxHp - player.hp, POTION_HEAL);
-    player.hp += healed;
+    const result = PlayerStateActions.consumeHealingPotion(player, { maxHp: playerStats().maxHp, healAmount: POTION_HEAL });
+    if (!result.ok && result.reason === "empty") return showToast("藥水用晒喇。", "danger");
+    if (!result.ok && result.reason === "full") return showToast("而家生命已經全滿。", "good");
+    if (!result.ok) return;
+    const healed = result.healed;
     markPersistenceDirty();
     sound.heal();
     showToast(`使用小型回復藥 · 回復 ${healed} HP`, "good");
@@ -4907,7 +4895,7 @@
     if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
     guildCommissionState = result.state;
     const rewardCoins = Math.max(0, Math.floor(Number(result.reward.coins) || 0));
-    player.coins += rewardCoins;
+    PlayerStateActions.grantCoins(player, rewardCoins);
     sound.level();
     const rewardText = `委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1 + ${rewardCoins.toLocaleString("zh-HK")} 金幣`;
     showToast(rewardText, "good");
@@ -7245,7 +7233,7 @@
     killEnemy(finished.source, { grantXp: false });
     for (const unit of bonusUnits) recordDefeatedMonster(unit);
     if (earnedCoins > 0) {
-      player.coins += earnedCoins;
+      PlayerStateActions.grantCoins(player, earnedCoins);
       markPersistenceDirty();
       addSystemMessage("reward", `獲得 ${earnedCoins} 金幣`);
     }

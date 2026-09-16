@@ -7,6 +7,9 @@
   const MINUTES_PER_HOUR = 60;
   const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
   const DEFAULT_REAL_SECONDS_PER_GAME_HOUR = 150;
+  const CALENDAR_START_YEAR = 101;
+  const DAYS_PER_YEAR = 365;
+  const DAYS_PER_MONTH = Object.freeze([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]);
 
   function finiteNumber(value, fallback = 0) {
     const number = Number(value);
@@ -47,6 +50,20 @@
     });
   }
 
+  function calendarDateFromDay(day) {
+    const safeDay = Math.max(1, Math.floor(finiteNumber(day, 1)));
+    const dayIndex = safeDay - 1;
+    const year = CALENDAR_START_YEAR + Math.floor(dayIndex / DAYS_PER_YEAR);
+    let dayOfYear = dayIndex % DAYS_PER_YEAR;
+    let month = 1;
+    for (const daysInMonth of DAYS_PER_MONTH) {
+      if (dayOfYear < daysInMonth) break;
+      dayOfYear -= daysInMonth;
+      month += 1;
+    }
+    return Object.freeze({ year, month, date: dayOfYear + 1 });
+  }
+
   function calculateTime(config, serverNow) {
     const normalized = normalizeConfig(config);
     const minuteMs = normalized.realSecondsPerGameHour * 1000 / MINUTES_PER_HOUR;
@@ -59,14 +76,18 @@
     const minuteOfDay = ((totalMinutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
     const hour = Math.floor(minuteOfDay / MINUTES_PER_HOUR);
     const minute = minuteOfDay % MINUTES_PER_HOUR;
+    const calendar = calendarDateFromDay(day);
     return Object.freeze({
       day,
+      year: calendar.year,
+      month: calendar.month,
+      date: calendar.date,
       hour,
       minute,
       totalMinutes,
       serverNow: Number(serverNow),
       realSecondsPerGameHour: normalized.realSecondsPerGameHour,
-      display: `Day ${day}   ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+      display: `${calendar.year}年 ${calendar.month}月${calendar.date}日   ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
     });
   }
 
@@ -142,7 +163,11 @@
     MINUTES_PER_HOUR,
     MINUTES_PER_DAY,
     DEFAULT_REAL_SECONDS_PER_GAME_HOUR,
+    CALENDAR_START_YEAR,
+    DAYS_PER_YEAR,
+    DAYS_PER_MONTH,
     epochMillis,
+    calendarDateFromDay,
     normalizeConfig,
     calculateTime,
     create,

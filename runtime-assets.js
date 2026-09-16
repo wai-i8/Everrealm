@@ -65,7 +65,7 @@
     "chat.js?v=20260916-01",
     "cloud-save.js",
     "save-persistence.js",
-    "world-time.js?v=20260916-01",
+    "world-time.js?v=20260916-02",
     "fighter-effects.js",
     "locomotion.js?v=20260915-04",
     "footstep-sfx.js?v=20260914-03",
@@ -83,7 +83,8 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260916-10",
+    "game/player-state-actions.js?v=20260916-01",
+    "game.js?v=20260916-12",
   ]);
 
   return Object.freeze({ scripts });
