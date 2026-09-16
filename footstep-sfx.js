@@ -13,7 +13,7 @@
   const LEGACY_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const DEFAULT_INTERVAL = 0.30;
   const DEFAULT_FIRST_DELAY = 0.10;
-  const DEFAULT_GAIN = 0.48;
+  const DEFAULT_GAIN = 1;
   const TOWN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/town/walk-on-town-v1-01-loop.mp3";
   const MOUNTAIN_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/dirt/walk-on-dirt-v1-01-loop.mp3";
   const BUILDING_WALK_LOOP_ASSET = "assets/audio/sfx/footsteps/building/walk-on-shop-v1-01-loop.mp3";

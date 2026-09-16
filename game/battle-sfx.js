@@ -26,12 +26,12 @@
   });
 
   const GAINS = Object.freeze({
-    fighterPunch: .66,
-    fighterUtility: .58,
-    miss: .58,
-    chickAttack: .60,
-    chickFootstep: .44,
-    chickDeath: .62,
+    fighterPunch: 1,
+    fighterUtility: 1,
+    miss: 1,
+    chickAttack: 1,
+    chickFootstep: 1,
+    chickDeath: 1,
   });
 
   function clamp01(value) {
