@@ -196,6 +196,12 @@
     const metadata = terrainCellData(grid, cell);
     const blocked = terrainIsBlocked(grid, cell);
     if (mode !== "arc") {
+      // Obstacle height is a gameplay classification, not only renderer
+      // metadata. High obstacles occupy the full attack lane; low cover still
+      // occupies the movement cell but does not intercept ground-level linear
+      // deliveries such as linear/contact/leap attacks.
+      if (metadata?.obstacleHeight === "high") return true;
+      if (metadata?.obstacleHeight === "low") return false;
       if (metadata && metadata.blocksLinear === false) return false;
       return Boolean(metadata?.blocksLinear) || blocked;
     }

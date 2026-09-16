@@ -221,7 +221,7 @@
       },
       terrainCells: {
         "3,0": { kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 },
-        "5,2": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: true, blocksArc: false, occupiedHeight: .65 },
+        "5,2": { kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: false, blocksArc: false, occupiedHeight: .65 },
       },
     };
 

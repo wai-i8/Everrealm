@@ -497,6 +497,14 @@ pathless-area
 - 牆
 - 地形障礙
 
+戰場障礙物必須帶有明確 `obstacleHeight` 分類：
+
+- `high`：阻擋所有沿實際地面 attack path 嘅 `linear`／`contact`／`leap` 攻擊；亦按 `blocksArc`／occupied height 規則處理 Arc。
+- `low`：只阻擋移動，唔阻擋上述地面線性攻擊；正常 Arc 可以越過，除非資料另有明確高度規則。
+- `pathless`／`pathless-area`：冇中途 attack path，召喚／遠端效果唔受中途障礙影響。
+
+`obstacleHeight` 係 gameplay classification，唔可以只靠圖片外觀或 `blocksLinear` 舊欄位猜測；低障礙即使仍然係 movement-blocked，都必須明確唔攔截 ground-level linear delivery。
+
 ### `contact`／`leap`
 
 代表近身／撲擊型攻擊。呢類技能可以用 authored relative cells 表達前左、正前、前右、左、右等近身目標，但仍然必須由施術者位置、面向同 intended target 產生 `attackPath`，再按實際路線檢查單位同地形。
@@ -2270,8 +2278,8 @@ movement、occupancy、range、AI、attack path 同 save/state 全部仍然使�
 
 初始山地場只放兩個主要 blocker，令玩家第一次就可以分辨 cover 高度：
 
-- **High tree**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=true`。高身障礙會攔截普通直線同與其 occupied height 相交嘅 ballistic arc。
-- **Low scrub**：`movementBlocked=true`、`blocksLinear=true`、`blocksArc=false`。低身障礙會阻擋移動同普通直線，但正常 Arc 可以越過。
+- **High tree**：`obstacleHeight="high"`、`movementBlocked=true`、`blocksLinear=true`、`blocksArc=true`。高身障礙會攔截所有地面線性攻擊，同與其 occupied height 相交嘅 ballistic arc。
+- **Low scrub／low rock**：`obstacleHeight="low"`、`movementBlocked=true`、`blocksLinear=false`、`blocksArc=false`。低身障礙只阻擋移動，唔阻擋地面線性攻擊，正常 Arc 亦可以越過。
 - scrub 後方接一個細型單級高台，橫跨約 2×2 格；Level-0 主棋盤保持同一平面，唔可以整塊場由左下逐級升成樓梯。
 
 Arc 是否真正撞到 terrain，仍然由 projectile trajectory height 同 `surfaceHeight + occupiedHeight` 比較；唔可以只因技能叫「Arc」就無條件穿過所有高障礙。

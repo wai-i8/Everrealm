@@ -698,13 +698,16 @@ if image === "rock-v3.png" then block
 ```js
 {
   terrainType: "boulder",
-  artId: "mountain-boulder-a"
+  artId: "mountain-boulder-a",
+  obstacleHeight: "low"
 }
 ```
 
 `terrainType` 交俾 battle rules。
 
 `artId` 交俾 renderer／art registry。
+
+`obstacleHeight` 必須由地圖資料明確標成 `high` 或 `low`：高障礙係完整攻擊線 blocker；低障礙只保留 movement collision，唔攔截地面線性攻擊。呢個分類同 `heightMap` 嘅地面 elevation 分開，唔可以由圖片尺寸或 filename 推斷。
 
 咁換圖唔會改 gameplay。
 

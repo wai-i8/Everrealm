@@ -41,7 +41,7 @@
     "map/mountain-south-navigation.generated.js",
     "map/mountain-south-navigation.js",
     "maps/main-town.js?v=20260913-01",
-    "maps/mountain-field.js?v=20260915-02",
+    "maps/mountain-field.js?v=20260916-02",
     "maps/mine.js",
     "maps/mountain-south.js",
     "maps/interiors/guild.js",
