@@ -328,12 +328,12 @@
   let inventoryFixtureCount = 0;
   let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
-  // Native-world zooms preserve the pre-migration wide-screen field of view:
-  // 1.48 * { .78, 1, 1.22 } * .4 = the constants below. This is a completed
-  // unit conversion, not a runtime map/migration scale.
-  const EXPLORE_ZOOM_SCALES = Object.freeze({ far: .46176, mid: .592, near: .72224 });
-  const EXPLORE_ZOOM_LABELS = Object.freeze({ far: "遠", mid: "中", near: "近" });
-  const EXPLORE_ZOOM_ORDER = Object.freeze(["far", "mid", "near"]);
+  // Exploration camera zoom is continuous.  The endpoints are expressed in
+  // authored world pixels: 1.0 is native image size and .35 is the far limit.
+  const EXPLORE_ZOOM_MIN = .35;
+  const EXPLORE_ZOOM_MAX = 1;
+  const EXPLORE_ZOOM_DEFAULT = .592;
+  const EXPLORE_ZOOM_WHEEL_SENSITIVITY = .0015;
   // Temporary development tuning: retreat always succeeds until the normal
   // level-difference formula is re-enabled.
   const RETREAT_CHANCE_OVERRIDE = 1;
@@ -608,9 +608,15 @@
     sound.suspend();
     bgm.suspend?.();
   }
-  let exploreZoomLevel = Object.hasOwn(EXPLORE_ZOOM_SCALES, readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY))
-    ? readPreference(ZOOM_KEY, "mid", LEGACY_ZOOM_KEY)
-    : "mid";
+  const storedExploreZoomPreference = readPreference(ZOOM_KEY, String(EXPLORE_ZOOM_DEFAULT), LEGACY_ZOOM_KEY);
+  const storedExploreZoom = {
+    far: EXPLORE_ZOOM_MIN,
+    mid: EXPLORE_ZOOM_DEFAULT,
+    near: EXPLORE_ZOOM_MAX,
+  }[storedExploreZoomPreference] ?? Number(storedExploreZoomPreference);
+  let exploreZoom = Number.isFinite(storedExploreZoom)
+    ? Core.clamp(storedExploreZoom, EXPLORE_ZOOM_MIN, EXPLORE_ZOOM_MAX)
+    : EXPLORE_ZOOM_DEFAULT;
   let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
 
   const player = createPlayer();
@@ -1762,28 +1768,11 @@
     // Camera zoom is shared by every map and input device. Map dimensions only
     // constrain camera position; small interiors must never be auto-enlarged
     // merely to cover the viewport.
-    return EXPLORE_ZOOM_SCALES[exploreZoomLevel];
+    return exploreZoom;
   }
 
   function setExploreZoomFromPinch(value) {
-    const requested = Number(value) || targetZoom();
-    const level = EXPLORE_ZOOM_ORDER.reduce((closest, candidate) => (
-      Math.abs(EXPLORE_ZOOM_SCALES[candidate] - requested) < Math.abs(EXPLORE_ZOOM_SCALES[closest] - requested)
-        ? candidate
-        : closest
-    ), "mid");
-    setExploreZoomLevel(level, { announceChange: false, immediate: true });
-    renderPreviousCamera.zoom = targetZoom();
-    return targetZoom();
-  }
-
-  function syncExploreZoomControls() {
-    stage.dataset.zoomLevel = exploreZoomLevel;
-    for (const button of document.querySelectorAll("[data-zoom-level]")) {
-      const active = button.dataset.zoomLevel === exploreZoomLevel;
-      button.setAttribute("aria-pressed", String(active));
-      button.classList.toggle("is-active", active);
-    }
+    return setExploreZoom(value, { announceChange: false, immediate: true });
   }
 
   function syncSystemSoundControl() {
@@ -1907,28 +1896,31 @@
     syncHudCollapse();
   }
 
-  function setExploreZoomLevel(level, options = {}) {
-    if (!Object.hasOwn(EXPLORE_ZOOM_SCALES, level)) return false;
-    const changed = level !== exploreZoomLevel;
-    exploreZoomLevel = level;
-    try { localStorage.setItem(ZOOM_KEY, level); } catch (_) {}
-    syncExploreZoomControls();
-    if (options.immediate) camera.zoom = targetZoom();
-    if (changed && options.announceChange !== false && mode !== "title") {
-      showToast(`地圖視角：${EXPLORE_ZOOM_LABELS[level]}`, "good");
-      announce(`地圖視角切換到${EXPLORE_ZOOM_LABELS[level]}。`);
+  function setExploreZoom(value, options = {}) {
+    const requested = Number(value);
+    if (!Number.isFinite(requested)) return false;
+    const nextZoom = Core.clamp(requested, EXPLORE_ZOOM_MIN, EXPLORE_ZOOM_MAX);
+    const changed = Math.abs(nextZoom - exploreZoom) >= .0001;
+    exploreZoom = nextZoom;
+    try { localStorage.setItem(ZOOM_KEY, exploreZoom.toFixed(4)); } catch (_) {}
+    if (options.immediate) {
+      camera.zoom = targetZoom();
+      renderPreviousCamera.zoom = targetZoom();
     }
-    return true;
+    if (changed && options.announceChange !== false && mode !== "title") {
+      const percentage = Math.round(exploreZoom * 100);
+      showToast(`地圖視角：${percentage}%`, "good");
+      announce(`地圖視角切換到${percentage}%。`);
+    }
+    return exploreZoom;
   }
 
   function handleExploreWheelZoom(event) {
     if (mode !== "playing" || usesMobileExploreControls() || event.ctrlKey || !event.deltaY) return;
-    const currentIndex = Math.max(0, EXPLORE_ZOOM_ORDER.indexOf(exploreZoomLevel));
-    const direction = event.deltaY < 0 ? 1 : -1;
-    const nextIndex = Core.clamp(currentIndex + direction, 0, EXPLORE_ZOOM_ORDER.length - 1);
-    if (nextIndex === currentIndex) return;
+    const nextZoom = targetZoom() * Math.pow(1 + EXPLORE_ZOOM_WHEEL_SENSITIVITY, -event.deltaY);
+    if (Math.abs(Core.clamp(nextZoom, EXPLORE_ZOOM_MIN, EXPLORE_ZOOM_MAX) - targetZoom()) < .0001) return;
     event.preventDefault();
-    setExploreZoomLevel(EXPLORE_ZOOM_ORDER[nextIndex], { announceChange: false });
+    setExploreZoom(nextZoom, { announceChange: false, immediate: true });
   }
 
   function resize() {
@@ -10514,7 +10506,7 @@
         guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
         skills: Skills.normalizeSkillState(skillState), godMode: godModeActive, automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
-        exploreZoomLevel, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
+        exploreZoom, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
         flattenedMapRender: world.art?.flattened && world.art?.backgroundScene ? (() => {
           const crop = flattenedBackgroundCrop();
           const downsampling = crop.dw < crop.sw || crop.dh < crop.sh;
@@ -10549,8 +10541,8 @@
         setExploreClickTarget(portal, portal);
         return window.__RPG_DEBUG__.snapshot();
       },
-      setZoom: (level) => {
-        setExploreZoomLevel(level, { announceChange: false, immediate: true });
+      setZoom: (value) => {
+        setExploreZoom(value, { announceChange: false, immediate: true });
         return window.__RPG_DEBUG__.snapshot();
       },
       teleportTo: (id) => {
@@ -11199,11 +11191,6 @@
   canvas.addEventListener("lostpointercapture", (event) => {
     if (explorePointerGesture?.pressed) cancelExplorePointerTracking(event.pointerId, false);
   });
-  document.getElementById("zoomControl")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-zoom-level]");
-    if (!button) return;
-    setExploreZoomLevel(button.dataset.zoomLevel);
-  });
   systemButton?.addEventListener("click", () => {
     if (systemSettingsPopover?.hidden === false) {
       focusUiWindow(systemSettingsPopover);
@@ -11268,7 +11255,6 @@
   syncAccountStatus();
   syncSystemSoundControl();
   startTitleBgm();
-  syncExploreZoomControls();
   syncHudCollapse();
   resetEnemies();
   drawPlayerHudPortrait();

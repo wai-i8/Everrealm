@@ -166,7 +166,8 @@ Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 f
 
 探索左側 HUD 係 compact mobile-game function menu，而唔係常駐角色資料表。expanded
 state 只保留四個 primary entry：`狀態`、`物品欄`、`戰技面板`、`技能樹`，以及底部
-`遠／中／近` 視角控制同 close control。角色頭像、名稱、Level、HP／XP、金錢、藥水、
+視角控制同 close control。視角由 desktop mouse wheel 或 mobile two-finger pinch
+連續調整，範圍係 `0.35–1.0`。角色頭像、名稱、Level、HP／XP、金錢、藥水、
 目前武器及公會委託摘要唔喺 expanded rail 常駐顯示；詳細資料由相應 Status、Inventory、
 Guild 等 feature panel 擁有。primary entries 使用純文字，唔加 icon、英文副標、右箭嘴或
 獨立 card frame；項目只用低對比分隔同 hover/focus highlight 表達可點擊性。
