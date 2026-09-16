@@ -6455,7 +6455,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 
 /* === 2026-09-11 guild sizing / general-store compact layout follow-up === */
-/* General Store is a small two-item utility shop, not a full equipment browser. */
+/* General Store is a small utility shop; its cards use the same stable
+   content-sized layout envelope as the equipment shop. */
 .facility-overlay[data-facility-context="general-store"] .facility-content {
   padding: .68rem !important;
 }
@@ -6466,11 +6467,16 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   margin-bottom: .48rem !important;
 }
 .general-store-grid {
-  grid-template-columns: 1fr !important;
-  gap: .45rem !important;
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(2, minmax(12rem, max-content)) !important;
+  justify-content: start;
+  gap: .62rem !important;
 }
 .general-store-card {
   grid-template-columns: 3.4rem minmax(0, 1fr) 5.25rem !important;
+  width: 100%;
+  min-width: 0;
   min-height: 0 !important;
   gap: .58rem !important;
   padding: .52rem .58rem !important;
@@ -6480,8 +6486,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   min-height: 0 !important;
 }
 .general-store-card .equipment-copy { gap: .16rem !important; }
+.general-store-card .equipment-copy { max-width: 18ch; }
 .general-store-card .equipment-copy strong { font-size: .72rem !important; }
-.general-store-card .equipment-copy p { font-size: .6rem !important; line-height: 1.35 !important; }
+.general-store-card .equipment-copy p { font-size: .6rem !important; line-height: 1.35 !important; overflow-wrap: anywhere; }
 .general-store-card .equipment-copy > small { font-size: .52rem !important; line-height: 1.25 !important; }
 .general-store-card .equipment-shop-purchase {
   align-self: center !important;
@@ -7306,11 +7313,34 @@ html body [aria-disabled="true"] {
 }
 
 /* Shop catalog starts as an icon/name list; details appear only after a selection. */
+/* Shop summaries keep a compact, content-sized card.  The outer shop still
+   prefers three columns, but spare window width is not redistributed into
+   giant cards.  The detail panel is outside this grid so it cannot change the
+   summary column count or intrinsic width. */
+.equipment-shop-browser {
+  display: grid;
+  width: max-content;
+  max-width: 100%;
+  justify-items: start;
+  gap: .62rem;
+}
+.equipment-shop-tabs {
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(7, max-content);
+  justify-content: start;
+  overflow-x: auto;
+}
+.equipment-shop-tab { width: fit-content; }
 .equipment-shop-compact-grid {
-  grid-template-columns: repeat(auto-fill, minmax(8.2rem, 1fr));
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(3, minmax(8.2rem, max-content));
+  justify-content: start;
   align-items: start;
 }
 .shop-item-summary {
+  width: 100%;
   min-width: 0;
   min-height: 7rem;
   grid-template-columns: 1fr;
@@ -7351,7 +7381,8 @@ html body [aria-disabled="true"] {
   white-space: nowrap;
 }
 .shop-item-detail {
-  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
   display: grid;
   align-items: center;
   grid-template-columns: 4.7rem minmax(0,1fr) 7rem;
@@ -7364,6 +7395,7 @@ html body [aria-disabled="true"] {
   background: linear-gradient(145deg,rgba(35,75,79,.72),rgba(14,28,43,.94));
   box-shadow: inset 0 1px rgba(255,255,255,.035), 3px 4px 0 rgba(0,0,0,.22);
 }
+.shop-item-detail .equipment-copy { min-width: 0; }
 .shop-item-detail .equipment-shop-art {
   width: 4.5rem;
   height: 4.5rem;
@@ -7371,13 +7403,31 @@ html body [aria-disabled="true"] {
 .shop-item-detail .equipment-copy p { max-width: 48rem; }
 .shop-item-detail .equipment-shop-purchase { align-self: stretch; }
 
-@media (max-width: 620px) {
-  .equipment-shop-compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Break the stable envelope only when the viewport can no longer fit its
+   preferred columns.  Category and buy/sell changes do not affect it. */
+@media (max-width: 28rem) {
+  .general-store-grid {
+    grid-template-columns: minmax(12rem, max-content) !important;
+  }
+}
+
+@media (max-width: 28rem) {
+  .equipment-shop-compact-grid {
+    grid-template-columns: repeat(2, minmax(8.2rem, max-content));
+  }
   .shop-item-summary { min-height: 6.2rem; grid-template-rows: 3.65rem auto; }
   .shop-item-summary .equipment-shop-art { width: 3.5rem; height: 3.5rem; }
   .shop-item-detail { grid-template-columns: 3.8rem minmax(0,1fr); }
   .shop-item-detail .equipment-shop-art { width: 3.65rem; height: 3.65rem; }
   .shop-item-detail .equipment-shop-purchase { grid-column: 1 / -1; grid-template-columns: minmax(0,1fr) minmax(6rem,.8fr); align-items: center; }
+}
+
+@media (max-width: 20rem) {
+  .equipment-shop-compact-grid,
+  .general-store-grid {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
 
 /* 2026-09-12 interaction polish: compact service choices and inventory detail actions. */
