@@ -5840,24 +5840,15 @@
         const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
         const renderedTriangleSize = Math.min(rootFontSize * 4.5, Math.max(rootFontSize * 3.25, width * .16));
         const ringRadius = renderedTriangleSize * .86;
-        // Projected logical facings are NW/NE/SE/SW. Place them at the four
-        // cardinal slots while keeping the triangle pointed at the real
-        // screen-space direction (top = NE, then clockwise by 90 degrees).
-        return projected
-          ? {
-            up: { x: -ringRadius, y: 0 },
-            right: { x: 0, y: -ringRadius },
-            down: { x: ringRadius, y: 0 },
-            left: { x: 0, y: ringRadius },
-          }
-          : {
-            up: { x: 0, y: -ringRadius },
-            right: { x: ringRadius, y: 0 },
-            down: { x: 0, y: ringRadius },
-            left: { x: -ringRadius, y: 0 },
-          };
+        return {
+          up: { x: 0, y: -ringRadius },
+          right: { x: ringRadius, y: 0 },
+          down: { x: 0, y: ringRadius },
+          left: { x: -ringRadius, y: 0 },
+        };
       })()
       : null;
+    const mobileTriangleRotations = { up: 180, right: -90, down: 0, left: 90 };
     const currentCommands = battle.heroMoveCommands || [];
     const currentCost = battleMoveCost(currentCommands);
     const endpoint = battleMoveDraftState().endpoint || battle.hero.cell;
@@ -5907,7 +5898,7 @@
       } else {
         arrow.style.removeProperty("transform");
         if (mobileTrianglePicker) {
-          arrow.style.setProperty("--battle-facing-rotation", `${angle - 90}deg`);
+          arrow.style.setProperty("--battle-facing-rotation", `${mobileTriangleRotations[facing] || 0}deg`);
         } else {
           arrow.style.removeProperty("--battle-facing-rotation");
         }
