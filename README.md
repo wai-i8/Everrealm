@@ -55,6 +55,20 @@ with:
 firebase deploy --only firestore:rules,firestore:indexes,database --project everrealm-f5a7d
 ```
 
+The developer-only WorldTime seed uses the Firebase Admin SDK with Application
+Default Credentials; it never reads credentials from the browser bundle or
+repository. Authenticate locally with `gcloud auth application-default login`
+or set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account file outside the
+repository, then run:
+
+```powershell
+npm run seed:world
+```
+
+The command creates `world/config` only when it is absent, reads it back and
+verifies the authoritative fixed epoch. It refuses to overwrite an existing
+world unless `npm run seed:world -- --force` is explicitly used.
+
 ## Project structure
 
 - `data/`：固定 Game Data 唯一資料層；職業、物品、裝備、怪物、任務及玩家技能定義集中喺呢度。

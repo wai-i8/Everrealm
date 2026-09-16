@@ -11,5 +11,9 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+.firebase/
+*.service-account.json
+service-account*.json
+google-credentials*.json
 Everrealm*.zip
 filelist.txt
