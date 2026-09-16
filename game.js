@@ -7185,11 +7185,9 @@
 
   function selectedBattleSkillDetail(skill) {
     if (!skill) return "";
-    const delivery = skill.deliveryMode === "arc" ? "拋物線" : skill.deliveryMode === "linear" ? "直線" : "";
-    const details = [skillRangeText(skill), delivery].filter(Boolean).join(" · ");
     return `<div class="battle-target-context" role="status" aria-live="polite">
-      <div><strong>${skill.name}</strong><small>${details}</small></div>
-      <span>選擇目標</span>
+      <strong>${skill.name}</strong>
+      <small>${skill.apCost} AP</small>
     </div>`;
   }
 
