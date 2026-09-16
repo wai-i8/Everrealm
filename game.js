@@ -6367,6 +6367,7 @@
   function showFighterEffectEvents(result) {
     if (!battle || !result) return;
     for (const event of result.events || []) {
+      if (event.status === "untargetable" || event.status === "stealth") continue;
       const unit = battleUnits().find((actor) => actor.id === event.unitId);
       if (!unit) continue;
       battle.effects.push({ cell: { ...unit.cell }, text: event.text, color: event.kind === "damage" ? "#ff6b6b" : "#a9c9ff", life: 1, maxLife: 1, kind: "status", offsetY: -.82 });
@@ -6477,11 +6478,26 @@
         ? Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS)
         : Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + strikeCount * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS)
       : Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + BATTLE_ACTION_LINGER_SECONDS);
+    let skippedCurrent = false;
+    if (current && !currentResolved) {
+      const pending = resolution.pendingActions.find((entry) => entry.actorId === current.actorId);
+      const validation = pending ? revalidateBattlePendingAction(pending) : { ok: true };
+      if (!validation.ok) {
+        pending && (pending.status = "cancelled");
+        const cancelledUnit = battleUnits().find((unit) => unit.id === current.actorId);
+        if (cancelledUnit?.name && !resolution.cancelledActors.includes(cancelledUnit.name)) {
+          resolution.cancelledActors.push(cancelledUnit.name);
+        }
+        resolution.resolvedActorIds.push(current.actorId);
+        skippedCurrent = true;
+        resolution.actionElapsed = duration;
+      }
+    }
     advanceHeroHitPresentation(resolution);
-    battle.actingUnitId = current?.actorId || null;
+    battle.actingUnitId = skippedCurrent ? null : current?.actorId || null;
     battle.actingUnitIds = [];
 
-    if (current && !resolution.resolvedActorIds.includes(current.actorId) && resolution.actionElapsed >= BATTLE_ACTION_WINDUP_SECONDS) {
+    if (!skippedCurrent && current && !resolution.resolvedActorIds.includes(current.actorId) && resolution.actionElapsed >= BATTLE_ACTION_WINDUP_SECONDS) {
       applyOrderedBattleAction(resolution.heroAction, current.actorId);
     }
 
@@ -6673,7 +6689,7 @@
       const skill = plan.skill || enemy.skill;
       const hit = Boolean(skill)
         && (MonsterAI?.validateSkillFrom
-          ? MonsterAI.validateSkillFrom(skill, enemy, enemy.cell, enemy.facing, battle.hero, battle.grid, battleUnits())
+          ? MonsterAI.validateSkillFrom(skill, enemy, enemy.cell, enemy.facing, battle.hero, battle.grid, battleUnits(), { canDirectTarget: battleCanDirectTarget })
           : Skills.validateSkillTarget(skill, enemy.cell, battle.hero.cell, {
               grid: battle.grid,
               battlefield: battle.battlefield,
@@ -6682,6 +6698,7 @@
               actorTeam: "enemy",
               actorId: enemy.id,
               targetUnit: { ...battle.hero, team: "ally" },
+              canDirectTarget: battleCanDirectTarget,
             }).ok)
         && plan.targetCells.some((cell) => sameBattleCell(cell, battle.hero.cell));
       // A stale/empty prediction is cancelled silently: the monster does not
