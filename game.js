@@ -197,6 +197,7 @@
     hpText: document.getElementById("selectedUnitHpText"),
     apFill: document.getElementById("selectedUnitApFill"),
     apText: document.getElementById("selectedUnitApText"),
+    enemyRows: document.getElementById("battleEnemyRows"),
     potionCount: document.getElementById("battlePotionCount"),
     hint: document.getElementById("battleHint"),
   };
@@ -5191,6 +5192,7 @@
       awaitingFacing: true,
       movementResolution: null,
       actionResolution: null,
+      selectedEnemyId: null,
       autoTimer: .35,
     };
     mode = "battle";
@@ -5397,6 +5399,65 @@
 
   function livingBattleEnemies() {
     return battle ? battle.enemies.filter((unit) => unit.alive && unit.hp > 0) : [];
+  }
+
+  function selectedBattleEnemy() {
+    if (!battle || battle.selectedEnemyId == null) return null;
+    return battle.enemies.find((unit) => String(unit.id) === String(battle.selectedEnemyId)) || null;
+  }
+
+  function syncBattleEnemyRowSelection() {
+    if (!battleUi.enemyRows || !battle) return;
+    for (const row of battleUi.enemyRows.querySelectorAll("[data-battle-enemy-id]")) {
+      const selected = String(row.dataset.battleEnemyId) === String(battle.selectedEnemyId);
+      row.classList.toggle("is-selected", selected);
+      row.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+  }
+
+  function renderBattleEnemyRows() {
+    if (!battleUi.enemyRows || !battle) return;
+    const rows = battle.enemies.map((enemy) => {
+      const defeated = !enemy.alive || enemy.hp <= 0;
+      const maxHp = Math.max(1, Number(enemy.maxHp) || 1);
+      const hpRatio = Core.clamp((Number(enemy.hp) || 0) / maxHp, 0, 1);
+      const level = Math.max(1, Math.floor(Number(enemy.level) || 1));
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `battle-enemy-row${defeated ? " is-defeated" : ""}`;
+      row.dataset.battleEnemyId = enemy.id;
+      row.setAttribute("aria-pressed", "false");
+      row.setAttribute("aria-label", `${enemy.name || "敵人"} LV. ${level}，${defeated ? "已倒下" : "HP 狀態"}`);
+
+      const identity = document.createElement("span");
+      identity.className = "battle-enemy-identity";
+      const name = document.createElement("strong");
+      name.textContent = enemy.name || "敵人";
+      const levelLabel = document.createElement("b");
+      levelLabel.textContent = `LV. ${level}`;
+      identity.append(name, levelLabel);
+
+      const hpLabel = document.createElement("span");
+      hpLabel.className = "battle-enemy-hp-label";
+      hpLabel.textContent = "HP";
+      const hpBar = document.createElement("span");
+      hpBar.className = "battle-enemy-hp-bar";
+      const hpFill = document.createElement("i");
+      hpFill.style.width = `${hpRatio * 100}%`;
+      hpBar.append(hpFill);
+      row.append(identity, hpLabel, hpBar);
+      return row;
+    });
+    battleUi.enemyRows.replaceChildren(...rows);
+    syncBattleEnemyRowSelection();
+  }
+
+  function selectBattleEnemy(enemyId) {
+    if (!battle || mode !== "battle") return;
+    const enemy = battle.enemies.find((unit) => String(unit.id) === String(enemyId));
+    if (!enemy) return;
+    battle.selectedEnemyId = enemy.id;
+    syncBattleEnemyRowSelection();
   }
 
   function battleMoveSchedule(commands = battle?.heroMoveCommands) {
@@ -7256,6 +7317,7 @@
     battleUi.hpText.textContent = `${Math.ceil(battle.hero.hp)} / ${battle.hero.maxHp}`;
     battleUi.apFill.style.width = `${Core.clamp(battle.ap / BATTLE_AP_MAX, 0, 1) * 100}%`;
     battleUi.apText.textContent = `${battle.ap} / ${BATTLE_AP_MAX}`;
+    renderBattleEnemyRows();
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
     battleUi.hint.textContent = battle.message;
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
@@ -8183,6 +8245,8 @@
     const attackableEnemies = new Set(selectedSkill
       ? livingBattleEnemies().filter((unit) => skillTargetValidation(selectedSkill, unit.cell).ok).map((unit) => Tactics.cellKey(unit.cell))
       : []);
+    const selectedEnemy = selectedBattleEnemy();
+    const selectedEnemyCellKey = selectedEnemy ? Tactics.cellKey(selectedEnemy.cell) : null;
     const areaPreview = new Set();
     if (selectedSkill && battle.phase === "planning_action" && skillTargetValidation(selectedSkill, battle.cursor).ok) {
       for (const cell of Skills.patternCells(selectedSkill, battle.hero.cell, battle.cursor, { grid: battle.grid, facing: battle.hero.facing })) areaPreview.add(Tactics.cellKey(cell));
@@ -8215,6 +8279,18 @@
       }
       if (!blocked && attackableEnemies.has(key) && battle.phase === "planning_action") {
         drawBattleCellOverlay(cell, layout, `rgba(255,91,91,${.35 + Math.sin(elapsed * 5) * .04})`, "rgba(255,118,118,.98)", 2.5, .79);
+      }
+      if (!blocked && selectedEnemyCellKey === key) {
+        const defeated = !selectedEnemy.alive || selectedEnemy.hp <= 0;
+        const pulse = .62 + Math.sin(elapsed * 4.5) * .12;
+        drawBattleCellOverlay(
+          cell,
+          layout,
+          defeated ? "rgba(173,180,195,.08)" : `rgba(255,200,87,${.08 + pulse * .06})`,
+          defeated ? "rgba(173,180,195,.62)" : `rgba(255,200,87,${pulse})`,
+          2.5,
+          .76,
+        );
       }
     }
 
@@ -11052,6 +11128,11 @@
   battleHud.addEventListener("click", (event) => {
     if (event.target.closest("[data-victory-continue]")) {
       advanceBattleVictory();
+      return;
+    }
+    const enemyRow = event.target.closest("[data-battle-enemy-id]");
+    if (enemyRow) {
+      selectBattleEnemy(enemyRow.dataset.battleEnemyId);
       return;
     }
     const facingButton = event.target.closest("[data-battle-facing]");
