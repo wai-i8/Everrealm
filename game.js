@@ -5819,12 +5819,12 @@
     const layout = battleLayout();
     const projected = Boolean(layout.projected);
     battleFacingPicker.dataset.projected = projected ? "true" : "false";
-    const labels = projected
-      ? { up: "左上", right: "右上", down: "右下", left: "左下" }
-      : { up: "上", right: "右", down: "下", left: "左" };
     const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const touchSizedPicker = coarseBattlePointer || width <= 820;
     const mobileTrianglePicker = touchSizedPicker;
+    const labels = projected && !mobileTrianglePicker
+      ? { up: "左上", right: "右上", down: "右下", left: "左下" }
+      : { up: "上", right: "右", down: "下", left: "左" };
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
     battleFacingPicker.dataset.mobileArrows = mobileTrianglePicker ? "true" : "false";
@@ -5885,7 +5885,7 @@
     for (const button of battleFacingPicker.querySelectorAll("[data-battle-facing]")) {
       const facing = button.dataset.battleFacing;
       const label = labels[facing] || facing;
-      const vector = battleFacingScreenVector(facing, layout);
+      const vector = mobileTrianglePicker ? Tactics.facingVector(facing) : battleFacingScreenVector(facing, layout);
       const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
       const position = mobileFacingOffsets?.[facing]
         || projectedDesktopFacingOffsets?.[facing]
