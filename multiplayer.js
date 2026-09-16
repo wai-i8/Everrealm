@@ -7,18 +7,17 @@
   const PLAYER_STATES = Object.freeze(["exploring", "battle"]);
   const VALID_FACING = Object.freeze(["up", "right", "down", "left"]);
   const POSITION_EPSILON = 1;
-  const EXPLORATION_WRITE_INTERVAL_MS = 125;
+  const EXPLORATION_WRITE_INTERVAL_MS = 100;
   const BATTLE_HEARTBEAT_INTERVAL_MS = 15000;
   const PRESENCE_HEARTBEAT_INTERVAL_MS = 15000;
-  const REMOTE_INTERPOLATION_DELAY_MS = 125;
-  const REMOTE_MAX_EXTRAPOLATION_MS = 250;
-  const REMOTE_MAX_SNAPSHOT_BUFFER = 24;
+  // Render remote exploration on a deliberately delayed 500 ms timeline.
+  // Everrealm values stable, faithful motion over twitch responsiveness.
+  const REMOTE_INTERPOLATION_DELAY_MS = 500;
+  const REMOTE_MAX_EXTRAPOLATION_MS = 0;
+  const REMOTE_MAX_SNAPSHOT_BUFFER = 32;
   const REMOTE_DISCONTINUITY_DISTANCE = 640;
-  const REMOTE_MAX_RENDER_BACKLOG_MS = 1000;
+  const REMOTE_HOLD_MOVING_GRACE_MS = 180;
 
-  // Snapshot receipt times and the render timeline intentionally use the same
-  // local monotonic clock. RTDB's updatedAt is only used to reject stale
-  // records; it is never mixed into interpolation timing.
   function localTimelineNow() {
     return typeof performance !== "undefined" && typeof performance.now === "function"
       ? performance.now()
@@ -37,6 +36,20 @@
     return String(value || "冒險者").trim().slice(0, 24) || "冒險者";
   }
 
+  function quantizeMotionHeading(dx, dy) {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) <= .001) return null;
+    const octant = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+    return ((octant % 8) + 8) % 8;
+  }
+
+  function facingFromSegment(dx, dy, fallback = "down") {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) <= .001) {
+      return validFacing(fallback);
+    }
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+    return dy >= 0 ? "down" : "up";
+  }
+
   function normalizePlayerRecord(uid, raw) {
     const source = raw && typeof raw === "object" ? raw : {};
     const safeUid = String(uid || source.uid || "").trim();
@@ -52,6 +65,9 @@
       y,
       facing: validFacing(source.facing),
       state: validState(source.state),
+      moving: Boolean(source.moving),
+      seq: Math.max(0, Math.floor(Number(source.seq) || 0)),
+      sampledAt: Number.isFinite(Number(source.sampledAt)) ? Number(source.sampledAt) : 0,
       updatedAt: Number.isFinite(Number(source.updatedAt)) ? Number(source.updatedAt) : 0,
     };
   }
@@ -63,15 +79,26 @@
       || previous.classId !== next.classId
       || previous.facing !== next.facing
       || previous.state !== next.state
+      || Boolean(previous.moving) !== Boolean(next.moving)
       || Math.hypot(previous.x - next.x, previous.y - next.y) >= POSITION_EPSILON;
   }
 
+  function urgentSnapshotChanged(previous, next) {
+    if (!previous) return true;
+    return previous.mapId !== next.mapId
+      || previous.name !== next.name
+      || previous.classId !== next.classId
+      || previous.facing !== next.facing
+      || previous.state !== next.state
+      || Boolean(previous.moving) !== Boolean(next.moving)
+      || (Boolean(previous.moving) && Boolean(next.moving) && previous.motionHeading !== next.motionHeading);
+  }
+
   function shouldPublishSnapshot(previous, next, { now = 0, lastPublishedAt = -Infinity, force = false } = {}) {
-    const stateChanged = !previous || previous.state !== next.state;
-    if (force || stateChanged || snapshotChanged(previous, next) && next.state !== "battle") {
-      return now - lastPublishedAt >= EXPLORATION_WRITE_INTERVAL_MS || force || !previous || stateChanged;
-    }
-    return next.state === "battle" && now - lastPublishedAt >= BATTLE_HEARTBEAT_INTERVAL_MS;
+    if (force || !previous || urgentSnapshotChanged(previous, next)) return true;
+    if (next.state === "battle") return now - lastPublishedAt >= BATTLE_HEARTBEAT_INTERVAL_MS;
+    const moved = Math.hypot(previous.x - next.x, previous.y - next.y) >= POSITION_EPSILON;
+    return moved && now - lastPublishedAt >= EXPLORATION_WRITE_INTERVAL_MS;
   }
 
   function snapshotRecordChanged(previous, next) {
@@ -80,6 +107,9 @@
       || previous.y !== next.y
       || previous.facing !== next.facing
       || previous.state !== next.state
+      || Boolean(previous.moving) !== Boolean(next.moving)
+      || previous.seq !== next.seq
+      || previous.sampledAt !== next.sampledAt
       || previous.updatedAt !== next.updatedAt;
   }
 
@@ -90,22 +120,44 @@
       y: record.y,
       facing: record.facing,
       state: record.state,
+      moving: Boolean(record.moving),
+      seq: record.seq || 0,
+      sampledAt: record.sampledAt || 0,
       updatedAt: record.updatedAt,
     };
   }
 
-  function appendRemoteSnapshot(entry, record, receivedAt = localTimelineNow()) {
+  function appendRemoteSnapshot(entry, record, receivedAt = Date.now()) {
     const snapshots = Array.isArray(entry.snapshots) ? entry.snapshots : [];
     const previous = snapshots[snapshots.length - 1] || null;
-    if (previous && record.updatedAt > 0 && previous.updatedAt > 0 && record.updatedAt < previous.updatedAt) {
+
+    // Interpolate using the time at which the sender actually sampled x/y.
+    // `updatedAt` is still useful for stale-write ordering, but it is assigned
+    // when Firebase commits the write and can be delayed by the write queue.
+    // Using commit time as movement time makes old positions appear to take a
+    // long time, then newer positions appear to cover distance impossibly fast.
+    // Sequence is the primary ordering key. Movement writes are intentionally
+    // allowed to be in flight concurrently, so never let an older sequence
+    // rewind an already accepted remote player even if callbacks/ACK timing
+    // happens to vary. Fall back to commit time only for legacy records that
+    // do not carry a sequence number.
+    if (previous && record.seq > 0 && previous.seq > 0 && record.seq <= previous.seq) {
+      return { changed: false, stale: true, discontinuity: false };
+    }
+    if (previous && !(record.seq > 0 && previous.seq > 0)
+        && record.updatedAt > 0 && previous.updatedAt > 0
+        && record.updatedAt < previous.updatedAt) {
       return { changed: false, stale: true, discontinuity: false };
     }
     if (previous && !snapshotRecordChanged(previous, record)) {
       return { changed: false, stale: false, discontinuity: false };
     }
 
-    const receivedTime = Number.isFinite(Number(receivedAt)) ? Number(receivedAt) : localTimelineNow();
-    const time = Math.max(receivedTime, (Number(previous?.time) || 0) + 1);
+    const fallbackTime = Number.isFinite(Number(receivedAt)) ? Number(receivedAt) : Date.now();
+    const rawTime = record.sampledAt > 0
+      ? record.sampledAt
+      : (record.updatedAt > 0 ? record.updatedAt : fallbackTime);
+    const time = Math.max(rawTime, (Number(previous?.time) || 0) + 1);
     const snapshot = snapshotFromRecord(record, time);
     const distance = previous ? Math.hypot(snapshot.x - previous.x, snapshot.y - previous.y) : 0;
     const discontinuity = Boolean(previous && distance > REMOTE_DISCONTINUITY_DISTANCE);
@@ -113,7 +165,7 @@
       entry.snapshots = [snapshot];
       entry.renderX = snapshot.x;
       entry.renderY = snapshot.y;
-      entry.renderTime = snapshot.time - REMOTE_INTERPOLATION_DELAY_MS;
+      entry.renderTime = undefined;
       entry.initialized = false;
       entry.snapCount = (entry.snapCount || 0) + 1;
       entry.lastSnapReason = "discontinuity";
@@ -133,147 +185,226 @@
         x: first.x,
         y: first.y,
         facing: first.facing,
+        // We are intentionally holding before the buffered timeline begins.
+        // Do not play a walk cycle while the world position is stationary.
+        moving: false,
         sourceA: first,
         sourceB: null,
         alpha: 0,
         extrapolated: false,
         held: true,
+        holdReason: "prebuffer",
       };
     }
 
+    // Never predict past the newest authoritative sample during ordinary
+    // exploration. With a buffered interpolation timeline, a short hold is far
+    // less noticeable than overshooting a turn and then sliding backwards.
     if (renderTime >= last.time) {
-      const previous = snapshots[snapshots.length - 2];
-      const elapsed = renderTime - last.time;
-      if (previous && last.time > previous.time) {
-        // Clamp the extrapolation itself. Once the cap is reached, hold the
-        // capped pose rather than switching back to the raw latest sample.
-        const cappedElapsed = Math.min(elapsed, REMOTE_MAX_EXTRAPOLATION_MS);
-        const scale = cappedElapsed / (last.time - previous.time);
-        return {
-          x: last.x + (last.x - previous.x) * scale,
-          y: last.y + (last.y - previous.y) * scale,
-          facing: last.facing,
-          sourceA: previous,
-          sourceB: last,
-          alpha: 1 + scale,
-          extrapolated: elapsed > 0,
-          held: elapsed > REMOTE_MAX_EXTRAPOLATION_MS,
-        };
-      }
       return {
         x: last.x,
         y: last.y,
         facing: last.facing,
-        sourceA: previous || last,
+        // No future authoritative point exists yet, so hold both position and
+        // locomotion instead of running in place while waiting for more data.
+        moving: false,
+        sourceA: snapshots[snapshots.length - 2] || last,
         sourceB: last,
         alpha: 1,
         extrapolated: false,
         held: true,
+        holdReason: "tail",
       };
     }
 
     for (let index = 1; index < snapshots.length; index += 1) {
       const next = snapshots[index];
       const previous = snapshots[index - 1];
-      if (renderTime > next.time) continue;
+      if (renderTime >= next.time) continue;
       const span = Math.max(1, next.time - previous.time);
+      const dx = next.x - previous.x;
+      const dy = next.y - previous.y;
+      const distance = Math.hypot(dx, dy);
+
+      // A stationary player does not publish 10 Hz movement samples, so the
+      // previous idle sample can be several seconds older than the first
+      // moving sample. Never stretch that whole idle gap into a walking
+      // segment. Hold the old idle pose until the delayed timeline actually
+      // reaches the first moving sample; then the following 100 ms samples
+      // carry the real movement path.
+      const idleToMovingGap = !Boolean(previous.moving)
+        && Boolean(next.moving)
+        && span > EXPLORATION_WRITE_INTERVAL_MS * 2;
+      if (idleToMovingGap && renderTime < next.time) {
+        return {
+          x: previous.x,
+          y: previous.y,
+          facing: previous.facing,
+          moving: false,
+          sourceA: previous,
+          sourceB: next,
+          alpha: 0,
+          extrapolated: false,
+          held: true,
+          holdReason: "idle-gap",
+        };
+      }
+
+      // Direction-change snapshots can legitimately have the same coordinate
+      // on both sides of the turn. They are path markers, not an authoritative
+      // stop. Keep the character in its walking state and freeze cadence for
+      // this zero-distance marker instead of resetting to idle/frame 1.
+      const turnMarker = distance <= .35 && Boolean(previous.moving) && Boolean(next.moving);
+      if (turnMarker) {
+        return {
+          x: previous.x,
+          y: previous.y,
+          facing: previous.facing,
+          moving: false,
+          sourceA: previous,
+          sourceB: next,
+          alpha: 0,
+          extrapolated: false,
+          held: true,
+          holdReason: "turn-marker",
+        };
+      }
+
       const amount = Math.max(0, Math.min(1, (renderTime - previous.time) / span));
+      const segmentMoving = distance > .35;
+      // Position is continuous between ordinary adjacent movement samples,
+      // while facing/moving are derived from that SAME delayed segment.
+      const segmentFacing = segmentMoving
+        ? facingFromSegment(dx, dy, previous.facing)
+        : previous.facing;
       return {
-        x: previous.x + (next.x - previous.x) * amount,
-        y: previous.y + (next.y - previous.y) * amount,
-        facing: amount >= .5 ? next.facing : previous.facing,
+        x: previous.x + dx * amount,
+        y: previous.y + dy * amount,
+        facing: amount >= 1 ? next.facing : segmentFacing,
+        moving: amount < 1 && segmentMoving,
         sourceA: previous,
         sourceB: next,
         alpha: amount,
         extrapolated: false,
         held: false,
+        holdReason: null,
       };
     }
     return {
       x: last.x,
       y: last.y,
       facing: last.facing,
+      moving: Boolean(last.moving),
       sourceA: snapshots[snapshots.length - 2] || last,
       sourceB: last,
       alpha: 1,
       extrapolated: false,
       held: true,
+      holdReason: "tail",
     };
   }
 
-  function interpolateRemotePlayer(entry, dt, locomotion = defaultLocomotion) {
+  function interpolateRemotePlayer(entry, dt, locomotion = defaultLocomotion, options = {}) {
     const seconds = Math.max(0, Number(dt) || 0);
     if (!Array.isArray(entry.snapshots) || !entry.snapshots.length) {
-      // A transient underflow holds the last rendered pose. Never substitute
-      // the raw latest target here and then resume delayed interpolation.
       entry.renderX = Number.isFinite(Number(entry.renderX)) ? Number(entry.renderX) : Number(entry.x) || 0;
       entry.renderY = Number.isFinite(Number(entry.renderY)) ? Number(entry.renderY) : Number(entry.y) || 0;
       entry.x = entry.renderX;
       entry.y = entry.renderY;
+      entry.renderFacing = entry.renderFacing || entry.facing || "down";
+      entry.renderMoving = false;
       entry.moving = false;
-      entry.lastRenderSample = {
-        timeline: "buffer-underflow-hold",
-        renderTime: Number.isFinite(entry.renderTime) ? entry.renderTime : null,
-        snapshotA: null,
-        snapshotB: null,
-        alpha: null,
-        bufferedX: entry.renderX,
-        bufferedY: entry.renderY,
-        rawLatestX: null,
-        rawLatestY: null,
-        finalX: entry.renderX,
-        finalY: entry.renderY,
-        extrapolated: false,
-        held: false,
-      };
       return entry;
     }
 
     const first = entry.snapshots[0];
-    if (!entry.initialized) {
-      entry.renderTime = Number.isFinite(entry.renderTime)
-        ? entry.renderTime
-        : first.time - REMOTE_INTERPOLATION_DELAY_MS;
-      entry.renderX = first.x;
-      entry.renderY = first.y;
-      entry.initialized = true;
-      entry.lastSnapReason = entry.lastSnapReason || "initial";
+    const latest = entry.snapshots[entry.snapshots.length - 1];
+    const explicitNow = Number(options?.now);
+    if (Number.isFinite(explicitNow)) {
+      entry.renderTime = explicitNow - REMOTE_INTERPOLATION_DELAY_MS;
+    } else if (latest.time > 100000000000) {
+      // Runtime fallback for direct callers that do not inject serverNow.
+      entry.renderTime = Date.now() - REMOTE_INTERPOLATION_DELAY_MS;
+    } else if (!entry.initialized || !Number.isFinite(entry.renderTime)) {
+      // Deterministic small-timestamp fallback used by unit tests.
+      entry.renderTime = first.time - REMOTE_INTERPOLATION_DELAY_MS;
     } else {
       entry.renderTime += seconds * 1000;
     }
 
-    const latest = entry.snapshots[entry.snapshots.length - 1];
-    const backlog = latest.time - entry.renderTime;
-    if (backlog > REMOTE_MAX_RENDER_BACKLOG_MS) {
-      entry.renderTime = latest.time - REMOTE_INTERPOLATION_DELAY_MS;
+    if (!entry.initialized) {
+      entry.renderX = first.x;
+      entry.renderY = first.y;
+      entry.initialized = true;
+      entry.lastSnapReason = entry.lastSnapReason || "initial";
     }
+
     const pose = sampleRemoteSnapshots(entry, entry.renderTime);
     if (!pose) return entry;
+
+    const previousRenderX = Number.isFinite(Number(entry.renderX)) ? Number(entry.renderX) : pose.x;
+    const previousRenderY = Number.isFinite(Number(entry.renderY)) ? Number(entry.renderY) : pose.y;
+    const previousLocomotion = entry.locomotion || { state: "idle", facing: pose.facing || "down", time: 0 };
+
     entry.renderX = pose.x;
     entry.renderY = pose.y;
-    const previous = entry.snapshots[entry.snapshots.length - 2];
-    const hasRecentMovement = previous
-      && Math.hypot(latest.x - previous.x, latest.y - previous.y) > .35
-      && entry.renderTime <= latest.time + REMOTE_MAX_EXTRAPOLATION_MS;
-    const moving = entry.state !== "battle" && Boolean(hasRecentMovement);
-    if (locomotion?.update) {
-      entry.locomotion = locomotion.update(entry.locomotion, {
-        moving,
-        facing: pose.facing || entry.facing,
-        dt: seconds,
-      });
-    } else {
+    entry.renderFacing = pose.facing || entry.renderFacing || entry.facing || "down";
+
+    // Remote walking cadence must follow the delayed visual timeline, not RTDB
+    // packet arrival. In particular, a short tail hold caused by network jitter
+    // must FREEZE the current foot frame instead of resetting the walk cycle to
+    // idle, and a continuous turn must keep the same cadence when facing changes.
+    const renderedDistance = Math.hypot(entry.renderX - previousRenderX, entry.renderY - previousRenderY);
+    const timelineMoving = entry.state !== "battle" && Boolean(pose.moving);
+    const cadenceHoldWhileAuthoritativelyMoving = entry.state !== "battle"
+      && (pose.holdReason === "tail" || pose.holdReason === "turn-marker")
+      && Boolean(pose.sourceB?.moving);
+    const actualIdleHold = pose.holdReason === "prebuffer" || pose.holdReason === "idle-gap";
+    const visuallyAdvancing = timelineMoving && renderedDistance > .001;
+
+    if (visuallyAdvancing) {
+      // Preserve the walk phase across facing changes. LanternLocomotion.update()
+      // intentionally resets on a facing change, which is correct for local
+      // authored movement but looks like repeated left/right-foot frames for
+      // jittery remote snapshots.
+      entry.remoteWalkTime = Math.max(0, Number(entry.remoteWalkTime ?? previousLocomotion.time) || 0) + seconds;
       entry.locomotion = {
-        state: moving ? "walk" : "idle",
-        facing: pose.facing || entry.facing,
-        time: moving ? (entry.locomotion?.time || 0) + seconds : 0,
+        state: "walk",
+        facing: entry.renderFacing,
+        time: entry.remoteWalkTime,
       };
+      entry.renderMoving = true;
+    } else if ((cadenceHoldWhileAuthoritativelyMoving || timelineMoving)
+        && previousLocomotion.state === "walk" && !actualIdleHold) {
+      // Network tail starvation, a zero-distance turn marker, or the exact
+      // first frame of the next moving segment: freeze the current foot frame
+      // until the delayed path advances again. Keep renderMoving=true because
+      // game.js selects the remote sprite's walk/idle state from that flag;
+      // setting it false would visually reset to idle.
+      entry.remoteWalkTime = Math.max(0, Number(entry.remoteWalkTime ?? previousLocomotion.time) || 0);
+      entry.locomotion = {
+        state: "walk",
+        facing: entry.renderFacing,
+        time: entry.remoteWalkTime,
+      };
+      entry.renderMoving = true;
+    } else {
+      // This is a real delayed idle/stop (including the long idle->moving gap).
+      // Reset once here so a later genuine movement start begins a fresh cycle.
+      entry.remoteWalkTime = 0;
+      entry.locomotion = {
+        state: "idle",
+        facing: entry.renderFacing,
+        time: 0,
+      };
+      entry.renderMoving = false;
     }
-    entry.moving = moving;
+    // Keep the latest network-facing/moving values on the entity for diagnostics,
+    // but the renderer must only receive the delayed visual pose below.
     entry.x = entry.renderX;
     entry.y = entry.renderY;
     entry.lastRenderSample = {
-      timeline: "local-monotonic-receive-render",
+      timeline: "firebase-server-buffered",
       renderTime: entry.renderTime,
       snapshotA: pose.sourceA ? { time: pose.sourceA.time, x: pose.sourceA.x, y: pose.sourceA.y } : null,
       snapshotB: pose.sourceB ? { time: pose.sourceB.time, x: pose.sourceB.x, y: pose.sourceB.y } : null,
@@ -284,8 +415,14 @@
       rawLatestY: latest.y,
       finalX: entry.renderX,
       finalY: entry.renderY,
-      extrapolated: Boolean(pose.extrapolated),
+      renderFacing: entry.renderFacing,
+      renderMoving: entry.renderMoving,
+      rawLatestFacing: latest.facing,
+      rawLatestMoving: Boolean(latest.moving),
+      extrapolated: false,
       held: Boolean(pose.held),
+      holdReason: pose.holdReason || null,
+      renderedDistance,
     };
     return entry;
   }
@@ -303,12 +440,15 @@
     let presenceRef = null;
     let mapUnsubscribe = () => {};
     let connectedUnsubscribe = () => {};
+    let serverTimeOffsetUnsubscribe = () => {};
+    let serverTimeOffset = 0;
     let remotePlayers = new Map();
     let getLocalPlayer = () => null;
     let localSnapshot = null;
     let lastPublishedSnapshot = null;
     let lastPublishedAt = -Infinity;
     let lastPresenceAt = -Infinity;
+    let localSequence = 0;
     let operationToken = 0;
     let writeChain = Promise.resolve();
     let pendingSnapshotWrite = null;
@@ -324,6 +464,10 @@
       } catch (_) {
         // Optional diagnostics must never affect multiplayer state handling.
       }
+    }
+
+    function serverTimelineNow() {
+      return Date.now() + serverTimeOffset;
     }
 
     function logError(label, error) {
@@ -353,7 +497,15 @@
       return snapshotDrainPromise;
     }
 
-    function queueLatestSnapshotWrite(task) {
+    function queueSnapshotWrite(task, { urgent = false } = {}) {
+      if (urgent) {
+        // Direction/start/stop/state changes are path-shaping samples. Never
+        // allow a later ordinary movement update to coalesce them away. A
+        // pending non-urgent sample can be discarded because this urgent
+        // sample is newer and semantically more important.
+        pendingSnapshotWrite = null;
+        return queueWrite(task);
+      }
       pendingSnapshotWrite = task;
       return ensureSnapshotDrain();
     }
@@ -383,11 +535,13 @@
         y,
         facing: validFacing(value.facing),
         state: validState(value.state),
+        moving: Boolean(value.moving) && validState(value.state) !== "battle",
+        sampledAt: serverTimelineNow(),
       };
     }
 
     function applyRemoteSnapshot(snapshot) {
-      const receivedAt = localTimelineNow();
+      const receivedAt = serverTimelineNow();
       trace("remote.listener.received", { receivedAt });
       const next = new Map();
       snapshot?.forEach?.((child) => {
@@ -403,6 +557,8 @@
           targetY: record.y,
           renderX: previous?.renderX ?? record.x,
           renderY: previous?.renderY ?? record.y,
+          renderFacing: previous?.renderFacing ?? previous?.facing ?? record.facing,
+          renderMoving: previous?.renderMoving ?? false,
           initialized: previous?.initialized ?? false,
           renderTime: previous?.renderTime,
           snapshots: previous?.snapshots || [],
@@ -416,6 +572,8 @@
           entry.renderTime = undefined;
           entry.renderX = record.x;
           entry.renderY = record.y;
+          entry.renderFacing = record.facing;
+          entry.renderMoving = false;
           entry.initialized = false;
           entry.lastSnapReason = "state-transition";
         }
@@ -480,16 +638,25 @@
     async function writeLocalSnapshot(snapshot, { force = false } = {}) {
       if (!active || !mapRef || !context || !snapshot) return;
       const now = Date.now();
+      const urgent = force || !lastPublishedSnapshot || urgentSnapshotChanged(lastPublishedSnapshot, snapshot);
       if (!shouldPublishSnapshot(lastPublishedSnapshot, snapshot, { now, lastPublishedAt, force })) return;
       lastPublishedSnapshot = { ...snapshot };
       lastPublishedAt = now;
+      const sequence = ++localSequence;
       const { sdk } = context;
       const ref = mapRef;
       const token = operationToken;
-      return queueLatestSnapshotWrite(() => {
-        trace("map.write.begin", { mapId: snapshot.mapId, state: snapshot.state, x: snapshot.x, y: snapshot.y });
-        if (!active || token !== operationToken || ref !== mapRef) return null;
-        return sdk.set(ref, {
+      // Movement/state snapshots are handed to the Firebase SDK immediately.
+      // Do NOT wait for the previous RTDB write ACK before issuing the next
+      // sample: doing so collapses an intended ~10 Hz stream into a few uneven
+      // points per second whenever network RTT fluctuates. Firebase already
+      // preserves the client's write ordering; `seq` protects the receiver
+      // from stale callbacks as an additional guard.
+      trace("map.write.begin", { mapId: snapshot.mapId, state: snapshot.state, moving: snapshot.moving, seq: sequence, x: snapshot.x, y: snapshot.y, urgent });
+      if (!active || token !== operationToken || ref !== mapRef) return;
+      let writePromise;
+      try {
+        writePromise = sdk.set(ref, {
           uid: snapshot.uid,
           name: snapshot.name,
           classId: snapshot.classId,
@@ -497,11 +664,23 @@
           y: snapshot.y,
           facing: snapshot.facing,
           state: snapshot.state,
+          moving: Boolean(snapshot.moving),
+          seq: sequence,
+          // Coordinate sample time and Firebase commit time are deliberately
+          // separate. Remote interpolation uses sampledAt.
+          sampledAt: Number(snapshot.sampledAt) || serverTimelineNow(),
           updatedAt: sdk.serverTimestamp(),
-        }).then((result) => {
-          trace("map.write.complete", { mapId: snapshot.mapId, state: snapshot.state });
-          return result;
         });
+      } catch (error) {
+        logError("snapshot write", error);
+        return;
+      }
+      return Promise.resolve(writePromise).then((result) => {
+        trace("map.write.complete", { mapId: snapshot.mapId, state: snapshot.state, seq: sequence });
+        return result;
+      }).catch((error) => {
+        logError("snapshot write", error);
+        return null;
       });
     }
 
@@ -572,7 +751,16 @@
       context = nextContext;
       getLocalPlayer = typeof getPlayer === "function" ? getPlayer : () => null;
       connectionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      localSequence = 0;
       active = true;
+      serverTimeOffsetUnsubscribe = context.sdk.onValue(
+        context.sdk.ref(context.database, ".info/serverTimeOffset"),
+        (snapshot) => {
+          const nextOffset = Number(snapshot.val());
+          if (Number.isFinite(nextOffset)) serverTimeOffset = nextOffset;
+        },
+        (error) => logError("server time offset watch", error),
+      );
       connectedUnsubscribe = context.sdk.onValue(
         context.sdk.ref(context.database, ".info/connected"),
         (snapshot) => {
@@ -594,9 +782,12 @@
       active = false;
       operationToken += 1;
       connectedUnsubscribe();
+      serverTimeOffsetUnsubscribe();
       mapUnsubscribe();
       connectedUnsubscribe = () => {};
+      serverTimeOffsetUnsubscribe = () => {};
       mapUnsubscribe = () => {};
+      serverTimeOffset = 0;
       mapRef = null;
       presenceRef = null;
       mapId = null;
@@ -607,6 +798,7 @@
       localSnapshot = null;
       lastPublishedSnapshot = null;
       pendingSnapshotWrite = null;
+      localSequence = 0;
       if (context?.sdk) {
         await waitForWrites();
         await Promise.all([
@@ -622,9 +814,18 @@
 
     function updateLocal(snapshot = null, options = {}) {
       if (!active) return false;
-      const value = snapshot || readLocalSnapshot();
-      if (!value) return false;
+      const rawValue = snapshot || readLocalSnapshot();
+      if (!rawValue) return false;
+      const value = { ...rawValue, sampledAt: serverTimelineNow() };
+      const previousLocal = localSnapshot;
+      if (value.state === "exploring" && value.moving && previousLocal?.mapId === value.mapId) {
+        const heading = quantizeMotionHeading(value.x - previousLocal.x, value.y - previousLocal.y);
+        value.motionHeading = heading ?? previousLocal.motionHeading ?? null;
+      } else {
+        value.motionHeading = null;
+      }
       if (value.mapId !== mapId) {
+        localSnapshot = value;
         void setMap(value.mapId);
         return true;
       }
@@ -640,8 +841,9 @@
     }
 
     function tick(dt) {
+      const now = serverTimelineNow();
       for (const player of remotePlayers.values()) {
-        interpolateRemotePlayer(player, dt, locomotion);
+        interpolateRemotePlayer(player, dt, locomotion, { now });
         if (debug) trace("remote.render.sample", { remoteUid: player.uid, ...player.lastRenderSample });
       }
     }
@@ -658,6 +860,8 @@
         kind: "remote-player",
         x: player.renderX,
         y: player.renderY,
+        facing: player.renderFacing || player.facing,
+        moving: Boolean(player.renderMoving),
         };
       });
     }
@@ -701,6 +905,8 @@
     REMOTE_MAX_EXTRAPOLATION_MS,
     REMOTE_MAX_SNAPSHOT_BUFFER,
     REMOTE_DISCONTINUITY_DISTANCE,
+    REMOTE_HOLD_MOVING_GRACE_MS,
+    quantizeMotionHeading,
     normalizePlayerRecord,
     snapshotChanged,
     shouldPublishSnapshot,

@@ -65,6 +65,9 @@ test("multiplayer records accept only the Phase 2 transient player states", () =
     y: 24,
     facing: "left",
     state: "battle",
+    moving: false,
+    seq: 0,
+    sampledAt: 0,
     updatedAt: 100,
   });
   assert.deepEqual(record, {
@@ -75,6 +78,9 @@ test("multiplayer records accept only the Phase 2 transient player states", () =
     y: 24,
     facing: "left",
     state: "battle",
+    moving: false,
+    seq: 0,
+    sampledAt: 0,
     updatedAt: 100,
   });
   assert.equal(Multiplayer.normalizePlayerRecord("USER_A", { x: 1, y: 2, state: "chat" }).state, "exploring");
@@ -84,7 +90,7 @@ test("exploration publishing is throttled while battle state heartbeats remain i
   const previous = { mapId: "world", name: "A", classId: "warrior", x: 0, y: 0, facing: "down", state: "exploring" };
   const moved = { ...previous, x: 4 };
   assert.equal(Multiplayer.shouldPublishSnapshot(previous, moved, { now: 50, lastPublishedAt: 0 }), false);
-  assert.equal(Multiplayer.shouldPublishSnapshot(previous, moved, { now: 125, lastPublishedAt: 0 }), true);
+  assert.equal(Multiplayer.shouldPublishSnapshot(previous, moved, { now: 100, lastPublishedAt: 0 }), true);
   const battle = { ...previous, state: "battle" };
   assert.equal(Multiplayer.shouldPublishSnapshot(previous, battle, { now: 1000, lastPublishedAt: 0 }), true);
   assert.equal(Multiplayer.shouldPublishSnapshot(battle, battle, { now: 14999, lastPublishedAt: 0 }), false);
@@ -101,12 +107,12 @@ test("remote players interpolate toward the latest exploration position", () => 
     initialized: true,
     locomotion: { state: "idle", facing: "right", time: 0 },
   };
-  Multiplayer.appendRemoteSnapshot(remote, { x: 0, y: 0, facing: "right", state: "exploring", updatedAt: 1 }, 1000);
-  Multiplayer.appendRemoteSnapshot(remote, { x: 100, y: 0, facing: "right", state: "exploring", updatedAt: 2 }, 1125);
+  Multiplayer.appendRemoteSnapshot(remote, { x: 0, y: 0, facing: "right", state: "exploring", sampledAt: 1000, updatedAt: 5000 }, 1000);
+  Multiplayer.appendRemoteSnapshot(remote, { x: 100, y: 0, facing: "right", state: "exploring", moving: true, sampledAt: 1125, updatedAt: 5001 }, 1125);
   Multiplayer.interpolateRemotePlayer(remote, 0.1);
   assert.ok(remote.renderX > 0 && remote.renderX < 100);
   assert.equal(remote.x, remote.renderX);
-  assert.equal(remote.moving, true);
+  assert.equal(remote.renderMoving, true);
 });
 
 test("map listener creates a remote entity immediately and exposes receiver timing", async () => {
@@ -154,8 +160,8 @@ test("snapshot buffering interpolates behind the latest network sample", () => {
     facing: "right",
     locomotion: { state: "walk", facing: "right", time: 0 },
   };
-  Multiplayer.appendRemoteSnapshot(entry, { x: 0, y: 0, facing: "right", state: "exploring", updatedAt: 1 }, 1000);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 100, y: 0, facing: "right", state: "exploring", updatedAt: 2 }, 1125);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 0, y: 0, facing: "right", state: "exploring", sampledAt: 1000, updatedAt: 5000 }, 1000);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 100, y: 0, facing: "right", state: "exploring", moving: true, sampledAt: 1125, updatedAt: 5001 }, 1125);
   Multiplayer.interpolateRemotePlayer(entry, .0625);
   assert.equal(entry.renderTime, 1062.5);
   assert.equal(entry.renderX, 50);
@@ -175,9 +181,9 @@ test("normal walking stays in the snapshot buffer without repeated snapping", ()
     locomotion: { state: "walk", facing: "right", time: 0 },
     snapCount: 0,
   };
-  Multiplayer.appendRemoteSnapshot(entry, { x: 0, y: 0, facing: "right", state: "exploring", updatedAt: 1 }, 1000);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 12, y: 0, facing: "right", state: "exploring", updatedAt: 2 }, 1125);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 24, y: 0, facing: "right", state: "exploring", updatedAt: 3 }, 1250);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 0, y: 0, facing: "right", state: "exploring", sampledAt: 1000, updatedAt: 5000 }, 1000);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 12, y: 0, facing: "right", state: "exploring", moving: true, sampledAt: 1125, updatedAt: 5001 }, 1125);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 24, y: 0, facing: "right", state: "exploring", moving: true, sampledAt: 1250, updatedAt: 5002 }, 1250);
   Multiplayer.interpolateRemotePlayer(entry, .125);
   assert.equal(entry.renderX, 12);
   assert.equal(entry.snapCount, 0);
@@ -195,10 +201,10 @@ test("steady leftward snapshots render monotonically without reversing", () => {
     facing: "left",
     locomotion: { state: "walk", facing: "left", time: 0 },
   };
-  Multiplayer.appendRemoteSnapshot(entry, { x: 500, y: 80, facing: "left", state: "exploring", updatedAt: 1 }, 1000);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 480, y: 80, facing: "left", state: "exploring", updatedAt: 2 }, 1100);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 460, y: 80, facing: "left", state: "exploring", updatedAt: 3 }, 1200);
-  Multiplayer.appendRemoteSnapshot(entry, { x: 440, y: 80, facing: "left", state: "exploring", updatedAt: 4 }, 1300);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 500, y: 80, facing: "left", state: "exploring", sampledAt: 1000, updatedAt: 5000 }, 1000);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 480, y: 80, facing: "left", state: "exploring", moving: true, sampledAt: 1100, updatedAt: 5001 }, 1100);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 460, y: 80, facing: "left", state: "exploring", moving: true, sampledAt: 1200, updatedAt: 5002 }, 1200);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 440, y: 80, facing: "left", state: "exploring", moving: true, sampledAt: 1300, updatedAt: 5003 }, 1300);
 
   const rendered = [];
   for (let index = 0; index < 20; index += 1) {
@@ -220,6 +226,17 @@ test("large discontinuities reset the buffer and snap once", () => {
   assert.equal(entry.snapCount, 1);
   Multiplayer.interpolateRemotePlayer(entry, 0);
   assert.equal(entry.renderX, 1000);
+});
+
+test("remote interpolation uses sender sample time, sequence ordering, and no extrapolation", () => {
+  const entry = { snapshots: [], renderX: 0, renderY: 0, initialized: false };
+  Multiplayer.appendRemoteSnapshot(entry, { x: 0, y: 0, facing: "right", state: "exploring", seq: 1, moving: true, sampledAt: 1000, updatedAt: 9000 }, 1000);
+  Multiplayer.appendRemoteSnapshot(entry, { x: 100, y: 0, facing: "right", state: "exploring", seq: 2, moving: true, sampledAt: 1100, updatedAt: 9001 }, 1100);
+  assert.deepEqual(entry.snapshots.map((snapshot) => snapshot.time), [1000, 1100]);
+  assert.equal(Multiplayer.appendRemoteSnapshot(entry, { x: 20, y: 0, facing: "right", state: "exploring", seq: 1, moving: true, sampledAt: 1050, updatedAt: 9002 }, 1050).stale, true);
+  Multiplayer.interpolateRemotePlayer(entry, 0, undefined, { now: 1700 });
+  assert.equal(entry.renderX, 100);
+  assert.equal(entry.lastRenderSample.extrapolated, false);
 });
 
 test("battle state updates immediately and returning to exploration removes it", async () => {
@@ -276,7 +293,7 @@ test("remote render path uses the graphical crossed-swords asset and shared rend
   assert.equal(fs.existsSync(path.join(root, "assets", "ui", "battle-state-crossed-swords-v1.png")), true);
   assert.match(gameSource, /remote\.state === "battle"/);
   assert.match(gameSource, /Art\.drawBattleStateIcon/);
-  assert.match(gameSource, /x: nameX/);
-  assert.match(gameSource, /y: nameY - 5 \* scale/);
+  assert.match(gameSource, /x: stableCenterX/);
+  assert.match(gameSource, /y: nameY - 8 \* scale/);
   assert.match(artSource, /battleState: \{ src: "assets\/ui\/battle-state-crossed-swords-v1\.png"/);
 });
