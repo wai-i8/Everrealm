@@ -299,6 +299,7 @@
   let battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
   let exploreHoverEntityId = null;
   let pendingClickInteractionId = null;
+  let pendingClickInteractionPoint = null;
   let pendingManualSkillId = null;
   let pendingSkillDetailId = null;
   let skillDetailReturnTarget = null;
@@ -2338,8 +2339,11 @@
     if (player.moving && updateRandomEncounters(travelDistance)) return;
     collectDrops();
     updateNearestInteraction();
-    if (pendingClickInteractionId && nearestInteraction?.id === pendingClickInteractionId) {
+    const pendingInteractionArrived = pendingClickInteractionId && pendingClickInteractionPoint && !exploreMoveTarget && !exploreMovePath.length &&
+      Core.distance(player, pendingClickInteractionPoint) <= Math.max(10, (Number(world.navigation?.feetRadiusPx) || 3) * 3);
+    if (pendingClickInteractionId && (nearestInteraction?.id === pendingClickInteractionId || pendingInteractionArrived)) {
       pendingClickInteractionId = null;
+      pendingClickInteractionPoint = null;
       clearExploreMovePath();
       interact();
       if (mode !== "playing") return;
@@ -2851,7 +2855,7 @@
 
   function interactionReachForEntity(entity) {
     if (authoritativeInteractionRegion(entity)) {
-      return Number(entity.interactionRadius) || Number(world.navigation.serviceInteractionReachPx) || 112;
+      return Math.max(8, (Number(world.navigation.feetRadiusPx) || 3) * 2);
     }
     return ["gate", "portal", "questBoard"].includes(entity?.kind)
       ? 82
@@ -8765,7 +8769,9 @@
         ? world.navigation.regionIndexAt("npc", authoredPoint)
         : null;
       if (Number.isInteger(authoredRegionIndex)) {
-        const authoredNpc = world.npcs.find((entity) => authoritativeInteractionRegion(entity) === "npc" && authoritativeInteractionRegionIndex(entity) === authoredRegionIndex);
+        const authoredNpcs = world.npcs.filter((entity) => authoritativeInteractionRegion(entity) === "npc");
+        const authoredNpc = authoredNpcs.find((entity) => authoritativeInteractionRegionIndex(entity) === authoredRegionIndex) ||
+          (authoredNpcs.length === 1 && authoritativeInteractionRegionIndex(authoredNpcs[0]) === null ? authoredNpcs[0] : null);
         if (authoredNpc) return authoredNpc;
       }
       const authoredInteractionId = world.navigation.interactionAtWorldPoint(authoredPoint);
@@ -8773,17 +8779,9 @@
         const authoredInteraction = [...world.npcs, ...world.boards].find((entity) => entity.id === authoredInteractionId);
         if (authoredInteraction) return authoredInteraction;
       }
-      if (typeof world.navigation.interactionHitTest === "function" && world.navigation.interactionHitTest("npc", authoredPoint)) {
-        const paddedInteraction = world.npcs
-          .filter((entity) => authoritativeInteractionRegion(entity) === "npc")
-          .map((entity) => ({ entity, distance: world.navigation.distanceToRegion("npc", authoredPoint, authoritativeInteractionRegionIndex(entity)) }))
-          .filter((item) => item.distance <= (Number(world.navigation.serviceInteractionHitPaddingPx) || 32))
-          .sort((left, right) => left.distance - right.distance)[0]?.entity;
-        if (paddedInteraction) return paddedInteraction;
-      }
     }
     const candidates = [
-      ...world.npcs,
+      ...world.npcs.filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
       ...world.boards,
       ...world.signs,
       ...(world.shrine ? [world.shrine] : []),
@@ -8806,30 +8804,16 @@
     const regionIndex = authoritativeInteractionRegionIndex(entity);
     const regionPoint = navigation.nearestPointInRegion(region, player, regionIndex);
     if (!regionPoint) return null;
-    const reach = Math.max(24, interactionReachForEntity(entity) - 8);
-    const baseAngle = Math.atan2(player.y - regionPoint.y, player.x - regionPoint.x);
-    const angleOffsets = [0, Math.PI / 12, -Math.PI / 12, Math.PI / 6, -Math.PI / 6, Math.PI / 4, -Math.PI / 4, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI];
-    const radii = [12, 18, 26, 36, 50, 68, 88, 112, 136, 176, 216, 256, 296, reach].filter((value, index, array) => value <= reach && array.indexOf(value) === index);
     const navigationRadius = Number(navigation.feetRadiusPx) || 3;
-    const candidates = [];
-    for (const radius of radii) {
-      for (const offset of angleOffsets) {
-        const angle = baseAngle + offset;
-        const candidate = {
-          x: Core.clamp(regionPoint.x + Math.cos(angle) * radius, navigationRadius, world.pixelWidth - navigationRadius),
-          y: Core.clamp(regionPoint.y + Math.sin(angle) * radius, navigationRadius, world.pixelHeight - navigationRadius),
-        };
-        if (isBlocked({ ...candidate, radius: navigationRadius })) continue;
-        if (typeof navigation.distanceToRegion === "function" && navigation.distanceToRegion(region, candidate, regionIndex) > reach) continue;
-        candidates.push({ candidate, playerDistance: Core.distance(player, candidate), regionDistance: Core.distance(regionPoint, candidate) });
-      }
-    }
-    candidates.sort((a, b) => a.playerDistance - b.playerDistance || a.regionDistance - b.regionDistance);
-    return candidates[0]?.candidate || null;
+    // The NPC mask stays exact. Find the nearest standable white/cyan point
+    // around that region, even when black blocked pixels separate it from the
+    // player; the pending click is completed when this reachable point is met.
+    return nearestWalkableExploreDestination(regionPoint, navigationRadius);
   }
 
   function setExploreClickTarget(target, entity = null) {
     explorePortalIntentId = null;
+    pendingClickInteractionPoint = null;
     const distance = entity ? interactionDistanceToEntity(entity) : Infinity;
     const interactionRange = entity && !entity.type ? interactionReachForEntity(entity) : 0;
     if (entity && !entity.type && entity.kind !== "portal" && distance <= interactionRange) {
@@ -8874,6 +8858,10 @@
       pendingClickInteractionId = null;
       explorePortalIntentId = null;
       return;
+    }
+    if (pendingClickInteractionId) {
+      const finalPathPoint = exploreMovePath[exploreMovePath.length - 1] || exploreMoveTarget;
+      pendingClickInteractionPoint = finalPathPoint ? { ...finalPathPoint } : { ...destination };
     }
     spawnBurst(destination.x, destination.y, entity?.type ? "#ff8b62" : "#52dccb", 5, 24);
   }
