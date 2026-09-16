@@ -7180,14 +7180,6 @@
     </div>`;
   }
 
-  function selectedBattleSkillDetail(skill) {
-    if (!skill) return "";
-    return `<div class="battle-target-context" role="status" aria-live="polite">
-      <strong>${skill.name}</strong>
-      <small>${skill.apCost} AP</small>
-    </div>`;
-  }
-
   function renderBattleActionButtons() {
     const planningMove = battle.phase === "planning_move";
     const planningAction = battle.phase === "planning_action";
@@ -7221,23 +7213,14 @@
       return;
     }
     const selectedSkill = battleSkillFromAction(battle.selectedAction);
-    if (selectedSkill) {
-      buttons.classList.add("is-target-phase");
-      buttons.innerHTML = `
-        ${selectedBattleSkillDetail(selectedSkill)}
-        <button class="battle-command-secondary cancel-target-button" type="button" data-battle-action="cancel-target">
-          <b>取消</b>
-        </button>`;
-      battleUi.potionCount = null;
-      return;
-    }
     const skillButtons = equippedBattleSkills().map((skill) => {
       const id = skill.id === "quick_slash" ? ' id="battleAttackButton"' : skill.id === "lantern_shot" ? ' id="battleLanternButton"' : "";
-      const className = skill.tags.includes("magic") ? "lantern-skill" : "attack-skill";
+      const selected = Boolean(selectedSkill && Skills.canonicalSkillId(selectedSkill.id) === Skills.canonicalSkillId(skill.id));
+      const className = `${skill.tags.includes("magic") ? "lantern-skill" : "attack-skill"}${selected ? " is-selected" : ""}`;
       const action = `skill:${skill.id}`;
       const disabled = battle.ap < skill.apCost;
       const apLabel = disabled ? `AP不足，需要 ${skill.apCost} AP` : `消耗 ${skill.apCost} AP`;
-      return `<button${id} class="battle-command-skill ${className}" type="button" data-battle-action="${action}" ${disabled ? "disabled" : ""} title="${apLabel}" aria-label="${skill.name}，${apLabel}">
+      return `<button${id} class="battle-command-skill ${className}" type="button" data-battle-action="${action}" ${disabled ? "disabled" : ""} aria-pressed="${selected ? "true" : "false"}" title="${apLabel}" aria-label="${skill.name}，${apLabel}">
         <b>${skill.name}</b>
       </button>`;
     }).join("");
