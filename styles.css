@@ -772,12 +772,17 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   transform: rotate(var(--battle-facing-angle,0deg));
   transform-origin: center;
 }
-/* Mobile projected movement arrows use authored diagonal bitmaps. Each arrow
-   stays in its own layer so pressed feedback affects only that direction. */
+/* Mobile facing controls reuse the generated equilateral triangle emblem. The
+   four touch targets stay in a loose ring while the artwork points along the
+   actual screen-space facing vector. */
+.battle-facing-picker[data-mobile-arrows="true"] {
+  --battle-facing-control-size: clamp(3.25rem,16vw,4.5rem);
+  --battle-facing-picker-size: calc(var(--battle-facing-control-size) * 2.25);
+}
 .battle-facing-picker[data-mobile-arrows="true"] button {
   margin: 0;
-  width: 2.3rem;
-  height: 2.3rem;
+  width: var(--battle-facing-control-size);
+  height: var(--battle-facing-control-size);
   z-index: 1;
   color: transparent;
   text-shadow: none;
@@ -787,20 +792,17 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-facing-picker[data-mobile-arrows="true"] button:focus-visible { transform: translate(-50%,-50%) scale(1.08); }
 .battle-facing-picker[data-mobile-arrows="true"] .facing-arrow {
   display: block;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--battle-facing-control-size);
+  height: var(--battle-facing-control-size);
+  background-image: url("assets/ui/battle-facing-triangle-v1.png");
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
   clip-path: none;
-  transform: none;
+  transform: rotate(var(--battle-facing-rotation,0deg));
   filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
   transition: transform .04s linear, filter .04s linear;
 }
-.battle-facing-picker[data-mobile-arrows="true"] .facing-up .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-up-v1.png"); }
-.battle-facing-picker[data-mobile-arrows="true"] .facing-right .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-right-v1.png"); }
-.battle-facing-picker[data-mobile-arrows="true"] .facing-down .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-down-v1.png"); }
-.battle-facing-picker[data-mobile-arrows="true"] .facing-left .facing-arrow { background-image: url("assets/ui/battle-facing-arrow-left-v1.png"); }
 .battle-facing-picker[data-mobile-arrows="true"] button:hover .facing-arrow,
 .battle-facing-picker[data-mobile-arrows="true"] button:focus-visible .facing-arrow {
   filter: brightness(1.12) saturate(1.08) drop-shadow(0 2px 3px rgba(0,0,0,.82)) drop-shadow(0 0 4px rgba(255,200,87,.32));
@@ -809,7 +811,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
   transform: translate(-50%,-50%) scale(.98);
 }
 .battle-facing-picker[data-mobile-arrows="true"] button:active .facing-arrow {
-  transform: translateY(1px) scale(.9);
+  transform: rotate(var(--battle-facing-rotation,0deg)) translateY(1px) scale(.9);
   filter: brightness(.72) saturate(.82) drop-shadow(0 1px 1px rgba(0,0,0,.9));
 }
 .battle-facing-picker[data-mobile-arrows="true"] .facing-drag-handle {
@@ -822,6 +824,10 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-facing-picker[data-detached="true"] {
   width: 8rem; height: 8rem;
   transform: translate(-50%,-50%);
+}
+.battle-facing-picker[data-mobile-arrows="true"][data-detached="true"] {
+  width: var(--battle-facing-picker-size);
+  height: var(--battle-facing-picker-size);
 }
 .battle-facing-picker[data-detached="true"] .facing-drag-handle { display: grid; }
 .battle-facing-picker[data-detached="true"] .facing-drag-handle {
@@ -5260,7 +5266,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     font-size: .5rem !important;
   }
   /* Touch targets stay comfortably tappable while the detached mobile picker
-     remains visually just the four arrows and its move handle. */
+     remains visually just the four generated triangles and its move handle. */
   .battle-facing-picker button {
     width: 2.65rem !important;
     height: 2.65rem !important;
@@ -5270,8 +5276,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
     margin: 0 !important;
   }
   .battle-facing-picker[data-detached="true"] {
-    width: 8rem !important;
-    height: 8rem !important;
+    width: var(--battle-facing-picker-size,8rem) !important;
+    height: var(--battle-facing-picker-size,8rem) !important;
+  }
+  .battle-facing-picker[data-mobile-arrows="true"][data-detached="true"] button {
+    width: var(--battle-facing-control-size,2.65rem) !important;
+    height: var(--battle-facing-control-size,2.65rem) !important;
   }
 
   .facility-overlay[data-facility-tab="bag"] .inventory-grid-item .inventory-item-art > .atlas-icon,

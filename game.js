@@ -5824,38 +5824,38 @@
       : { up: "上", right: "右", down: "下", left: "左" };
     const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const touchSizedPicker = coarseBattlePointer || width <= 820;
-    const mobileProjectedArrows = projected && touchSizedPicker;
+    const mobileTrianglePicker = touchSizedPicker;
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
-    battleFacingPicker.dataset.mobileArrows = mobileProjectedArrows ? "true" : "false";
-    const pickerRadius = mobileProjectedArrows
+    battleFacingPicker.dataset.mobileArrows = mobileTrianglePicker ? "true" : "false";
+    const pickerRadius = mobileTrianglePicker
       ? 0
       : projected
         ? 44
         : touchSizedPicker
           ? Core.clamp(layout.cell * .54, 38, 46)
           : Core.clamp(layout.cell * .48, 31, 45);
-    const projectedFacingOffsets = mobileProjectedArrows
+    const mobileFacingOffsets = mobileTrianglePicker
       ? (() => {
         const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        const renderedArrowWidth = rootFontSize * 2.5;
-        const arrowAspectRatios = {
-          up: 1527 / 793,
-          right: 2708 / 782,
-          down: 1504 / 783,
-          left: 1528 / 778,
-        };
-        const renderedArrowHeight = (facing) => renderedArrowWidth / arrowAspectRatios[facing];
-        const verticalGap = 0;
-        const horizontalGap = verticalGap * (765 / 125);
-        const spanX = renderedArrowWidth + horizontalGap;
-        const spanY = (renderedArrowHeight("up") + renderedArrowHeight("left")) / 2 + verticalGap;
-        return {
-          up: { x: -spanX / 2, y: -spanY / 2 },
-          right: { x: spanX / 2, y: -spanY / 2 },
-          down: { x: spanX / 2, y: spanY / 2 },
-          left: { x: -spanX / 2, y: spanY / 2 },
-        };
+        const renderedTriangleSize = Math.min(rootFontSize * 4.5, Math.max(rootFontSize * 3.25, width * .16));
+        const ringRadius = renderedTriangleSize * .86;
+        // Projected logical facings are NW/NE/SE/SW. Place them at the four
+        // cardinal slots while keeping the triangle pointed at the real
+        // screen-space direction (top = NE, then clockwise by 90 degrees).
+        return projected
+          ? {
+            up: { x: -ringRadius, y: 0 },
+            right: { x: 0, y: -ringRadius },
+            down: { x: ringRadius, y: 0 },
+            left: { x: 0, y: ringRadius },
+          }
+          : {
+            up: { x: 0, y: -ringRadius },
+            right: { x: ringRadius, y: 0 },
+            down: { x: 0, y: ringRadius },
+            left: { x: -ringRadius, y: 0 },
+          };
       })()
       : null;
     const currentCommands = battle.heroMoveCommands || [];
@@ -5896,7 +5896,7 @@
       const label = labels[facing] || facing;
       const vector = battleFacingScreenVector(facing, layout);
       const angle = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
-      const position = projectedFacingOffsets?.[facing]
+      const position = mobileFacingOffsets?.[facing]
         || projectedDesktopFacingOffsets?.[facing]
         || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
       button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
@@ -5906,6 +5906,11 @@
         arrow.style.transform = `matrix(${vector.x},${vector.y},${tangent.x},${tangent.y},0,0)`;
       } else {
         arrow.style.removeProperty("transform");
+        if (mobileTrianglePicker) {
+          arrow.style.setProperty("--battle-facing-rotation", `${angle - 90}deg`);
+        } else {
+          arrow.style.removeProperty("--battle-facing-rotation");
+        }
       }
       button.style.left = detachedPicker ? `calc(50% + ${position.x}px)` : `${position.x}px`;
       button.style.top = detachedPicker ? `calc(50% + ${position.y}px)` : `${position.y}px`;
