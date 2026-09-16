@@ -38,7 +38,13 @@
         : state.getEntries().filter((entry) => (filterGroups[filter] || [filter]).includes(entry.type));
       dom.systemLog.dataset.filter = filter;
       const visibleEntries = state.getCollapsed() ? entries.slice(-2) : entries;
-      dom.systemLogMessages.innerHTML = visibleEntries.map((entry) => `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}"><span class="system-log-tag">[${labels[entry.type] || "系統"}]</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`).join("");
+      dom.systemLogMessages.innerHTML = visibleEntries.map((entry) => {
+        const tag = `<span class="system-log-tag">[${labels[entry.type] || "系統"}]</span>`;
+        if (entry.type === "world" && entry.author) {
+          return `<div class="system-log-entry is-world"><span class="system-log-tag">[${labels.world || "世界"}]</span><span class="system-log-author">${escapeUiText(entry.author)}：</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`;
+        }
+        return `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}">${tag}<span class="system-log-text">${escapeUiText(entry.text)}</span></div>`;
+      }).join("");
       dom.systemLogMessages.scrollTop = dom.systemLogMessages.scrollHeight;
       for (const tab of dom.systemLogTabs?.querySelectorAll?.("[data-log-filter]") || []) {
         const selected = tab.dataset.logFilter === filter;
@@ -61,7 +67,17 @@
       if (!safeText) return;
       const entries = state.getEntries();
       entries.push({ id: state.nextSerial(), type: safeType, text: safeText, tone: String(tone || "") });
-      if (entries.length > 400) entries.splice(0, entries.length - 400);
+      if (entries.length > 800) entries.splice(0, entries.length - 800);
+      renderSystemLog();
+    }
+
+    function addWorldMessage(author, text) {
+      const safeAuthor = String(author || "冒險者").trim().slice(0, 24) || "冒險者";
+      const safeText = String(text || "").trim();
+      if (!safeText) return;
+      const entries = state.getEntries();
+      entries.push({ id: state.nextSerial(), type: "world", author: safeAuthor, text: safeText, tone: "" });
+      if (entries.length > 800) entries.splice(0, entries.length - 800);
       renderSystemLog();
     }
 
@@ -82,6 +98,7 @@
       announce,
       renderSystemLog,
       addSystemMessage,
+      addWorldMessage,
       syncSystemLogCollapsed,
       toggleSystemLogCollapsed,
     });

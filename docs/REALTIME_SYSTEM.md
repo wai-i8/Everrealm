@@ -10,7 +10,7 @@ https://everrealm-f5a7d-default-rtdb.firebaseio.com/
 
 Realtime Database is transient only. Firestore remains the permanent save store for inventory, equipment, coins, EXP, quests, progression and all existing `players/{uid}` data. The one-active-device/session policy remains owned by Firestore and is unchanged.
 
-Phase 2 does not synchronize combat, tactical cells, damage, skills, enemy state, turns, battle results, parties, chat, trading, economy or Cloud Functions.
+Phase 2 does not synchronize combat, tactical cells, damage, skills, enemy state, turns, battle results, parties, trading, economy or Cloud Functions. A lightweight authenticated world-chat feed is layered on RTDB after the movement/presence foundation and remains non-authoritative gameplay data.
 
 ## Presence records
 
@@ -49,6 +49,24 @@ maps/{mapId}/players/{uid}
 Exploration coordinates are throttled and are never written once per render frame. Battle state keeps the same exploration `x`, `y` and `facing`; tactical battle coordinates are not published. A low-frequency heartbeat keeps an in-battle record fresh without publishing battle movement.
 
 Remote records are rendered only on the subscribed map. Their positions are interpolated toward the newest RTDB target. A remote player in `battle` remains visible at their last exploration position and receives the dedicated crossed-swords Canvas marker. No collision or combat authority is attached to remote records.
+
+## World chat
+
+The first chat channel is a single global world feed:
+
+```text
+chat/world/messages/{messageId}
+{
+  uid: string,
+  name: string,
+  text: string,
+  createdAt: RTDB server timestamp
+}
+```
+
+Only authenticated users may read the feed, and a client may create only a message whose `uid` matches `auth.uid`. Messages are plain text, limited to 200 characters, and the client applies a short send cooldown. The runtime listens to at most 500 messages from the current gameplay session start time onward, so logging in / entering gameplay does not replay historical world chat. The database is not client-pruned; server-side retention cleanup can be added later without granting clients delete authority.
+
+The existing lower-left system log renders world chat through a dedicated `世界` filter. Desktop uses the same HTML input with Enter/submit; touch devices use the native software keyboard. Chat pointer/touch events are contained by the chat controls and do not trigger click-to-move.
 
 ## WorldTime
 

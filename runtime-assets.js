@@ -62,6 +62,7 @@
     "save-system.js",
     "firebase-config.js",
     "firebase-client.js?v=20260916-01",
+    "chat.js?v=20260916-01",
     "cloud-save.js",
     "save-persistence.js",
     "world-time.js?v=20260916-01",
@@ -82,7 +83,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260916-08",
+    "game.js?v=20260916-10",
   ]);
 
   return Object.freeze({ scripts });

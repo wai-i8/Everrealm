@@ -7652,3 +7652,85 @@ html body [aria-disabled="true"] {
 .primary-button::after,
 .secondary-button::after,
 .facility-action-button::after { content: none !important; display:none !important; }
+
+/* === 2026-09-16 world chat === */
+.system-log-entry.is-world {
+  color: #8fe9ff !important;
+}
+.system-log-entry.is-world .system-log-tag {
+  color: #70dcff !important;
+}
+.system-log-entry.is-world .system-log-author {
+  flex: 0 0 auto;
+  color: #fff0bd;
+  font-weight: 850;
+}
+.system-log-entry.is-world .system-log-text {
+  min-width: 0;
+  color: #edf3ff !important;
+  overflow-wrap: anywhere;
+}
+
+/* Chat input deliberately matches the floating log: no visible box/surface.
+   The full-width transparent input keeps a generous touch target while only
+   the placeholder/caret/text are visible. */
+.system-log-chat-form {
+  position: relative;
+  z-index: 7;
+  display: block;
+  width: 100%;
+  margin-top: .12rem;
+  pointer-events: auto;
+  user-select: auto;
+}
+.system-log-chat-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.35rem;
+  box-sizing: border-box;
+  margin: 0;
+  padding: .08rem .18rem;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  color: #edf3ff;
+  caret-color: #fff0bd;
+  font: 650 .72rem/1.35 system-ui, sans-serif;
+  text-shadow:
+    0 0 1px rgba(0,0,0,1),
+    0 0 4px rgba(0,0,0,.96),
+    0 0 8px rgba(0,0,0,.86),
+    0 0 14px rgba(0,0,0,.68),
+    0 0 20px rgba(0,0,0,.48);
+}
+.system-log-chat-input::placeholder {
+  color: rgba(237,243,255,.58);
+  opacity: 1;
+  text-shadow:
+    0 0 1px rgba(0,0,0,1),
+    0 0 4px rgba(0,0,0,.96),
+    0 0 8px rgba(0,0,0,.86);
+}
+.system-log-chat-input:focus,
+.system-log-chat-input:focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.system-log.is-collapsed .system-log-chat-form { display: none; }
+
+@media (max-width: 760px) {
+  .system-log-chat-form { margin-top: .08rem; }
+  .system-log-chat-input {
+    min-height: 1.45rem;
+    padding: .04rem .12rem;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+}

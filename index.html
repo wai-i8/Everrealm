@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260913-08"],
+          ["everrealmStyles", "styles.css?v=20260916-02"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -160,6 +160,7 @@
           <div class="system-log-toolbar">
             <nav id="systemLogTabs" class="system-log-tabs" aria-label="資訊分類">
               <button type="button" data-log-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-log-filter="world" aria-pressed="false">世界</button>
               <button type="button" data-log-filter="combat" aria-pressed="false">戰鬥</button>
               <button type="button" data-log-filter="progress" aria-pressed="false">進度</button>
               <button type="button" data-log-filter="system" aria-pressed="false">系統</button>
@@ -168,6 +169,9 @@
             <button id="systemLogDragHandle" class="system-log-drag-handle" type="button" aria-label="拖動系統資訊欄" title="拖動資訊欄">✥</button>
           </div>
           <div id="systemLogMessages" class="system-log-messages" aria-live="polite" aria-relevant="additions text"></div>
+          <form id="worldChatForm" class="system-log-chat-form" autocomplete="off">
+            <input id="worldChatInput" class="system-log-chat-input" type="text" maxlength="200" placeholder="請輸入…" aria-label="世界頻道訊息" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true" />
+          </form>
           <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="喺呢度用滑鼠滾輪或手指上下掃動翻閱訊息"></div>
         </section>
 
@@ -532,7 +536,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260916-08")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260916-10")}"><\/script>`);
       })();
     </script>
 

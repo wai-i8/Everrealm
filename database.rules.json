@@ -17,6 +17,35 @@
           }
         }
       }
+    },
+    "chat": {
+      "world": {
+        "messages": {
+          ".read": "auth != null",
+          ".indexOn": [
+            "createdAt"
+          ],
+          "$messageId": {
+            ".write": "auth != null && !data.exists() && newData.exists() && newData.child('uid').val() == auth.uid",
+            ".validate": "newData.hasChildren(['uid', 'name', 'text', 'createdAt'])",
+            "uid": {
+              ".validate": "newData.isString() && newData.val() == auth.uid"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber() && newData.val() >= now - 10000 && newData.val() <= now + 5000"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -38,6 +38,8 @@
   const BattleVictory = window.EverrealmBattleVictory;
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
+  const Chat = window.EverrealmChat;
+  let worldChat = null;
   const {
     normalizeCharacterName,
     statText,
@@ -172,6 +174,8 @@
   const systemLogDragHandle = document.getElementById("systemLogDragHandle");
   const systemLogMessages = document.getElementById("systemLogMessages");
   const systemLogScrollZone = document.getElementById("systemLogScrollZone");
+  const worldChatForm = document.getElementById("worldChatForm");
+  const worldChatInput = document.getElementById("worldChatInput");
   const guildCommissionDetailPanel = document.getElementById("guildCommissionDetailPanel");
   const guildCommissionDetailContent = document.getElementById("guildCommissionDetailContent");
   const guildCommissionDetailCloseButton = document.getElementById("guildCommissionDetailCloseButton");
@@ -628,6 +632,7 @@
   let worldTimeLoadStarted = false;
   let worldClockText = "";
   let realtimeStartPromise = null;
+  let chatStartPromise = null;
   let realtimeSessionToken = 0;
 
   function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
@@ -660,27 +665,43 @@
 
   function startRealtimeSession() {
     const uid = authenticatedUid();
-    if (!uid || !multiplayer) return;
+    if (!uid) return;
     const token = ++realtimeSessionToken;
-    realtimeStartPromise = multiplayer.start({
-      uid,
-      getPlayer: () => realtimePlayerSnapshot(),
-    }).then((started) => {
-      if (token !== realtimeSessionToken) {
-        if (started) void multiplayer.stop();
+    if (multiplayer) {
+      realtimeStartPromise = multiplayer.start({
+        uid,
+        getPlayer: () => realtimePlayerSnapshot(),
+      }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) void multiplayer.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm multiplayer unavailable.", error);
         return false;
-      }
-      return started;
-    }).catch((error) => {
-      console.warn("Everrealm multiplayer unavailable.", error);
-      return false;
-    });
+      });
+    }
+    if (worldChat) {
+      chatStartPromise = worldChat.start({ uid, name: playerDisplayName() }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) worldChat.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm world chat unavailable.", error);
+        return false;
+      });
+    }
   }
 
   function stopRealtimeSession() {
     realtimeSessionToken += 1;
     realtimeStartPromise = null;
+    chatStartPromise = null;
     if (multiplayer?.isActive?.()) void multiplayer.stop();
+    worldChat?.stop?.();
   }
 
   function syncRealtimeState(state) {
@@ -7795,12 +7816,12 @@
     hud.zone.textContent = name;
   }
 
-  const SYSTEM_LOG_LABELS = Object.freeze({ combat: "戰鬥", reward: "進度", quest: "進度", item: "進度", system: "系統" });
+  const SYSTEM_LOG_LABELS = Object.freeze({ world: "世界", combat: "戰鬥", reward: "進度", quest: "進度", item: "進度", system: "系統" });
 
   const systemFeedback = SystemFeedback.create({
     dom: { toastElement, ariaLive, systemLog, systemLogMessages, systemLogTabs, systemLogToggleButton },
     labels: SYSTEM_LOG_LABELS,
-    filterGroups: { combat: ["combat"], progress: ["reward", "quest", "item"], system: ["system"] },
+    filterGroups: { world: ["world"], combat: ["combat"], progress: ["reward", "quest", "item"], system: ["system"] },
     escapeUiText,
     storage: { setItem(key, value) { localStorage.setItem(key, value); } },
     storageKey: SYSTEM_LOG_COLLAPSED_KEY,
@@ -7818,9 +7839,19 @@
     announce,
     renderSystemLog,
     addSystemMessage,
+    addWorldMessage,
     syncSystemLogCollapsed,
     toggleSystemLogCollapsed,
   } = systemFeedback;
+
+  worldChat = Chat?.create?.({
+    firebase: Firebase,
+    historyLimit: 500,
+    maxMessageLength: 200,
+    sendCooldownMs: 650,
+    onMessage: (message) => addWorldMessage(message.name, message.text),
+    onError: (error) => console.warn("Everrealm world chat failed.", error),
+  }) || null;
 
   function restoreSystemLogPosition() {
     if (!systemLog) return;
@@ -11274,9 +11305,45 @@
     const button = event.target.closest("[data-log-filter]");
     if (!button) return;
     const next = button.dataset.logFilter;
-    systemLogFilter = ["all", "combat", "progress", "system"].includes(next) ? next : "all";
+    systemLogFilter = ["all", "world", "combat", "progress", "system"].includes(next) ? next : "all";
     renderSystemLog();
   });
+  worldChatForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = String(worldChatInput?.value || "").trim();
+    if (!text) return;
+    if (!worldChat?.isActive?.()) {
+      showToast("世界頻道尚未連線。", "danger");
+      return;
+    }
+    try {
+      const result = await worldChat.send(text);
+      if (result?.ok) {
+        worldChatInput.value = "";
+      } else if (result?.reason === "cooldown") {
+        showToast("訊息傳送得太快，請等一等。", "danger");
+      } else if (result?.reason === "too-long") {
+        showToast(`世界頻道每句最多 ${result.maxLength || 200} 字。`, "danger");
+      } else {
+        showToast("世界頻道暫時未能傳送訊息。", "danger");
+      }
+    } catch (error) {
+      console.warn("Everrealm world chat send failed.", error);
+      showToast("世界頻道暫時未能傳送訊息。", "danger");
+    } finally {
+      worldChatInput?.focus?.({ preventScroll: true });
+    }
+  });
+  worldChatInput?.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    worldChatForm?.requestSubmit?.();
+  });
+  worldChatForm?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  worldChatForm?.addEventListener("click", (event) => event.stopPropagation());
+  worldChatForm?.addEventListener("keydown", (event) => event.stopPropagation());
   systemLogToggleButton?.addEventListener("click", toggleSystemLogCollapsed);
   systemLogScrollZone?.addEventListener("wheel", (event) => {
     if (!event.deltaY) return;
@@ -11454,6 +11521,7 @@
   window.addEventListener("beforeunload", () => {
     if (mode !== "title" && isGameplayAuthorized()) persistence?.flush();
     void multiplayer?.stop?.();
+    worldChat?.stop?.();
   });
   window.addEventListener("resize", resize, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
