@@ -775,7 +775,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 /* Mobile facing controls reuse the generated equilateral triangle emblem. The
    four touch targets stay in a loose ring while the artwork points outward. */
 .battle-facing-picker[data-mobile-arrows="true"] {
-  --battle-facing-control-size: clamp(3.25rem,16vw,4.5rem);
+  --battle-facing-control-size: clamp(1.625rem,8vw,2.25rem);
   --battle-facing-picker-size: calc(var(--battle-facing-control-size) * 2.25);
 }
 .battle-facing-picker[data-mobile-arrows="true"] button {

@@ -5838,7 +5838,7 @@
     const mobileFacingOffsets = mobileTrianglePicker
       ? (() => {
         const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        const renderedTriangleSize = Math.min(rootFontSize * 4.5, Math.max(rootFontSize * 3.25, width * .16));
+        const renderedTriangleSize = Math.min(rootFontSize * 2.25, Math.max(rootFontSize * 1.625, width * .08));
         const ringRadius = renderedTriangleSize * .86;
         return {
           up: { x: 0, y: -ringRadius },
