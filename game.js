@@ -79,6 +79,7 @@
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
+  const MOBILE_PROJECTED_FACING_MAP = Object.freeze({ up: "right", right: "down", down: "left", left: "up" });
   const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
   const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
   const INVENTORY_PAGE_SIZE = 15;
@@ -5827,8 +5828,11 @@
     const coarseBattlePointer = Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const touchSizedPicker = coarseBattlePointer || width <= 820;
     const mobileTrianglePicker = touchSizedPicker;
-    const labels = projected && !mobileTrianglePicker
-      ? { up: "左上", right: "右上", down: "右下", left: "左下" }
+    const projectedMobilePicker = projected && mobileTrianglePicker;
+    const labels = projectedMobilePicker
+      ? { up: "右上", right: "右下", down: "左下", left: "左上" }
+      : projected
+        ? { up: "左上", right: "右上", down: "右下", left: "左下" }
       : { up: "上", right: "右", down: "下", left: "左" };
     const detachedPicker = touchSizedPicker;
     battleFacingPicker.dataset.detached = detachedPicker ? "true" : "false";
@@ -5895,6 +5899,9 @@
       const position = mobileFacingOffsets?.[facing]
         || projectedDesktopFacingOffsets?.[facing]
         || { x: vector.x * pickerRadius, y: vector.y * pickerRadius };
+      const commandFacing = projectedMobilePicker
+        ? MOBILE_PROJECTED_FACING_MAP[facing] || facing
+        : facing;
       button.innerHTML = '<span class="facing-arrow" aria-hidden="true"></span>';
       const arrow = button.querySelector(".facing-arrow");
       if (projectedDesktopFacingOffsets?.[facing]?.edgeTangent) {
@@ -5911,7 +5918,8 @@
       button.style.left = detachedPicker ? `calc(50% + ${position.x}px)` : `${position.x}px`;
       button.style.top = detachedPicker ? `calc(50% + ${position.y}px)` : `${position.y}px`;
       button.style.setProperty("--battle-facing-angle", `${angle}deg`);
-      const candidateCommands = [...currentCommands, { type: "face", facing }];
+      button.dataset.battleFacingCommand = commandFacing;
+      const candidateCommands = [...currentCommands, { type: "face", facing: commandFacing }];
       const candidateCost = battleMoveCost(candidateCommands);
       const actionCost = Math.max(0, candidateCost - currentCost);
       const affordable = candidateCost <= battle.hero.moveRange + 1e-9;
@@ -11140,7 +11148,7 @@
     clearBattleEnemySelection();
     const facingButton = event.target.closest("[data-battle-facing]");
     if (facingButton && !facingButton.disabled) {
-      chooseBattleFacing(facingButton.dataset.battleFacing);
+      chooseBattleFacing(facingButton.dataset.battleFacingCommand || facingButton.dataset.battleFacing);
       return;
     }
     const button = event.target.closest("[data-battle-action]");
