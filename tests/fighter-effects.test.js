@@ -114,7 +114,7 @@ test("special HP punches respect success chance, never heal, and cap boss damage
   assert.equal(boss.hp, 700);
 });
 
-test("healing, movement reduction, stealth, poison and sleep recovery have executable effects", () => {
+test("healing, movement reduction, direct-target protection, poison and sleep recovery have executable effects", () => {
   const caster = unit("hero", 1, 2, { hp: 20 });
   cast("chi_gathering", caster, [caster]);
   assert.equal(caster.hp, 44);
@@ -125,7 +125,8 @@ test("healing, movement reduction, stealth, poison and sleep recovery have execu
   cast("roar", caster, [caster]);
   assert.equal(Effects.movementPenalty(caster, 2), 2);
   cast("vanishing_aura", caster, [caster]);
-  assert.equal(Effects.statusEvasion(caster, 2), .35);
+  assert.equal(Effects.statusEvasion(caster, 2), 0);
+  assert.equal(Effects.isUntargetable(caster, 2), true);
   caster.statusEffects.poison = { untilRound: 9, amount: 0, appliedRound: 1 };
   caster.statusEffects.sleep = { untilRound: 9 };
   Effects.tickStatuses(caster, 2, Effects.passiveModifiers([Skills.getSkill("poison_recovery"), Skills.getSkill("sleep_recovery")]));

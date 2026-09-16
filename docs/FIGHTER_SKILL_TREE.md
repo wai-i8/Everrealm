@@ -189,7 +189,17 @@ Height validation compares `target.height - caster.height` against `up` and `dow
 
 ### Effects
 
-Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, invisible, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action.
+Runtime consumes knockback, knockdown, paralysis, poison/self-poison, feint-versus-guard, action interference, blind, `untargetable`, heal, guard/evasion/counter/projectile reflection and cleanse. The ten PSV chain plus the two side guardian PSV skills are converted to passive modifiers or auto-cleanse behavior; they are learnable but never equipable in DECK. The DECK UI labels equipable command skills as `CMD` and passive skills as `PSV`; only the former exposes an equip action.
+
+`無鬥氣` (`mutouki`) applies `untargetable` to itself for 2 rounds. This is a visible
+semi-transparent state, not true invisibility and not an evasion bonus. While the
+status is active, a unit cannot be selected as the direct unit target of a single-
+target skill. It remains a real occupied unit for delivery resolution: authored
+area effects can include it, and an attack path can hit it as an intermediate or
+actual impact. Normal path blocking and non-piercing stop rules remain unchanged;
+`piercing` deliveries may continue to later candidates. Future skills with the same
+rule must use the shared `untargetable` utility instead of defining a new skill-
+specific exception.
 
 ### Two distinct Deck surfaces
 

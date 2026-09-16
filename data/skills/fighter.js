@@ -4216,14 +4216,14 @@
           "drops": [],
           "other_sources": []
         },
-        "description_zh": "透明2回合",
+        "description_zh": "半透明2回合；不可直接被點選，但可被範圍及攻擊路線命中",
         "description_status": "traditional_chinese_functional_translation",
         "hit_count": 0,
         "source_hit_judgement": null,
         "source_special_notes": [],
         "source_effects": [
           {
-            "type": "invisible",
+            "type": "untargetable",
             "duration_turns": 2
           }
         ]
@@ -4235,7 +4235,7 @@
         "path_mode": null,
         "utility_effects": [
           {
-            "type": "invisible",
+            "type": "untargetable",
             "duration_turns": 2
           }
         ],

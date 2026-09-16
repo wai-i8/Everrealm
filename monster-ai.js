@@ -26,7 +26,7 @@
     return commands;
   }
 
-  function validateSkillFrom(skill, enemy, origin, facing, target, grid, units) {
+  function validateSkillFrom(skill, enemy, origin, facing, target, grid, units, options = {}) {
     if (!skill || !origin || !target?.cell) return false;
     const validation = Skills.validateSkillTarget(skill, origin, target.cell, {
       grid,
@@ -35,6 +35,7 @@
       actorTeam: enemy.side || enemy.team || "enemy",
       actorId: enemy.id,
       targetUnit: { ...target, team: target.side || target.team || "ally" },
+      canDirectTarget: options.canDirectTarget,
     });
     if (!validation.ok) return false;
     if (!Tactics.usesAttackPath(skill.deliveryMode)) return true;
@@ -189,7 +190,7 @@
     return finite(skill?.range?.max, 1) === 1 && finite(skill?.range?.min, 1) === 1 && skill?.deliveryMode === "contact";
   }
 
-  function attackCandidates({ grid, enemy, target, units, skills }) {
+  function attackCandidates({ grid, enemy, target, units, skills, canDirectTarget }) {
     const currentAp = Math.max(0, finite(enemy.ap, 0));
     const states = reachableStates(grid, enemy, units);
     const candidates = [];
@@ -208,7 +209,7 @@
         sharedMeleeRoute ||= meleePursuitRoute({ grid, enemy, target, units });
         const route = sharedMeleeRoute;
         if (route && route.attackCost <= Math.max(0, finite(enemy.moveRange, 0)) + 1e-9
-          && validateSkillFrom(skill, enemy, route.attackOrigin, route.attackFacing, target, grid, units)) {
+          && validateSkillFrom(skill, enemy, route.attackOrigin, route.attackFacing, target, grid, units, { canDirectTarget })) {
           candidates.push({
             kind: "attack",
             skill,
@@ -230,7 +231,7 @@
       }
 
       for (const state of states) {
-        if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units)) continue;
+        if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units, { canDirectTarget })) continue;
         if (isPureMelee(skill) && !sameCell(state.cell, enemy.cell)) continue;
         const distance = Tactics.manhattan(state.cell, target.cell);
         const maxRange = Math.max(1, finite(skill.range?.max, 1));
@@ -253,7 +254,7 @@
     return candidates;
   }
 
-  function setupCandidates({ grid, enemy, target, units, skills, apGain = 10 }) {
+  function setupCandidates({ grid, enemy, target, units, skills, apGain = 10, canDirectTarget }) {
     const currentAp = Math.max(0, finite(enemy.ap, 0));
     const nextAp = currentAp + Math.max(0, finite(apGain, 10));
     const states = reachableStates(grid, enemy, units);
@@ -265,7 +266,7 @@
         // Setup is based on the AUTHORED attack cells, not a generic Manhattan
         // range band.  A boar stages on a real charge line; a snake stages on
         // a real venom-spit cell/facing.
-        if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units)) continue;
+        if (!validateSkillFrom(skill, enemy, state.cell, state.facing, target, grid, units, { canDirectTarget })) continue;
         const distance = Tactics.manhattan(state.cell, target.cell);
         const maxRange = Math.max(1, finite(skill.range?.max, 1));
         const distanceBonus = maxRange > 1 ? Math.min(distance, maxRange) * 2 : 0;
@@ -311,7 +312,7 @@
   // Re-evaluate only attacks from the unit's actual post-movement cell. This
   // is intentionally separate from planEnemyAction: movement has already
   // resolved, so a stale setup skill must not prevent a newly legal attack.
-  function planCurrentAttack({ grid, enemy, targets = [], units = [], skills = [] } = {}) {
+  function planCurrentAttack({ grid, enemy, targets = [], units = [], skills = [], canDirectTarget } = {}) {
     if (!grid || !alive(enemy)) return null;
     const livingTargets = targets.filter(alive);
     if (!livingTargets.length) return null;
@@ -322,7 +323,7 @@
     const candidates = [];
     for (const skill of (skills || []).filter(Boolean)) {
       if (skill.dealsDamage === false || skill.actionKind === "guard" || currentAp < finite(skill.apCost, 0)) continue;
-      if (!validateSkillFrom(skill, enemy, enemy.cell, facing, target, grid, allUnits)) continue;
+      if (!validateSkillFrom(skill, enemy, enemy.cell, facing, target, grid, allUnits, { canDirectTarget })) continue;
       candidates.push({
         kind: "attack",
         skill,
@@ -359,7 +360,7 @@
     };
   }
 
-  function planEnemyAction({ grid, enemy, targets = [], units = [], skills = [], apGain = 10 } = {}) {
+  function planEnemyAction({ grid, enemy, targets = [], units = [], skills = [], apGain = 10, canDirectTarget } = {}) {
     if (!grid || !alive(enemy)) return null;
     const livingTargets = targets.filter(alive);
     if (!livingTargets.length) return {
@@ -370,8 +371,8 @@
     const allUnits = [...new Map([enemy, ...units, ...livingTargets].filter(Boolean).map((unit) => [unit.id, unit])).values()];
     const usableSkills = (skills || []).filter(Boolean);
 
-    const attacks = attackCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills }).sort(comparePlan);
-    const setup = setupCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills, apGain }).sort(comparePlan)[0] || null;
+    const attacks = attackCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills, canDirectTarget }).sort(comparePlan);
+    const setup = setupCandidates({ grid, enemy, target, units: allUnits, skills: usableSkills, apGain, canDirectTarget }).sort(comparePlan)[0] || null;
     const bestAttack = attacks[0] || null;
 
     let chosen = bestAttack;

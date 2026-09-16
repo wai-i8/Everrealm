@@ -954,7 +954,10 @@ Caster → path cell A → intended target B
 
 A 有單位就先處理 A。
 
-友軍唔係透明：佢會截住條攻擊路線，並且作為第一個 impact target 受到傷害。
+普通友軍唔係透明：佢會截住條攻擊路線，並且作為第一個 impact target 受到傷害。
+但處於 `untargetable` 嘅單位仍然係真實佔格單位，同樣可以截路及成為
+attack-path impact；`untargetable` 只限制直接 target selection，唔會令單位從
+route 或範圍效果消失。
 
 
 ---
@@ -1326,6 +1329,13 @@ deliveryMode: "pathless"
 ### Targeting
 
 > 玩家想打邊個／邊格？
+
+直接選取同效果傳遞必須分開處理。`untargetable` 單位仍然可見，只以半透明
+角色顯示；佢冇額外迴避力，亦唔會令敵我 AI 停止移動。當技能係直接 unit
+target 時，target resolver 必須拒絕揀中佢；當技能係範圍效果，或 intended
+target 令 attack path 經過佢，效果 resolver 必須照正常處理佢。普通非貫通
+route 會喺佢作為第一個成功 impact 後停止；貫通 route 按 `piercing`／
+`maxPierce` 繼續掃描後續單位。
 
 ### Line of Sight
 

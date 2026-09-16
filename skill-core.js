@@ -161,7 +161,9 @@
       else if (type === "counter_stance") effects.push({ type: "counter", amount: .9, duration: 1 });
       else if (type === "projectile_reflect_stance") effects.push({ type: "projectile_counter", amount: 1, duration: 1 });
       else if (type === "action_interference") effects.push({ type, amount: Number(utility.value) || 0, duration: 1 });
-      else if (type === "invisible") effects.push({ type: "stealth", duration: Math.max(1, Number(utility.duration_turns) || 1) });
+      // `invisible` is a legacy source name. Everrealm models this as
+      // visible-but-not-directly-targetable rather than true invisibility.
+      else if (type === "untargetable" || type === "invisible") effects.push({ type: "untargetable", duration: Math.max(1, Number(utility.duration_turns) || 1) });
       else if (type === "heal_hp") effects.push({ type: "heal", maxHpRatio: utility.magnitude === "large" ? .38 : .18, flat: utility.magnitude === "large" ? 60 : 30 });
       else if (type === "paralysis") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
       else if (type === "blind") effects.push({ type, chance: utility.probability === "low" ? .25 : utility.probability === "high" ? .75 : 1, duration: Math.max(1, Number(utility.duration_turns) || 1) });
@@ -820,6 +822,11 @@
       if (skill.targeting.team === "self" && context.actorId != null && String(targetUnit.id) !== String(context.actorId)) {
         return { ok: false, reason: "self-only", cells: [] };
       }
+    }
+    if (skill.targeting.mode === "unit" && targetUnit
+      && typeof context.canDirectTarget === "function"
+      && !context.canDirectTarget(targetUnit, skill)) {
+      return { ok: false, reason: "untargetable", cells: [] };
     }
     const cells = patternCells(skill, origin, target, context);
     return cells.length

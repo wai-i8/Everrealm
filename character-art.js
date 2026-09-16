@@ -657,6 +657,7 @@
     ctx.save();
     try {
       drawGroundShadow(ctx, x, y, visualScale, id === "fighter" ? 15 : 12, selected.state === "hurt" ? .24 : .34);
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? Math.max(0, Math.min(1, settings.alpha)) : 1;
       if (selected.state === "hurt") {
         ctx.globalAlpha *= .84;
         ctx.filter = "brightness(1.12) saturate(.88)";
@@ -727,6 +728,7 @@
       }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? Math.max(0, Math.min(1, settings.alpha)) : 1;
       ctx.drawImage(atlas.image, selected.sx, selected.sy, selected.sw, selected.sh, box.x, box.y, box.width, box.height);
     } finally { ctx.restore(); }
     const nameAnchorX = visualCenterX;
@@ -914,6 +916,7 @@
         ctx.globalAlpha = .63;
         hurtOffset = Math.sin((Number(settings.phase) || 0) * 35) * 1.4 * scale;
       }
+      ctx.globalAlpha *= Number.isFinite(settings.alpha) ? Math.max(0, Math.min(1, settings.alpha)) : 1;
       ctx.translate(x + hurtOffset, 0);
       if (selected.mirror) ctx.scale(-1, 1);
       const localX = box.x - x;

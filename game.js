@@ -4085,7 +4085,8 @@
       feint: () => "對防禦架式有效",
       action_interference: () => "妨礙行動",
       blind: () => "黑暗",
-      stealth: () => "隱身",
+      untargetable: () => "半透明／不可直接選取",
+      stealth: () => "半透明／不可直接選取",
       counter: () => "反擊架式",
       projectile_counter: () => "投射反擊",
       cleanse: (effect) => `解除 ${(effect.statuses || []).join("／")}`,
@@ -4977,6 +4978,7 @@
   const BATTLE_ACTION_STRIKE_INTERVAL_SECONDS = reducedMotion ? .18 : .5;
   const BATTLE_SIDE_DAMAGE_BONUS = .15;
   const BATTLE_REAR_DAMAGE_BONUS = .35;
+  const BATTLE_UNTARGETABLE_ALPHA = .5;
   const BATTLE_MISS_COLOR = "#ffc857";
 
   function battleMoveCapacityForPlayer(stats) {
@@ -5260,7 +5262,7 @@
       const hero = simulated.find((unit) => unit.id === battle.hero.id);
       if (actual.moveDownUntilRound >= battle.round) enemy.moveRange = Math.max(0, enemy.moveRange - (actual.moveDown || 0));
       enemy.moveRange = Math.max(0, enemy.moveRange - (FighterEffects?.movementPenalty(actual, battle.round) || 0));
-      if (FighterEffects?.isDisabled(actual, battle.round, "move") || FighterEffects?.isStealthed?.(battle.hero, battle.round)) {
+      if (FighterEffects?.isDisabled(actual, battle.round, "move")) {
         plans.push({ enemyId: actual.id, move: { ...actual.cell }, path: [{ ...actual.cell }], targetCells: [], willAttack: false, facing: actual.facing, reason: "disabled" });
         continue;
       }
@@ -5272,6 +5274,7 @@
         units: simulated,
         skills: actual.skills,
         apGain: BATTLE_AP_GAIN,
+        canDirectTarget: battleCanDirectTarget,
       }) || Tactics.chooseEnemyAction({ grid: battle.grid, enemy, targets: [hero], units: simulated });
       if (!action) continue;
 
@@ -5345,12 +5348,17 @@
   function battleTargetEvasion(unit) {
     if (!unit) return 0;
     // unit.evasion already contains permanent gear/passive modifiers. Ask the
-    // status system only for temporary stance/concealment bonuses, then add
+    // status system only for temporary evasion stances, then add
     // the one-resolution battle stance (e.g. 舞葉) on top.
     const base = Math.max(0, Number(unit.evasion) || 0);
     const status = (FighterEffects?.statusEvasion(unit, battle?.round || 0, {}) || 0) * 100;
     const battleStance = unit === battle?.hero ? Math.max(0, Number(battle.evasion) || 0) * 100 : 0;
     return Math.max(0, base + status + battleStance);
+  }
+
+  function battleCanDirectTarget(unit) {
+    if (!unit || typeof FighterEffects?.isDirectTargetable !== "function") return true;
+    return FighterEffects.isDirectTargetable(unit, battle?.round || 0);
   }
 
   function revalidateBattlePendingAction(pending) {
@@ -5385,6 +5393,7 @@
             actorTeam,
             actorId: currentActor.id,
             targetUnit: currentTarget ? { ...currentTarget, team: currentTarget.side || currentTarget.team } : null,
+            canDirectTarget: battleCanDirectTarget,
           });
           return validation.ok;
         }
@@ -5565,7 +5574,7 @@
     if (!battle) return;
     for (const plan of battle.enemyPlans) {
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
-      if (!enemy?.alive || enemy.hp <= 0 || FighterEffects?.isDisabled(enemy, battle.round) || FighterEffects?.isStealthed?.(battle.hero, battle.round)) {
+      if (!enemy?.alive || enemy.hp <= 0 || FighterEffects?.isDisabled(enemy, battle.round)) {
         plan.willAttack = false;
         plan.targetCells = [];
         continue;
@@ -5579,6 +5588,7 @@
             targets: [battle.hero],
             units: battleUnits(),
             skills: enemy.skills,
+            canDirectTarget: battleCanDirectTarget,
           })
         : null;
       const skill = action?.skill || null;
@@ -6036,6 +6046,7 @@
       actorTeam: "ally",
       actorId: battle.hero.id,
       targetUnit: targetUnit ? { ...targetUnit, team: targetUnit.side } : null,
+      canDirectTarget: battleCanDirectTarget,
     });
     const damaging = skill?.effects?.some((effect) => effect.type === "damage");
     if (validation.ok && damaging && !skillArcAllowsCell(skill, cell)) {
@@ -6121,6 +6132,8 @@
             ? "背後係攻擊死角；要靠移動最後一步轉向，先可以向前或左右出招。"
           : validation.reason === "blocked-path"
             ? "攻擊路線被高障礙物擋住，唔可以出招。"
+          : validation.reason === "untargetable"
+            ? "呢個單位而家唔可以直接點選；可以用範圍或攻擊路線命中。"
           : "目標唔喺技能射程或方向內。";
         return setBattleMessage(copy, true), false;
       }
@@ -8540,6 +8553,7 @@
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
       && (unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
     const renderFacing = battleUnitRenderFacing(unit);
+    const untargetable = FighterEffects?.isUntargetable?.(unit, battle.round) === true;
     const attackFacing = unit.side === "ally" && acting && battle.actionResolution?.heroAction?.targetCell
       ? Locomotion.facingFromDelta(
           battle.actionResolution.heroAction.targetCell.x - unit.cell.x,
@@ -8591,6 +8605,7 @@
         progress: actionStrikeProgress,
         actionStrikeIndex,
         actionHitCount,
+        alpha: untargetable ? BATTLE_UNTARGETABLE_ALPHA : 1,
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         // The old selected ring and AP orbit were persistent visual noise; tile
         // overlays/cursor already communicate tactical selection.
@@ -8610,6 +8625,7 @@
         progress: actionStrikeProgress,
         actionStrikeIndex,
         actionHitCount,
+        alpha: untargetable ? BATTLE_UNTARGETABLE_ALPHA : 1,
         selected: false,
       });
     }

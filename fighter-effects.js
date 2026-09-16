@@ -6,8 +6,8 @@
   "use strict";
 
   const STANCES = new Set(["guard", "evasion", "counter", "projectile_counter"]);
-  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "stealth", "action_interference", "burn", "wet", "freeze", "sleep", "petrify", "accuracy_down", "barrier"]);
-  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", stealth: "隱身", action_interference: "行動妨礙", burn: "灼傷", wet: "濕身", freeze: "凍結", sleep: "睡眠", petrify: "石化", accuracy_down: "命中下降", barrier: "屏障" };
+  const STATUSES = new Set(["guard", "evasion", "counter", "projectile_counter", "poison", "paralysis", "blind", "knockdown", "move_down", "untargetable", "stealth", "action_interference", "burn", "wet", "freeze", "sleep", "petrify", "accuracy_down", "barrier"]);
+  const LABELS = { guard: "防禦", evasion: "迴避架式", counter: "反擊架式", projectile_counter: "投射反擊", poison: "中毒", paralysis: "麻痺", blind: "黑暗", knockdown: "跌倒", move_down: "移動下降", untargetable: "不可直接選取", stealth: "不可直接選取", action_interference: "行動妨礙", burn: "灼傷", wet: "濕身", freeze: "凍結", sleep: "睡眠", petrify: "石化", accuracy_down: "命中下降", barrier: "屏障" };
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
   const roundNumber = (value) => Math.max(0, Math.trunc(Number(value) || 0));
   const cellOf = (unit) => unit?.cell || unit;
@@ -60,16 +60,26 @@
 
   function statusEvasion(unit, round = 0, passives = {}) {
     const stance = activeStatus(unit, "evasion", round)?.amount || 0;
-    const concealment = activeStatus(unit, "stealth", round) ? .35 : 0;
-    return clamp((passives.evasion || 0) + stance + concealment, 0, .9);
+    return clamp((passives.evasion || 0) + stance, 0, .9);
   }
 
   function accuracyPenalty(unit, round = 0) {
     return Math.min(.9, (activeStatus(unit, "blind", round) ? .55 : 0) + (activeStatus(unit, "accuracy_down", round)?.amount || 0));
   }
 
+  function isUntargetable(unit, round = 0) {
+    // `stealth` is retained as a save/debug compatibility alias. It no
+    // longer means unseen or evasive; both names use direct-target protection.
+    return Boolean(activeStatus(unit, "untargetable", round) || activeStatus(unit, "stealth", round));
+  }
+
+  function isDirectTargetable(unit, round = 0) {
+    return !isUntargetable(unit, round);
+  }
+
   function isStealthed(unit, round = 0) {
-    return Boolean(activeStatus(unit, "stealth", round));
+    // Legacy API alias. New callers must use isUntargetable.
+    return isUntargetable(unit, round);
   }
 
   function movementPenalty(unit, round = 0) {
@@ -265,5 +275,5 @@
     return output;
   }
 
-  return { passiveModifiers, applySkillEffects, tickStatuses, activeStatus, isDisabled, isStealthed, statusEvasion, accuracyPenalty, movementPenalty, damageMultiplier, resolveCounter };
+  return { passiveModifiers, applySkillEffects, tickStatuses, activeStatus, isDisabled, isUntargetable, isDirectTargetable, isStealthed, statusEvasion, accuracyPenalty, movementPenalty, damageMultiplier, resolveCounter };
 });
