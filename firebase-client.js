@@ -54,23 +54,26 @@
 
   const ready = Promise.resolve().then(async () => {
     assertConfig();
-    const [appSdk, authSdk, firestoreSdk, databaseSdk] = await Promise.all([
+    const [appSdk, authSdk, firestoreSdk, databaseSdk, functionsSdk] = await Promise.all([
       import(`${SDK_BASE}/firebase-app.js`),
       import(`${SDK_BASE}/firebase-auth.js`),
       import(`${SDK_BASE}/firebase-firestore.js`),
       import(`${SDK_BASE}/firebase-database.js`),
+      import(`${SDK_BASE}/firebase-functions.js`),
     ]);
     const firebaseApp = appSdk.getApps().length ? appSdk.getApp() : appSdk.initializeApp(config);
     const auth = authSdk.getAuth(firebaseApp);
     const db = firestoreSdk.getFirestore(firebaseApp);
     const realtimeDb = databaseSdk.getDatabase(firebaseApp, config.databaseURL);
+    const functions = functionsSdk.getFunctions(firebaseApp, "europe-west2");
     authInstance = auth;
     if (useEmulators) {
       authSdk.connectAuthEmulator(auth, "http://127.0.0.1:19099", { disableWarnings: true });
       firestoreSdk.connectFirestoreEmulator(db, "127.0.0.1", 18085);
       databaseSdk.connectDatabaseEmulator(realtimeDb, "127.0.0.1", 19000);
+      functionsSdk.connectFunctionsEmulator(functions, "127.0.0.1", 15001);
     }
-    return Object.freeze({ appSdk, authSdk, firestoreSdk, databaseSdk, firebaseApp, auth, db, realtimeDb });
+    return Object.freeze({ appSdk, authSdk, firestoreSdk, databaseSdk, functionsSdk, firebaseApp, auth, db, realtimeDb, functions });
   });
 
   function authCall(method, ...args) {
@@ -180,6 +183,7 @@
     },
     firestore: () => ready.then(({ firestoreSdk, db }) => ({ db, sdk: firestoreSdk })),
     realtime: () => ready.then(({ databaseSdk, realtimeDb }) => ({ database: realtimeDb, sdk: databaseSdk })),
+    functions: () => ready.then(({ functionsSdk, functions }) => ({ functions, sdk: functionsSdk })),
   };
 
   root.EverrealmFirebase = Object.freeze(api);

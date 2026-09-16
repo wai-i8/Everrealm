@@ -37,6 +37,7 @@
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const BattleVictory = window.EverrealmBattleVictory;
   const PlayerStateActions = window.EverrealmPlayerStateActions;
+  const ServerApi = window.EverrealmServerApi?.create?.({ firebase: Firebase });
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const Chat = window.EverrealmChat;
@@ -271,6 +272,7 @@
   let persistenceFingerprint = "";
   let persistence = null;
   let savePersistence = null;
+  let healingPotionCommandPending = false;
   let authUser = null;
   let authMode = "login";
   let pendingRegistrationCharacterName = "";
@@ -2537,21 +2539,60 @@
     return true;
   }
 
+  async function useHealingPotionCommand({ fromBag = false } = {}) {
+    if (mode !== "playing" || healingPotionCommandPending) return;
+    const maxHp = playerStats().maxHp;
+    if (player.potions <= 0) return showToast("藥水用晒喇。", "danger");
+    if (player.hp >= maxHp) return showToast(fromBag ? "而家生命已經全滿。" : "而家精神得很，留返支藥先。", "good");
+    if (!ServerApi?.useItem) return showToast("伺服器道具指令尚未就緒。", "danger");
+
+    healingPotionCommandPending = true;
+    try {
+      // Make sure the callable reads the latest canonical cloud save before it
+      // applies the transaction.  This closes the normal client-save race; the
+      // next migration steps will move more fields behind the same boundary.
+      const flush = await savePersistence?.flushCloud?.();
+      if (flush?.error) throw flush.error;
+
+      const result = await ServerApi.useItem("healing_potion");
+      if (!result?.ok && result?.reason === "empty") return showToast("藥水用晒喇。", "danger");
+      if (!result?.ok && result?.reason === "full") return showToast(fromBag ? "而家生命已經全滿。" : "而家精神得很，留返支藥先。", "good");
+      if (!result?.ok) return showToast("今次未能使用小型回復藥。", "danger");
+
+      const authoritativeHp = Number(result.player?.hp);
+      const authoritativePotions = Number(result.player?.potions);
+      if (!Number.isFinite(authoritativeHp) || !Number.isFinite(authoritativePotions)) {
+        throw new Error("useItem returned an invalid authoritative player state.");
+      }
+
+      player.hp = Core.clamp(authoritativeHp, 0, playerStats().maxHp);
+      player.potions = Core.clamp(Math.floor(authoritativePotions), 0, 9);
+      const healed = Math.max(0, Number(result.healed) || 0);
+      markPersistenceDirty();
+      if (!fromBag) {
+        spawnBurst(player.x, player.y, "#87db82", 22, 68);
+        addDamageNumber(player.x, player.y - 18, `+${healed}`, "#87db82", true);
+      }
+      sound.heal();
+      if (fromBag) showToast(`使用小型回復藥 · 回復 ${healed} HP`, "good");
+      addSystemMessage("item", `使用小型回復藥，恢復 ${healed} HP`);
+      announce(`回復 ${healed} 生命`);
+      updateHud();
+      if (fromBag) renderFacility();
+      saveImportant(false);
+    } catch (error) {
+      console.warn("Everrealm server useItem command failed.", error);
+      const code = String(error?.code || "");
+      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+      else showToast("伺服器暫時未能使用道具。", "danger");
+    } finally {
+      healingPotionCommandPending = false;
+    }
+  }
+
   function usePotion() {
-    if (mode !== "playing") return;
-    const result = PlayerStateActions.consumeHealingPotion(player, { maxHp: playerStats().maxHp, healAmount: POTION_HEAL });
-    if (!result.ok && result.reason === "empty") return showToast("藥水用晒喇。", "danger");
-    if (!result.ok && result.reason === "full") return showToast("而家精神得很，留返支藥先。", "good");
-    if (!result.ok) return;
-    const healed = result.healed;
-    markPersistenceDirty();
-    spawnBurst(player.x, player.y, "#87db82", 22, 68);
-    addDamageNumber(player.x, player.y - 18, `+${healed}`, "#87db82", true);
-    sound.heal();
-    addSystemMessage("item", `使用小型回復藥，恢復 ${healed} HP`);
-    announce(`回復 ${healed} 生命`);
-    saveImportant(false);
-    updateHud();
+    return useHealingPotionCommand({ fromBag: false });
   }
 
   function damageEnemy(enemy, amount, direction = { x: 0, y: 0 }, critical = false) {
@@ -4420,19 +4461,7 @@
   }
 
   function useBagPotion() {
-    const result = PlayerStateActions.consumeHealingPotion(player, { maxHp: playerStats().maxHp, healAmount: POTION_HEAL });
-    if (!result.ok && result.reason === "empty") return showToast("藥水用晒喇。", "danger");
-    if (!result.ok && result.reason === "full") return showToast("而家生命已經全滿。", "good");
-    if (!result.ok) return;
-    const healed = result.healed;
-    markPersistenceDirty();
-    sound.heal();
-    showToast(`使用小型回復藥 · 回復 ${healed} HP`, "good");
-    addSystemMessage("item", `使用小型回復藥，恢復 ${healed} HP`);
-    announce(`回復 ${healed} 生命`);
-    updateHud();
-    renderFacility();
-    saveImportant(false);
+    return useHealingPotionCommand({ fromBag: true });
   }
 
   function changeSkillLoadout(skillId, equip, options = {}) {
