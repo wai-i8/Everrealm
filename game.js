@@ -5927,9 +5927,11 @@
       for (let x = 0; x < battle.grid.width; x += 1) {
         const cell = { x, y };
         if (battle.grid.blocked.has(Tactics.cellKey(cell))) continue;
+        const pathTrace = damaging ? battleSkillAttackPathTrace(skill, cell) : null;
         if (Skills.isTargetInRange(skill, battle.hero.cell, cell, { facing: battle.hero.facing })
           && Skills.isSkillHeightValid(skill, battle.hero.cell, cell, { battlefield: battle.battlefield, grid: battle.grid })
-          && (!damaging || skillArcAllowsCell(skill, cell))) cells.push(cell);
+          && (!damaging || skillArcAllowsCell(skill, cell))
+          && pathTrace?.stoppedReason !== "terrain") cells.push(cell);
       }
     }
     return cells;
