@@ -71,9 +71,10 @@ final override stylesheet。
 decoration，HTML/CSS 才係內容尺寸、對齊同 scroll 嘅 sizing system。唔為 Status、
 Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要同時具備：
 
-- `min-width` / `min-height` 只保證最小可讀性；
-- panel width follows its sizing tier; the standard ceiling is `min(54rem, 100vw - 2rem)`；
-- `max-height: min(44rem, 100vh - 2rem)`；
+- 所有 window 以內容驅動寬度為主，使用 `width: fit-content`，唔因 viewport 仲有空位就預設拉到某個固定寬度；
+- 全 game 只保留一個共用 `--ui-window-min-width: 16rem`，只作視覺最低寬度，避免短內容窗口窄到唔靚；
+- `.ui-window` / `.ui-modal-window` 只保留 viewport-safe `max-width`，窄屏以 `calc(100vw - 2rem)` 收窄；
+- `min-height` 同樣由內容自然決定；高度上限只用作 viewport safety，超出部分由 content scroll；
 - header、footer 固定喺 frame 內，content 以 `minmax(0, 1fr)` 伸縮；
 - content 超過 viewport 時只由 content scroll，唔令 frame 或 controls 被推出畫面；
 - padding 以 `.5rem`、`.75rem`、`1rem`、`1.25rem` 節奏遞進，唔用任意 magic offset。
@@ -140,14 +141,12 @@ badge 同技能名，empty slot 的 content 必須完全 blank，唔顯示「空
 
 ### Panel sizing, identity and progressive disclosure
 
-Panel 唔可以因為 viewport 仲有空位就預設最大寬度；寬度必須按 task complexity
-同 content density 決定。共用 sizing tiers 如下：
+所有 major window、facility window 同 nested popup 都使用同一套內容驅動 sizing contract：
 
-- `compact`：簡單唯讀資訊、短直向列表、確認；
-- `medium`：較豐富但仍然單一主題嘅資料；
-- `standard`：需要兩欄但仍然要受控嘅管理畫面，例如 Inventory 同 Deck configuration；
-
-`facility-panel` 以 `data-panel-size` 套用同一套 compact／medium／standard max-width。正常左側 `戰技面板` viewer 使用 compact bounded content region；需要兩欄嘅管理畫面使用 standard bounded shell。短名單或 slot list 要用 `max-width`、`minmax(0, 1fr)`、Grid/Flex containment，唔可以因 screen space 拉成一大片空白。
+- outer window 以 `width: fit-content` 跟住實際內容自然增闊／收窄；
+- 全 game 只由 shared `--ui-window-min-width: 16rem` 提供視覺最低寬度，唔再按頁面用途分別指定窗口寬度；
+- window 只保留 viewport-safe `max-width`，內部 list／grid 先用 `minmax(0, 1fr)`、Grid/Flex containment 同 content scroll 處理長內容；
+- 窄屏自然收窄或堆疊，唔用固定大寬度、per-popup width 或人手擴大 clickable／content region 補救布局。
 
 一個 screen 只保留一個 primary page identity。eyebrow、header、body title 同 footer
 唔可以用稍為不同嘅字眼重複同一個頁名；section label 只可用於真正不同嘅 subsection。
@@ -206,7 +205,7 @@ Canvas 唔負責 ordinary dialogue portrait 或 generic dialogue chrome。細節
 
 ## 5. Screen variants
 
-### Standard window
+### Shared facility window
 
 Status、Inventory、Equipment 以共用 base frame 為主。Status 左邊係角色 visual
 同身份，右邊係 stat groups；Inventory / Equipment 以可捲動 grid/list 表達內容，
@@ -224,7 +223,7 @@ Status 顯示角色身份、等級、XP／HP progress、攻防、戰棋移動及
 
 ### Guild variant
 
-Guild 委託主列表使用 compact Status-tier footprint；每個委託 summary row 內容整組置中，順序固定為「委託名稱 → 星級 →（如有）進行狀態」，避免星級先行令短標題視覺偏左。左側 launcher 開出嘅 `任務` 同唯讀 `面板` window 同樣使用 Status-tier compact width；城門真正可編輯嘅面板配置保持約 `17rem` 窄窗，但「技能／面板」兩個管理區固定左右並排，唔因窄身而堆成上下。
+Guild 委託主列表同其他 facility window 一樣使用 shared content-driven sizing；每個委託 summary row 內容整組置中，順序固定為「委託名稱 → 星級 →（如有）進行狀態」，避免星級先行令短標題視覺偏左。左側 launcher 開出嘅 `任務`、唯讀 `面板` 同城門可編輯配置都唔再指定獨立窗口寬度；兩欄管理內容只由內部 layout 決定，窄屏先自然堆疊。
 
 Guild window 可以有非常克制嘅金色 guild accent、委託星級同 progress meter，
 但仍然使用相同 base frame、字級、padding、button 和 scroll rules。正式頁面身份
@@ -362,9 +361,9 @@ Firebase 帳戶未通過登入／授權前，左側主功能 launcher 必須完�
 單向對話唔硬塞選項；如有 choices，唔顯示 `1.`／`2.` 或其他無意義括號數字，亦唔用拉長金色 bitmap
 再疊第二層底框。短 service choice（例如醫院「治療／不用了」）使用內容寬度、橫向 compact buttons，唔拉滿整行。選項只係真正 branching/service action 時先出現。
 
-## 7. 2026-09-11 compact launcher / click-through log update
+## 7. 2026-09-11 launcher / click-through log update
 
-- Compact launcher-family windows use the narrow trial footprint requested for visual testing: `status`, portable `missions`, portable read-only `deck-view`, and the in-Guild commission list target about `16rem` desktop max width. The city-gate editable Deck configurator targets about `17rem`; its learned-skill and current-panel regions remain side-by-side inside that narrow footprint.
+- All launcher-family windows, facility windows and modal/detail popups share one sizing rule: content-driven `width: fit-content`, global visual minimum `--ui-window-min-width: 16rem`, and viewport-safe max-width. No named window sizing tier or per-window fixed width is part of the contract. Internal two-column content may remain side-by-side when it fits, and stacks naturally on narrow screens.
 - The six left launcher functions (`status`, `bag`, `deck-view`, `skills`, `missions`, `system`) are non-blocking exploration UI: the player may keep walking while these windows are open. Facility/service UI reached through world interaction (`guild`, `shop`, `general-store`, editable `deck`) and modal confirmations/details remain movement-blocking.
 - Inventory remains exactly `5 × 3` per page. Each visible item tile uses one `1:1` outer frame only（icon 上、名稱下），唔再喺 icon 外加第二層卡框；左邊六格裝備板保留，但移除再包住整塊裝備板嘅最外層裝飾框。物品區高度按最多三行內容決定，唔為空白行拉長。Item/equipment detail popup 點擊 popup 外背景即關閉，關閉物品欄亦會清除 selection；已裝備物品嘅 `卸下` 同一般物品嘅 `銷毀` action 都屬 detail popup state，popup 一關就必須一齊消失。`銷毀` 要先進入明確確認狀態；確認狀態只顯示「確定銷毀」同「取消」，唔同時再顯示「裝備」。Inventory action hierarchy 只用金／藍兩級：金色係主要／確定動作（使用、裝備、確定銷毀），藍色係次要／返回動作（卸下、銷毀入口、取消、返回），唔使用紅色 destroy skin。卸下成功後關閉目前 detail selection，唔即時將同一位置變成「裝備」按鈕。短內容 detail popup 自然增高／增闊，唔因幾行內容出現內部 scrollbar；只喺極窄／極矮 viewport 才容許 fallback scroll。
 - The persistent System/Battle log is HUD text rather than a panel surface: no message background, no visible scrollbar, and text does not intercept map clicks. Each full message line inherits one category/tone colour from `[tag]` through body text and uses a black outline/shadow for contrast.

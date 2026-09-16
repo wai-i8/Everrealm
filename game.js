@@ -4645,7 +4645,6 @@
       context: facilityContext,
       availableTabs,
       coins: player.coins,
-      hasActiveGuildCommission: facilityTab === "guild" && Boolean(activeGuildCommission()),
     });
     setFacilityHelpOpen(false);
     updateMenuBadges();

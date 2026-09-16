@@ -113,15 +113,6 @@
     }[tab];
   }
 
-  function panelSizeFor(tab, context, hasActiveGuildCommission) {
-    if (tab === "deck") return context === "deck-view" ? "compact" : "medium";
-    if (tab === "status") return "compact";
-    if (tab === "missions") return "compact";
-    if (tab === "shop" && context === "general-store") return "medium";
-    if (tab === "guild" && hasActiveGuildCommission) return "medium";
-    return "standard";
-  }
-
   function renderWindowChrome({
     stage,
     panel,
@@ -132,14 +123,12 @@
     context,
     availableTabs,
     coins = 0,
-    hasActiveGuildCommission = false,
   }) {
     const copy = facilityCopy(tab, context);
     stage.dataset.facilityTab = tab;
     stage.dataset.facilityContext = context;
     panel.dataset.facilityContext = context;
     panel.dataset.facilityTab = tab;
-    panel.dataset.panelSize = panelSizeFor(tab, context, hasActiveGuildCommission);
     if (tabs) tabs.dataset.visibleTabs = availableTabs.join(" ");
     const kicker = panel.querySelector(".facility-kicker");
     if (kicker) {
@@ -240,7 +229,6 @@
     createWindow,
     topWindow,
     facilityCopy,
-    panelSizeFor,
     renderWindowChrome,
     templateBindings,
     removeWindow,

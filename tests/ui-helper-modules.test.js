@@ -914,7 +914,7 @@ test("facility window shell renders chrome metadata, title, help, and tab state"
   assert.equal(kicker.hidden, true);
   assert.equal(title.textContent, "公會委託");
   assert.match(helpText.textContent, /五份固定委託都可以重複接受/);
-  assert.equal(panel.dataset.panelSize, "medium");
+  assert.equal(Object.hasOwn(panel.dataset, "panelSize"), false);
   assert.equal(helpButton.hidden, true, "guild help button follows existing hidden rule");
   assert.equal(bagTab.hidden, true);
   assert.equal(bagTab.disabled, true);

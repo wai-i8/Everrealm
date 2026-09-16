@@ -167,15 +167,12 @@ test("Status and normal Deck are summary-first and keep management at the statio
   assert.match(uiCssForTest(), /\.deck-slot-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
 });
 
-test("Deck sizing and shared badge readability are content-driven", () => {
-  const uiCss = fs.readFileSync(path.join(rpgRoot, "ui-system.css"), "utf8");
-  assert.match(uiCss, /--ui-panel-compact-max:\s*34rem/);
-  assert.match(uiCss, /--ui-panel-medium-max:\s*48rem/);
-  assert.match(uiCss, /--ui-panel-wide-max:\s*66rem/);
-  assert.match(uiCss, /data-panel-size="compact"/);
-  assert.match(uiCss, /data-panel-size="wide"\]\[data-facility-tab="deck"\][\s\S]*min-height:\s*0/);
-  assert.match(facilityWindowShell, /panel\.dataset\.panelSize = panelSizeFor\(tab, context, hasActiveGuildCommission\)/);
-  assert.match(uiCss, /--ui-skill-badge-width/);
+test("Shared windows use content-driven sizing with one global visual minimum", () => {
+  assert.match(css, /--ui-window-min-width:\s*16rem/);
+  assert.match(css, /\.ui-window,\s*\.ui-modal-window\s*\{[\s\S]*width:\s*fit-content;[\s\S]*max-width:\s*calc\(100vw - 2rem\)/);
+  assert.doesNotMatch(css, /--ui-panel-(compact|medium|standard|wide)-max|data-panel-size|--ui-panel-width/);
+  assert.doesNotMatch(facilityWindowShell, /panelSizeFor|panel\.dataset\.panelSize|hasActiveGuildCommission/);
+  assert.doesNotMatch(game, /hasActiveGuildCommission/);
   assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-width\)/);
   assert.match(uiCssForTest(), /\.skill-kind-badge\s*\{[\s\S]*var\(--ui-skill-badge-height\)/);
   assert.doesNotMatch(game, /return skill\.tags\.includes\("passive"\) \? "✦" : "◆"/);
