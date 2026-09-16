@@ -5935,6 +5935,27 @@
     return cells;
   }
 
+  function battleSkillAttackPathTrace(skill, cell) {
+    if (!battle || !skill || !cell || !Tactics.usesAttackPath(skill.deliveryMode)) return null;
+    const path = Tactics.facingOrthogonalPriority(battle.hero.cell, cell, battle.hero.facing);
+    return Tactics.traceAttackPath({
+      origin: battle.hero.cell,
+      target: cell,
+      path,
+      facing: battle.hero.facing,
+      grid: battle.grid,
+      units: battleUnits(),
+      actorId: battle.hero.id,
+      deliveryMode: skill.deliveryMode,
+      blocksByTerrain: skill.blocksByTerrain,
+      blocksByUnits: skill.blocksByUnits,
+      arcHeight: skill.arcHeight,
+      piercing: skill.piercing,
+      maxPierce: skill.maxPierce,
+      friendlyFire: Tactics.FRIENDLY_FIRE,
+    });
+  }
+
   function skillTargetValidation(skill, cell) {
     const targetUnit = battleTargetUnitAt(cell, skill?.targeting?.team);
     const validation = Skills.validateSkillTarget(skill, battle.hero.cell, cell, {
@@ -5950,6 +5971,10 @@
     const damaging = skill?.effects?.some((effect) => effect.type === "damage");
     if (validation.ok && damaging && !skillArcAllowsCell(skill, cell)) {
       return { ok: false, reason: "rear-target", cells: [] };
+    }
+    if (validation.ok && damaging) {
+      const pathTrace = battleSkillAttackPathTrace(skill, cell);
+      if (pathTrace?.stoppedReason === "terrain") return { ok: false, reason: "blocked-path", cells: [] };
     }
     return validation;
   }
@@ -6023,9 +6048,11 @@
           ? "呢招要揀一個合適目標。"
           : validation.reason === "wrong-team"
             ? "呢招唔可以對呢個陣營使用。"
-            : validation.reason === "rear-target"
-              ? "背後係攻擊死角；要靠移動最後一步轉向，先可以向前或左右出招。"
-              : "目標唔喺技能射程或方向內。";
+          : validation.reason === "rear-target"
+            ? "背後係攻擊死角；要靠移動最後一步轉向，先可以向前或左右出招。"
+          : validation.reason === "blocked-path"
+            ? "攻擊路線被高障礙物擋住，唔可以出招。"
+          : "目標唔喺技能射程或方向內。";
         return setBattleMessage(copy, true), false;
       }
       resolvePlayerBattleSkill(skill, cell, target, validation.cells);
