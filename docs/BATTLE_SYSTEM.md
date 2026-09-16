@@ -2136,11 +2136,11 @@ Preview 必須同實際 resolver 共用同一函數。
 如果怪物 A 嘗試射玩家，但怪物 B 擋住：
 
 - 普通 projectile 應視為 B 係 first impact。
-- AI 可以因此改選：
+- 如果 B 係 A 嘅隊友，AI 必須拒絕呢個 attack plan，改選：
   - 另一技能
   - 另一方向
   - 待機
-- 但如果仍選擇射擊，resolver 仍按真實路線執行。
+- 如果 execution 前路線先被隊友截住，pending action 亦必須取消；resolver 永遠按真實路線執行。
 
 ---
 

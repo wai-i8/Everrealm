@@ -6,6 +6,8 @@
   "use strict";
 
   const MIN_DIRECT_DAMAGE = 5;
+  const FRIENDLY_FIRE = true;
+  const PATHLESS_DELIVERIES = Object.freeze(new Set(["pathless", "pathless-area"]));
 
   const DIRECTIONS = Object.freeze([
     Object.freeze({ x: 0, y: -1, name: "up" }),
@@ -25,6 +27,10 @@
 
   function cellKey(cell) {
     return `${cell.x},${cell.y}`;
+  }
+
+  function usesAttackPath(deliveryMode) {
+    return !PATHLESS_DELIVERIES.has(String(deliveryMode || "pathless"));
   }
 
   function copyCell(cell) {
@@ -288,7 +294,7 @@
     const target = cellOf(options.target || options.intendedTarget);
     if (!origin || !target) return { path: [], intendedTarget: null, actualTarget: null, candidateUnits: [], firstImpactCell: null, blocked: false, stoppedReason: "invalid-cell" };
     const deliveryMode = options.deliveryMode || "linear";
-    const path = deliveryMode === "pathless"
+    const path = PATHLESS_DELIVERIES.has(deliveryMode)
       ? []
       : Array.isArray(options.path) && options.path.length ? options.path.filter(validCell).map(copyCell)
         : facingOrthogonalPriority(origin, target, options.facing || options.caster?.facing || "down");
@@ -304,12 +310,12 @@
       blocked: false,
       blockedBy: null,
       stoppedReason: null,
-      friendlyFire: options.friendlyFire === true,
+      friendlyFire: FRIENDLY_FIRE,
       piercing: options.piercing === true,
       deliveryMode,
       impactHeight: null,
     };
-    if (deliveryMode === "pathless") return result;
+    if (PATHLESS_DELIVERIES.has(deliveryMode)) return result;
     for (let index = 0; index < path.length; index += 1) {
       const cell = path[index];
       const projectileHeight = deliveryMode === "arc"
@@ -1638,7 +1644,8 @@
       arcHeight: options.arcHeight == null ? null : Math.max(0, Number(options.arcHeight) || 0),
       piercing: options.piercing === true,
       maxPierce: options.maxPierce == null ? null : Math.max(1, Math.trunc(Number(options.maxPierce) || 1)),
-      friendlyFire: options.friendlyFire === true,
+      friendlyFire: FRIENDLY_FIRE,
+      avoidFriendlyImpact: options.avoidFriendlyImpact === true,
       skillDurability: durability,
       accumulatedInterrupt: 0,
       remainingSkillDurability: durability,
@@ -1692,7 +1699,7 @@
     if (typeof state.canAct === "function" && !state.canAct(actor, action)) return { ok: false, reason: "action-prevented", action, actor, target };
     if (typeof state.rangeResolver === "function" && !state.rangeResolver({ action, actor, target })) return { ok: false, reason: "out-of-range", action, actor, target };
     if (typeof state.pathResolver === "function" && !state.pathResolver({ action, actor, target })) return { ok: false, reason: "invalid-path", action, actor, target };
-    if (["linear", "arc"].includes(action.deliveryMode) && actor?.cell && target?.cell && state.grid) {
+    if (usesAttackPath(action.deliveryMode) && actor?.cell && target?.cell && state.grid) {
       const selectedCell = target?.cell || action.targetCell;
       const path = facingOrthogonalPriority(actor.cell, selectedCell, actor.facing);
       const trace = traceAttackPath({
@@ -1709,12 +1716,20 @@
         arcHeight: action.arcHeight,
         piercing: action.piercing,
         maxPierce: action.maxPierce,
-        friendlyFire: action.friendlyFire,
+        friendlyFire: FRIENDLY_FIRE,
       });
       const candidateUnits = trace.candidateUnits || trace.impactedUnits || [];
+      const friendlyImpact = trace.actualTarget
+        && String(trace.actualTarget.id) !== String(action.targetId)
+        && (typeof state.isFriendlyUnit === "function"
+          ? state.isFriendlyUnit(actor, trace.actualTarget)
+          : Boolean(actor?.side && trace.actualTarget?.side && actor.side === trace.actualTarget.side));
+      if (action.avoidFriendlyImpact && friendlyImpact) {
+        return { ok: false, reason: "friendly-fire", action, actor, target, path, trace };
+      }
       const hasImpactForAction = action.targetId == null
         ? Boolean(trace.actualTarget) || trace.stoppedReason !== "terrain"
-        : candidateUnits.some((unit) => String(unit.id) === String(action.targetId));
+        : Boolean(trace.actualTarget) || candidateUnits.some((unit) => String(unit.id) === String(action.targetId));
       const invalidated = !hasImpactForAction;
       if (invalidated) {
         return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
@@ -1759,6 +1774,8 @@
 
   return {
     MIN_DIRECT_DAMAGE,
+    FRIENDLY_FIRE,
+    usesAttackPath,
     DIRECTIONS,
     FACING_VECTORS,
     POSITIONAL_MULTIPLIERS,

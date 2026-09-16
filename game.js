@@ -5362,6 +5362,10 @@
       units: battleUnits(),
       grid: battle.grid,
       canAct: (unit) => !FighterEffects?.isDisabled(unit, battle.round),
+      isFriendlyUnit: (actor, other) => Boolean(actor && other
+        && (actor.side || actor.team)
+        && (other.side || other.team)
+        && (actor.side || actor.team) === (other.side || other.team)),
       rangeResolver: ({ action, actor: currentActor, target: currentTarget }) => {
         const cell = currentTarget?.cell || action.targetCell;
         if (!cell) return action.rangeMax == null;
@@ -6160,7 +6164,7 @@
     if (!skill || (!godModeActive && battle.ap < skill.apCost)) return setBattleMessage("AP 唔夠。", true);
     if (!godModeActive) battle.ap -= skill.apCost;
     const centre = targetCell || battle.hero.cell;
-    const attackPath = ["linear", "arc"].includes(skill.deliveryMode)
+    const attackPath = Tactics.usesAttackPath(skill.deliveryMode)
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, centre, battle.hero.facing)
       : [];
     beginActionResolution({
@@ -6288,7 +6292,7 @@
       arcHeight: heroSkill?.arcHeight,
       piercing: heroSkill?.piercing,
       maxPierce: heroSkill?.maxPierce,
-      friendlyFire: heroSkill?.friendlyFire,
+      friendlyFire: Tactics.FRIENDLY_FIRE,
     });
     const enemyPending = battle.enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
@@ -6308,7 +6312,8 @@
         arcHeight: plan.skill?.arcHeight,
         piercing: plan.skill?.piercing,
         maxPierce: plan.skill?.maxPierce,
-        friendlyFire: plan.skill?.friendlyFire,
+        friendlyFire: Tactics.FRIENDLY_FIRE,
+        avoidFriendlyImpact: true,
       });
     });
     const actionOrder = Skills.orderActionsBySpeed([
@@ -6434,7 +6439,7 @@
       const defenceDownEffect = skill?.effects.find((effect) => effect.type === "defense_down");
       const moveDownEffect = skill?.effects.find((effect) => effect.type === "move_down");
       let affectedUnits = enemiesAtStart.filter((unit) => pattern.has(Tactics.cellKey(unit.cell)));
-      const projectileTrace = ["linear", "arc"].includes(skill?.deliveryMode)
+      const projectileTrace = Tactics.usesAttackPath(skill?.deliveryMode)
         ? Tactics.traceAttackPath({
           origin: battle.hero.cell,
           target: heroAction.targetCell,
@@ -6449,7 +6454,7 @@
           arcHeight: skill.arcHeight,
           piercing: skill.piercing,
           maxPierce: skill.maxPierce,
-          friendlyFire: skill.friendlyFire,
+          friendlyFire: Tactics.FRIENDLY_FIRE,
         })
         : null;
       // Linear and ballistic deliveries resolve terrain/unit impacts along the
@@ -6458,7 +6463,7 @@
         const tracedUnits = projectileTrace.piercing
           ? projectileTrace.impactedUnits
           : projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
-        affectedUnits = tracedUnits.filter((unit) => skill.friendlyFire || unit.side !== "ally");
+        affectedUnits = tracedUnits;
       }
       effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedUnits;
       if (damageEffect) {
@@ -6511,7 +6516,7 @@
             deliveryMode: skill.deliveryMode,
             arcHeight: skill.arcHeight,
             maxPierce: skill.maxPierce,
-            friendlyFire: skill.friendlyFire,
+            friendlyFire: Tactics.FRIENDLY_FIRE,
             makeHeroHit,
           });
         } else {
@@ -6629,7 +6634,7 @@
         // the next round.
         battle.evasion = Math.max(battle.evasion || 0, evasionThisRound);
         for (const resolver of heroHitResolvers) {
-          const routedDelivery = ["linear", "arc"].includes(resolver.deliveryMode);
+          const routedDelivery = Tactics.usesAttackPath(resolver.deliveryMode);
           const traceCandidates = (trace) => trace?.candidateUnits
             || trace?.impactedUnits
             || (trace?.actualTarget ? [trace.actualTarget] : []);
@@ -6654,7 +6659,7 @@
                 arcHeight: resolver.arcHeight,
                 piercing: resolver.piercing,
                 maxPierce: resolver.maxPierce,
-                friendlyFire: resolver.friendlyFire,
+                friendlyFire: Tactics.FRIENDLY_FIRE,
               })
             : null;
           const stableTrace = routedDelivery && !resolver.recheck ? traceNow() : null;
@@ -6699,7 +6704,7 @@
                 continue;
               }
               const hitCell = { ...target.cell };
-              if (resolver.friendlyFire || target.side !== "ally") {
+              if (Tactics.FRIENDLY_FIRE || target.side !== "ally") {
                 const hitResult = presentation
                   ? previewBattleDamage({ ...hit.target, hp: predictedHeroHp(hit.target), alive: predictedHeroHp(hit.target) > 0 }, hit.damage)
                   : applyBattleHit(hit.target, hit.damage, hit.color, hit.hitIndex, hit.hitCount, true);
@@ -6792,9 +6797,10 @@
         evasion: battleTargetEvasion(battle.hero),
         accuracyPenalties: [(FighterEffects?.accuracyPenalty(hit.enemy, battle.round) || 0) * 100],
       }, battleRandom);
+      const enemySkillName = hit.plan.skillName || hit.plan.skill?.name || hit.enemy.skillName || "普通攻擊";
       if (!hitRoll.hit) {
         missedCells.push({ cell: { ...battle.hero.cell }, enemy: hit.enemy, skillName: hit.plan.skillName || hit.enemy.skillName || "攻擊" });
-        addSystemMessage("combat", `${hit.enemy.name}對你未命中`, "incoming");
+        addSystemMessage("combat", `${hit.enemy.name}使用「${enemySkillName}」對你未命中`, "incoming");
         continue;
       }
       const activeGuard = battle.guardReduction || 0;
@@ -6819,7 +6825,7 @@
       const result = Tactics.applyDamage(battle.hero, godModeActive ? 0 : hit.damage);
       hit.appliedDamage = result.appliedDamage;
       hit.damage = result.requestedDamage;
-      addSystemMessage("combat", `${hit.enemy.name}對你造成 ${hit.damage} 傷害`, "incoming");
+      addSystemMessage("combat", `${hit.enemy.name}使用「${enemySkillName}」對你造成 ${hit.damage} 傷害`, "incoming");
       battle.hero.hp = result.hpAfter;
       battle.hero.alive = !result.defeated;
       if (hit.plan.skill && FighterEffects && hit.plan.skill.effects?.length && battle.hero.alive) {
@@ -8198,7 +8204,7 @@
     if (selectedSkill && battle.phase === "planning_action" && skillTargetValidation(selectedSkill, battle.cursor).ok) {
       for (const cell of Skills.patternCells(selectedSkill, battle.hero.cell, battle.cursor, { grid: battle.grid, facing: battle.hero.facing })) areaPreview.add(Tactics.cellKey(cell));
     }
-    const attackPathPreview = ["linear", "arc"].includes(selectedSkill?.deliveryMode)
+    const attackPathPreview = Tactics.usesAttackPath(selectedSkill?.deliveryMode)
       && battle.phase === "planning_action"
       && skillTargetValidation(selectedSkill, battle.cursor).ok
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, battle.cursor, battle.hero.facing)

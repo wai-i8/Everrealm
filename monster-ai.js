@@ -37,7 +37,7 @@
       targetUnit: { ...target, team: target.side || target.team || "ally" },
     });
     if (!validation.ok) return false;
-    if (!["linear", "arc"].includes(skill.deliveryMode)) return true;
+    if (!Tactics.usesAttackPath(skill.deliveryMode)) return true;
     const path = Tactics.facingOrthogonalPriority(origin, target.cell, facing);
     const trace = Tactics.traceAttackPath({
       origin,
@@ -51,6 +51,7 @@
       blocksByTerrain: skill.blocksByTerrain,
       blocksByUnits: skill.blocksByUnits,
       arcHeight: skill.arcHeight,
+      friendlyFire: Tactics.FRIENDLY_FIRE,
     });
     return trace.stoppedReason !== "terrain" && (!trace.actualTarget || trace.actualTarget.id === target.id);
   }
