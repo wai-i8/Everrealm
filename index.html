@@ -532,7 +532,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260916-06")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260916-07")}"><\/script>`);
       })();
     </script>
 
@@ -568,7 +568,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260916-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260916-02", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

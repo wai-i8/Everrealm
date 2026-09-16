@@ -69,7 +69,7 @@
     "locomotion.js?v=20260915-04",
     "footstep-sfx.js?v=20260914-03",
     "character-art.js",
-    "multiplayer.js?v=20260916-01",
+    "multiplayer.js?v=20260916-02",
     "game/battle-sfx.js?v=20260915-03",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
@@ -82,7 +82,7 @@
     "game/facility-window-shell.js",
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
-    "game.js?v=20260916-06",
+    "game.js?v=20260916-07",
   ]);
 
   return Object.freeze({ scripts });

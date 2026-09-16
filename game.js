@@ -10231,11 +10231,12 @@
       phase: elapsed,
       expression: "happy",
     });
+    if (artBox) multiplayer?.markRemoteRendered?.(remote.uid);
     const nameX = artBox?.nameAnchorX ?? point.x;
     const nameY = artBox?.nameAnchorY ?? point.y - 56 * scale;
     if (remote.state === "battle") {
       const iconSize = Core.clamp(28 * scale, 17, 34);
-      Art.drawBattleStateIcon(ctx, {
+      const iconDrawn = Art.drawBattleStateIcon(ctx, {
         x: nameX,
         y: nameY - 5 * scale,
         width: iconSize,
@@ -10244,6 +10245,7 @@
         anchorY: 1,
         alpha: .96,
       });
+      if (iconDrawn) multiplayer?.markRemoteBattleIconRendered?.(remote.uid);
     }
     drawNpcName(nameX, nameY, remote.name);
   }
