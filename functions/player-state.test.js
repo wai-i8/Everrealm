@@ -64,3 +64,56 @@ test("client save cannot increase weak potion steps or rewind play time", () => 
   assert.equal(patch.playTime, 1000);
   assert.equal(patch["expansion.weakPotion.stepsRemaining"], 20);
 });
+
+test("Step 9A creates a server-owned position authority anchor without changing saved movement", () => {
+  const current = canonicalInitialSave(
+    { player: { x: 100, y: 200 }, expansion: { classId: "fighter" } },
+    { nowMs: 100000 },
+  );
+  const patch = clientOwnedPatch(current, { player: { x: 250, y: 200 } }, { nowMs: 101000 });
+  const next = mergeClientOwnedState(current, patch);
+
+  assert.equal(next.player.x, 250);
+  assert.equal(next.player.y, 200);
+  assert.equal(next.expansion.positionAuthority.mapId, "world");
+  assert.equal(next.expansion.positionAuthority.x, 250);
+  assert.equal(next.expansion.positionAuthority.y, 200);
+  assert.equal(next.expansion.positionAuthority.validatedAtMs, 101000);
+  assert.equal(next.expansion.positionAuthority.anomalyCount, 0);
+});
+
+test("Step 9A records an impossible same-map jump but remains observation-only", () => {
+  const current = canonicalInitialSave(
+    { player: { x: 100, y: 200 }, expansion: { classId: "fighter" } },
+    { nowMs: 100000 },
+  );
+  const patch = clientOwnedPatch(current, { player: { x: 5000, y: 5000 } }, { nowMs: 100100 });
+  const next = mergeClientOwnedState(current, patch);
+
+  // Step 9A deliberately preserves current client movement/save behaviour.
+  assert.equal(next.player.x, 5000);
+  assert.equal(next.player.y, 5000);
+  // The trusted anchor does not follow the impossible jump.
+  assert.equal(next.expansion.positionAuthority.x, 100);
+  assert.equal(next.expansion.positionAuthority.y, 200);
+  assert.equal(next.expansion.positionAuthority.validatedAtMs, 100000);
+  assert.equal(next.expansion.positionAuthority.anomalyCount, 1);
+  assert.equal(next.expansion.positionAuthority.lastAnomalyAtMs, 100100);
+});
+
+test("Step 9A bootstraps a fresh anchor after an authoritative map change", () => {
+  const current = canonicalInitialSave(
+    { player: { x: 100, y: 200 }, expansion: { classId: "fighter" } },
+    { nowMs: 100000 },
+  );
+  current.expansion.currentMapId = "guild";
+
+  const patch = clientOwnedPatch(current, { player: { x: 30, y: 40 } }, { nowMs: 101000 });
+  const next = mergeClientOwnedState(current, patch);
+
+  assert.equal(next.expansion.positionAuthority.mapId, "guild");
+  assert.equal(next.expansion.positionAuthority.x, 30);
+  assert.equal(next.expansion.positionAuthority.y, 40);
+  assert.equal(next.expansion.positionAuthority.validatedAtMs, 101000);
+  assert.equal(next.expansion.positionAuthority.anomalyCount, 0);
+});

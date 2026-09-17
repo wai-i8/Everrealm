@@ -72,37 +72,38 @@ exports.playerStateCommand = onCall({ region: REGION, maxInstances: 20 }, async 
   }
 
   const playerRef = db.doc(`players/${uid}`);
+  const nowMs = Date.now();
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(playerRef);
     const existing = snapshot.exists ? playerDataWithoutMetadata(snapshot.data()) : null;
 
     if (action === "create") {
       if (existing) return { ok: true, created: false, data: existing };
-      const next = PlayerState.canonicalInitialSave(payload);
+      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, data: next };
     }
 
     if (action === "migrate") {
       if (existing) return { ok: true, created: false, data: existing };
-      const next = PlayerState.sanitizeLegacySave(payload);
+      const next = PlayerState.sanitizeLegacySave(payload, { nowMs });
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, migrated: true, data: next };
     }
 
     if (action === "reset") {
-      const next = PlayerState.canonicalInitialSave(payload);
+      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: !existing, reset: true, data: next };
     }
 
     if (!existing) {
-      const next = PlayerState.canonicalInitialSave(payload);
+      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, data: next };
     }
 
-    const patch = PlayerState.clientOwnedPatch(existing, payload);
+    const patch = PlayerState.clientOwnedPatch(existing, payload, { nowMs });
     transaction.update(playerRef, { ...patch, updatedAt: FieldValue.serverTimestamp() });
     return { ok: true, saved: true, data: PlayerState.mergeClientOwnedState(existing, patch) };
   });

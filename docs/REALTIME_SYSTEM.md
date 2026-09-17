@@ -104,3 +104,5 @@ The public API is `getTime()`, `getDay()`, `getHour()` and `getMinute()`. `isNig
 ## Security
 
 Authenticated clients may read same-map player collections and presence records. A client may write only its own UID's presence and player record. RTDB rules validate the required fields and constrain `state` to `exploring` or `battle`. Firestore allows authenticated reads of `world/config` and denies client writes.
+
+Phase 3 Step 9A deliberately leaves this realtime path untouched: local movement still publishes through the existing throttled RTDB record, and remote interpolation remains presentation-only. Separately, routine Firestore saves derive a server-owned `expansion.positionAuthority` checkpoint. That checkpoint is not sourced from RTDB and does not add a Function call to each movement update.

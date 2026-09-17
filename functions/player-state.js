@@ -15,6 +15,15 @@ const MAX_POSITION = 100000;
 const MAX_WEAK_POTION_STEPS = 500;
 const MAX_WEAK_POTION_REMAINDER = 999999;
 
+// Phase 3 Step 9A: keep realtime/client movement unchanged, but derive a
+// server-owned checkpoint that later authoritative commands can trust.
+const POSITION_AUTHORITY_VERSION = 1;
+const EXPLORATION_BASE_SPEED = 330;
+const EXPLORATION_EQUIPMENT_SPEED_UNIT = 2.5;
+const POSITION_TIME_GRACE_SECONDS = 1.0;
+const POSITION_DISTANCE_TOLERANCE = 180;
+const POSITION_MAX_ELAPSED_SECONDS = 12;
+
 function clone(value) {
   if (value == null) return value;
   return JSON.parse(JSON.stringify(value));
@@ -49,7 +58,77 @@ function normalizeGender(value, fallback = "male") {
   return gender === "female" || gender === "male" ? gender : fallback;
 }
 
-function canonicalInitialSave(payload = {}) {
+function normalizedNowMs(value) {
+  const now = Number(value);
+  return Number.isFinite(now) && now > 0 ? Math.trunc(now) : 0;
+}
+
+function explorationSpeedForSave(save = {}) {
+  const equipped = save?.expansion?.equipped && typeof save.expansion.equipped === "object"
+    ? save.expansion.equipped
+    : {};
+  const gear = Expansion.equipmentStats(equipped);
+  const speedPoints = Number(gear?.speed) || 0;
+  return Math.max(175, EXPLORATION_BASE_SPEED + speedPoints * EXPLORATION_EQUIPMENT_SPEED_UNIT);
+}
+
+function freshPositionAuthority(mapId, x, y, nowMs, previous = null) {
+  return {
+    version: POSITION_AUTHORITY_VERSION,
+    mapId: String(mapId || "world").slice(0, 64),
+    x: finite(x, 0),
+    y: finite(y, 0),
+    validatedAtMs: normalizedNowMs(nowMs),
+    anomalyCount: clamp(whole(previous?.anomalyCount, 0), 0, 999999),
+    lastAnomalyAtMs: normalizedNowMs(previous?.lastAnomalyAtMs),
+  };
+}
+
+function nextPositionAuthority(existingSave, candidateX, candidateY, nowMs) {
+  const expansion = existingSave?.expansion && typeof existingSave.expansion === "object"
+    ? existingSave.expansion
+    : {};
+  const mapId = String(expansion.currentMapId || "world").slice(0, 64);
+  const previous = expansion.positionAuthority && typeof expansion.positionAuthority === "object"
+    ? expansion.positionAuthority
+    : null;
+  const now = normalizedNowMs(nowMs);
+
+  // Old saves and the first save after a server-authorized map change have no
+  // same-map anchor yet. Bootstrap once without affecting live movement.
+  if (!previous || previous.version !== POSITION_AUTHORITY_VERSION || String(previous.mapId || "") !== mapId || normalizedNowMs(previous.validatedAtMs) <= 0) {
+    return freshPositionAuthority(mapId, candidateX, candidateY, now, previous);
+  }
+
+  const anchorX = finite(previous.x, Number(existingSave?.player?.x) || 0);
+  const anchorY = finite(previous.y, Number(existingSave?.player?.y) || 0);
+  const elapsedSeconds = clamp((now - normalizedNowMs(previous.validatedAtMs)) / 1000, 0, POSITION_MAX_ELAPSED_SECONDS);
+  const allowedDistance = explorationSpeedForSave(existingSave) * (elapsedSeconds + POSITION_TIME_GRACE_SECONDS) + POSITION_DISTANCE_TOLERANCE;
+  const travelled = Math.hypot(candidateX - anchorX, candidateY - anchorY);
+
+  if (travelled <= allowedDistance) {
+    return {
+      ...freshPositionAuthority(mapId, candidateX, candidateY, now, previous),
+      anomalyCount: clamp(whole(previous.anomalyCount, 0), 0, 999999),
+      lastAnomalyAtMs: normalizedNowMs(previous.lastAnomalyAtMs),
+    };
+  }
+
+  // Step 9A is observation-only: preserve the trusted anchor and record the
+  // anomaly, while player.x/y continue to save exactly as before. Enforcement
+  // is intentionally deferred to 9B/9C so multiplayer movement cannot regress.
+  return {
+    version: POSITION_AUTHORITY_VERSION,
+    mapId,
+    x: anchorX,
+    y: anchorY,
+    validatedAtMs: normalizedNowMs(previous.validatedAtMs),
+    anomalyCount: clamp(whole(previous.anomalyCount, 0) + 1, 0, 999999),
+    lastAnomalyAtMs: now,
+  };
+}
+
+function canonicalInitialSave(payload = {}, options = {}) {
   const source = payload && typeof payload === "object" ? payload : {};
   const sourcePlayer = source.player && typeof source.player === "object" ? source.player : {};
   const sourceExpansion = source.expansion && typeof source.expansion === "object" ? source.expansion : {};
@@ -58,6 +137,7 @@ function canonicalInitialSave(payload = {}) {
   const x = finite(sourcePlayer.x, 0);
   const y = finite(sourcePlayer.y, 0);
   const maxHp = classMaxHp(classId, 1);
+  const nowMs = normalizedNowMs(options.nowMs);
 
   return {
     version: SAVE_VERSION,
@@ -101,11 +181,12 @@ function canonicalInitialSave(payload = {}) {
       defeatedDungeonBosses: [],
       skills: Skills.createSkillState({ classId }),
       checkpoint: { mapId: "world", x, y },
+      positionAuthority: freshPositionAuthority("world", x, y, nowMs),
     },
   };
 }
 
-function clientOwnedPatch(existingSave, payload = {}) {
+function clientOwnedPatch(existingSave, payload = {}, options = {}) {
   const existing = existingSave && typeof existingSave === "object" ? existingSave : {};
   const source = payload && typeof payload === "object" ? payload : {};
   const player = source.player && typeof source.player === "object" ? source.player : {};
@@ -123,14 +204,18 @@ function clientOwnedPatch(existingSave, payload = {}) {
 
   const previousPlayTime = clamp(Number(existing.playTime) || 0, 0, MAX_PLAY_TIME);
   const requestedPlayTime = clamp(Number(source.playTime) || 0, 0, MAX_PLAY_TIME);
+  const nextX = finite(player.x, Number(existing.player?.x) || 0);
+  const nextY = finite(player.y, Number(existing.player?.y) || 0);
+  const positionAuthority = nextPositionAuthority(existing, nextX, nextY, options.nowMs);
 
   return {
     "player.gender": normalizeGender(player.gender, normalizeGender(existing.player?.gender)),
-    "player.x": finite(player.x, Number(existing.player?.x) || 0),
-    "player.y": finite(player.y, Number(existing.player?.y) || 0),
+    "player.x": nextX,
+    "player.y": nextY,
     playTime: Math.max(previousPlayTime, requestedPlayTime),
     "expansion.weakPotion.stepsRemaining": nextSteps,
     "expansion.weakPotion.distanceRemainder": nextRemainder,
+    "expansion.positionAuthority": positionAuthority,
   };
 }
 
@@ -147,10 +232,11 @@ function mergeClientOwnedState(existingSave, patch) {
   next.playTime = patch.playTime;
   next.expansion.weakPotion.stepsRemaining = patch["expansion.weakPotion.stepsRemaining"];
   next.expansion.weakPotion.distanceRemainder = patch["expansion.weakPotion.distanceRemainder"];
+  next.expansion.positionAuthority = clone(patch["expansion.positionAuthority"]);
   return next;
 }
 
-function sanitizeLegacySave(payload = {}) {
+function sanitizeLegacySave(payload = {}, options = {}) {
   const source = payload && typeof payload === "object" ? payload : {};
   const sourcePlayer = source.player && typeof source.player === "object" ? source.player : {};
   const sourceExpansion = source.expansion && typeof source.expansion === "object" ? source.expansion : {};
@@ -167,6 +253,7 @@ function sanitizeLegacySave(payload = {}) {
   }
   const x = finite(sourcePlayer.x, 0);
   const y = finite(sourcePlayer.y, 0);
+  const nowMs = normalizedNowMs(options.nowMs);
   const checkpoint = sourceExpansion.checkpoint && typeof sourceExpansion.checkpoint === "object"
     ? {
       mapId: String(sourceExpansion.checkpoint.mapId || "world").slice(0, 64),
@@ -222,6 +309,7 @@ function sanitizeLegacySave(payload = {}) {
         : [],
       skills: Skills.normalizeSkillState(sourceExpansion.skills, { classId }),
       checkpoint,
+      positionAuthority: freshPositionAuthority(String(sourceExpansion.currentMapId || "world").slice(0, 64), x, y, nowMs),
     },
   };
 }
@@ -229,8 +317,11 @@ function sanitizeLegacySave(payload = {}) {
 module.exports = Object.freeze({
   SAVE_VERSION,
   COMBAT_SCALE_VERSION,
+  POSITION_AUTHORITY_VERSION,
   canonicalInitialSave,
   clientOwnedPatch,
   mergeClientOwnedState,
   sanitizeLegacySave,
+  explorationSpeedForSave,
+  nextPositionAuthority,
 });
