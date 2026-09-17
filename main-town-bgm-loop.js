@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const api = root.LanternBgm;
+  const api = root.EverrealmBgm;
   const AudioContextCtor = root.AudioContext || root.webkitAudioContext;
   if (!api || typeof api.createBgmManager !== "function" || !AudioContextCtor) return;
 
@@ -276,5 +276,5 @@
     });
   }
 
-  root.LanternBgm = Object.assign({}, api, { createBgmManager });
+  root.EverrealmBgm = Object.assign({}, api, { createBgmManager });
 })(typeof window !== "undefined" ? window : globalThis);

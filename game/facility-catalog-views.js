@@ -206,17 +206,16 @@
     setFacilityFooter,
     ids,
     monsterKills,
-    legacyMonsterMigration,
     monsterBlueprint,
   }) {
     const cards = ids.map((type) => {
-      const count = monsterKills[type] || Object.entries(legacyMonsterMigration).filter(([, migration]) => migration.id === type).reduce((sum, [legacy]) => sum + (monsterKills[legacy] || 0), 0);
+      const count = monsterKills[type] || 0;
       const blueprint = monsterBlueprint(type);
       const hidden = count === 0;
-      return `<article class="codex-card ${hidden ? "is-unknown" : ""}"><span class="codex-count">${count ? `討伐 ${count}` : "未發現"}</span><div class="codex-sigil" aria-hidden="true">${hidden ? "?" : blueprint.battleRole === "poison" ? "✦" : blueprint.battleRole === "tank" ? "◇" : "●"}</div><div><strong>${hidden ? "？？？" : blueprint.name_zh}</strong><p>${hidden ? "繼續探索霧林同沉燈坑道。" : blueprint.codex.summary}</p><small>${hidden ? "能力未明" : `建議級別 ${blueprint.normalLevelRange[0]}-${blueprint.normalLevelRange[1]} · 暫無掉落物`}</small></div></article>`;
+      return `<article class="codex-card ${hidden ? "is-unknown" : ""}"><span class="codex-count">${count ? `討伐 ${count}` : "未發現"}</span><div class="codex-sigil" aria-hidden="true">${hidden ? "?" : blueprint.battleRole === "poison" ? "✦" : blueprint.battleRole === "tank" ? "◇" : "●"}</div><div><strong>${hidden ? "？？？" : blueprint.name_zh}</strong><p>${hidden ? "繼續探索山地各區域。" : blueprint.codex.summary}</p><small>${hidden ? "能力未明" : `建議級別 ${blueprint.normalLevelRange[0]}-${blueprint.normalLevelRange[1]} · 暫無掉落物`}</small></div></article>`;
     }).join("");
     const discovered = ids.filter((type) => monsterKills[type] > 0).length;
-    content.innerHTML = `<div class="facility-section-heading"><div><small>MONSTER CODEX</small><h3>霧獸觀察簿</h3></div><span>${discovered} / ${ids.length} 種</span></div><div class="codex-grid">${cards}</div>`;
+    content.innerHTML = `<div class="facility-section-heading"><div><small>MONSTER CODEX</small><h3>怪物觀察簿</h3></div><span>${discovered} / ${ids.length} 種</span></div><div class="codex-grid">${cards}</div>`;
     setFacilityFooter(`<span aria-hidden="true">◎</span> 每次討伐都會永久記錄；目前戰鬥只會獲得 EXP。`);
   }
 

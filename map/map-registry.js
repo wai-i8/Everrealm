@@ -1,19 +1,19 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
-  const transitions = root.LanternMapTransitions || (typeof require === "function" ? require("./map-transitions.js") : null);
-  const mainTown = root.LanternMainTownMap || (typeof require === "function" ? require("../maps/main-town.js") : null);
-  const field = root.LanternMountainFieldMap || (typeof require === "function" ? require("../maps/mountain-field.js") : null);
-  const mine = root.LanternMineMap || (typeof require === "function" ? require("../maps/mine.js") : null);
-  const mountainSouth = root.LanternMountainSouthMap || (typeof require === "function" ? require("../maps/mountain-south.js") : null);
-  const guild = root.LanternGuildMap || (typeof require === "function" ? require("../maps/interiors/guild.js") : null);
-  const shop = root.LanternEquipmentShopMap || (typeof require === "function" ? require("../maps/interiors/equipment-shop.js") : null);
-  const clinic = root.LanternClinicMap || (typeof require === "function" ? require("../maps/interiors/clinic.js") : null);
-  const generalStore = root.LanternGeneralStoreMap || (typeof require === "function" ? require("../maps/interiors/general-store.js") : null);
-  const inn = root.LanternInnMap || (typeof require === "function" ? require("../maps/interiors/inn.js") : null);
-  const api = factory(constants, transitions, mainTown, field, mine, mountainSouth, guild, shop, clinic, generalStore, inn);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
+  const transitions = root.EverrealmMapTransitions || (typeof require === "function" ? require("./map-transitions.js") : null);
+  const mainTown = root.EverrealmMainTownMap || (typeof require === "function" ? require("../maps/main-town.js") : null);
+  const field = root.EverrealmMountainFieldMap || (typeof require === "function" ? require("../maps/mountain-field.js") : null);
+  const mountainSoutheast = root.EverrealmMountainSoutheastMap || (typeof require === "function" ? require("../maps/mountain-southeast.js") : null);
+  const mountainSouth = root.EverrealmMountainSouthMap || (typeof require === "function" ? require("../maps/mountain-south.js") : null);
+  const guild = root.EverrealmGuildMap || (typeof require === "function" ? require("../maps/interiors/guild.js") : null);
+  const shop = root.EverrealmEquipmentShopMap || (typeof require === "function" ? require("../maps/interiors/equipment-shop.js") : null);
+  const clinic = root.EverrealmClinicMap || (typeof require === "function" ? require("../maps/interiors/clinic.js") : null);
+  const generalStore = root.EverrealmGeneralStoreMap || (typeof require === "function" ? require("../maps/interiors/general-store.js") : null);
+  const inn = root.EverrealmInnMap || (typeof require === "function" ? require("../maps/interiors/inn.js") : null);
+  const api = factory(constants, transitions, mainTown, field, mountainSoutheast, mountainSouth, guild, shop, clinic, generalStore, inn);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMapRegistry = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, transitions, mainTown, field, mine, mountainSouth, guild, shop, clinic, generalStore, inn) {
+  root.EverrealmMapRegistry = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (constants, transitions, mainTown, field, mountainSoutheast, mountainSouth, guild, shop, clinic, generalStore, inn) {
   "use strict";
   const { MAP_IDS, TILE, TILES } = constants;
 
@@ -21,7 +21,7 @@
     const maps = {
       [MAP_IDS.WORLD]: mainTown.createMainTownMap(),
       [MAP_IDS.FIELD]: field.createMountainFieldMap(),
-      [MAP_IDS.DUNGEON]: mine.createMineMap(),
+      [MAP_IDS.MOUNTAIN_SOUTHEAST]: mountainSoutheast.createMountainSoutheastMap(),
       [MAP_IDS.MOUNTAIN_SOUTH]: mountainSouth.createMountainSouthMap(),
       [MAP_IDS.GUILD]: guild.createGuildMap(),
       [MAP_IDS.SHOP]: shop.createEquipmentShopMap(),

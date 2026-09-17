@@ -11,20 +11,20 @@ const {
   healingPotionResult,
   weakPotionResult,
   clinicHealResult,
-  shrineRestResult,
   reviveResult,
   HEALING_POTION_HEAL,
   WEAK_POTION_TOTAL_STEPS,
-  ECHO_LANTERN_CHECKPOINT,
 } = require("./game-rules");
 
 test("server HP formula matches current class table anchors", () => {
   assert.equal(classMaxHp("fighter", 1), 440);
-  assert.equal(classMaxHp("warrior", 1), 440);
   assert.equal(classMaxHp("elementalist", 1), 440);
   assert.equal(classMaxHp("fighter", 6), (88 + 5 * 7 + 3) * 5);
-  assert.equal(classMaxHp("warrior", 6), (88 + 5 * 8 + 4) * 5);
   assert.equal(classMaxHp("elementalist", 6), (88 + 5 * 6 + 2) * 5);
+});
+
+test("retired Warrior saves use the Fighter HP table during migration", () => {
+  assert.equal(classMaxHp("warrior", 6), classMaxHp("fighter", 6));
 });
 
 test("server HP formula stays identical to browser class data", () => {
@@ -107,19 +107,6 @@ test("clinic healing only succeeds while the save is in the clinic", () => {
   });
   assert.equal(rejected.ok, false);
   assert.equal(rejected.reason, "wrong-map");
-});
-
-test("shrine rest validates the authored shrine and writes the canonical checkpoint", () => {
-  const result = shrineRestResult({
-    player: { level: 12, hp: 2 },
-    expansion: { classId: "warrior", currentMapId: "dungeon" },
-  }, "echo-lantern-shrine");
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.checkpoint, ECHO_LANTERN_CHECKPOINT);
-  assert.equal(result.player.hp, classMaxHp("warrior", 12));
-
-  assert.equal(shrineRestResult({ expansion: { currentMapId: "world" } }, "echo-lantern-shrine").reason, "wrong-map");
-  assert.equal(shrineRestResult({ expansion: { currentMapId: "dungeon" } }, "fake-shrine").reason, "unknown-shrine");
 });
 
 test("revive applies the server XP penalty and chooses the correct HP", () => {

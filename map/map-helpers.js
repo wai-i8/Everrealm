@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
   const api = factory(constants);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMapHelpers = api;
+  root.EverrealmMapHelpers = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants) {
   "use strict";
 
@@ -88,8 +88,6 @@
       ...(map.npcs || []),
       ...(map.boards || []),
       ...(map.chests || []),
-      ...(map.shrine ? [map.shrine] : []),
-      ...(map.waypoint && map.waypoint !== map.shrine ? [map.waypoint] : []),
     ];
     map.staticObjects = [
       ...(map.staticObjects || []),
@@ -98,7 +96,6 @@
       ...(map.decorations || []),
       ...(map.boards || []),
       ...(map.chests || []),
-      ...(map.shrine ? [map.shrine] : []),
     ].filter((object, index, all) => all.findIndex((candidate) => candidate.id === object.id) === index);
     map.collisionObjects = [
       ...(map.collisionObjects || []),

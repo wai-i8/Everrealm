@@ -3,7 +3,7 @@
     || (typeof require === "function" ? require("./data/quests.js") : null);
   const api = factory(questData);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternGuildCommission = api;
+  root.EverrealmGuildCommission = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (questData) {
   "use strict";
 

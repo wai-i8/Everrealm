@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternFighterSkillData = api;
+  root.EverrealmFighterSkillData = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
   const data = {
@@ -5448,7 +5448,7 @@
       "name_zh": "防禦",
       "source_name_ja": "防御",
       "type": "CMD",
-      "category": "side_warrior",
+      "category": "side_fighter",
       "requires": [
         "kentotsu"
       ],
@@ -5507,7 +5507,7 @@
           }
         ],
         "requirements": {
-          "job": "warrior",
+          "job": "fighter",
           "level_min": 5
         }
       },
@@ -5541,7 +5541,7 @@
       "name_zh": "電拳擊",
       "source_name_ja": "電拳撃",
       "type": "CMD",
-      "category": "side_warrior",
+      "category": "side_fighter",
       "requires": [
         "bougyo"
       ],
@@ -5611,7 +5611,7 @@
           }
         ],
         "requirements": {
-          "job": "warrior",
+          "job": "fighter",
           "level_min": 10
         }
       },
@@ -5647,7 +5647,7 @@
       "name_zh": "留下半氣拳",
       "source_name_ja": "留下半気拳",
       "type": "CMD",
-      "category": "side_warrior",
+      "category": "side_fighter",
       "requires": [
         "denkangeki"
       ],
@@ -5701,7 +5701,7 @@
         "source_special_notes": [],
         "source_effects": [],
         "requirements": {
-          "job": "warrior",
+          "job": "fighter",
           "level_min": 15
         }
       },
@@ -5735,7 +5735,7 @@
       "name_zh": "留下後一拳",
       "source_name_ja": "留下後一拳",
       "type": "CMD",
-      "category": "side_warrior",
+      "category": "side_fighter",
       "requires": [
         "ruka_hanki_ken"
       ],
@@ -5786,7 +5786,7 @@
         "source_special_notes": [],
         "source_effects": [],
         "requirements": {
-          "job": "warrior",
+          "job": "fighter",
           "level_min": 20
         }
       },
@@ -5820,7 +5820,7 @@
       "name_zh": "拳瞬",
       "source_name_ja": "拳瞬",
       "type": "CMD",
-      "category": "side_warrior",
+      "category": "side_fighter",
       "requires": [
         "ruka_kouitsu_ken"
       ],
@@ -5871,7 +5871,7 @@
         "source_special_notes": [],
         "source_effects": [],
         "requirements": {
-          "job": "warrior",
+          "job": "fighter",
           "level_min": 25
         }
       },

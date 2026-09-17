@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("./map-helpers.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("./map-helpers.js") : null);
   const api = factory(helpers);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternInteriorHelpers = api;
+  root.EverrealmInteriorHelpers = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (helpers) {
   "use strict";
   const { TILE, TILES, TRANSITION_TYPES } = helpers;
@@ -51,8 +51,6 @@
       npcs: npcs || [],
       enemySpawns: map.enemySpawns || [],
       chests: map.chests || [],
-      shrine: map.shrine || null,
-      waypoint: map.waypoint || null,
     });
   }
 

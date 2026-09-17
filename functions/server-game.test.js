@@ -20,10 +20,7 @@ function baseSave(overrides = {}) {
       guildMarks: 0,
       guildRenown: 0,
       monsterKills: {},
-      dungeonClears: 0,
-      defeatedDungeonBosses: [],
       skills: Skills.createSkillState({ classId: "fighter" }),
-      checkpoint: { mapId: "world", x: 100, y: 100 },
     },
   };
   return {
@@ -78,6 +75,20 @@ test("map transitions only allow authored adjacent maps", () => {
   const invalid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "mountain-south" }, { nowMs: 123456 });
   assert.equal(invalid.ok, false);
   assert.equal(invalid.reason, "invalid-transition");
+});
+
+test("legacy dungeon map ids migrate to the mountain-southeast route", () => {
+  const save = baseSave({
+    player: { x: 150, y: 1000 },
+    expansion: {
+      currentMapId: "dungeon",
+      positionAuthority: { version: 1, mapId: "dungeon", x: 150, y: 1000, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.mapCommand(save, { action: "transition", targetMapId: "mountain-south" }, { nowMs: 123456 });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.expansion.currentMapId, "mountain-south");
+  assert.equal(result.state.expansion.classId, "fighter");
 });
 
 test("Step 9B accepts a transition when the trusted anchor is at the authored exit", () => {

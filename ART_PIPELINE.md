@@ -5,9 +5,9 @@
 - 地圖 NPC：`assets/npc-map-chibi-v4.png`，4 × 3。只用成年 Q 版全身像；阿澄係紫／白毛領星術師原裝，唔再縮細角色立繪。
 - 對話 NPC：`assets/npc-dialogue-portraits-v4.png`，4 × 3。每格係獨立頭肩大頭照，採用透明 RGB 清理版，唔再由全身像硬裁。
 - 場景物件：`assets/environment-atlas-v5.png`，1536 × 1920、4 × 5。由 `tools/repack-environment-atlas.ps1` 重排；每件物件的底座、根部及接地陰影都完整收納於單格，修正 v4 跨格及上下裁切。
-- 地面：`assets/terrain-atlas-v1.png`，4 × 3。草地、泥路、河水、石路、公會／商店地板與地毯、坑道地面、河岸及木橋全部使用 bitmap tile。
-- 室內／坑道物件：`assets/interior-props-v2.png`，4 × 3。室內委託板、長桌、屏風、人偶、旗幟、壁爐、壁燈、符文燈、菇叢、瓦礫、裂地及石柱。
-- 霧獸舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy migration reference**；正式 runtime 唔可以因新 asset 未載入／失敗而自動跌返舊圖；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
+- 地面：`assets/terrain-atlas-v1.png`，4 × 3。草地、泥路、河水、石路、公會／商店地板與地毯、山地岩地、河岸及木橋全部使用 bitmap tile。
+- 室內／場景物件：`assets/interior-props-v2.png`，4 × 3。室內委託板、長桌、屏風、人偶、旗幟、壁爐、壁燈、符文燈、菇叢、瓦礫、裂地及石柱。
+- 怪物舊版四方向靜態圖：`assets/monster-facing-core-v1.png` 及 `assets/monster-facing-depths-v1.png`。呢兩張只屬 **locomotion standard 遷移前嘅 legacy migration reference**；正式 runtime 唔可以因新 asset 未載入／失敗而自動跌返舊圖；普通細至中型怪物完成新標準圖後，探索及戰鬥移動都應改用下文 `Standard Mobile Unit Locomotion Contract`，唔再以靜態 facing sprite 水平滑行。
 - 格鬥士舊版：`assets/fighter-atlas-v2.png` 及 `assets/fighter-walk-atlas-v4.png` 只保留作現有兼容／造型參考。新正式 locomotion 唔再逐格 patch 舊 `4 × 4` walk atlas，而係按下文統一 `4 rows × 7 columns = 28 frames` 標準重新生成、normalize、repack，再由探索及戰鬥共用。
 - 小地圖外框：`assets/minimap-frame-v1.png`。真正透明圓形華麗框，疊在小地圖 Canvas 上；內容必須裁進內圓，不可再顯示方形底板。地形、樹、建築、石、寶箱、神龕及室內家具必須縮繪自現有 terrain／environment／interior atlas，不可用幾何方格、圓點或矩形代替場景美術。
 - 地圖標記：`assets/marker-atlas-v1.png`，2 × 2。任務問號、回報感嘆號、互動菱形及 legacy 傳送門；flattened interior runtime 不把 marker 畫喺場景上。
@@ -494,7 +494,7 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 
 ### 阿澄專用外貌基準
 
-- 角色身份：25 歲成年女性「守燈星術師」，保留角色名「阿澄」及既有 `ah-ching`／`keeper` 任務兼容識別。
+- 角色身份：25 歲成年女性「星術師」，保留角色名「阿澄」及既有 `ah-ching`／`keeper` 任務兼容識別。
 - 固定外貌：銀藍色長髮、青綠眼睛、成熟日系奇幻女性比例。
 - 固定服裝：紫黑金星術法衣、白色羽毛披肩、金色圓環飾物。
 - 固定裝備與同伴：頂端帶藍金月輪球體嘅法杖，以及漂浮於身旁嘅藍色精靈。
@@ -522,7 +522,7 @@ Battle movement 嘅 timing／collision 仍然由 `docs/BATTLE_SYSTEM.md` 負責�
 
 阿澄變體：
 
-> 以 `assets/ah-ching-v1.png` 為精確角色參考，製作 25 歲成年女性阿澄（守燈星術師）嘅新表情或動作。嚴格保持銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、金色圓環飾物、藍金月輪法杖與藍色精靈；只改指定姿勢／表情／視角，不重新設計服裝或角色。沿用精緻日系奇幻 RPG 畫風，genuinely transparent PNG alpha，不加背景、文字、水印或額外角色。
+> 以 `assets/ah-ching-v1.png` 為精確角色參考，製作 25 歲成年女性阿澄（星術師）嘅新表情或動作。嚴格保持銀藍長髮、青綠眼、紫黑金星術法衣、白羽披肩、金色圓環飾物、藍金月輪法杖與藍色精靈；只改指定姿勢／表情／視角，不重新設計服裝或角色。沿用精緻日系奇幻 RPG 畫風，genuinely transparent PNG alpha，不加背景、文字、水印或額外角色。
 
 ## NPC 共用索引
 
@@ -771,7 +771,7 @@ decals
 | 1 | 鍛造／裝備店 | 9 | 燈柱 |
 | 2 | 旅店（舊索引槽） | 10 | 路牌 |
 | 3 | 港口小屋 | 11 | 寶箱 |
-| 4 | 綠葉樹 | 12 | 港口燈龕 |
+| 4 | 綠葉樹 | 12 | 港口裝飾 |
 | 5 | 松樹 | 13 | 委託板 |
 | 6 | 秋樹 | 14 | 木桶＋木箱 |
 | 7 | 櫻花樹 | 15 | 水井 |

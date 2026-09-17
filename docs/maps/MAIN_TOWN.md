@@ -1,4 +1,4 @@
-# 霧都主城 · Main Town
+# 主城 · Main Town
 
 - `map_id: world`
 - runtime owner：`maps/main-town.js`

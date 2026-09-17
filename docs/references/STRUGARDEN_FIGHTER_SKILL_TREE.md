@@ -4864,7 +4864,7 @@ skills:
     - type: damage_reduction_stance
       duration_turns: 0
     requirements:
-      job: warrior
+      job: fighter
       level_min: 5
   everrealm:
     action_kind: self_buff
@@ -4941,7 +4941,7 @@ skills:
       probability: low
       duration_turns: 1
     requirements:
-      job: warrior
+      job: fighter
       level_min: 10
   everrealm:
     action_kind: damage_control
@@ -5011,7 +5011,7 @@ skills:
     source_special_notes: []
     source_effects: []
     requirements:
-      job: warrior
+      job: fighter
       level_min: 15
   everrealm:
     action_kind: fixed_damage
@@ -5079,7 +5079,7 @@ skills:
     source_special_notes: []
     source_effects: []
     requirements:
-      job: warrior
+      job: fighter
       level_min: 20
   everrealm:
     action_kind: fixed_damage
@@ -5147,7 +5147,7 @@ skills:
     source_special_notes: []
     source_effects: []
     requirements:
-      job: warrior
+      job: fighter
       level_min: 25
   everrealm:
     action_kind: damage

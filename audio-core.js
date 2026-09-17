@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternBgm = api;
+  root.EverrealmBgm = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
@@ -20,7 +20,7 @@
     "general-store": "building",
     inn: "building",
     field: "mountainField",
-    dungeon: "mountainField",
+    "mountain-southeast": "mountainField",
     "mountain-south": "mountainField",
   });
 

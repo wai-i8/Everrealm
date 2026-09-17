@@ -1,6 +1,6 @@
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory(null, null);
-  else root.EverrealmMultiplayer = factory(root.EverrealmFirebase, root.LanternLocomotion);
+  else root.EverrealmMultiplayer = factory(root.EverrealmFirebase, root.EverrealmLocomotion);
 })(typeof globalThis !== "undefined" ? globalThis : this, function (defaultFirebase, defaultLocomotion) {
   "use strict";
 
@@ -60,7 +60,7 @@
     return {
       uid: safeUid,
       name: safeName(source.name),
-      classId: String(source.classId || "warrior").trim() || "warrior",
+      classId: String(source.classId || "fighter").trim() || "fighter",
       gender: String(source.gender || "").trim().toLowerCase() === "female" ? "female" : "male",
       x,
       y,
@@ -367,7 +367,7 @@
     const visuallyAdvancing = timelineMoving && renderedDistance > .001;
 
     if (visuallyAdvancing) {
-      // Preserve the walk phase across facing changes. LanternLocomotion.update()
+      // Preserve the walk phase across facing changes. EverrealmLocomotion.update()
       // intentionally resets on a facing change, which is correct for local
       // authored movement but looks like repeated left/right-foot frames for
       // jittery remote snapshots.
@@ -534,7 +534,7 @@
         uid,
         mapId: resolvedMapId,
         name: safeName(value.name),
-        classId: String(value.classId || "warrior").trim() || "warrior",
+        classId: String(value.classId || "fighter").trim() || "fighter",
         gender: String(value.gender || "").trim().toLowerCase() === "female" ? "female" : "male",
         x,
         y,

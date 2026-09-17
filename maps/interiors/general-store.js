@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
-  const helpers = root.LanternInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
-  const navigationApi = root.LanternItemNavigation || (typeof require === "function" ? require("../../map/item-navigation.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
+  const helpers = root.EverrealmInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
+  const navigationApi = root.EverrealmItemNavigation || (typeof require === "function" ? require("../../map/item-navigation.js") : null);
   const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternGeneralStoreMap = api;
+  root.EverrealmGeneralStoreMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, interior, navigationApi) {
   "use strict";
   const { MAP_IDS, TILES } = constants;

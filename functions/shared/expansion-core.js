@@ -5,7 +5,7 @@
     || (typeof require === "function" ? require("./data/equipment.js") : null);
   const api = factory(classData, equipmentData);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternExpansion = api;
+  root.EverrealmExpansion = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (classData, equipmentData) {
   "use strict";
 
@@ -23,7 +23,7 @@
   }
 
   function starterEquipmentForClass(classId) {
-    return classData?.starterEquipment?.(classId) || { weapon: classId === "fighter" ? "novice_gloves" : "novice_blade", upperBody: "traveller_coat" };
+    return classData?.starterEquipment?.(classId) || { weapon: "novice_gloves", upperBody: "traveller_coat" };
   }
 
   function facilityTabsForContext(context = "portable", mapId = "world") {
@@ -83,7 +83,7 @@
         cost: wholeNumber(raw.cost),
         requiredLevel: Math.max(1, Math.min(LEVEL_CAP, wholeNumber(raw.requiredLevel, 1, 1))),
         purchasable: raw.purchasable !== false && raw.legacyOnly !== true,
-        classId: ["warrior", "fighter"].includes(String(raw.classId || "")) ? String(raw.classId) : null,
+        classId: (classData?.CLASS_IDS || ["fighter", "elementalist"]).includes(String(raw.classId || "")) ? String(raw.classId) : null,
         legacyOnly: raw.legacyOnly === true,
         iconIndex: Math.max(0, Math.min(15, wholeNumber(raw.iconIndex, 0))),
         icon: raw.icon && typeof raw.icon === "object" ? Object.freeze({ ...raw.icon }) : null,
@@ -130,7 +130,7 @@
     return {
       coins: wholeNumber(state.coins),
       level: Math.max(1, Math.min(LEVEL_CAP, wholeNumber(state.level, 1, 1))),
-      classId: (classData?.CLASS_IDS || ["warrior", "fighter"]).includes(String(state.classId || "")) ? String(state.classId) : null,
+      classId: (classData?.CLASS_IDS || ["fighter", "elementalist"]).includes(String(state.classId || "")) ? String(state.classId) : null,
       ownedEquipment,
       equipped,
     };

@@ -10,37 +10,6 @@
   const EQUIPMENT_STAT_KEYS = Object.freeze(["attack", "defense", "maxHp", "speed", "critChance", "moveRange", "accuracy", "evasion", "weight"]);
   const RAW_EQUIPMENT_CATALOG = [
   {
-    "id": "novice_blade",
-    "slot": "weapon",
-    "occupiesSlots": [
-      "weapon"
-    ],
-    "name": "見習燈刃",
-    "description": "拾燈人最初使用的短刃，輕巧可靠。",
-    "cost": 0,
-    "requiredLevel": 1,
-    "purchasable": false,
-    "classId": "warrior",
-    "iconIndex": 0,
-    "stats": {
-      "attack": 10,
-      "defense": 0,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 2
-    },
-    "legacyOnly": false,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 0
-    }
-  },
-  {
     "id": "novice_gloves",
     "slot": "weapon",
     "occupiesSlots": [
@@ -434,37 +403,6 @@
     }
   },
   {
-    "id": "tide_iron_sword",
-    "slot": "weapon",
-    "occupiesSlots": [
-      "weapon"
-    ],
-    "name": "潮鐵劍",
-    "description": "以霧都潮鐵打製，劍身會映出淡藍微光。",
-    "cost": 90,
-    "requiredLevel": 1,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 1,
-    "stats": {
-      "attack": 25,
-      "defense": 0,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 2
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 1
-    }
-  },
-  {
     "id": "windfeather_dagger",
     "slot": "weapon",
     "occupiesSlots": [
@@ -493,99 +431,6 @@
       "type": "atlas",
       "atlas": "equipment",
       "index": 2
-    }
-  },
-  {
-    "id": "lantern_sabre",
-    "slot": "weapon",
-    "occupiesSlots": [
-      "weapon"
-    ],
-    "name": "曜燈彎刀",
-    "description": "刀脊藏有燈晶，揮舞時會留下金色光弧。",
-    "cost": 380,
-    "requiredLevel": 7,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 3,
-    "stats": {
-      "attack": 70,
-      "defense": 0,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0.04,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 3
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 3
-    }
-  },
-  {
-    "id": "starfall_glaive",
-    "slot": "weapon",
-    "occupiesSlots": [
-      "weapon"
-    ],
-    "name": "墜星長刃",
-    "description": "從地城隕鐵重鑄而成，沉重但威力驚人。",
-    "cost": 720,
-    "requiredLevel": 12,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 4,
-    "stats": {
-      "attack": 110,
-      "defense": 2,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 5
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 4
-    }
-  },
-  {
-    "id": "dawn_oath",
-    "slot": "weapon",
-    "occupiesSlots": [
-      "weapon"
-    ],
-    "name": "破曉誓約",
-    "description": "公會高手夢寐以求的燈刃，光芒從不熄滅。",
-    "cost": 1250,
-    "requiredLevel": 17,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 5,
-    "stats": {
-      "attack": 155,
-      "defense": 0,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0.05,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 7
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 5
     }
   },
   {
@@ -648,68 +493,6 @@
       "type": "atlas",
       "atlas": "equipment",
       "index": 7
-    }
-  },
-  {
-    "id": "mistweave_cape",
-    "slot": "upperBody",
-    "occupiesSlots": [
-      "upperBody"
-    ],
-    "name": "霧織斗篷",
-    "description": "以霧蛛絲織成，防護與靈活兼備。",
-    "cost": 290,
-    "requiredLevel": 6,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 8,
-    "stats": {
-      "attack": 0,
-      "defense": 5,
-      "maxHp": 0,
-      "speed": 5,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 3
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 8
-    }
-  },
-  {
-    "id": "cavern_guard",
-    "slot": "upperBody",
-    "occupiesSlots": [
-      "upperBody"
-    ],
-    "name": "岩窟守衛甲",
-    "description": "厚重岩片內襯燈晶，專為深入地城而設。",
-    "cost": 560,
-    "requiredLevel": 10,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 9,
-    "stats": {
-      "attack": 0,
-      "defense": 9,
-      "maxHp": 0,
-      "speed": -8,
-      "critChance": 0,
-      "moveRange": -1,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 8
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 9
     }
   },
   {
@@ -1286,37 +1069,6 @@
     }
   },
   {
-    "id": "copper_lantern_bell",
-    "slot": "charm",
-    "occupiesSlots": [
-      "charm"
-    ],
-    "name": "銅燈鈴",
-    "description": "細小鈴聲令人安心，稍微提升生存能力。",
-    "cost": 80,
-    "requiredLevel": 1,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 11,
-    "stats": {
-      "attack": 0,
-      "defense": 0,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 0
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 11
-    }
-  },
-  {
     "id": "hunter_fang",
     "slot": "charm",
     "occupiesSlots": [
@@ -1378,37 +1130,6 @@
       "index": 13
     }
   },
-  {
-    "id": "deep_lantern_core",
-    "slot": "charm",
-    "occupiesSlots": [
-      "charm"
-    ],
-    "name": "深層燈核",
-    "description": "在地城深處仍然發亮的古老核心。",
-    "cost": 900,
-    "requiredLevel": 15,
-    "purchasable": true,
-    "classId": null,
-    "iconIndex": 14,
-    "stats": {
-      "attack": 7,
-      "defense": 5,
-      "maxHp": 0,
-      "speed": 0,
-      "critChance": 0,
-      "moveRange": 0,
-      "accuracy": 0,
-      "evasion": 0,
-      "weight": 2
-    },
-    "legacyOnly": true,
-    "icon": {
-      "type": "atlas",
-      "atlas": "equipment",
-      "index": 14
-    }
-  }
 ];
   const ALL_EQUIPMENT_CATALOG = Object.freeze(RAW_EQUIPMENT_CATALOG.map((item) => Object.freeze({ ...item, occupiesSlots: Object.freeze([...(item.occupiesSlots || [item.slot])]), stats: Object.freeze({ ...(item.stats || {}) }), icon: Object.freeze({ ...(item.icon || {}) }) })));
   const EQUIPMENT_CATALOG = Object.freeze(ALL_EQUIPMENT_CATALOG.filter((item) => !item.legacyOnly));

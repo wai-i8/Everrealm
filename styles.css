@@ -102,8 +102,6 @@ button { font: inherit; }
 .back-link:hover { color: var(--cream); }
 .wordmark { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: .55rem; font-size: .72rem; font-weight: 900; letter-spacing: .14em; }
 .wordmark small { color: var(--gold); font: 700 .6rem/1 ui-monospace, monospace; letter-spacing: .16em; }
-.mini-lantern { width: .7rem; height: .9rem; border: 1px solid var(--gold); border-radius: .15rem; position: relative; box-shadow: 0 0 12px rgba(255,200,87,.5); }
-.mini-lantern::before { content: ""; position: absolute; width: .38rem; height: .16rem; border: 1px solid var(--gold); border-bottom: 0; border-radius: 50% 50% 0 0; top: -.26rem; left: .09rem; }
 .top-actions { display: flex; gap: .4rem; }
 .round-button {
   width: 2rem; height: 2rem; border: 1px solid rgba(245,233,202,.2); border-radius: 50%;
@@ -596,8 +594,6 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-unit-face::before { content: ""; position: absolute; left: -.42rem; top: -1.2rem; width: 2.35rem; height: 1.2rem; border-radius: 75% 75% 30% 40%; background: #263352; clip-path: polygon(0 0,100% 0,100% 55%,78% 43%,68% 83%,49% 45%,31% 80%,0 58%); }
 .battle-unit-face::after { content: ""; position: absolute; left: .4rem; top: .62rem; width: .48rem; height: .22rem; border-bottom: 3px solid #a85f5f; border-radius: 0 0 50% 50%; }
 .battle-unit-face i { position: absolute; left: -.68rem; top: -.58rem; width: .38rem; height: .38rem; border: 2px solid var(--gold); border-radius: 50%; box-shadow: 2.35rem .08rem 0 -.13rem var(--gold); }
-.battle-unit-lantern { position: absolute; z-index: 4; right: .32rem; bottom: .42rem; width: .65rem; height: .82rem; border: 1px solid #fff0ba; border-radius: .15rem; background: var(--gold); box-shadow: 0 0 14px var(--gold); }
-.battle-unit-lantern::before { content: ""; position: absolute; left: .11rem; top: -.3rem; width: .32rem; height: .2rem; border: 1px solid #fff0ba; border-bottom: 0; border-radius: 50% 50% 0 0; }
 .selected-unit-copy {
   width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) 5rem; align-items: center; gap: .4rem;
   padding: .24rem .34rem; border: 1px solid transparent; border-radius: .42rem; color: var(--cream); background: rgba(6,11,24,.42);
@@ -688,7 +684,7 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 .battle-command-skill.is-selected { color: var(--red); border-color: rgba(255,107,107,.82); background: linear-gradient(90deg,rgba(255,107,107,.14),transparent 46%),linear-gradient(180deg,rgba(62,25,42,.97),rgba(28,12,27,.97)); }
 .battle-command-skill.is-selected b { color: var(--red); }
 .battle-command-skill.attack-skill { --skill-accent: var(--gold); }
-.battle-command-skill.lantern-skill { --skill-accent: var(--violet); }
+.battle-command-skill.magic-skill { --skill-accent: var(--violet); }
 .battle-command-skill:hover,.battle-command-skill:focus-visible {
   transform: translateY(-1px); border-color: rgba(255,200,87,.72); background: linear-gradient(90deg,rgba(255,200,87,.1),transparent 46%),linear-gradient(180deg,rgba(34,47,79,.97),rgba(12,20,39,.97));
   box-shadow: inset 0 1px rgba(255,255,255,.055),0 .18rem .5rem rgba(0,0,0,.24);
@@ -883,13 +879,6 @@ kbd { min-width: 1.65rem; padding: .25rem .38rem; display: inline-grid; place-it
 /* The live blurred town canvas is the title backdrop; no decorative geometry
    should cover the actual Guild/fountain composition. */
 .title-screen > * { position: relative; z-index: 1; }
-.title-mist { position: absolute; z-index: 0; width: 50vw; height: 7rem; border-radius: 50%; background: rgba(198,213,224,.06); filter: blur(24px); animation: mistDrift 12s ease-in-out infinite alternate; }
-.mist-one { left: -10%; top: 34%; }
-.mist-two { right: -12%; top: 58%; animation-delay: -6s; }
-.title-lantern { width: 3rem; height: 4rem; margin-bottom: 1rem; position: relative; filter: drop-shadow(0 0 20px rgba(255,200,87,.6)); }
-.title-lantern::before { content: ""; position: absolute; inset: .3rem .25rem .1rem; border: 2px solid var(--cream); clip-path: polygon(18% 0,82% 0,100% 15%,90% 100%,10% 100%,0 15%); }
-.title-lantern::after { content: ""; position: absolute; width: 1.45rem; height: .6rem; border: 2px solid var(--cream); border-bottom: 0; border-radius: 50% 50% 0 0; top: -.2rem; left: .78rem; }
-.title-lantern i { position: absolute; width: 1.2rem; height: 1.7rem; left: .9rem; top: 1.15rem; border-radius: 50% 50% 42% 42%; background: var(--gold); box-shadow: 0 0 28px 10px rgba(255,200,87,.35); animation: lanternBreath 2.4s ease-in-out infinite; }
 .eyebrow, .modal-kicker { margin: 0 0 .55rem; color: var(--teal); font: 800 .6rem/1 ui-monospace, monospace; letter-spacing: .2em; }
 h1 { margin: 0; font-size: clamp(3.8rem, 9vw, 7.4rem); line-height: .82; letter-spacing: -.08em; filter: drop-shadow(4px 5px 0 rgba(0,0,0,.45)); }
 h1 span { display: block; }
@@ -1390,7 +1379,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   color: var(--muted);
   text-align: center;
 }
-.facility-empty-state > span { color: var(--gold); font-size: 1.35rem; animation: lanternBreath 2.4s ease-in-out infinite; }
+.facility-empty-state > span { color: var(--gold); font-size: 1.35rem; animation: softPulse 2.4s ease-in-out infinite; }
 .facility-empty-state strong { color: var(--cream); font-size: .8rem; }
 .facility-empty-state small { font-size: .62rem; }
 .facility-footer {
@@ -1413,8 +1402,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
 
-@keyframes mistDrift { from { transform: translateX(-5%) scale(.9); } to { transform: translateX(18%) scale(1.15); } }
-@keyframes lanternBreath { 50% { transform: scale(.87); opacity: .8; } }
+@keyframes softPulse { 50% { transform: scale(.87); opacity: .8; } }
 @keyframes nextBounce { to { transform: translateY(3px); } }
 @keyframes slowSpin { to { transform: rotate(360deg); } }
 @keyframes locationReveal { 0% { opacity: 0; transform: translate(-50%,-12px); } 15%,70% { opacity: 1; transform: translate(-50%,0); } 100% { opacity: 0; transform: translate(-50%,8px); } }
@@ -1508,7 +1496,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   .quest-hud { top: .45rem; right: .45rem; width: 10.2rem; }
   .quest-hud p, .quest-hud small { display: none; }
   .resource-hud { top: 4rem; }
-  .title-lantern { margin-bottom: .55rem; transform: scale(.8); }
   h1 { font-size: clamp(3.4rem,18vw,5rem); }
   .title-copy { margin: .7rem 0 1rem; }.title-actions { flex-direction: column; gap: .45rem; }
   .control-strip { display: none; }
@@ -1587,7 +1574,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 }
 
 @media (max-height: 660px) {
-  .title-lantern { display: none; }.eyebrow { display: none; }
+  .eyebrow { display: none; }
   h1 { font-size: clamp(3rem,14vh,5.2rem); }.title-copy { margin: .6rem 0 .8rem; }.control-strip { margin-top: .8rem; }
   .mobile-controls { height: 8rem; transform: scale(.86); transform-origin: bottom; }
   .battle-skill-button { min-height: 1.72rem; }

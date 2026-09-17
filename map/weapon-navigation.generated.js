@@ -6,7 +6,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternWeaponNavigationGenerated = api;
+  root.EverrealmWeaponNavigationGenerated = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 

@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMapConstants = api;
+  root.EverrealmMapConstants = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
@@ -22,7 +22,7 @@
     CLINIC: "clinic",
     GENERAL_STORE: "general-store",
     INN: "inn",
-    DUNGEON: "dungeon",
+    MOUNTAIN_SOUTHEAST: "mountain-southeast",
     MOUNTAIN_SOUTH: "mountain-south",
   });
 

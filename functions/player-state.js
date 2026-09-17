@@ -16,7 +16,7 @@ const MAX_WEAK_POTION_STEPS = 500;
 const MAX_WEAK_POTION_REMAINDER = 999999;
 
 // Phase 3 Step 9A: keep realtime/client movement unchanged, but derive a
-// server-owned checkpoint that later authoritative commands can trust.
+// server-owned position anchor that later authoritative commands can trust.
 const POSITION_AUTHORITY_VERSION = 1;
 const EXPLORATION_BASE_SPEED = 330;
 const EXPLORATION_EQUIPMENT_SPEED_UNIT = 2.5;
@@ -50,7 +50,13 @@ function playerName(value, fallback = "阿巡") {
 
 function normalizeClassId(value) {
   const id = String(value || "").trim();
+  if (id === "warrior") return "fighter";
   return Skills.CLASS_IDS?.includes(id) ? id : (Skills.DEFAULT_CLASS_ID || "fighter");
+}
+
+function normalizeMapId(value) {
+  const id = String(value || "world").trim();
+  return id === "dungeon" ? "mountain-southeast" : id;
 }
 
 function normalizeGender(value, fallback = "male") {
@@ -75,7 +81,7 @@ function explorationSpeedForSave(save = {}) {
 function freshPositionAuthority(mapId, x, y, nowMs, previous = null) {
   return {
     version: POSITION_AUTHORITY_VERSION,
-    mapId: String(mapId || "world").slice(0, 64),
+    mapId: normalizeMapId(mapId).slice(0, 64),
     x: finite(x, 0),
     y: finite(y, 0),
     validatedAtMs: normalizedNowMs(nowMs),
@@ -88,15 +94,16 @@ function nextPositionAuthority(existingSave, candidateX, candidateY, nowMs) {
   const expansion = existingSave?.expansion && typeof existingSave.expansion === "object"
     ? existingSave.expansion
     : {};
-  const mapId = String(expansion.currentMapId || "world").slice(0, 64);
+  const mapId = normalizeMapId(expansion.currentMapId).slice(0, 64);
   const previous = expansion.positionAuthority && typeof expansion.positionAuthority === "object"
     ? expansion.positionAuthority
     : null;
+  const previousMapId = normalizeMapId(previous?.mapId);
   const now = normalizedNowMs(nowMs);
 
   // Old saves and the first save after a server-authorized map change have no
   // same-map anchor yet. Bootstrap once without affecting live movement.
-  if (!previous || previous.version !== POSITION_AUTHORITY_VERSION || String(previous.mapId || "") !== mapId || normalizedNowMs(previous.validatedAtMs) <= 0) {
+  if (!previous || previous.version !== POSITION_AUTHORITY_VERSION || previousMapId !== mapId || normalizedNowMs(previous.validatedAtMs) <= 0) {
     return freshPositionAuthority(mapId, candidateX, candidateY, now, previous);
   }
 
@@ -177,10 +184,7 @@ function canonicalInitialSave(payload = {}, options = {}) {
       inventory: {},
       weakPotion: { stepsRemaining: 0, distanceRemainder: 0 },
       monsterKills: {},
-      dungeonClears: 0,
-      defeatedDungeonBosses: [],
       skills: Skills.createSkillState({ classId }),
-      checkpoint: { mapId: "world", x, y },
       positionAuthority: freshPositionAuthority("world", x, y, nowMs),
     },
   };
@@ -215,6 +219,8 @@ function clientOwnedPatch(existingSave, payload = {}, options = {}) {
     playTime: Math.max(previousPlayTime, requestedPlayTime),
     "expansion.weakPotion.stepsRemaining": nextSteps,
     "expansion.weakPotion.distanceRemainder": nextRemainder,
+    "expansion.currentMapId": normalizeMapId(existing.expansion?.currentMapId),
+    "expansion.classId": normalizeClassId(existing.expansion?.classId),
     "expansion.positionAuthority": positionAuthority,
   };
 }
@@ -232,6 +238,8 @@ function mergeClientOwnedState(existingSave, patch) {
   next.playTime = patch.playTime;
   next.expansion.weakPotion.stepsRemaining = patch["expansion.weakPotion.stepsRemaining"];
   next.expansion.weakPotion.distanceRemainder = patch["expansion.weakPotion.distanceRemainder"];
+  next.expansion.currentMapId = patch["expansion.currentMapId"];
+  next.expansion.classId = patch["expansion.classId"];
   next.expansion.positionAuthority = clone(patch["expansion.positionAuthority"]);
   return next;
 }
@@ -254,13 +262,7 @@ function sanitizeLegacySave(payload = {}, options = {}) {
   const x = finite(sourcePlayer.x, 0);
   const y = finite(sourcePlayer.y, 0);
   const nowMs = normalizedNowMs(options.nowMs);
-  const checkpoint = sourceExpansion.checkpoint && typeof sourceExpansion.checkpoint === "object"
-    ? {
-      mapId: String(sourceExpansion.checkpoint.mapId || "world").slice(0, 64),
-      x: finite(sourceExpansion.checkpoint.x, x),
-      y: finite(sourceExpansion.checkpoint.y, y),
-    }
-    : { mapId: "world", x, y };
+
 
   return {
     version: SAVE_VERSION,
@@ -288,7 +290,7 @@ function sanitizeLegacySave(payload = {}, options = {}) {
       : [],
     playTime: clamp(Number(source.playTime) || 0, 0, MAX_PLAY_TIME),
     expansion: {
-      currentMapId: String(sourceExpansion.currentMapId || "world").slice(0, 64),
+      currentMapId: normalizeMapId(sourceExpansion.currentMapId).slice(0, 64),
       classId,
       ownedEquipment: Array.isArray(sourceExpansion.ownedEquipment)
         ? [...new Set(sourceExpansion.ownedEquipment.filter((id) => id == null || typeof id === "string"))].slice(0, 120)
@@ -303,13 +305,8 @@ function sanitizeLegacySave(payload = {}, options = {}) {
         distanceRemainder: finite(sourceExpansion.weakPotion?.distanceRemainder, 0, 0, MAX_WEAK_POTION_REMAINDER),
       },
       monsterKills,
-      dungeonClears: clamp(whole(sourceExpansion.dungeonClears, 0), 0, 9999),
-      defeatedDungeonBosses: Array.isArray(sourceExpansion.defeatedDungeonBosses)
-        ? [...new Set(sourceExpansion.defeatedDungeonBosses.map(String).filter(Boolean))].slice(0, 50)
-        : [],
       skills: Skills.normalizeSkillState(sourceExpansion.skills, { classId }),
-      checkpoint,
-      positionAuthority: freshPositionAuthority(String(sourceExpansion.currentMapId || "world").slice(0, 64), x, y, nowMs),
+      positionAuthority: freshPositionAuthority(normalizeMapId(sourceExpansion.currentMapId).slice(0, 64), x, y, nowMs),
     },
   };
 }

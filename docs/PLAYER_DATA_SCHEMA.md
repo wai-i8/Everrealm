@@ -12,7 +12,7 @@ The Firestore player document keeps the existing version-1 envelope for compatib
 - `expansion.inventory` — canonical item IDs to quantities;
 - `expansion.skills` — learned/manual/deck state keyed by skill ID;
 - `expansion.guildCommission` — current commission state/progress;
-- `expansion.monsterKills`, dungeon progression and checkpoint.
+- `expansion.monsterKills`, current map ID and server-owned position authority.
 - `combatScaleVersion` — optional balance-migration marker; version `2` means
   the global HP/ATK/DEF scale has been applied. Saves without it are migrated
   by multiplying the persisted current HP once on load.
@@ -33,7 +33,7 @@ players/{uid}
   playTime
   expansion: { classId, ownedEquipment[], equipped, inventory, skills,
                guildCommission, guildMarks, guildRenown, monsterKills,
-               dungeonClears, defeatedDungeonBosses[], checkpoint, currentMapId,
+               currentMapId,
                positionAuthority }
   updatedAt: server timestamp (cloud metadata; never applied as gameplay state)
 ```
@@ -68,7 +68,7 @@ position as a claim, but the claim is never trusted directly. The server first
 checks that the point is reachable from the Step 9A `positionAuthority` anchor
 under the same speed/time budget used by routine saves. Only a plausible claim
 may advance the trusted anchor. Shop purchases/sales, guild accept/report/abandon,
-the authored mountain wish-pool interaction, clinic healing and shrine rest then
+the authored mountain wish-pool interaction and clinic healing then
 also require that validated point to be near their authored service location.
 Battle start validates the same-map movement claim before creating the server
 battle session. Inventory-only actions such as equip/unequip or opening an owned

@@ -3,7 +3,7 @@
     || (typeof require === "function" ? require("./data/classes.js") : null);
   const api = factory(classData);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternCore = api;
+  root.EverrealmCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (classData) {
   "use strict";
 

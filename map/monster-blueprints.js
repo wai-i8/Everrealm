@@ -7,7 +7,7 @@
     || (typeof require === "function" ? require("../data/items.js") : null);
   const api = factory(monsterData, monsterSkillData, itemData);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMonsterBlueprints = api;
+  root.EverrealmMonsterBlueprints = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (monsterData, monsterSkillData, itemData) {
   "use strict";
 
@@ -20,7 +20,6 @@
 
   const MONSTER_LEVEL_CAP = Math.max(1, Number(monsterData?.MONSTER_LEVEL_CAP) || 45);
   const SKILLS = deepFreeze({ ...(monsterSkillData?.SKILLS || monsterData?.SKILLS || {}) });
-  const LEGACY_MONSTER_MIGRATION = deepFreeze({ ...(monsterData?.LEGACY_MONSTER_MIGRATION || {}) });
 
   function hydrateBlueprint(raw) {
     const level = Math.max(1, Math.trunc(Number(raw.progression?.level) || 1));
@@ -66,7 +65,7 @@
 
   function normalizeMonsterId(id) {
     const raw = String(id || "").trim();
-    return MONSTER_BLUEPRINTS[raw] ? raw : LEGACY_MONSTER_MIGRATION[raw]?.id || null;
+    return MONSTER_BLUEPRINTS[raw] ? raw : null;
   }
 
   function monsterBlueprint(id) {
@@ -199,7 +198,6 @@
     MONSTER_LEVEL_CAP,
     MONSTER_BLUEPRINTS,
     CANONICAL_MONSTER_IDS,
-    LEGACY_MONSTER_MIGRATION,
     SKILLS,
     monsterBlueprint,
     normalizeMonsterId,

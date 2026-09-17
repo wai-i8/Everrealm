@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260917-05"],
+          ["everrealmStyles", "styles.css?v=20260917-legacy-cleanup-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -285,8 +285,6 @@
         </section>
 
         <section id="titleScreen" class="overlay title-screen" aria-labelledby="gameTitle">
-          <div class="title-mist mist-one"></div>
-          <div class="title-mist mist-two"></div>
           <h1 id="gameTitle"><span>永恆</span><span>國度</span></h1>
           <p class="english-title">EVERREALM</p>
           <div id="titleActions" class="title-actions" hidden>
@@ -346,10 +344,6 @@
             <button class="class-choice-card is-default" type="button" data-class-choice="fighter" aria-current="true">
               <img class="class-choice-sprite" src="assets/classes/fighter.png?v=20260913-02" alt="格鬥士" />
               <strong>格鬥士</strong><small>拳套 · 近身連擊</small>
-            </button>
-            <button class="class-choice-card is-locked" type="button" data-class-choice="warrior" data-class-locked="true">
-              <img class="class-choice-sprite" src="assets/classes/warrior.png?v=20260913-02" alt="戰士" />
-              <strong>戰士</strong><small>刀劍 · 近戰攻守</small>
             </button>
             <button class="class-choice-card is-locked" type="button" data-class-choice="elementalist" data-class-locked="true">
               <img class="class-choice-sprite" src="assets/classes/elementalist.png?v=20260913-02" alt="元素使" />
@@ -444,30 +438,6 @@
           </div>
         </section>
 
-        <section id="levelUpPanel" class="overlay modal-overlay" aria-labelledby="levelTitle" hidden>
-          <div class="level-burst" aria-hidden="true"></div>
-          <p class="modal-kicker">LANTERN GROWS BRIGHTER</p>
-          <h2 id="levelTitle">升到 <span id="newLevelValue">LV. 2</span>！</h2>
-          <p>揀一項永久成長</p>
-          <div class="upgrade-grid">
-            <button class="upgrade-card" type="button" data-upgrade="vigor">
-              <i class="upgrade-icon heart-icon" aria-hidden="true">♥</i>
-              <span><b>厚皮袍</b><small>最大生命 +18<br />即時回復生命</small></span>
-              <kbd>1</kbd>
-            </button>
-            <button class="upgrade-card" type="button" data-upgrade="edge">
-              <i class="upgrade-icon sword-icon" aria-hidden="true">╱</i>
-              <span><b>燈火斬</b><small>攻擊 +4<br />暴擊率提升</small></span>
-              <kbd>2</kbd>
-            </button>
-            <button class="upgrade-card" type="button" data-upgrade="swift">
-              <i class="upgrade-icon boot-icon" aria-hidden="true">➜</i>
-              <span><b>追風步</b><small>移速 +7.5%<br />閃身更快回復</small></span>
-              <kbd>3</kbd>
-            </button>
-          </div>
-        </section>
-
         <section id="systemSettingsPopover" class="system-settings-popover system-settings-window ui-window" role="dialog" aria-modal="false" aria-labelledby="systemSettingsTitle" hidden>
           <header class="system-settings-header">
             <strong id="systemSettingsTitle">系統</strong>
@@ -547,7 +517,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-13")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-legacy-cleanup-01")}"><\/script>`);
       })();
     </script>
 

@@ -1,9 +1,9 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("./map-helpers.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("./map-constants.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("./map-helpers.js") : null);
   const api = factory(constants, helpers);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMapTransitions = api;
+  root.EverrealmMapTransitions = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers) {
   "use strict";
   const { TILE, MAP_IDS, TRANSITION_TYPES } = constants;
@@ -218,7 +218,6 @@
     map.id = map.id || id;
     map.name = map.name || (id === MAP_IDS.WORLD ? "米克雷帝國" : id);
     for (const key of ["houses", "trees", "rocks", "flowers", "lamps", "npcs", "signs", "chests", "staticObjects", "enemySpawns", "portals", "exits", "boards", "collisionObjects", "decorations"]) if (!Array.isArray(map[key])) map[key] = [];
-    if (!map.shrine) map.shrine = null;
     if (!map.spawnPoints) map.spawnPoints = {};
     map.exits = map.exits || map.portals;
     map.portals = map.exits;

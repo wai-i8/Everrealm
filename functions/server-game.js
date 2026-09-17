@@ -6,7 +6,7 @@ const Skills = require("./shared/skill-core.js");
 const Tactics = require("./shared/tactics-core.js");
 const ItemData = require("./shared/data/items.js");
 const MonsterBlueprints = require("./shared/map/monster-blueprints.js");
-const { classMaxHp } = require("./game-rules.js");
+const { classMaxHp, normalizeClassId } = require("./game-rules.js");
 const PlayerState = require("./player-state.js");
 
 const SHOP_SELL_RATE = 1 / 3;
@@ -17,9 +17,9 @@ const GENERAL_STORE_GOODS = Object.freeze({
 });
 const MAP_LINKS = Object.freeze({
   world: new Set(["field", "guild", "shop", "clinic", "general-store", "inn"]),
-  field: new Set(["world", "dungeon"]),
-  dungeon: new Set(["field", "mountain-south"]),
-  "mountain-south": new Set(["dungeon"]),
+  field: new Set(["world", "mountain-southeast"]),
+  "mountain-southeast": new Set(["field", "mountain-south"]),
+  "mountain-south": new Set(["mountain-southeast"]),
   guild: new Set(["world"]),
   shop: new Set(["world"]),
   clinic: new Set(["world"]),
@@ -67,10 +67,6 @@ const GAMEPLAY_INTERACTION_RULES = Object.freeze({
     mapId: "field",
     targets: Object.freeze([Object.freeze({ x: 1770, y: 938, radius: 190 })]),
   }),
-  "echo-lantern-shrine": Object.freeze({
-    mapId: "dungeon",
-    targets: Object.freeze([Object.freeze({ x: 4680, y: 4680, radius: 100 })]),
-  }),
 });
 
 function transitionRule(sourceRect, arrival) {
@@ -91,14 +87,14 @@ const MAP_TRANSITION_RULES = Object.freeze({
   }),
   field: Object.freeze({
     world: transitionRule({ x: 567, y: 2545, w: 99, h: 215 }, { x: 6067, y: 2092 }),
-    dungeon: transitionRule({ x: 3320, y: 148, w: 314, h: 207 }, { x: 4716, y: 4383 }),
+    "mountain-southeast": transitionRule({ x: 3320, y: 148, w: 314, h: 207 }, { x: 4716, y: 4383 }),
   }),
-  dungeon: Object.freeze({
+  "mountain-southeast": Object.freeze({
     field: transitionRule({ x: 4506, y: 4523, w: 435, h: 493 }, { x: 3477, y: 454 }),
     "mountain-south": transitionRule({ x: 0, y: 872, w: 384, h: 348 }, { x: 4500, y: 1489 }),
   }),
   "mountain-south": Object.freeze({
-    dungeon: transitionRule({ x: 4628, y: 1318, w: 236, h: 317 }, { x: 524, y: 1036 }),
+    "mountain-southeast": transitionRule({ x: 4628, y: 1318, w: 236, h: 317 }, { x: 524, y: 1036 }),
   }),
   guild: Object.freeze({
     world: transitionRule({ x: 1423, y: 1588, w: 492, h: 122 }, { x: 3663, y: 1746 }),
@@ -117,6 +113,12 @@ const MAP_TRANSITION_RULES = Object.freeze({
   }),
 });
 
+function normalizeMapId(value) {
+  const id = String(value || "world").trim();
+  // One-time compatibility for saves created while this mountain map still
+  // used the retired internal id "dungeon".
+  return id === "dungeon" ? "mountain-southeast" : id;
+}
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)); }
 function whole(value, fallback = 0) {
   const number = Number(value);
@@ -127,6 +129,11 @@ function saveCopy(save) {
   const next = clone(save) || {};
   next.player = next.player && typeof next.player === "object" ? next.player : {};
   next.expansion = next.expansion && typeof next.expansion === "object" ? next.expansion : {};
+  next.expansion.currentMapId = normalizeMapId(next.expansion.currentMapId);
+  next.expansion.classId = normalizeClassId(next.expansion.classId);
+  if (next.expansion.positionAuthority && typeof next.expansion.positionAuthority === "object") {
+    next.expansion.positionAuthority = { ...next.expansion.positionAuthority, mapId: normalizeMapId(next.expansion.positionAuthority.mapId) };
+  }
   next.expansion.inventory = ItemData.normalizeInventory(next.expansion.inventory || {});
   next.expansion.ownedEquipment = Array.isArray(next.expansion.ownedEquipment) ? next.expansion.ownedEquipment.map(String) : [];
   next.expansion.equipped = next.expansion.equipped && typeof next.expansion.equipped === "object" ? next.expansion.equipped : {};
@@ -134,9 +141,6 @@ function saveCopy(save) {
   next.expansion.skills = Skills.normalizeSkillState(next.expansion.skills, { classId: next.expansion.classId });
   next.expansion.weakPotion = next.expansion.weakPotion && typeof next.expansion.weakPotion === "object" ? { ...next.expansion.weakPotion } : { stepsRemaining: 0, distanceRemainder: 0 };
   next.expansion.monsterKills = next.expansion.monsterKills && typeof next.expansion.monsterKills === "object" ? { ...next.expansion.monsterKills } : {};
-  next.expansion.dungeonClears = Math.max(0, whole(next.expansion.dungeonClears, 0));
-  next.expansion.defeatedDungeonBosses = Array.isArray(next.expansion.defeatedDungeonBosses) ? next.expansion.defeatedDungeonBosses.map(String) : [];
-  next.expansion.checkpoint = next.expansion.checkpoint && typeof next.expansion.checkpoint === "object" ? { ...next.expansion.checkpoint } : null;
   next.openedChests = Array.isArray(next.openedChests) ? next.openedChests.map(String) : [];
   return next;
 }
@@ -155,7 +159,8 @@ function statePayload(state) {
   return {
     player: playerSnapshot(state),
     expansion: {
-      currentMapId: String(state.expansion.currentMapId || "world"),
+      currentMapId: normalizeMapId(state.expansion.currentMapId),
+      classId: normalizeClassId(state.expansion.classId),
       inventory: clone(state.expansion.inventory || {}),
       ownedEquipment: [...(state.expansion.ownedEquipment || [])],
       equipped: clone(state.expansion.equipped || {}),
@@ -165,9 +170,6 @@ function statePayload(state) {
       skills: clone(state.expansion.skills || {}),
       weakPotion: clone(state.expansion.weakPotion || { stepsRemaining: 0, distanceRemainder: 0 }),
       monsterKills: clone(state.expansion.monsterKills || {}),
-      dungeonClears: Math.max(0, whole(state.expansion.dungeonClears, 0)),
-      defeatedDungeonBosses: [...(state.expansion.defeatedDungeonBosses || [])],
-      checkpoint: clone(state.expansion.checkpoint || null),
       positionAuthority: clone(state.expansion.positionAuthority || null),
       serverBattle: clone(state.expansion.serverBattle || null),
     },
@@ -178,7 +180,7 @@ function resultWithState(state, result = {}) {
   return { ok: true, ...result, state: statePayload(state) };
 }
 function wrongMap(state, allowed) {
-  return !allowed.includes(String(state.expansion.currentMapId || ""));
+  return !allowed.includes(normalizeMapId(state.expansion.currentMapId));
 }
 function pointNearRect(x, y, rect, margin = MAP_TRANSITION_POSITION_MARGIN) {
   if (!rect) return false;
@@ -223,7 +225,7 @@ function samePoint(a, b, tolerance = 0.01) {
 }
 
 function validateCommandPositionState(state, input = {}, options = {}) {
-  const mapId = String(state?.expansion?.currentMapId || "world");
+  const mapId = normalizeMapId(state?.expansion?.currentMapId);
   const trusted = trustedPositionForMap(state, mapId);
   const claimed = claimedCommandPosition(input);
 
@@ -287,7 +289,7 @@ function validateGameplayInteractionState(state, input = {}, interactionId, opti
   if (!positionResult.positionValidated && positionResult.usedTrustedFallback) {
     return { ...positionResult, interactionId, proximityValidated: false };
   }
-  const mapId = String(state.expansion.currentMapId || "world");
+  const mapId = normalizeMapId(state.expansion.currentMapId);
   if (mapId !== rule.mapId) return { ok: false, reason: "wrong-map", interactionId };
 
   const position = positionResult.position;
@@ -364,7 +366,7 @@ function economyCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   const itemId = String(input.itemId || "").trim();
-  const mapId = String(state.expansion.currentMapId || "");
+  const mapId = normalizeMapId(state.expansion.currentMapId);
   const requireInteraction = (interactionId) => validateGameplayInteractionState(state, input, interactionId, options);
 
   if (action === "buy-store-item") {
@@ -552,7 +554,7 @@ function economyCommand(save, input = {}, options = {}) {
 
   if (action === "open-skill-book") {
     const star = clamp(whole(input.star, 0), 0, 99);
-    const result = Skills.openOwnedSkillBook(star, { seed: "mist-harbour-guild-skills", serial: state.expansion.skills.drawSerial }, state.expansion.skills);
+    const result = Skills.openOwnedSkillBook(star, { seed: "everrealm-guild-skills", serial: state.expansion.skills.drawSerial }, state.expansion.skills);
     if (!result.ok) return { ok: false, reason: result.reason || "no-book" };
     state.expansion.skills = result.state;
     return resultWithState(state, { action, star, skill: result.skill ? { id: result.skill.id, name: result.skill.name } : null });
@@ -604,7 +606,7 @@ function economyCommand(save, input = {}, options = {}) {
 function questCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
-  const mapId = String(state.expansion.currentMapId || "");
+  const mapId = normalizeMapId(state.expansion.currentMapId);
   const current = Guild.normalizeState(state.expansion.guildCommission);
   const requireInteraction = (interactionId) => validateGameplayInteractionState(state, input, interactionId, options);
 
@@ -690,7 +692,7 @@ function battleCommand(save, input = {}, options = {}) {
     const monsterType = requestedMonsterType;
     const blueprint = monsterType ? MonsterBlueprints.monsterBlueprint(monsterType) : null;
     if (!blueprint) return { ok: false, reason: "unknown-monster" };
-    const mapId = String(state.expansion.currentMapId || "");
+    const mapId = normalizeMapId(state.expansion.currentMapId);
     if (Array.isArray(blueprint.habitat?.maps) && blueprint.habitat.maps.length && !blueprint.habitat.maps.includes(mapId)) {
       return { ok: false, reason: "wrong-map" };
     }
@@ -847,7 +849,7 @@ function mapCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   if (action !== "transition") return { ok: false, reason: "unsupported-action" };
-  const from = String(state.expansion.currentMapId || "world");
+  const from = normalizeMapId(state.expansion.currentMapId);
   const to = String(input.targetMapId || "").trim();
   if (!MAP_LINKS[from]?.has(to)) return { ok: false, reason: "invalid-transition", from, to };
 

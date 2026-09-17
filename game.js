@@ -1,26 +1,26 @@
 (function () {
   "use strict";
 
-  const Core = window.LanternCore;
-  const World = window.LanternWorld;
-  const Expansion = window.LanternExpansion;
+  const Core = window.EverrealmCore;
+  const World = window.EverrealmWorld;
+  const Expansion = window.EverrealmExpansion;
   const ClassData = window.EverrealmClassData;
   const EquipmentData = window.EverrealmEquipmentData;
   const ItemData = window.EverrealmItemData;
-  const ExpansionWorld = window.LanternExpansionWorld;
-  const Guild = window.LanternGuildCommission;
-  const MapRegistry = window.LanternMapRegistry;
-  const MapTransitions = window.LanternMapTransitions;
-  const MainTownNavigation = window.LanternMainTownNavigation;
+  const ExpansionWorld = window.EverrealmExpansionWorld;
+  const Guild = window.EverrealmGuildCommission;
+  const MapRegistry = window.EverrealmMapRegistry;
+  const MapTransitions = window.EverrealmMapTransitions;
+  const MainTownNavigation = window.EverrealmMainTownNavigation;
   const TRANSITION_TYPES = MapTransitions.TRANSITION_TYPES;
   const houseSpriteSettings = MapTransitions.houseSpriteSettings;
-  const Tactics = window.LanternTactics;
-  const Skills = window.LanternSkills;
+  const Tactics = window.EverrealmTactics;
+  const Skills = window.EverrealmSkills;
   const MonsterAI = window.EverrealmMonsterAI;
-  const Bgm = window.LanternBgm;
-  const FighterEffects = window.LanternFighterEffects;
-  const Art = window.LanternArt;
-  const Locomotion = window.LanternLocomotion;
+  const Bgm = window.EverrealmBgm;
+  const FighterEffects = window.EverrealmFighterEffects;
+  const Art = window.EverrealmArt;
+  const Locomotion = window.EverrealmLocomotion;
   const SaveSystem = window.EverrealmSaveSystem;
   const Firebase = window.EverrealmFirebase;
   const CloudSave = window.EverrealmCloudSave?.create?.({ firebase: Firebase });
@@ -82,13 +82,11 @@
   let currentMapId = "world";
   let world = overworld;
   const SOUND_KEY = "everrealm-sound";
-  const LEGACY_SOUND_KEY = "lanternbound-sound";
   const BGM_ENABLED_KEY = "everrealm-bgm-enabled-v1";
   const SFX_ENABLED_KEY = "everrealm-sfx-enabled-v1";
   const BGM_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const ZOOM_KEY = "everrealm-zoom";
-  const LEGACY_ZOOM_KEY = "lanternbound-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
@@ -118,7 +116,6 @@
   const stage = document.getElementById("gameStage");
   const titleScreen = document.getElementById("titleScreen");
   const dialoguePanel = document.getElementById("dialoguePanel");
-  const levelUpPanel = document.getElementById("levelUpPanel");
   const deathPanel = document.getElementById("deathPanel");
   const facilityPanelTemplate = document.getElementById("facilityPanel");
   let facilityPanel = facilityPanelTemplate;
@@ -266,7 +263,6 @@
     };
   }
   // Legacy exploration/save aliases remain readable, but all new spawns resolve to canonical IDs.
-  for (const [legacy, migration] of Object.entries(ExpansionWorld.LEGACY_MONSTER_MIGRATION)) enemyTypes[legacy] = enemyTypes[migration.id];
 
   const hasMap = (id) => typeof id === "string" && Object.hasOwn(maps, id);
   const keys = new Set();
@@ -296,18 +292,16 @@
   let authStateResolved = false;
   let legacyClaimUid = null;
   let openedChests = new Set();
-  let ownedEquipment = ["novice_blade", "traveller_coat"];
-  let equipped = { head: null, weapon: "novice_blade", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
+  let ownedEquipment = ["novice_gloves", "traveller_coat"];
+  let equipped = { head: null, weapon: "novice_gloves", upperBody: "traveller_coat", lowerBody: null, hands: null, feet: null, charm: null };
   let guildCommissionState = Guild.normalizeState();
   let pendingAbandonContractId = null;
   let guildMarks = 0;
   let guildRenown = 0;
   let inventory = {};
   let monsterKills = {};
-  let dungeonClears = 0;
-  let defeatedDungeonBosses = new Set();
   let skillState = Skills.createSkillState();
-  let playerClassId = Skills.DEFAULT_CLASS_ID || "warrior";
+  let playerClassId = Skills.DEFAULT_CLASS_ID || "fighter";
   let playerGender = "male";
   let pendingPlayerGender = "male";
   let exploreMoveTarget = null;
@@ -355,7 +349,6 @@
   let remoteSessionKickMessage = "";
   let sessionKickInProgress = false;
   let inventoryFixtureCount = 0;
-  let checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
   const FACILITY_TABS = Object.freeze(["status", "missions", "bag", "equipment", "deck", "guild", "shop", "skills", "codex"]);
   // Exploration camera zoom is continuous.  The endpoints are expressed in
   // authored world pixels: 1.0 is native image size and .35 is the far limit.
@@ -374,7 +367,7 @@
   const GENERAL_STORE_GOODS_BY_ID = new Map(GENERAL_STORE_GOODS.map((item) => [item.id, item]));
   const SHOP_SELL_RATE = 1 / 3;
   const FIGHTER_GUILD_BOOK_RANKS = new Map(
-    (window.LanternFighterSkillData?.skills || []).map((sourceSkill) => {
+    (window.EverrealmFighterSkillData?.skills || []).map((sourceSkill) => {
       const ranks = (sourceSkill.original_reference?.acquisition?.guild_reward_books || [])
         .map((entry) => Number(entry?.star_value))
         .filter((value) => Number.isFinite(value) && value > 0);
@@ -401,7 +394,6 @@
   const facilityWindows = new Map();
   let activeFacilityWindow = null;
   let uiWindowZCounter = 40;
-  let pendingLevelUps = 0;
   let dialogue = null;
   let dialogueChoiceIndex = 0;
   const dialogueUi = DialogueUi.create({
@@ -482,7 +474,7 @@
   }
 
   let randomEncounterRuntime = createRandomEncounterRuntime();
-  const legacySoundPreference = readPreference(SOUND_KEY, "on", LEGACY_SOUND_KEY);
+  const legacySoundPreference = readPreference(SOUND_KEY, "on");
   let musicEnabled = readPreference(BGM_ENABLED_KEY, legacySoundPreference) !== "off";
   let sfxEnabled = readPreference(SFX_ENABLED_KEY, legacySoundPreference) !== "off";
   let bgmVolume = Core.clamp(Number(readPreference(BGM_VOLUME_KEY, "0.70")), 0, 1);
@@ -660,7 +652,7 @@
     sound.suspend();
     bgm.suspend?.();
   }
-  const storedExploreZoomPreference = readPreference(ZOOM_KEY, String(EXPLORE_ZOOM_DEFAULT), LEGACY_ZOOM_KEY);
+  const storedExploreZoomPreference = readPreference(ZOOM_KEY, String(EXPLORE_ZOOM_DEFAULT));
   const storedExploreZoom = {
     far: EXPLORE_ZOOM_MIN,
     mid: EXPLORE_ZOOM_DEFAULT,
@@ -882,7 +874,7 @@
     try {
       const stored = localStorage.getItem(PLAYER_GENDER_KEY);
       if (stored === "female" || stored === "male") return stored;
-      for (const key of ["everrealm-save-v1", "lanternbound-save-v1"]) {
+      for (const key of ["everrealm-save-v1"]) {
         const raw = localStorage.getItem(key);
         if (!raw) continue;
         try {
@@ -978,12 +970,11 @@
   function equipmentMatchesClass(item) {
     if (!item) return false;
     if (item.classId === "fighter") return playerClassId === "fighter";
-    if (item.classId === "warrior") return playerClassId === "warrior";
     return true;
   }
 
   function equippedWeaponName() {
-    return equipmentItem(equipped.weapon)?.name || "見習燈刃";
+    return equipmentItem(equipped.weapon)?.name || "見習拳套";
   }
 
   function activeGuildCommission() {
@@ -1058,7 +1049,7 @@
 
   function resetEnemies() {
     // Monster progression is authored by species/map data. Do not dynamically
-    // scale exploration spawns to the player's level or dungeon-clear count;
+    // scale exploration spawns to the authored monster progression;
     // doing so destroys the fixed Lv1→45 progression ladder.
     enemies = world.enemySpawns.map((spawn) => makeEnemy(spawn));
     projectiles = [];
@@ -1280,8 +1271,8 @@
     return false;
   }
 
-  function readPreference(key, fallback, legacyKey = null) {
-    try { return localStorage.getItem(key) || (legacyKey ? localStorage.getItem(legacyKey) : null) || fallback; } catch (_) { return fallback; }
+  function readPreference(key, fallback) {
+    try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
   }
 
   function authenticatedUser() {
@@ -1312,7 +1303,7 @@
   }
 
   function resetExpansionProgress(classId = playerClassId) {
-    playerClassId = Skills.CLASS_IDS?.includes(classId) ? classId : (Skills.DEFAULT_CLASS_ID || "warrior");
+    playerClassId = Skills.CLASS_IDS?.includes(classId) ? classId : (Skills.DEFAULT_CLASS_ID || "fighter");
     const starterGear = Expansion.starterEquipmentForClass(playerClassId);
     const starterWeapon = starterGear.weapon;
     const starterUpperBody = starterGear.upperBody;
@@ -1323,10 +1314,7 @@
     guildRenown = 0;
     inventory = {};
     monsterKills = {};
-    dungeonClears = 0;
-    defeatedDungeonBosses = new Set();
     skillState = Skills.createSkillState({ classId: playerClassId });
-    checkpoint = { mapId: "world", x: overworld.start.x, y: overworld.start.y };
     facilityTab = "bag";
     facilityContext = "portable";
     selectedInventoryItemId = null;
@@ -1373,18 +1361,7 @@
     if (data.monsterKills && typeof data.monsterKills === "object") {
       for (const [type, amount] of Object.entries(data.monsterKills).slice(0, 40)) if (enemyTypes[type]) monsterKills[type] = Core.clamp(Math.floor(Number(amount) || 0), 0, 99999);
     }
-    dungeonClears = Core.clamp(Math.floor(Number(data.dungeonClears) || 0), 0, 9999);
-    defeatedDungeonBosses = new Set(Array.isArray(data.defeatedDungeonBosses) ? data.defeatedDungeonBosses.filter((id) => typeof id === "string").slice(0, 20) : []);
-    const checkpointMap = hasMap(data.checkpoint?.mapId) ? data.checkpoint.mapId : "world";
-    const checkpointWorld = maps[checkpointMap];
-    const checkpointCandidate = {
-      mapId: checkpointMap,
-      x: Core.clamp(Number(data.checkpoint?.x) || checkpointWorld.start.x, 40, checkpointWorld.pixelWidth - 40),
-      y: Core.clamp(Number(data.checkpoint?.y) || checkpointWorld.start.y, 40, checkpointWorld.pixelHeight - 40),
-    };
-    checkpoint = isBlocked({ x: checkpointCandidate.x, y: checkpointCandidate.y, radius: player.radius }, checkpointWorld, checkpointMap)
-      ? { mapId: checkpointMap, x: checkpointWorld.start.x, y: checkpointWorld.start.y }
-      : checkpointCandidate;
+
   }
 
   function buildSaveData() {
@@ -1404,7 +1381,6 @@
         weaponLevel: player.weaponLevel,
         upgrades: { ...player.upgrades },
       },
-      pendingLevelUps,
       openedChests: [...openedChests],
       playTime,
       expansion: {
@@ -1418,10 +1394,7 @@
         inventory: { ...inventory },
         weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder },
         monsterKills: { ...monsterKills },
-        dungeonClears,
-        defeatedDungeonBosses: [...defeatedDungeonBosses],
         skills: Skills.normalizeSkillState(skillState),
-        checkpoint: { ...checkpoint },
       },
     };
   }
@@ -1478,7 +1451,7 @@
     return { ok: true, reason: null, active: godModeActive, skillResult };
   }
 
-  function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "warrior", gender = playerGender) {
+  function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "fighter", gender = playerGender) {
     if (!requireAuthenticatedGameplay()) return false;
     sound.ensure();
     closeBattleHud();
@@ -1499,7 +1472,6 @@
     if (registeredName) player.name = registeredName;
     resetExpansionProgress(classId);
     openedChests = new Set();
-    pendingLevelUps = 0;
     playTime = 0;
     resetEnemies();
     camera.x = player.x;
@@ -1567,7 +1539,8 @@
     closeBattleHud();
     encounterGrace = 1.2;
     automaticPortalReady = false;
-    currentMapId = hasMap(rawSave?.expansion?.currentMapId) ? rawSave.expansion.currentMapId : "world";
+    const savedMapId = rawSave?.expansion?.currentMapId === "dungeon" ? "mountain-southeast" : rawSave?.expansion?.currentMapId;
+    currentMapId = hasMap(savedMapId) ? savedMapId : "world";
     world = maps[currentMapId];
     clearExploreMovePath();
     pendingClickInteractionId = null;
@@ -1583,9 +1556,6 @@
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
     playTime = save.playTime;
-    // Legacy saves may contain unspent three-choice upgrades.  Growth is now
-    // derived directly from class and level, so there is nothing left to spend.
-    pendingLevelUps = 0;
     loadExpansionProgress(rawSave?.expansion);
     syncDeckCapacityMilestones({ silent: true });
     const stats = playerStats();
@@ -1988,7 +1958,6 @@
     authCloseButton.hidden = false;
     legacySavePanel.hidden = true;
     dialoguePanel.hidden = true;
-    levelUpPanel.hidden = true;
     deathPanel.hidden = true;
     clearAllFacilityWindows();
     classSelectPanel.hidden = true;
@@ -2549,7 +2518,6 @@
       legacySavePanel?.hidden === false ||
       classSelectPanel?.hidden === false ||
       deathPanel?.hidden === false ||
-      levelUpPanel?.hidden === false ||
       dialoguePanel?.hidden === false ||
       hasBlockingFacilityWindow()
     );
@@ -2706,7 +2674,7 @@
         if (mode === "playing" && target.alive) startBattle(target);
       }, 130);
     } else {
-      showToast("行近霧獸就會展開格仔戰鬥。", "good");
+      showToast("行近怪物就會展開格仔戰鬥。", "good");
     }
   }
 
@@ -2800,8 +2768,8 @@
   function getPersistenceFingerprint() {
     return JSON.stringify({
       player: { gender: normalizeGender(player.gender), x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
-      pendingLevelUps, openedChests: [...openedChests].sort(),
-      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder }, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
+      openedChests: [...openedChests].sort(),
+      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder }, monsterKills, skills: skillState },
     });
   }
 
@@ -2846,11 +2814,11 @@
       weakPotionDistanceRemainder = Math.max(0, Number(expansion.weakPotion.distanceRemainder) || 0);
     }
     if (expansion.monsterKills && typeof expansion.monsterKills === "object") monsterKills = { ...expansion.monsterKills };
-    if (Number.isFinite(Number(expansion.dungeonClears))) dungeonClears = Math.max(0, Math.floor(Number(expansion.dungeonClears)));
-    if (Array.isArray(expansion.defeatedDungeonBosses)) defeatedDungeonBosses = new Set(expansion.defeatedDungeonBosses.map(String));
-    if (expansion.checkpoint && typeof expansion.checkpoint === "object") checkpoint = { ...expansion.checkpoint };
     if (Array.isArray(snapshot.openedChests)) openedChests = new Set(snapshot.openedChests.map(String));
-    if (options.applyMap === true && typeof expansion.currentMapId === "string" && hasMap(expansion.currentMapId)) currentMapId = expansion.currentMapId;
+    if (options.applyMap === true && typeof expansion.currentMapId === "string") {
+      const nextMapId = expansion.currentMapId === "dungeon" ? "mountain-southeast" : expansion.currentMapId;
+      if (hasMap(nextMapId)) currentMapId = nextMapId;
+    }
     markPersistenceDirty();
     updateHud(true);
     return true;
@@ -2993,8 +2961,7 @@
     if (amount > 0) markPersistenceDirty();
     let hpGain = 0;
     if (result.levelsGained > 0) {
-      pendingLevelUps = 0;
-      const newStats = playerStats();
+        const newStats = playerStats();
       player.hp = newStats.maxHp;
       hpGain = newStats.maxHp - oldStats.maxHp;
       addSystemMessage("system", `等級提升！LV.${player.level} · HP 已完全恢復`, "good");
@@ -3009,20 +2976,6 @@
     return { ...result, hpGain };
   }
 
-  function openLevelUp() {
-    pendingLevelUps = 0;
-    levelUpPanel.hidden = true;
-    if (mode === "levelup") {
-      mode = "playing";
-      stage.dataset.gameState = mode;
-    }
-    return false;
-  }
-
-  function chooseUpgrade() {
-    // Kept as a no-op debug compatibility hook for old smoke scripts/saves.
-    return openLevelUp();
-  }
 
   function damagePlayer(amount, source, direction) {
     if (mode !== "playing" || player.invulnerable > 0) return;
@@ -3381,7 +3334,6 @@
   function updateNearestInteraction() {
     const candidates = [];
     for (const npc of world.npcs) candidates.push(npc);
-    if (world.shrine) candidates.push(world.shrine);
     candidates.push(...world.signs, ...world.boards);
     candidates.push(...world.portals);
     nearestInteraction = candidates
@@ -3409,7 +3361,6 @@
 
   function interactionLabel(entity) {
     if (entity.kind === "npc") return `同${npcDisplayName(entity)}傾偈`;
-    if (entity.kind === "shrine") return "喺燈龕休息";
     if (entity.kind === "portal") return entity.interactionMode === "door"
       ? (entity.prompt || `進入${entity.name}`)
       : (entity.prompt || `前往${entity.name}`);
@@ -3423,7 +3374,6 @@
     const candidates = [
       ...(world.npcs || []), ...(world.boards || []), ...(world.signs || []),
       ...(world.chests || []), ...(world.portals || []),
-      ...(world.shrine ? [world.shrine] : []),
     ];
     return candidates.find((entity) => entity?.id === id) || null;
   }
@@ -3435,7 +3385,6 @@
     const entity = nearestInteraction;
     if (entity.kind === "npc") interactNpc(entity);
     else if (entity.kind === "chest") openChest(entity);
-    else if (entity.kind === "shrine") restAtShrine();
     else if (entity.kind === "portal") usePortal(entity);
     else if (entity.kind === "questBoard") entity.boardId === "deck-loadout" ? openFacility("deck", "deck") : openFacility("guild");
     else if (entity.kind === "wishPool") interactWishPool(entity);
@@ -3455,7 +3404,7 @@
   async function interactDeliveryRecipient(npc) {
     const commission = activeGuildCommission();
     if (!commission || commission.type !== "delivery") {
-      return startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。"] });
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "山路北面風大，信件交畀我保管就唔會畀濕氣浸壞。"] });
     }
     if (guildCommissionState.status === "ready_to_report" && guildCommissionState.deliveryCompleted) {
       return startDialogue({ speaker: npc.name, color: npc.color, lines: ["公會封信我已經收妥喇。你返公會回報，就可以領取委託報酬。"] });
@@ -3508,18 +3457,6 @@
   function usePortal(portal) {
     const arrival = MapTransitions.resolveArrival(maps, portal) || { position: null, facing: null };
     const targetPosition = arrival.position;
-    if (portal.targetMap === "dungeon" && player.level < (portal.minLevel || 5)) {
-      const targetAreaName = maps[portal.targetMap]?.name || "前方區域";
-      return startDialogue({
-        speaker: `${targetAreaName}入口`,
-        color: "#ff8b62",
-        lines: [`${targetAreaName}建議 LV.${portal.minLevel || 5}。你而家 LV.${player.level}，前方霧獸會明顯更強。`],
-        choices: [
-          { label: "照樣落去", action: () => transitionMap(portal.targetMap, targetPosition, arrival.facing) },
-          { label: "準備好先", action: () => {} },
-        ],
-      });
-    }
     transitionMap(portal.targetMap, targetPosition, arrival.facing);
   }
 
@@ -3866,18 +3803,13 @@
   function openChest(chest) {
     if (openedChests.has(chest.id)) return;
     if (chest.lockedBy && enemies.some((enemy) => enemy.id === chest.lockedBy && enemy.alive)) {
-      showToast("寶箱畀守門者嘅霧鎖住。", "danger");
+      showToast("寶箱畀守門者嘅魔力鎖住。", "danger");
       return;
     }
     openedChests.add(chest.id);
     PlayerStateActions.grantCoins(player, chest.reward.coins || 0);
     PlayerStateActions.grantHealingPotions(player, chest.reward.potions || 0, { maxPotions: 9 });
-    const treasureEquipment = {
-      "mistguard-boots": "wayfarer_compass",
-      "echo-blade": "lantern_sabre",
-      "fogweave-coat": "mistweave_cape",
-      "warden-lantern": "deep_lantern_core",
-    }[chest.reward.itemId];
+    const treasureEquipment = null;
     let itemText = "";
     if (treasureEquipment && !ownedEquipment.includes(treasureEquipment)) {
       ownedEquipment.push(treasureEquipment);
@@ -3892,48 +3824,6 @@
     updateNearestInteraction();
   }
 
-  async function restAtShrine() {
-    if (recoveryCommandPending) return;
-    if (!world?.shrine?.id || !ServerApi?.recoverPlayer) return showToast("伺服器燈龕指令尚未就緒。", "danger");
-    recoveryCommandPending = true;
-    try {
-      saveImportant(false);
-      const flush = await savePersistence?.flushCloud?.();
-      if (flush?.error) throw flush.error;
-
-      const result = await ServerApi.recoverPlayer("shrine", { shrineId: world.shrine.id });
-      if (!result?.ok && ["wrong-map", "unknown-shrine"].includes(result?.reason)) {
-        return showToast("呢個位置暫時無法點亮燈火。", "danger");
-      }
-      if (!result?.ok) return showToast("今次未能點亮燈火。", "danger");
-
-      const hp = Number(result.player?.hp);
-      const nextCheckpoint = result.checkpoint;
-      if (!Number.isFinite(hp) || !nextCheckpoint || !Number.isFinite(Number(nextCheckpoint.x)) || !Number.isFinite(Number(nextCheckpoint.y))) {
-        throw new Error("recoverPlayer returned an invalid shrine state.");
-      }
-      player.hp = Core.clamp(hp, 1, playerStats().maxHp);
-      checkpoint = {
-        mapId: String(nextCheckpoint.mapId || currentMapId),
-        x: Number(nextCheckpoint.x),
-        y: Number(nextCheckpoint.y),
-      };
-      markPersistenceDirty();
-      sound.heal();
-      spawnBurst(world.shrine.x, world.shrine.y, "#ffc857", 22, 62);
-      showToast(currentMapId === "dungeon" ? "回音燈已點亮 · 死亡會喺呢度醒返" : "燈火暖返晒 · 進度已儲存", "good");
-      saveImportant(false);
-      updateHud();
-    } catch (error) {
-      console.warn("Everrealm server shrine recovery command failed.", error);
-      const code = String(error?.code || "");
-      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
-      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
-      else showToast("伺服器暫時未能處理燈龕。", "danger");
-    } finally {
-      recoveryCommandPending = false;
-    }
-  }
 
   function startDialogue(config) {
     mode = "dialogue";
@@ -4037,10 +3927,10 @@
   }
 
   function guildRankInfo() {
-    if (guildMarks >= 18) return { name: "金燈領航員", next: null, icon: "✦" };
-    if (guildMarks >= 10) return { name: "銀燈巡路者", next: 18, icon: "◇" };
-    if (guildMarks >= 4) return { name: "銅燈冒險者", next: 10, icon: "◆" };
-    return { name: "見習拾燈人", next: 4, icon: "·" };
+    if (guildMarks >= 18) return { name: "金章領航員", next: null, icon: "✦" };
+    if (guildMarks >= 10) return { name: "銀章巡路者", next: 18, icon: "◇" };
+    if (guildMarks >= 4) return { name: "銅章冒險者", next: 10, icon: "◆" };
+    return { name: "見習冒險者", next: 4, icon: "·" };
   }
 
   function currentContractOffers() {
@@ -4081,7 +3971,7 @@
 
   function renderFacilitySummary() {
     const rank = guildRankInfo();
-    const weapon = equipmentItem(equipped.weapon)?.name || "見習燈刃";
+    const weapon = equipmentItem(equipped.weapon)?.name || "見習拳套";
     const upperBody = equipmentItem(equipped.upperBody)?.name || "旅行者短衣";
     const lowerBody = equipped.lowerBody && equipped.lowerBody !== equipped.upperBody
       ? equipmentItem(equipped.lowerBody)?.name
@@ -4254,7 +4144,7 @@
       id: "weak_potion", name: "弱氣之藥", category: "消耗品", quantity: weakPotionCount,
       categoryKey: "consumable",
       description: ItemData?.getItem?.("weak_potion")?.description || "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。",
-      detail: weakPotionStepsRemaining > 0 ? "怪味仲纏住你，附近霧獸似乎更加躁動。" : "喝下後，這股古怪氣味會跟住你一段路。",
+      detail: weakPotionStepsRemaining > 0 ? "怪味仲纏住你，附近怪物似乎更加躁動。" : "喝下後，這股古怪氣味會跟住你一段路。",
       action: "use-weak-potion", actionLabel: weakPotionStepsRemaining > 0 ? "重新使用" : "使用",
       destroyable: true,
     });
@@ -4327,7 +4217,7 @@
       items.push({ id, name: inventoryItemName(id), category: categoryKey === "consumable" ? "消耗品" : "素材", categoryKey, quantity: amount, description: materialDescription(id), detail: categoryKey === "consumable" ? "消耗品" : "冒險素材", destroyable: itemData?.destroyable !== false && itemData?.kind !== "quest" });
     }
     if (inventoryFixtureCount > 0) {
-      const fixtureNames = ["霧晶碎片", "舊銅齒輪", "潮濕苔絲", "微光粉末", "沉燈玻璃", "巡夜羽片"];
+      const fixtureNames = ["晶石碎片", "舊銅齒輪", "潮濕苔絲", "微光粉末", "山徑玻璃", "巡夜羽片"];
       for (let index = 0; index < inventoryFixtureCount; index += 1) {
         items.push({ id: `fixture_material_${index + 1}`, name: `${fixtureNames[index % fixtureNames.length]} ${index + 1}`, category: "素材 · 測試", categoryKey: "material", quantity: 1, iconId: 4 + (index % 11), description: "只供版面壓力測試使用，不會寫入存檔。", detail: "UI fixture" });
       }
@@ -4694,7 +4584,7 @@
     const xpNeeded = Core.xpRequired(player.level);
     return {
       displayName: playerDisplayName(),
-      className: playerClassId === "fighter" ? "格鬥士" : playerClassId === "elementalist" ? "精靈魔導師" : "戰士",
+      className: playerClassId === "fighter" ? "格鬥士" : playerClassId === "elementalist" ? "精靈魔導師" : "冒險者",
       level: player.level,
       hp,
       maxHp: stats.maxHp,
@@ -5292,7 +5182,6 @@
       setFacilityFooter,
       ids: ExpansionWorld.CANONICAL_MONSTER_IDS,
       monsterKills,
-      legacyMonsterMigration: ExpansionWorld.LEGACY_MONSTER_MIGRATION,
       monsterBlueprint: ExpansionWorld.monsterBlueprint,
     });
   }
@@ -5511,8 +5400,7 @@
       mode = "playing";
       stage.dataset.gameState = mode;
       updateHud(true);
-      pendingLevelUps = 0;
-      canvas.focus({ preventScroll: true });
+        canvas.focus({ preventScroll: true });
     }
   }
 
@@ -5882,7 +5770,6 @@
       chick: [[3, 1], [3, 5], [5, 2], [5, 4]],
       fox: [[3, 2], [3, 4], [5, 1], [5, 5]],
       raccoon: [[4, 1], [4, 5], [5, 3]],
-      wild_boar: [[4, 2], [4, 4], [6, 3]],
       frog: [[3, 3], [5, 1], [5, 5]],
       coyote: [[3, 2], [3, 4], [5, 1], [5, 5]],
       turtle: [[3, 2], [3, 4], [5, 1], [5, 5]],
@@ -5895,7 +5782,7 @@
   function battleFieldContextFor(mapId) {
     const map = maps[mapId];
     if (map?.biome !== "mountain") return null;
-    const authored = mapId === "dungeon"
+    const authored = mapId === "mountain-southeast"
       ? (maps.field?.battlefield || map?.battlefield || {})
       : (map?.battlefield || {});
     return {
@@ -6963,8 +6850,8 @@
 
   function battleSkillFromAction(action) {
     if (typeof action !== "string") return null;
-    const starterId = Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0] || "quick_slash";
-    const id = action.startsWith("skill:") ? action.slice(6) : action === "slash" ? starterId : action === "flare" ? "lantern_shot" : null;
+    const starterId = Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0] || "kentotsu";
+    const id = action.startsWith("skill:") ? action.slice(6) : action === "slash" ? starterId : null;
     return id ? Skills.getSkill(id) : null;
   }
 
@@ -7059,7 +6946,6 @@
       const starter = equippedBattleSkills()[0] || Skills.getSkill(Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0]);
       action = starter ? `skill:${starter.id}` : "";
     }
-    if (action === "lantern-skill" || action === "flare") action = "skill:lantern_shot";
     battle.messageDanger = false;
     if (action === "cancel-target") return cancelBattleTargetSelection();
     if (action === "flee") {
@@ -7182,7 +7068,7 @@
     };
     battle.movementResolution = { ...movement, finalHeroFacing: finalFacing, elapsed: 0, stepDuration: BATTLE_MOVE_STEP_SECONDS };
     battle.actingUnitIds = movement.actors.filter((id) => movement.unitResults[id]?.elapsedCost > 0 || movement.unitResults[id]?.blocked);
-    battle.message = heroPath.length > 1 ? `路線確認——${battle.hero.name}同霧獸同步移動！` : `${battle.hero.name}留喺原位；霧獸開始行動。`;
+    battle.message = heroPath.length > 1 ? `路線確認——${battle.hero.name}同敵人同步移動！` : `${battle.hero.name}留喺原位；敵人開始行動。`;
     battle.messageDanger = false;
     updateBattleUi();
     sound.tone(360, .09, { to: 620, gain: .025 });
@@ -7281,7 +7167,7 @@
   }
 
   function resolvePlayerBattleAttack(target, legacySkill) {
-    const skill = Skills.getSkill(legacySkill === "flare" ? "lantern_shot" : Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0] || "quick_slash");
+    const skill = Skills.getSkill(Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0] || "kentotsu");
     const cell = target.cell || target;
     resolvePlayerBattleSkill(skill, cell, target.cell ? target : null);
   }
@@ -8125,10 +8011,10 @@
       const enemyPosition = executedEnemyHits.some((hit) => hit.position === "rear") ? "（背擊 +35%）" : executedEnemyHits.some((hit) => hit.position === "side") ? "（側擊 +15%）" : "";
       const actorUnit = battleUnits().find((unit) => unit.id === actorId);
       const enemyResult = executedEnemyHits.length
-        ? `${actorUnit?.name || "霧獸"}用${usedSkills.length ? `「${usedSkills.join("／")}」` : "技能"}${enemyPosition}造成 ${totalEnemyDamage} 傷害`
+        ? `${actorUnit?.name || "敵人"}用${usedSkills.length ? `「${usedSkills.join("／")}」` : "技能"}${enemyPosition}造成 ${totalEnemyDamage} 傷害`
         : missedCells.length
-          ? `${actorUnit?.name || "霧獸"}技能落空`
-          : `${actorUnit?.name || "霧獸"}未能出招`;
+          ? `${actorUnit?.name || "敵人"}技能落空`
+          : `${actorUnit?.name || "敵人"}未能出招`;
       resolution.enemySummaries.push(enemyResult);
       battle.message = `${enemyResult}。`;
     }
@@ -8238,7 +8124,7 @@
   function finishBattleVictory() {
     if (!battle || battle.phase === "victory") return;
     battle.phase = "victory";
-    battle.message = "霧散開咗——戰鬥勝利！";
+    battle.message = "敵人全數倒下——戰鬥勝利！";
     battle.messageDanger = false;
     addSystemMessage("combat", "戰鬥獲勝！", "good");
     const token = battle.token;
@@ -8283,7 +8169,7 @@
     const chance = RETREAT_CHANCE_OVERRIDE ?? ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (battleRandom() >= chance) {
       const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
-      setBattleMessage(`${retreatMessage}，霧獸逼近咗！`, true);
+      setBattleMessage(`${retreatMessage}，敵人逼近咗！`, true);
       showToast(retreatMessage, "danger");
       battle.phase = "planning_action";
       return updateBattleUi();
@@ -8427,9 +8313,9 @@
     }
     const selectedSkill = battleSkillFromAction(battle.selectedAction);
     const skillButtons = equippedBattleSkills().map((skill) => {
-      const id = skill.id === "quick_slash" ? ' id="battleAttackButton"' : skill.id === "lantern_shot" ? ' id="battleLanternButton"' : "";
+      const id = "";
       const selected = Boolean(selectedSkill && Skills.canonicalSkillId(selectedSkill.id) === Skills.canonicalSkillId(skill.id));
-      const className = `${skill.tags.includes("magic") ? "lantern-skill" : "attack-skill"}${selected ? " is-selected" : ""}`;
+      const className = `${skill.tags.includes("magic") ? "magic-skill" : "attack-skill"}${selected ? " is-selected" : ""}`;
       const action = `skill:${skill.id}`;
       const disabled = battle.ap < skill.apCost;
       const apLabel = disabled ? `AP不足，需要 ${skill.apCost} AP` : `消耗 ${skill.apCost} AP`;
@@ -8458,8 +8344,8 @@
       resolving_move: ["移動中", ""],
       planning_action: ["戰鬥指令", "選擇招式"],
       resolving_action: ["行動中", ""],
-      victory: ["戰鬥勝利！", "霧散開咗"],
-      defeat: ["燈火熄滅", "返回落腳燈位"],
+      victory: ["戰鬥勝利！", "敵人全數倒下"],
+      defeat: ["戰鬥失敗", "選擇復活方式"],
     };
     battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "戰鬥";
     battleUi.phase.textContent = phaseCopy[battle.phase]?.[1] || "";
@@ -8620,7 +8506,6 @@
     updateCamera(dt);
     updateHud();
     syncRealtimeExploration();
-    if (autoplay && mode === "levelup") chooseUpgrade("edge");
   }
 
   function updateCamera(dt) {
@@ -8666,7 +8551,7 @@
   }
 
   function contractTargetMap(target) {
-    return ["frog", "turtle", "snake", "bear"].includes(target) ? "dungeon" : "field";
+    return ["frog", "turtle", "snake", "bear"].includes(target) ? "mountain-southeast" : "field";
   }
 
   function nearestContractEnemy(target) {
@@ -9381,19 +9266,19 @@
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, width, height);
 
-      // Preserve the established dungeon / boss presentation.  The oblique
+      // Preserve the established mountain / boss presentation.  The oblique
       // height renderer is opt-in per battlefield and must not silently restyle
       // legacy flat encounters.
       ctx.save();
       ctx.globalAlpha = .16;
       for (let index = 0; index < 8; index += 1) {
-        const fogX = ((index * 233 + elapsed * (8 + index)) % (width + 240)) - 120;
-        const fogY = 80 + ((index * 97) % Math.max(100, height - 170));
-        const fog = ctx.createRadialGradient(fogX, fogY, 0, fogX, fogY, 90 + index * 9);
-        fog.addColorStop(0, bossFight ? "rgba(174,145,255,.3)" : "rgba(82,220,203,.22)");
-        fog.addColorStop(1, "rgba(20,30,50,0)");
-        ctx.fillStyle = fog;
-        ctx.fillRect(fogX - 140, fogY - 110, 280, 220);
+        const auraX = ((index * 233 + elapsed * (8 + index)) % (width + 240)) - 120;
+        const auraY = 80 + ((index * 97) % Math.max(100, height - 170));
+        const aura = ctx.createRadialGradient(auraX, auraY, 0, auraX, auraY, 90 + index * 9);
+        aura.addColorStop(0, bossFight ? "rgba(174,145,255,.3)" : "rgba(82,220,203,.22)");
+        aura.addColorStop(1, "rgba(20,30,50,0)");
+        ctx.fillStyle = aura;
+        ctx.fillRect(auraX - 140, auraY - 110, 280, 220);
       }
       ctx.restore();
       ctx.fillStyle = "rgba(4,8,18,.42)";
@@ -9892,7 +9777,6 @@
       ...world.npcs.filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
       ...(world.boards || []).filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
       ...(world.signs || []).filter((entity) => !(world.navigation?.authoritative && authoritativeInteractionRegion(entity))),
-      ...(world.shrine && !(world.navigation?.authoritative && authoritativeInteractionRegion(world.shrine)) ? [world.shrine] : []),
       ...world.portals,
       ...enemies.filter((enemy) => enemy.alive),
     ];
@@ -10336,8 +10220,8 @@
     if (["shop", "general-store"].includes(currentMapId)) {
       return tile === world.tileTypes.STONE || tile === world.tileTypes.PATH ? "shopRug" : tile === world.tileTypes.WOOD ? "shopWood" : tile === world.tileTypes.WALL ? "interiorWall" : tile === world.tileTypes.WATER ? "water" : "stone";
     }
-    if (currentMapId === "dungeon") return tile === world.tileTypes.WATER ? "water" : tile === world.tileTypes.WOOD ? "bridge" : "dungeonStone";
-    return tile === world.tileTypes.GRASS ? "grass" : tile === world.tileTypes.PATH ? "path" : tile === world.tileTypes.WATER ? "water" : tile === world.tileTypes.STONE ? "stone" : tile === world.tileTypes.WOOD ? "bridge" : "dungeonStone";
+    if (currentMapId === "mountain-southeast") return tile === world.tileTypes.WATER ? "water" : tile === world.tileTypes.WOOD ? "bridge" : "rockFloor";
+    return tile === world.tileTypes.GRASS ? "grass" : tile === world.tileTypes.PATH ? "path" : tile === world.tileTypes.WATER ? "water" : tile === world.tileTypes.STONE ? "stone" : tile === world.tileTypes.WOOD ? "bridge" : "rockFloor";
   }
 
   // Every interior map (guild/shop/clinic/general-store/inn - see maps/interiors/*.js)
@@ -10395,7 +10279,7 @@
     miniCtx.arc(centreX, centreY, radius, 0, Core.TAU);
     miniCtx.clip();
 
-    miniCtx.fillStyle = world.kind === "dungeon" ? "#151c2b" : "#173d3c";
+    miniCtx.fillStyle = "#173d3c";
     miniCtx.fillRect(0, 0, mapWidth, mapHeight);
     if (flattenedMapArt) {
       // Draw the authored flattened scene at local-navigation scale. The circle
@@ -10509,10 +10393,6 @@
       const point = mapPoint(sign.x, sign.y + 20);
       queueEnvironment("sign", point.x, point.y, Math.max(7, 58 * scale), point.y);
     }
-    if (world.shrine) {
-      const point = mapPoint(world.shrine.x, world.shrine.y + 25);
-      queueEnvironment("shrine", point.x, point.y, Math.max(11, 88 * scale), point.y);
-    }
     for (const board of world.boards || []) {
       if (board.render === false) continue;
       const point = mapPoint(board.x, board.y + 15);
@@ -10537,12 +10417,12 @@
     scenery.sort((left, right) => left.order - right.order);
     for (const item of scenery) item.draw();
 
-    // Fog of war: fade the true map edge into the ambient backdrop colour
+    // Edge fade: blend the true map edge into the ambient backdrop colour
     // instead of a hard cut-off. Anchored to the map's actual rectangle (not
-    // the minimap frame), so a small map fogs out well inside the circle,
-    // while a large map only fogs right at its real edge.
-    const fogColourHex = world.kind === "dungeon" ? "#151c2b" : "#173d3c";
-    const fogColourRgb = [1, 3, 5].map((i) => parseInt(fogColourHex.slice(i, i + 2), 16)).join(",");
+    // the minimap frame), so a small map fades out well inside the circle,
+    // while a large map only fades right at its real edge.
+    const edgeFadeColourHex = "#173d3c";
+    const edgeFadeColourRgb = [1, 3, 5].map((i) => parseInt(edgeFadeColourHex.slice(i, i + 2), 16)).join(",");
     const mapRectHalfWidth = Math.max(1, world.pixelWidth * scale * .5);
     const mapRectHalfHeight = Math.max(1, world.pixelHeight * scale * .5);
     const mapRectCentreX = originX + mapRectHalfWidth;
@@ -10550,16 +10430,16 @@
     miniCtx.save();
     miniCtx.translate(mapRectCentreX, mapRectCentreY);
     miniCtx.scale(mapRectHalfWidth, mapRectHalfHeight);
-    const fog = miniCtx.createRadialGradient(0, 0, .6, 0, 0, 1.05);
-    fog.addColorStop(0, `rgba(${fogColourRgb},0)`);
-    fog.addColorStop(1, `rgba(${fogColourRgb},1)`);
-    miniCtx.fillStyle = fog;
+    const edgeFade = miniCtx.createRadialGradient(0, 0, .6, 0, 0, 1.05);
+    edgeFade.addColorStop(0, `rgba(${edgeFadeColourRgb},0)`);
+    edgeFade.addColorStop(1, `rgba(${edgeFadeColourRgb},1)`);
+    miniCtx.fillStyle = edgeFade;
     // Overscan generously in this normalised space so the fill still reaches
     // every corner of the square canvas even when the map rect is tiny or
     // off-centre relative to the minimap frame.
-    const fogOverscanX = (mapWidth * 3) / mapRectHalfWidth;
-    const fogOverscanY = (mapHeight * 3) / mapRectHalfHeight;
-    miniCtx.fillRect(-fogOverscanX, -fogOverscanY, fogOverscanX * 2, fogOverscanY * 2);
+    const edgeFadeOverscanX = (mapWidth * 3) / mapRectHalfWidth;
+    const edgeFadeOverscanY = (mapHeight * 3) / mapRectHalfHeight;
+    miniCtx.fillRect(-edgeFadeOverscanX, -edgeFadeOverscanY, edgeFadeOverscanX * 2, edgeFadeOverscanY * 2);
     miniCtx.restore();
 
     // Darken toward the circular frame itself for a subtle vignette, so the
@@ -10918,7 +10798,6 @@
     else if (entity.kind === "tree") drawTree(entity, shakeX, shakeY);
     else if (entity.kind === "rock") drawRock(entity, shakeX, shakeY);
     else if (entity.kind === "lamp") drawLamp(entity, shakeX, shakeY);
-    else if (entity.kind === "shrine") drawShrine(entity, shakeX, shakeY);
     else if (entity.kind === "sign") drawSign(entity, shakeX, shakeY);
     else if (entity.kind === "chest") drawChest(entity, shakeX, shakeY);
     else if (entity.kind === "npc") drawNpc(entity, shakeX, shakeY);
@@ -10950,7 +10829,7 @@
     const point = worldToScreen(prop, shakeX, shakeY);
     const scale = camera.zoom;
     if (prop.kind === "questBoard") {
-      const indoor = world.kind === "interior" || world.kind === "dungeon";
+      const indoor = world.kind === "interior";
       const boardDrawer = indoor ? Art.drawInteriorSprite : Art.drawEnvironmentSprite;
       if (prop.boardId === "deck-loadout") drawSkillPanelLabel(prop, shakeX, shakeY);
       boardDrawer(ctx, {
@@ -11078,11 +10957,6 @@
     if (drew) drawGlow(lamp, "rgba(255,200,87,.16)", 100, shakeX, shakeY);
   }
 
-  function drawShrine(shrine, shakeX, shakeY) {
-    const point = worldToScreen(shrine, shakeX, shakeY);
-    const scale = camera.zoom;
-    Art.drawEnvironmentSprite(ctx, { sprite: "shrine", x: point.x, y: point.y + 25 * scale, width: 88 * scale, height: 88 * scale });
-  }
 
   function drawSign(sign, shakeX, shakeY) {
     const point = worldToScreen(sign, shakeX, shakeY);
@@ -11227,7 +11101,7 @@
       y: point.y + 13 * scale,
       scale,
       actor: "player",
-      classId: remote.classId || "warrior",
+      classId: remote.classId || "fighter",
       gender: remote.gender,
       facing: remote.facing,
       state: remote.moving ? "walk" : "idle",
@@ -11571,12 +11445,6 @@
       } else if (["Enter", "KeyE", "Space"].includes(code)) advanceDialogue();
       return;
     }
-    if (mode === "levelup") {
-      if (code === "Digit1") chooseUpgrade("vigor");
-      else if (code === "Digit2") chooseUpgrade("edge");
-      else if (code === "Digit3") chooseUpgrade("swift");
-      return;
-    }
     if (mode === "dead") return;
     if (mode !== "playing") return;
     if (code === "Escape" && systemSettingsPopover?.hidden === false) {
@@ -11710,10 +11578,10 @@
         gender: player.gender,
         x: player.x, y: player.y, facing: player.facing, moving: player.moving, locomotion: player.locomotion ? { ...player.locomotion } : null,
         movementOdometer: { distanceWorldUnits: player.explorationDistance, movingSeconds: player.explorationMoveSeconds },
-        currentMapId, bgm: bgm.snapshot(), pendingLevelUps,
+        currentMapId, bgm: bgm.snapshot(),
         coins: player.coins, ownedEquipment: [...ownedEquipment], equipped: { ...equipped },
         guildCommission: Guild.normalizeState(guildCommissionState),
-        guildMarks, guildRenown, monsterKills: { ...monsterKills }, dungeonClears,
+        guildMarks, guildRenown, monsterKills: { ...monsterKills },
         skills: Skills.normalizeSkillState(skillState), godMode: godModeActive, automaticPortalReady,
         explorePath: { target: exploreMoveTarget ? { ...exploreMoveTarget } : null, remaining: exploreMovePath.length, portalIntentId: explorePortalIntentId },
         exploreZoom, cameraZoom: camera.zoom, targetCameraZoom: targetZoom(), hudCollapsed,
@@ -11732,7 +11600,6 @@
         })() : null,
         persistence: { dirty: persistence?.isDirty() || false, saveAttempts: persistence?.getSaveAttempts() || 0, successfulSaves: persistence?.getSuccessfulSaves() || 0 },
         facility: facilityWindows.size ? { tab: facilityTab, context: facilityContext, availableTabs: [...availableFacilityTabs()] } : null,
-        checkpoint: { ...checkpoint },
         enemyLevels: enemies.map((enemy) => ({ id: enemy.id, level: enemy.level, boss: enemy.boss })),
         enemyStates: enemies.filter((enemy) => enemy.alive).map((enemy) => ({
           id: enemy.id, type: enemy.type, x: enemy.x, y: enemy.y, facing: enemy.facing,
@@ -11947,7 +11814,6 @@
         if (Number.isFinite(values.level)) player.level = Core.clamp(Math.floor(values.level), 1, Expansion.LEVEL_CAP);
         if (Number.isFinite(values.coins)) player.coins = Core.clamp(Math.floor(values.coins), 0, 99999);
         if (Number.isFinite(values.hp)) player.hp = Core.clamp(values.hp, 1, playerStats().maxHp);
-        if (Number.isFinite(values.pendingLevelUps)) pendingLevelUps = Core.clamp(Math.floor(values.pendingLevelUps), 0, Math.max(0, player.level - 1));
         updateHud(true);
         return window.__RPG_DEBUG__.snapshot();
       },
@@ -11957,14 +11823,13 @@
         if (facilityWindows.size) renderFacility();
         return window.__RPG_DEBUG__.snapshot();
       },
-      chooseUpgrade,
       save: () => saveGame(false, true),
       load: loadGame,
       enterMap: (id) => transitionMap(id, maps[id]?.start),
       forceDeath: () => { player.hp = 0; playerDeath(); },
       respawn,
       interactWith: (id) => {
-        const target = world.npcs.find((item) => item.id === id) || world.portals.find((item) => item.id === id) || world.boards.find((item) => item.id === id) || world.chests.find((item) => item.id === id) || (world.shrine?.id === id ? world.shrine : null);
+        const target = world.npcs.find((item) => item.id === id) || world.portals.find((item) => item.id === id) || world.boards.find((item) => item.id === id) || world.chests.find((item) => item.id === id);
         if (!target) return false;
         nearestInteraction = target;
         interact();
@@ -12477,7 +12342,6 @@
     const nextVolume = Core.clamp(Number(soundEffectsVolumeSlider.value) / 100, 0, 1);
     setSfxVolume(nextVolume);
   });
-  for (const card of document.querySelectorAll("[data-upgrade]")) card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
   document.addEventListener("pointerdown", unlockGameAudioFromGesture, { capture: true, passive: true });
   window.addEventListener("keydown", unlockGameAudioFromGesture, { capture: true });
   window.addEventListener("keydown", handleKeyDown);
@@ -12522,7 +12386,7 @@
   syncHudCollapse();
   resetEnemies();
   drawPlayerHudPortrait();
-  window.addEventListener("lantern-art-ready", () => {
+  window.addEventListener("everrealm-art-ready", () => {
     drawPlayerHudPortrait();
   });
   resize();

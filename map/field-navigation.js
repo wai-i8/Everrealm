@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const generated = root.LanternFieldNavigationGenerated || (typeof require === "function" ? require("./field-navigation.generated.js") : null);
+  const generated = root.EverrealmFieldNavigationGenerated || (typeof require === "function" ? require("./field-navigation.generated.js") : null);
   const api = factory(generated);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternFieldNavigation = api;
+  root.EverrealmFieldNavigation = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (generated) {
   "use strict";
 

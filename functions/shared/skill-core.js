@@ -1,16 +1,14 @@
 (function (root, factory) {
   const classData = root.EverrealmClassData
     || (typeof require === "function" ? require("./data/classes.js") : null);
-  const warriorData = root.LanternWarriorSkillData
-    || (typeof require === "function" ? require("./data/skills/warrior.js") : null);
-  const fighterData = root.LanternFighterSkillData
+  const fighterData = root.EverrealmFighterSkillData
     || (typeof require === "function" ? require("./data/skills/fighter.js") : null);
-  const elementalistData = root.LanternElementalistSkillData
+  const elementalistData = root.EverrealmElementalistSkillData
     || (typeof require === "function" ? require("./data/skills/elementalist.js") : null);
-  const api = factory(classData, warriorData, fighterData, elementalistData);
+  const api = factory(classData, fighterData, elementalistData);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternSkills = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (classData, warriorData, fighterData, elementalistData) {
+  root.EverrealmSkills = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (classData, fighterData, elementalistData) {
   "use strict";
 
   const STARTING_AP = 10;
@@ -19,12 +17,10 @@
   const STARTING_DECK_CAPACITY = 3;
   const MAX_EQUIPPED_SKILLS = 6;
   const DECK_CAPACITY_MILESTONES = deepFreeze({
-    "main:fog-gate-open": 4,
     "guild:rank-2": 5,
-    "main:light-eater-defeated": 6,
   });
-  const CLASS_IDS = Object.freeze([...(classData?.CLASS_IDS || ["warrior", "fighter"])]);
-  const DEFAULT_CLASS_ID = classData?.DEFAULT_CLASS_ID || "warrior";
+  const CLASS_IDS = Object.freeze([...(classData?.CLASS_IDS || ["fighter", "elementalist"])]);
+  const DEFAULT_CLASS_ID = classData?.DEFAULT_CLASS_ID || "fighter";
   const SPEED_GRADES = Object.freeze(["S", "A", "B", "C", "D", "E", "F", "PSV"]);
   const DEFAULT_TARGET_ARC = Object.freeze(["front", "left", "right"]);
   const TARGET_ARCS = Object.freeze(["front", "left", "right", "rear", "self"]);
@@ -41,17 +37,16 @@
   const DUPLICATE_SHARDS = deepFreeze({ 1: 2, 2: 5, 3: 10 });
   const MASTERY_UNLOCK_COST = deepFreeze({ 1: 12, 2: 28, 3: 55 });
   const AREA_SHAPES = Object.freeze(["single", "self", "line", "cone", "cross", "radius", "relative_cells", "line_to_target", "impact_area"]);
-  const DEFAULT_STARTER_SKILLS = Object.freeze([...(warriorData?.starterSkills || classData?.starterSkills?.("warrior") || ["quick_slash", "lantern_shot", "guard_stance"])]);
-  // The promoted Fighter specification uses the original romanized ids.  A
-  // small compatibility map keeps saves, debug commands and old Warrior-era
-  // integrations readable without adding duplicate skills to the catalog.
+  const DEFAULT_STARTER_SKILLS = Object.freeze([...(classData?.starterSkills?.("fighter") || ["kentotsu"])]);
+  // Fighter data keeps a small id alias map for saves created during the
+  // current Fighter implementation; the retired Warrior skill set is gone.
   const LEGACY_ID_ALIASES = Object.freeze(fighterData?.legacyIds || {});
   const CANONICAL_ID_ALIASES = Object.freeze(Object.fromEntries(
     Object.entries(LEGACY_ID_ALIASES).map(([legacyId, canonicalId]) => [canonicalId, legacyId]),
   ));
   const CLASS_STARTER_SKILLS = deepFreeze(Object.fromEntries(CLASS_IDS.map((classId) => [
     classId,
-    classId === "warrior" ? [...DEFAULT_STARTER_SKILLS] : [...(classData?.starterSkills?.(classId) || ["kentotsu"])],
+    [...(classData?.starterSkills?.(classId) || (classId === "fighter" ? DEFAULT_STARTER_SKILLS : []))],
   ])));
   const COMPATIBILITY_STARTER_SKILLS = Object.freeze({ fighter: ["straight_punch"] });
 
@@ -340,13 +335,11 @@
   }
 
   const RAW_SKILLS = [
-    ...(warriorData?.skills || []),
     ...FIGHTER_SKILL_SPECS.map(fighterRawSkill),
     ...ELEMENTALIST_SKILL_SPECS.map(fighterRawSkill),
   ];
 
   const SKILL_PROGRESSION = deepFreeze({
-    ...(warriorData?.progression || {}),
     ...Object.fromEntries(FIGHTER_SKILL_SPECS.map((skill) => [skill.id, {
       classId: "fighter",
       speedGrade: skill.speedGrade,
@@ -895,9 +888,8 @@
     const valid = uniqueValidSkillIds(oldUnlocks);
     const hasFighter = valid.some((id) => getSkill(id).classId === "fighter");
     const hasElementalist = valid.some((id) => getSkill(id).classId === "elementalist");
-    const hasWarrior = valid.some((id) => getSkill(id).classId === "warrior");
-    if (hasElementalist && !hasFighter && !hasWarrior) return "elementalist";
-    return hasFighter && !hasWarrior ? "fighter" : DEFAULT_CLASS_ID;
+    if (hasElementalist && !hasFighter) return "elementalist";
+    return hasFighter ? "fighter" : DEFAULT_CLASS_ID;
   }
 
   function deckIds(slots) {
@@ -1211,15 +1203,15 @@
   function drawSeedParts(seedOrSerial, fallbackSerial = 0) {
     if (seedOrSerial && typeof seedOrSerial === "object") {
       return {
-        seed: String(seedOrSerial.seed == null ? "mist-harbour-skill-book" : seedOrSerial.seed),
+        seed: String(seedOrSerial.seed == null ? "everrealm-skill-book" : seedOrSerial.seed),
         serial: wholeNumber(seedOrSerial.serial, fallbackSerial),
       };
     }
     if (typeof seedOrSerial === "number") {
-      return { seed: "mist-harbour-skill-book", serial: wholeNumber(seedOrSerial) };
+      return { seed: "everrealm-skill-book", serial: wholeNumber(seedOrSerial) };
     }
     return {
-      seed: String(seedOrSerial == null ? "mist-harbour-skill-book" : seedOrSerial),
+      seed: String(seedOrSerial == null ? "everrealm-skill-book" : seedOrSerial),
       serial: wholeNumber(fallbackSerial),
     };
   }

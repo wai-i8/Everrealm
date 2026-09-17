@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternFieldEncounters = api;
+  root.EverrealmFieldEncounters = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
   const WIDTH = 4096;

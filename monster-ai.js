@@ -1,6 +1,6 @@
 (function (root, factory) {
-  const tactics = root.LanternTactics || (typeof require === "function" ? require("./tactics-core.js") : null);
-  const skills = root.LanternSkills || (typeof require === "function" ? require("./skill-core.js") : null);
+  const tactics = root.EverrealmTactics || (typeof require === "function" ? require("./tactics-core.js") : null);
+  const skills = root.EverrealmSkills || (typeof require === "function" ? require("./skill-core.js") : null);
   const api = factory(tactics, skills);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EverrealmMonsterAI = api;

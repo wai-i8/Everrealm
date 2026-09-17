@@ -33,7 +33,7 @@
 - 主城可見 artwork、native gameplay world 同 authored navigation 都固定為 `7680 × 4320`；玩家約 `128 × 192` 嘅可見 sprite body proportion 係以呢個原生尺度 authored，標準玩家 locomotion frame 保持 `256 × 256` world units，唔使用 `worldScale`／`entityScale`／`unitScale` migration factor。camera 係圍繞玩家裁切 viewport 嘅 window，唔係將全張主城 fit 入 gameplay viewport；原圖 native-world zoom 範圍係 `0.35` 至 `1.0`，8K source 尺寸亦唔會自動改變當下視角。background、entity、collision 同 screen／world conversion 共用同一 camera transform，DPR 只提高 Canvas output resolution，唔改變 world viewport。
 - 每張 supplied map image 都保留自己嘅 native source 座標；native image width／height 係 source bounds，但唔再自動等同 runtime gameplay world。凡採用 compact full-map exploration 嘅地圖，source pair 要等比例映射到細型 logical world，唔因原圖像素較大而令玩家要行更耐；玩家、NPC、怪物、入口、互動、碰撞、pathfinding 同 click conversion 全部使用同一個 map-level transform。玩家、NPC 同各 monster 嘅 authored render dimensions、`330` world-units/sec 基礎探索移速及 `0.35–1.0` camera zoom 範圍仍然係 global contract，唔可以用 per-entity offset 或 per-frame scale 補救地圖比例問題；native source pair 亦不可被非等比拉伸。檔案壓縮率只影響載入速度，唔可以直接用檔案 bytes 推導 gameplay 尺寸或移速。
 - 後續凡係同山地圖一樣以「完整場景圖＋walkable 圖」作主畫面探索嘅新地圖，預設採用 compact full-map exploration：主畫面一次容納整張地圖，角色喺縮細後嘅地圖範圍內行走。可見 master 優先使用 JPEG 以減少載入容量；walkable 保留同 native 尺寸嘅 PNG，以黑色表示不可行區、白色表示可行區（需要時保留語意 interaction 顏色），利用大面積純色令檔案保持細小。只有明確指定另一種 presentation contract 嘅地圖，先可以使用 native crop camera。
-- 世界目前由 **主城、山地野外、沉燈坑道** 三個主要探索區域組成；冒險者公會、帝都裝備坊、帝都醫療院、帝都道具店及帝都旅館等屬主城附屬 interior。主城東門連接山地野外，山地再通往坑道。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
+- 世界目前由 **主城、欣梅爾山地、欣梅爾山地東南部、欣梅爾山地南部** 組成；冒險者公會、帝都裝備坊、帝都醫療院、帝都道具店及帝都旅館等屬主城附屬 interior。主城東門連接欣梅爾山地，各山地區域再以 physical passage 互相連接。入口、傳送、探索 collision、encounter zone、biome，以及探索位置如何生成對應戰鬥場景，全部見 `docs/MAP_SYSTEM.md`。
 - 物品欄統一呈現裝備與背包：左邊角色紙娃娃使用 canonical slots `head`、`weapon`、`upperBody`、`lowerBody`、`hands`、`feet`、`charm`，右邊固定每頁 `5 × 3`、最多 15 格列出藥水、技能書、素材及裝備；每件物品只用一層 outer slot frame，icon 上、名稱下，左邊裝備板亦唔再額外加最外層 shell。`upperBody`／`lowerBody` 取代舊 `body`／`armor` 別名；全身裝備可同時佔用上身及下身，互斥部位由裝備資料的 `occupiesSlots` 定義。玩家先選取物品，再喺獨立詳情區查看描述、數量及可用動作；已裝備物品可直接「卸下」，一般可棄物品可經確認後「銷毀」，detail popup 點外層背景或關閉物品欄時 action state 必須一齊清除。物品 action 只用金色主要／確認同藍色次要／返回兩級，唔用紅色 destroy skin；銷毀確認只保留金色「確定銷毀」＋藍色「取消」，卸下後清除 selection，唔即時彈返「裝備」。換裝、使用及技能書流程仍沿用現有規則，未有對應裝備的部位亦須明示空位。
 - 左側功能列保持原作式窄身、單欄及極簡；每個彈出頁只處理當前主題，不再重複放公會摘要或跨頁分頁列。開啟狀態、物品、面板、技能、任務或系統時左側功能列繼續顯示，玩家可以同時開多個不同功能 window；同一功能只維持一個 instance。新開／重新點擊嘅 window 置頂，點擊其他已開 window 會將其帶回前景。系統設定同其他五個主功能使用同一套可拖動、可疊放 window 行為，唔再固定黐住 system icon。
 - 所有一般彈出視窗右上角永遠提供清楚可見、bitmap-backed 的 shared close control。阻塞式 modal／confirmation 可以點半透明背景關閉；可並存嘅主功能 window 則使用 transparent positioning layer，點 window 外唔會自動關閉，並容許玩家繼續操作左側 launcher。Popup backdrop 唔使用 blur；major window／modal 可用滑鼠或觸控由標題、文字或其他非互動區域拖動，button、input、link、可拖技能等 interactive control 本身唔啟動視窗拖動。
@@ -101,7 +101,7 @@
   | 問號 | 前置未解鎖 | 必須先沿連線學會前方技能 |
 
 - 格鬥士技能樹以 explicit prerequisite graph 保存；合流節點必須同時滿足全部實際 connector 前置，**唔可以因兩招喺版面相鄰就自行加 prerequisite**。例如：`跳彈腳` 需要 `先之先 + 轉砲腳`，但 `時差正拳` 上方只有 `連擊` 直線，所以只需要 `連擊`。原日文 `連弾` 顯示名統一為繁體中文「連擊」，消耗 `12 AP`、速度 `B`，連續出拳兩次。完整現行資料、range／高低差、入手方法、Everrealm damage balance 及 runtime contract 詳見 `docs/FIGHTER_SKILL_TREE.md`；原始來源證據保留於 `docs/references/STRUGARDEN_FIGHTER_SKILL_TREE.md`。
-- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；公會達銀燈階級擴至 `4` 格。配置管理採用 summary-first compact rows，容量只喺目前配置標題旁顯示一次，唔顯示 `可裝入 DECK`／`可裝入 N 格`。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
+- 一般左側選單嘅 `戰技面板` 係 compact、窄身、直向、唯讀嘅 current-loadout viewer，只顯示目前 DECK slots、細小 secondary slot index、CMD/PSV badge（按實際可裝技能規則）同技能名；唔顯示已學技能 catalogue、裝入／移除控制、AP／速度／range 或完整描述。只可在主城粉紅色 authoring deck-configuration region 編輯；管理流程保留喺該 region。空槽保留框體但 content 完全留白。初始 `3` 格；公會達銀章階級擴至 `4` 格。配置管理採用 summary-first compact rows，容量只喺目前配置標題旁顯示一次，唔顯示 `可裝入 DECK`／`可裝入 N 格`。獎勵以 milestone 記錄，重複回報或讀舊檔都不會重複加格；未放入 DECK 的已學技能不能在戰鬥使用。DECK 牌面以 `CMD`／`PSV` badge 區分指令與被動；PSV 只可學習並持續生效，永遠不能裝入 DECK。
 - 城門粉紅色 authoring region 嘅「戰技配置」係另一個獨立嘅 editable management surface：左邊單欄列出已學且可裝入技能，右邊單欄列出目前 DECK slots；`裝入`、`卸下`、容量、唯一性、職業限制及 CMD／PSV 規則保持不變。粉紅區唔係 NPC、對話點或出口；舊 deck sign／bitmap 不再係 canonical trigger。技能配置支援 drag-and-drop：拖到空槽會移入該槽，拖到已有技能嘅槽位就交換兩格位置，唔可以覆蓋並令原本技能消失。技能樹只負責學習／解鎖及技能詳細資料，唔取代以上兩個 Deck surface。
 - 世界／地圖上的 NPC 名稱以功能角色為主，讓玩家一眼知道互動用途；普通服務／提示 NPC 嘅個人身份只保留作 internal compatibility metadata，唔進入 player-facing label、quest copy 或 dialogue speaker。具名劇情 NPC 必須有明確未來設計批准先可例外使用個人名；主城街道維持沒有服務 NPC，核心服務角色放在各自 interior。
 - 一般功能頁只用 shared X 關閉，唔顯示「返回標題」；返回標題屬 system/menu-level 操作，保留於標題／系統流程。普通 NPC 對話使用獨立 anchored、portrait-free gameplay overlay：深海軍藍、金色裝飾、只顯示功能角色名，panel 依短句／選項內容收窄，選項預設直向排列並保留滑鼠、觸控及鍵盤操作。
@@ -115,7 +115,7 @@
 ## 世界與美術一致性
 
 - 正式遊戲畫面統一使用精緻 Q 版 bitmap 美術；Canvas 幾何圖只可作底層效果、debug 或資產載入失敗時的後備。
-- 探索環境同戰鬥場景必須保持 biome 身份連續：玩家喺山地、坑道或將來海岸遇敵，戰鬥地台、背景及障礙物應合理反映原本環境。
+- 探索環境同戰鬥場景必須保持 biome 身份連續：玩家喺各山地區域或將來海岸遇敵，戰鬥地台、背景及障礙物應合理反映原本環境。
 - 地圖／biome／encounter／battlefield context 由 `docs/MAP_SYSTEM.md` 定義。
 - 戰鬥 terrain／obstacle 對 movement、LOS、Linear／Arc／Pathless 攻擊有咩機械效果，由 `docs/BATTLE_SYSTEM.md` 定義。
 - PNG、tile、battlefield background、props、atlas、透明安全邊、anchor、grid visual overlay 及美術 QA，由 `ART_PIPELINE.md` 定義。

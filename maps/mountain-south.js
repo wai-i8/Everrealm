@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
-  const navigationApi = root.LanternMountainSouthNavigation || (typeof require === "function" ? require("../map/mountain-south-navigation.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
+  const navigationApi = root.EverrealmMountainSouthNavigation || (typeof require === "function" ? require("../map/mountain-south-navigation.js") : null);
   const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMountainSouthMap = api;
+  root.EverrealmMountainSouthMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi) {
   "use strict";
 
@@ -48,7 +48,7 @@
     if (!eastExitRegion) throw new Error("mountain-south east cyan exit is unavailable");
 
     const eastExit = {
-      id: "mountain-south-to-dungeon",
+      id: "mountain-south-to-mountain-southeast",
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
@@ -56,7 +56,7 @@
       x: eastExitRegion.centroid.x,
       y: eastExitRegion.centroid.y,
       radius: 38,
-      targetMap: MAP_IDS.DUNGEON,
+      targetMap: MAP_IDS.MOUNTAIN_SOUTHEAST,
       targetSpawn: "southEntrance",
       targetPosition: null,
       targetFacing: "right",
@@ -112,8 +112,6 @@
       npcs: [],
       enemySpawns: [],
       chests: [],
-      shrine: null,
-      waypoint: null,
       routeLayout: {
         style: "authored-mountain-road",
         entrySide: "east",

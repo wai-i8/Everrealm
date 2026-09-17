@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const generated = root.LanternHospitalNavigationGenerated || (typeof require === "function"
+  const generated = root.EverrealmHospitalNavigationGenerated || (typeof require === "function"
     ? require("./hospital-navigation.generated.js")
     : null);
   const api = factory(generated);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternHospitalNavigation = api;
+  root.EverrealmHospitalNavigation = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (generated) {
   "use strict";
 

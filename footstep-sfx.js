@@ -8,7 +8,6 @@
 
   const SFX_ENABLED_KEY = "everrealm-sfx-enabled-v1";
   const LEGACY_SOUND_KEY = "everrealm-sound";
-  const OLDEST_SOUND_KEY = "lanternbound-sound";
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const LEGACY_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const DEFAULT_INTERVAL = 0.30;
@@ -20,6 +19,8 @@
   const WALK_LOOP_ASSET_BY_MAP = Object.freeze({
     world: TOWN_WALK_LOOP_ASSET,
     field: MOUNTAIN_WALK_LOOP_ASSET,
+    "mountain-southeast": MOUNTAIN_WALK_LOOP_ASSET,
+    "mountain-south": MOUNTAIN_WALK_LOOP_ASSET,
     guild: BUILDING_WALK_LOOP_ASSET,
     shop: BUILDING_WALK_LOOP_ASSET,
     clinic: BUILDING_WALK_LOOP_ASSET,
@@ -45,6 +46,8 @@
   const SURFACE_BY_MAP = Object.freeze({
     world: "stone",
     field: "grass",
+    "mountain-southeast": "grass",
+    "mountain-south": "grass",
     guild: "stone",
     shop: "stone",
     clinic: "stone",
@@ -93,7 +96,7 @@
     function enabled() {
       if (suspended) return false;
       if (host?.document?.visibilityState && host.document.visibilityState !== "visible") return false;
-      const legacyEnabled = read(LEGACY_SOUND_KEY, read(OLDEST_SOUND_KEY, "on"));
+      const legacyEnabled = read(LEGACY_SOUND_KEY, "on");
       return read(SFX_ENABLED_KEY, legacyEnabled) !== "off" && volume() > 0;
     }
 
@@ -234,8 +237,8 @@
 
   function install(host = root, options = {}) {
     if (!host || host.__everrealmFootstepsInstalled) return host?.EverrealmFootstepsRuntime || null;
-    const originalBgm = host.LanternBgm;
-    const originalLocomotion = host.LanternLocomotion;
+    const originalBgm = host.EverrealmBgm;
+    const originalLocomotion = host.EverrealmLocomotion;
     if (!originalBgm?.createBgmManager || !originalLocomotion?.update || !originalLocomotion?.facingFromDelta) return null;
 
     const controller = createFootstepController({ root: host, ...(options.controller || {}) });
@@ -284,8 +287,8 @@
       },
     });
 
-    host.LanternBgm = wrappedBgm;
-    host.LanternLocomotion = wrappedLocomotion;
+    host.EverrealmBgm = wrappedBgm;
+    host.EverrealmLocomotion = wrappedLocomotion;
     host.__everrealmFootstepsInstalled = true;
     host.EverrealmFootstepsRuntime = controller;
 

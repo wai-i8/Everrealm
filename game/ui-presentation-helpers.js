@@ -1,7 +1,7 @@
 (function (root, factory) {
   const itemData = root.EverrealmItemData
     || (typeof require === "function" ? require("../data/items.js") : null);
-  const skills = root.LanternSkills
+  const skills = root.EverrealmSkills
     || (typeof require === "function" ? require("../skill-core.js") : null);
   const api = factory(itemData, skills);
   if (typeof module === "object" && module.exports) module.exports = api;

@@ -123,6 +123,6 @@ protected world interactions, the client includes its current map/x/y in the
 existing gameplay callable; this is not an extra movement RPC. The Function
 validates that claim against the Firestore `positionAuthority` speed/time anchor
 before allowing the command to advance the anchor. Authored services then add a
-small proximity gate (guild desk/board, shops, clinic, wish pool and shrine), and
+small proximity gate (guild desk/board, shops, clinic and wish pool), and
 battle start rejects an impossible same-map position claim. Normal movement,
 500 ms remote interpolation and RTDB publish cadence are unchanged.

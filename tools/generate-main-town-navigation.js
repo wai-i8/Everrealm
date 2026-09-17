@@ -69,7 +69,7 @@ function renderRuntime(packageData, masks) {
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMainTownNavigationGenerated = api;
+  root.EverrealmMainTownNavigationGenerated = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 

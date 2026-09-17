@@ -1,16 +1,16 @@
-# 霧梅爾山地 · Mountain Field
+# 欣梅爾山地 · Mountain Field
 
 - `map_id: field`
 - 類型：山地野外；Biome：`mountain`
-- 目的：主城外野外路線、坑道入口、2★「代客許願」互動與 Lv1–27 初中段遭遇。
+- 目的：主城外野外路線、東南部入口、2★「代客許願」互動與 Lv1–27 初中段遭遇。
 
 ## 拓撲
 
-西側連接 `world`。主要路線大致由西向東，後段在山路彎向北，北端連接 `dungeon`。路線以少量清楚道路與開闊 clearings 組成；路線外大部分空間由密集森林／樹團封閉，不能當作可通行捷徑。
+西側連接 `world`。主要路線大致由西向東，後段在山路彎向北，北端連接 `mountain-southeast`（欣梅爾山地東南部）。路線以少量清楚道路與開闊 clearings 組成；路線外大部分空間由密集森林／樹團封閉，不能當作可通行捷徑。
 
 山地敵人配置在 authored route 與 clearings，避免遮蔽主要導航。山地遭遇沿用既有 `mountain` battlefield context；同一張圖的森林密度與道路可讀性是固定 layout 規則。
 
-入口／出口為 `field-to-world`、`field-to-dungeon`；兩者都是正常可達 physical passage。精確 route、forest mass、enemy spawn 由 `maps/mountain-field.js` 定義；現階段不設寶箱。
+入口／出口為 `field-to-world`、`field-to-mountain-southeast`；兩者都是正常可達 physical passage。精確 route、forest mass、enemy spawn 由 `maps/mountain-field.js` 定義；現階段不設寶箱。
 
 ## 古怪水池互動
 

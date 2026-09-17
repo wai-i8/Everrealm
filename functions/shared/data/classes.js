@@ -20,7 +20,7 @@
   });
 
   const DEFAULT_CLASS_ID = "fighter";
-  const CLASS_IDS = Object.freeze(["warrior", "fighter", "elementalist"]);
+  const CLASS_IDS = Object.freeze(["fighter", "elementalist"]);
 
   function buildLevelTable(classId) {
     return Object.freeze(Array.from({ length: LEVEL_CAP }, (_, index) => {
@@ -38,19 +38,19 @@
   }
 
   const CLASS_LEVEL_TABLES = Object.freeze({
-    warrior: buildLevelTable("warrior"),
     fighter: buildLevelTable("fighter"),
     elementalist: buildLevelTable("elementalist"),
   });
 
   const CLASS_DEFINITIONS = Object.freeze({
-    warrior: Object.freeze({ id: "warrior", starterEquipment: Object.freeze({ weapon: "novice_blade", upperBody: "traveller_coat" }), starterSkills: Object.freeze(["quick_slash", "lantern_shot", "guard_stance"]) }),
     fighter: Object.freeze({ id: "fighter", starterEquipment: Object.freeze({ weapon: "novice_gloves", upperBody: "traveller_coat" }), starterSkills: Object.freeze(["kentotsu"]) }),
     elementalist: Object.freeze({ id: "elementalist", starterEquipment: Object.freeze({ weapon: null, upperBody: "traveller_coat" }), starterSkills: Object.freeze(["little_force", "fireball", "wind_edge"]) }),
   });
 
   function normalizeClassId(value) {
     const id = String(value || "").trim();
+    // One-time save compatibility: the retired Warrior class is now Fighter.
+    if (id === "warrior") return "fighter";
     return CLASS_IDS.includes(id) ? id : DEFAULT_CLASS_ID;
   }
 

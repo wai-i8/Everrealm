@@ -36,7 +36,7 @@
 | `map/*` | 共用常數、map-building helpers、registry、door anchor 與 transition linking |
 | `game.js` | 地圖 registry 的 gameplay consumer；只執行已解析的 transition，不 author 或 patch 地圖 |
 
-目前 registry 由 `map/map-registry.js` 建立 `world`、`field`、`dungeon`、`mountain-south`、`guild`、`shop`、`clinic`、`general-store`、`inn`，再交給 `map/map-transitions.js` 完成互相連接。`world.js` 與 `expansion-world.js` 只保留舊 API 的薄兼容入口，真正的 runtime 定義不在其中。
+目前 registry 由 `map/map-registry.js` 建立 `world`、`field`、`mountain-southeast`、`mountain-south`、`guild`、`shop`、`clinic`、`general-store`、`inn`，再交給 `map/map-transitions.js` 完成互相連接。`world.js` 與 `expansion-world.js` 只保留舊 API 的薄兼容入口，真正的 runtime 定義不在其中。
 
 修改 shared map behavior 時，先讀本文件；修改特定地圖時，讀本文件加上對應 `docs/maps/*.md`；修改 exact runtime layout 時，只編輯該地圖的 owning JS。永久語意／layout rule 改動要同步更新對應 Markdown。
 
@@ -53,7 +53,7 @@
 例如：
 
 - 山地野外遇敵 → 山地／泥土／草地戰場，石、樹、灌木等合理障礙。
-- 沉燈坑道遇敵 → 洞穴岩地，石柱、碎岩、裂地、礦石等。
+- 欣梅爾山地東南部遇敵 → 洞穴岩地，石柱、碎岩、裂地、礦石等。
 - 將來海邊遇敵 → 沙地／濕沙／淺水，礁石、水灘、漂流木等。
 - 將來森林遇敵 → 草地／泥地，樹、樹根、灌木等。
 
@@ -143,23 +143,23 @@ Player, NPC and monster authored render dimensions, the base exploration movemen
 主要特徵：
 
 - 西面接主城。
-- 主要道路由西向東，再通往北面坑道。
+- 主要道路由西向東，再通往北面嘅欣梅爾山地東南部。
 - 山地／泥土／草地／岩石環境。
 - 樹林可以構成真正不可通行邊界；主路下緣保留較闊 canopy visual buffer，避免樹冠遮住玩家。
 - 普通怪物可以喺合理區域活動及觸發遭遇。
 - 戰鬥場景預設使用 `mountain` biome。
 
-### 3.3 沉燈坑道
+### 3.3 欣梅爾山地東南部
 
-主要洞穴／地下探索地圖。
+第二張山地探索地圖，沿用 authored mountain-road scene。
 
 主要特徵：
 
-- 岩地。
-- 石柱、瓦礫、裂地、礦石、洞穴物件。
-- 可以包含較狹窄通道。
-- 可放置較高階怪物、採掘資源及 Boss／任務內容。
-- 戰鬥場景預設使用 `cave` biome。
+- 使用 `assets/field/vanmer-mountains-2.jpg` 作 flattened background。
+- 以 paired walkable mask 決定可行區域及兩個 physical passage。
+- 南端連接 `field`，西側連接 `mountain-south`。
+- 目前放置沼澤蛙、灰原郊狼、苔甲龜及噴毒蛇等普通怪物。
+- 戰鬥場景沿用 `mountain` biome。
 
 ---
 
@@ -198,7 +198,6 @@ Player, NPC and monster authored render dimensions, the base exploration movemen
 type:
 world
 interior
-dungeon
 special
 ```
 
@@ -218,7 +217,7 @@ special
 | --- | --- |
 | `world` | `maps/main-town.js` |
 | `field` | `maps/mountain-field.js` |
-| `dungeon` | `maps/mine.js` |
+| `mountain-southeast` | `maps/mountain-southeast.js` |
 | `mountain-south` | `maps/mountain-south.js` |
 | `guild` | `maps/interiors/guild.js` |
 | `shop` | `maps/interiors/equipment-shop.js` |
@@ -237,7 +236,7 @@ special
 - 讀取主城 authored navigation package 的 building trigger、threshold、approach anchor。
 - 將 exact authored doorway contract 解析成 physical `interactionMode: "door"` transition；舊 bitmap sprite anchor 只保留畀 legacy map consumers。
 - 建立主城五個服務入口與室內 `*-to-world` 回程的對應。
-- 將 `field ↔ world`、`field ↔ dungeon`、`dungeon ↔ mountain-south` 保持為 physical passage。
+- 將 `field ↔ world`、`field ↔ mountain-southeast`、`mountain-southeast ↔ mountain-south` 保持為 physical passage。
 - 以 `targetSpawn` 優先解析 arrival；`targetPosition` 只作兼容 fallback。
 - 建築門口 transition 另保存可見 doorway anchor、精準 threshold、approach point、`returnSpawn`、`returnPosition` 與 `returnFacing`；城外返回位置由 owning map 明確提供，不能用通用 `door.y + 34` 類像素偏移推算。
 
@@ -245,7 +244,7 @@ special
 
 - `physical-door`：建築門口與室內門。
 - `physical-gate`：城門或具有門閘語意的出入口。
-- `physical-passage`：洞口、坑道或普通通道。
+- `physical-passage`：山路、普通通道或其他非門戶式連接。
 - `magic-teleport`：真正的超自然瞬間傳送。
 
 Renderer 先讀 `transitionType`，再決定實體門／通道或魔法 marker；舊 `kind: "portal"` 不會自行觸發 magic VFX。真正魔法傳送若日後加入，必須明確使用 `magic-teleport`。
@@ -1036,8 +1035,8 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 
 - 主城 → 山地。
 - 山地 → 主城。
-- 山地 → 坑道。
-- 坑道 → 山地。
+- 山地 → 山地東南部。
+- 山地東南部 → 山地／山地南部。
 - target spawn 合法。
 - entrance image resize 不改 teleport trigger。
 
@@ -1051,7 +1050,6 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 ### Encounter context
 
 - mountain encounter → mountain battle theme。
-- cave encounter → cave battle theme。
 - town 普通區域唔 random encounter。
 - 同 seed 可重現同 layout。
 - 不同 local environment 可以改 obstacle weighting。
@@ -1088,10 +1086,10 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 - 障礙物同 grid 對位。
 - blocker 視覺位置同 gameplay cell 一致。
 
-坑道實際遇敵：
+山地東南部實際遇敵：
 
-- 明顯係洞穴／岩地。
-- props 唔混入無關嘅戶外街燈／樹。
+- 戰場延續山地 biome，而唔係切換成另一套地下場景。
+- props、背景同探索區域保持一致。
 
 ### Grid
 
@@ -1109,15 +1107,14 @@ Familiar 探索 visual anchor 仍由 `ART_PIPELINE.md` 負責。
 
 第一階段 Map System 至少完成：
 
-1. 主城、山地、坑道正式登錄 map registry。
+1. 主城及三張現役山地 map 正式登錄 map registry。
 2. 入口／出口／teleport data-driven。
 3. collision 同圖片外框分離。
 4. encounter zone。
 5. BattleContext。
 6. biome → battle theme。
 7. mountain battle theme。
-8. cave battle theme。
-9. town special battle theme interface。
+8. town special battle theme interface。
 10. local environment → obstacle weighting。
 11. deterministic battlefield seed。
 12. semantic terrain／obstacle ID。

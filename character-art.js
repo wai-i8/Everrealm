@@ -1,9 +1,9 @@
 (function (root, factory) {
   "use strict";
 
-  const api = factory(typeof module === "object" && module.exports ? require("./locomotion.js") : root.LanternLocomotion);
+  const api = factory(typeof module === "object" && module.exports ? require("./locomotion.js") : root.EverrealmLocomotion);
   if (typeof module === "object" && module.exports) module.exports = api;
-  else root.LanternArt = api;
+  else root.EverrealmArt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Locomotion) {
   "use strict";
 
@@ -12,7 +12,7 @@
     player: Object.freeze({
       skin: "#f3c9a5", skinShade: "#d99d7c", hair: "#17253f", hairLight: "#294568",
       outfit: "#286a70", outfitDark: "#17444d", accent: "#ffc857", scarf: "#ef6f6c",
-      shoe: "#172238", eye: "#172238", outline: "#101827", accessory: "lantern",
+      shoe: "#172238", eye: "#172238", outline: "#101827", accessory: "none",
     }),
     keeper: Object.freeze({
       skin: "#f0c29d", skinShade: "#d89475", hair: "#3d2635", hairLight: "#724052",
@@ -42,15 +42,11 @@
   });
 
   const enemyPresets = Object.freeze({
-    slime: Object.freeze({ body: "#7c75c9", shade: "#514b91", light: "#c3bdf5", eye: "#25203b", accent: "#8ce4c5", outline: "#292643" }),
-    wisp: Object.freeze({ body: "#b59bf0", shade: "#715aa8", light: "#fff4ff", eye: "#40335e", accent: "#70e7dc", outline: "#493b69" }),
-    hound: Object.freeze({ body: "#59677d", shade: "#354052", light: "#9ba9b7", eye: "#ffcf65", accent: "#e66b75", outline: "#202838" }),
     boss: Object.freeze({ body: "#683f72", shade: "#3b294b", light: "#a871a7", eye: "#ffc857", accent: "#ff6b91", outline: "#251b36" }),
     chick: Object.freeze({ body: "#d89d42", shade: "#9d632e", light: "#ffe0a0", eye: "#28202a", accent: "#fff0b2", outline: "#493020" }),
     fox: Object.freeze({ body: "#c9783e", shade: "#7d412b", light: "#ffe0ac", eye: "#2b2023", accent: "#f7a64f", outline: "#4b2c24" }),
     raccoon: Object.freeze({ body: "#7c6656", shade: "#443b3b", light: "#c8b49d", eye: "#242031", accent: "#a8d2c0", outline: "#302737" }),
     blackcat: Object.freeze({ body: "#4b4355", shade: "#25212f", light: "#a89bad", eye: "#ffb52f", accent: "#d8748a", outline: "#181521" }),
-    wild_boar: Object.freeze({ body: "#9a684c", shade: "#5a3b34", light: "#d6a47d", eye: "#2a2020", accent: "#f2c084", outline: "#442c2a" }),
     bear: Object.freeze({ body: "#a66f45", shade: "#67402f", light: "#e1b28c", eye: "#2a2020", accent: "#f0b75c", outline: "#4d302a" }),
     turtle: Object.freeze({ body: "#817548", shade: "#4f4a31", light: "#d1bb72", eye: "#26221e", accent: "#a8d56e", outline: "#373625" }),
     coyote: Object.freeze({ body: "#87786f", shade: "#4d4647", light: "#c6b8ae", eye: "#26212d", accent: "#d9a95e", outline: "#37313a" }),
@@ -62,21 +58,11 @@
   // an atlas cell.  The facing atlases intentionally include transparent
   // breathing room, so a cell edge is not a reliable visual anchor.
   const monsterVisualProfiles = Object.freeze({
-    slime: Object.freeze({ nameLift: 56, nameOffsetX: 0 }),
-    wisp: Object.freeze({ nameLift: 58, nameOffsetX: 0 }),
-    hound: Object.freeze({ nameLift: 58, nameOffsetX: 0 }),
     boss: Object.freeze({ nameLift: 80, nameOffsetX: 0 }),
-    mossbun: Object.freeze({ nameLift: 56, nameOffsetX: 0 }),
-    mistwing: Object.freeze({ nameLift: 62, nameOffsetX: 0 }),
-    cragboar: Object.freeze({ nameLift: 60, nameOffsetX: 0 }),
-    hollowmage: Object.freeze({ nameLift: 64, nameOffsetX: 0 }),
-    "lantern-golem": Object.freeze({ nameLift: 72, nameOffsetX: 0 }),
-    deepwarden: Object.freeze({ nameLift: 82, nameOffsetX: 0 }),
     chick: Object.freeze({ nameLift: 58, nameOffsetX: 0 }),
     fox: Object.freeze({ nameLift: 62, nameOffsetX: 0 }),
     raccoon: Object.freeze({ nameLift: 60, nameOffsetX: 0 }),
     blackcat: Object.freeze({ nameLift: 70, nameOffsetX: 0 }),
-    wild_boar: Object.freeze({ nameLift: 68, nameOffsetX: 0 }),
     bear: Object.freeze({ nameLift: 84, nameOffsetX: 0 }),
     turtle: Object.freeze({ nameLift: 72, nameOffsetX: 0 }),
     coyote: Object.freeze({ nameLift: 64, nameOffsetX: 0 }),
@@ -94,7 +80,7 @@
   });
 
   function locomotionWorldFrame(id) {
-    return ["fighter", "fighterFemale", "warrior"].includes(id)
+    return ["fighter", "fighterFemale"].includes(id)
       ? locomotionWorldFrames.player
       : locomotionWorldFrames.monster;
   }
@@ -172,7 +158,6 @@
     lamp: 9,
     sign: 10,
     chest: 11,
-    shrine: 12,
     questBoard: 13,
     barrelCrate: 14,
     well: 15,
@@ -207,7 +192,6 @@
     lamp: Object.freeze({ category: "human-height-prop", scale: 1.32 }),
     sign: Object.freeze({ category: "waist-height-prop", scale: 1 }),
     chest: Object.freeze({ category: "waist-height-prop", scale: 1 }),
-    shrine: Object.freeze({ category: "large-prop", scale: 1.28 }),
     questBoard: Object.freeze({ category: "human-height-prop", scale: 1.12 }),
     barrelCrate: Object.freeze({ category: "waist-height-prop", scale: 1 }),
     well: Object.freeze({ category: "large-prop", scale: 1.12 }),
@@ -225,7 +209,7 @@
     guildWood: 4,
     interiorWall: 5,
     shopWood: 6,
-    dungeonStone: 7,
+    rockFloor: 7,
     guildRug: 8,
     shopRug: 9,
     riverBank: 10,
@@ -248,16 +232,7 @@
   });
 
   const monsterSpriteIndices = Object.freeze({
-    slime: Object.freeze({ atlas: "monstersCore", row: 0 }),
-    wisp: Object.freeze({ atlas: "monstersCore", row: 1 }),
-    hound: Object.freeze({ atlas: "monstersCore", row: 2 }),
     boss: Object.freeze({ atlas: "monstersCore", row: 3 }),
-    mossbun: Object.freeze({ atlas: "monstersCore", row: 4 }),
-    mistwing: Object.freeze({ atlas: "monstersDepths", row: 0 }),
-    cragboar: Object.freeze({ atlas: "monstersDepths", row: 1 }),
-    hollowmage: Object.freeze({ atlas: "monstersDepths", row: 2 }),
-    "lantern-golem": Object.freeze({ atlas: "monstersDepths", row: 3 }),
-    deepwarden: Object.freeze({ atlas: "monstersDepths", row: 4 }),
     // Canonical ordinary monsters resolve through the shared 28-frame
     // locomotion atlases registered from Locomotion.assets above. These
     // entries intentionally carry no static four-facing fallback metadata.
@@ -265,7 +240,6 @@
     fox: Object.freeze({ locomotion: true }),
     raccoon: Object.freeze({ locomotion: true }),
     blackcat: Object.freeze({ locomotion: true }),
-    wild_boar: Object.freeze({ locomotion: true }),
     bear: Object.freeze({ locomotion: true }),
     turtle: Object.freeze({ locomotion: true }),
     coyote: Object.freeze({ locomotion: true }),
@@ -375,7 +349,7 @@
           atlas.alphaBounds = scanAtlasAlphaBounds(atlas);
         }
         if (typeof globalThis.dispatchEvent === "function" && typeof CustomEvent === "function") {
-          globalThis.dispatchEvent(new CustomEvent("lantern-art-ready", { detail: { src: atlas.src } }));
+          globalThis.dispatchEvent(new CustomEvent("everrealm-art-ready", { detail: { src: atlas.src } }));
         }
       });
       image.addEventListener("error", () => { atlas.failed = true; });
@@ -855,7 +829,7 @@
 
   function drawBitmapCharacter(ctx, settings) {
     if ((settings.actor || settings.kind) === "player") {
-      const id = Locomotion.assetKeyForCharacter?.(settings.classId || "warrior", settings.gender) || settings.classId || "warrior";
+      const id = Locomotion.assetKeyForCharacter?.(settings.classId || "fighter", settings.gender) || settings.classId || "fighter";
       const battleDiagonal = drawBattleFighterDiagonal(ctx, settings);
       if (battleDiagonal) return battleDiagonal;
       if (["attack", "hurt", "stop"].includes(settings.state)) {
@@ -1406,7 +1380,7 @@
   }
 
   function enemyPaletteFor(type, overrides) {
-    const base = enemyPresets[type] || enemyPresets.slime;
+    const base = enemyPresets[type] || enemyPresets.chick;
     return Object.assign({}, base, overrides || {});
   }
 
@@ -1704,7 +1678,7 @@
   function drawBoss(ctx, palette, phase, state) {
     const breathe = 1 + Math.sin(phase * 2.3) * .035;
     ctx.save(); ctx.scale(breathe, 1 / breathe);
-    // Mist tails fan out behind the round body.
+    // Trailing tails fan out behind the round body.
     ctx.globalAlpha = .55;
     [-1, 0, 1].forEach((side) => {
       ctx.strokeStyle = side === 0 ? palette.accent : palette.light;

@@ -7,7 +7,7 @@
 
 ## 拓撲
 
-東面 authored cyan passage 雙向連接 `dungeon`（欣梅爾山地東南部）西面 cyan passage。兩邊 cyan 只係 transition trigger；玩家到達另一張圖時必須落在相鄰白色道路的安全 spawn，而不是 cyan 區內。
+東面 authored cyan passage 雙向連接 `mountain-southeast`（欣梅爾山地東南部）西面 cyan passage。兩邊 cyan 只係 transition trigger；玩家到達另一張圖時必須落在相鄰白色道路的安全 spawn，而不是 cyan 區內。
 
 北面 cyan passage 現階段保留作未來連接，不建立 runtime transition。
 

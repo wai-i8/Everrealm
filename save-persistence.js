@@ -6,7 +6,6 @@
 
   const KEYS = Object.freeze({
     save: "everrealm-save-v1",
-    legacy: Object.freeze(["lanternbound-save-v1"]),
     owner: "everrealm-save-owner-v1",
     cachePrefix: "everrealm-save-cache-v1:",
     legacyCache: "everrealm-save-cache-v1:legacy",
@@ -60,7 +59,7 @@
     }
 
     function readLegacySave() {
-      for (const key of [KEYS.save, ...KEYS.legacy]) {
+      for (const key of [KEYS.save]) {
         const data = parseValid(key);
         if (data) return { data, key };
       }
@@ -79,7 +78,7 @@
     }
 
     function clearLegacyGameplayKeys() {
-      for (const key of [KEYS.save, ...KEYS.legacy, KEYS.owner, KEYS.legacyCache]) removeItem(key);
+      for (const key of [KEYS.save, KEYS.owner, KEYS.legacyCache]) removeItem(key);
       for (const key of storageKeys()) {
         if (key.startsWith(KEYS.cachePrefix)) removeItem(key);
       }

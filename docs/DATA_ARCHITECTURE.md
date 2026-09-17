@@ -11,7 +11,7 @@ Everrealm separates fixed game definitions from runtime/player state. A fixed en
 - `data/equipment.js` — active and legacy-only equipment records, shop membership and icon/art metadata.
 - `data/monsters.js` — monster identities, combat skills, drops, ecology and exploration tuning.
 - `data/quests.js` — current fixed Guild Commission definitions.
-- `data/skills/warrior.js` / `data/skills/fighter.js` — player skill definitions.
+- `data/skills/fighter.js` / `data/skills/elementalist.js` — player skill definitions.
 
 Runtime logic remains in `expansion-core.js`, `map/monster-blueprints.js`, `guild-commission-core.js`, `skill-core.js` and `game.js`.
 
@@ -25,6 +25,6 @@ Fixed Game Data remains version-controlled with the build. Firebase Auth supplie
 
 `firebase-client.js` is the small browser SDK boundary, `cloud-save.js` owns the Firestore document contract, and `save-persistence.js` owns cloud resolution, the explicit one-time legacy migration and queued Firestore writes. `game.js` owns gameplay serialization/application but does not define a second cloud schema. Gameplay startup is closed until Firebase Auth has resolved and the authenticated UID has a cloud-ready Firestore session.
 
-Normal runtime never reads or writes gameplay localStorage. The historical keys `everrealm-save-v1`, `lanternbound-save-v1`, `everrealm-save-owner-v1` and `everrealm-save-cache-v1:{uid}` are retained only as migration inputs/cleanup targets. If an authenticated UID has no cloud document and a valid historical local save exists, the player must explicitly choose whether to migrate it; successful `createIfAbsent` migration removes those gameplay keys. Existing cloud data always wins, migration failures preserve the old keys, and Firestore failures never create a persistent local fallback.
+Normal runtime never reads or writes gameplay localStorage. The historical Everrealm keys `everrealm-save-v1`, `everrealm-save-owner-v1` and `everrealm-save-cache-v1:{uid}` are retained only as migration inputs/cleanup targets. If an authenticated UID has no cloud document and a valid historical local save exists, the player must explicitly choose whether to migrate it; successful `createIfAbsent` migration removes those gameplay keys. Existing cloud data always wins, migration failures preserve the old keys, and Firestore failures never create a persistent local fallback.
 
 Firestore rules allow a user to read or write only their own `players/{uid}` document. Phase 2 adds Realtime Database as a separate transient boundary for presence and same-map player state; it never becomes a permanent save store. See `docs/REALTIME_SYSTEM.md` for its exact records and lifecycle. Hosting and server-authoritative systems remain outside this phase.

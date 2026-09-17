@@ -60,8 +60,8 @@
     "id": "guild_hunt_frog_5star",
     "star": 5,
     "type": "hunt",
-    "title": "霧沼蛙討伐",
-    "description": "處理積水地帶出沒的霧沼蛙，避免牠們用長舌同黏液封住前路。",
+    "title": "沼澤蛙討伐",
+    "description": "處理積水地帶出沒的沼澤蛙，避免牠們用長舌同黏液封住前路。",
     "recommendedLevel": 21,
     "repeatable": true,
     "objective": {

@@ -10,7 +10,6 @@ const {
   healingPotionResult,
   weakPotionResult,
   clinicHealResult,
-  shrineRestResult,
   reviveResult,
 } = require("./game-rules");
 const ServerGame = require("./server-game");
@@ -104,7 +103,13 @@ exports.playerStateCommand = onCall({ region: REGION, maxInstances: 20 }, async 
     }
 
     const patch = PlayerState.clientOwnedPatch(existing, payload, { nowMs });
-    transaction.update(playerRef, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+    transaction.update(playerRef, {
+      ...patch,
+      "expansion.checkpoint": FieldValue.delete(),
+      "expansion.dungeonClears": FieldValue.delete(),
+      "expansion.defeatedDungeonBosses": FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
     return { ok: true, saved: true, data: PlayerState.mergeClientOwnedState(existing, patch) };
   });
 });
@@ -150,8 +155,7 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
   assertCommandVersion(request);
 
   const action = String(request.data?.action || "").trim();
-  const shrineId = String(request.data?.shrineId || "").trim();
-  if (!["clinic", "shrine", "revive_here", "respawn_town"].includes(action)) {
+  if (!["clinic", "revive_here", "respawn_town"].includes(action)) {
     return { ok: false, reason: "unsupported-action", action };
   }
 
@@ -177,29 +181,6 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
       return { ...result, positionValidated: positionCheck.positionValidated };
     }
 
-    if (action === "shrine") {
-      const positionCheck = ServerGame.validateGameplayInteraction(
-        save,
-        request.data || {},
-        "echo-lantern-shrine",
-        { nowMs: Date.now() },
-      );
-      if (!positionCheck.ok) return positionCheck;
-      const validatedSave = positionCheck.state;
-      const result = shrineRestResult(validatedSave, shrineId);
-      if (!result.ok) return result;
-      transaction.update(playerRef, {
-        "player.hp": result.player.hp,
-        "player.x": validatedSave.player.x,
-        "player.y": validatedSave.player.y,
-        "expansion.positionAuthority": validatedSave.expansion.positionAuthority,
-        "expansion.checkpoint.mapId": result.checkpoint.mapId,
-        "expansion.checkpoint.x": result.checkpoint.x,
-        "expansion.checkpoint.y": result.checkpoint.y,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return { ...result, positionValidated: positionCheck.positionValidated };
-    }
 
     const returnToTown = action === "respawn_town";
     const result = reviveResult(save, { returnToTown });
@@ -238,9 +219,13 @@ async function runAuthoritativeCommand(request, command) {
     const result = command(save, request.data || {}, { nowMs: Date.now() });
     if (!result?.ok || !result.state) return result;
     const payload = result.state;
+    const expansion = { ...(save.expansion || {}), ...(payload.expansion || {}) };
+    delete expansion.checkpoint;
+    delete expansion.dungeonClears;
+    delete expansion.defeatedDungeonBosses;
     transaction.update(playerRef, {
       player: { ...(save.player || {}), ...(payload.player || {}) },
-      expansion: { ...(save.expansion || {}), ...(payload.expansion || {}) },
+      expansion,
       openedChests: Array.isArray(payload.openedChests) ? payload.openedChests : (save.openedChests || []),
       updatedAt: FieldValue.serverTimestamp(),
     });

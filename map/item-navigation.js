@@ -1,9 +1,9 @@
 (function (root, factory) {
-  const generic = root.LanternFlattenedNavigation || (typeof require === "function" ? require("./flattened-navigation.js") : null);
-  const generated = root.LanternItemNavigationGenerated || (typeof require === "function" ? require("./item-navigation.generated.js") : null);
+  const generic = root.EverrealmFlattenedNavigation || (typeof require === "function" ? require("./flattened-navigation.js") : null);
+  const generated = root.EverrealmItemNavigationGenerated || (typeof require === "function" ? require("./item-navigation.generated.js") : null);
   const api = factory(generic, generated);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternItemNavigation = api;
+  root.EverrealmItemNavigation = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (generic, generated) {
   "use strict";
   const resolver = generic.createResolver(generated, { scene: "item", authoringImage: "assets/item/item_walkable.png", npcId: "store-merchant-gin" });

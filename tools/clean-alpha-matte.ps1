@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
-if (-not ("LanternAlphaCleaner" -as [type])) {
+if (-not ("EverrealmAlphaCleaner" -as [type])) {
   Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -24,7 +24,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 
-public static class LanternAlphaCleaner
+public static class EverrealmAlphaCleaner
 {
     private static bool IsPaleNeutral(byte b, byte g, byte r, int floor, int spread)
     {
@@ -153,7 +153,7 @@ public static class LanternAlphaCleaner
 
 $sourcePath = (Resolve-Path -LiteralPath $Source).Path
 $destinationPath = [System.IO.Path]::GetFullPath($Destination)
-[LanternAlphaCleaner]::Clean($sourcePath, $destinationPath, $Mode -eq "checker", $EdgePasses)
+[EverrealmAlphaCleaner]::Clean($sourcePath, $destinationPath, $Mode -eq "checker", $EdgePasses)
 
 $result = [System.Drawing.Bitmap]::FromFile($destinationPath)
 try {

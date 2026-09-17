@@ -25,14 +25,14 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
-if (-not ("LanternAlphaAudit" -as [type])) {
+if (-not ("EverrealmAlphaAudit" -as [type])) {
   Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
-public sealed class LanternAlphaAuditResult
+public sealed class EverrealmAlphaAuditResult
 {
     public string Path;
     public int Width;
@@ -44,9 +44,9 @@ public sealed class LanternAlphaAuditResult
     public bool CornersTransparent;
 }
 
-public static class LanternAlphaAudit
+public static class EverrealmAlphaAudit
 {
-    public static LanternAlphaAuditResult Inspect(string path)
+    public static EverrealmAlphaAuditResult Inspect(string path)
     {
         using (var input = new Bitmap(path))
         using (var bitmap = new Bitmap(input.Width, input.Height, PixelFormat.Format32bppArgb))
@@ -57,7 +57,7 @@ public static class LanternAlphaAudit
                 graphics.DrawImageUnscaled(input, 0, 0);
             }
 
-            var result = new LanternAlphaAuditResult {
+            var result = new EverrealmAlphaAuditResult {
                 Path = path,
                 Width = bitmap.Width,
                 Height = bitmap.Height,
@@ -105,7 +105,7 @@ public static class LanternAlphaAudit
 $failed = $false
 $rows = foreach ($path in $Paths) {
   $resolved = (Resolve-Path -LiteralPath $path).Path
-  $result = [LanternAlphaAudit]::Inspect($resolved)
+  $result = [EverrealmAlphaAudit]::Inspect($resolved)
   $total = [double]($result.Width * $result.Height)
   $ratio = $result.Transparent / $total
   $ok = $result.CornersTransparent -and $ratio -ge $MinimumTransparentRatio -and $result.DirtyTransparentRgb -eq 0

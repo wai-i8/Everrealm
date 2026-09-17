@@ -36,7 +36,7 @@ test("normal client save can only change cosmetic gender, move, advance play tim
     player: { gender: "female", x: 88, y: 99, coins: 99999, hp: 99999 },
     playTime: 120,
     expansion: {
-      currentMapId: "dungeon",
+      currentMapId: "mountain-southeast",
       inventory: { weak_potion: 999 },
       weakPotion: { stepsRemaining: 90, distanceRemainder: 3 },
     },
@@ -54,7 +54,7 @@ test("normal client save can only change cosmetic gender, move, advance play tim
 });
 
 test("client save cannot increase weak potion steps or rewind play time", () => {
-  const current = canonicalInitialSave({ player: { x: 10, y: 20 }, expansion: { classId: "warrior" } });
+  const current = canonicalInitialSave({ player: { x: 10, y: 20 }, expansion: { classId: "fighter" } });
   current.playTime = 1000;
   current.expansion.weakPotion = { stepsRemaining: 20, distanceRemainder: 1 };
   const patch = clientOwnedPatch(current, {
@@ -63,6 +63,32 @@ test("client save cannot increase weak potion steps or rewind play time", () => 
   });
   assert.equal(patch.playTime, 1000);
   assert.equal(patch["expansion.weakPotion.stepsRemaining"], 20);
+});
+
+
+test("legacy Warrior and dungeon save ids are migrated to current Fighter and mountain map ids", () => {
+  const current = canonicalInitialSave(
+    { player: { x: 100, y: 200 }, expansion: { classId: "fighter" } },
+    { nowMs: 100000 },
+  );
+  current.expansion.classId = "warrior";
+  current.expansion.currentMapId = "dungeon";
+  current.expansion.positionAuthority = {
+    version: 1,
+    mapId: "dungeon",
+    x: 100,
+    y: 200,
+    validatedAtMs: 100000,
+    anomalyCount: 0,
+    lastAnomalyAtMs: 0,
+  };
+  const patch = clientOwnedPatch(current, { player: { x: 110, y: 205 } }, { nowMs: 100100 });
+  const next = mergeClientOwnedState(current, patch);
+  assert.equal(next.expansion.classId, "fighter");
+  assert.equal(next.expansion.currentMapId, "mountain-southeast");
+  assert.equal(next.expansion.positionAuthority.mapId, "mountain-southeast");
+  assert.equal(next.expansion.positionAuthority.x, 110);
+  assert.equal(next.expansion.positionAuthority.y, 205);
 });
 
 test("Step 9A creates a server-owned position authority anchor without changing saved movement", () => {

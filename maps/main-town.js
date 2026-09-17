@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
-  const navigationApi = root.LanternMainTownNavigation || (typeof require === "function" ? require("../map/main-town-navigation.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
+  const navigationApi = root.EverrealmMainTownNavigation || (typeof require === "function" ? require("../map/main-town-navigation.js") : null);
   const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMainTownMap = api;
+  root.EverrealmMainTownMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi) {
   "use strict";
 
@@ -161,7 +161,6 @@
       eastGateInside: eastAnchor,
     };
     const spawnFacings = { guildFront: "down", shopFront: "down", clinicFront: "down", generalStoreFront: "down", innFront: "down", eastGateInside: "right" };
-    const shrine = null;
     const npcs = [];
     const signs = [];
     const chests = [];
@@ -218,7 +217,6 @@
       flowers: [],
       lamps: [],
       npcs,
-      shrine,
       signs,
       boards: [deckInteraction],
       portals: [eastPortal],

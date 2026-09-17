@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
-  const helpers = root.LanternInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
-  const navigationApi = root.LanternGuildNavigation || (typeof require === "function" ? require("../../map/guild-navigation.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
+  const helpers = root.EverrealmInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
+  const navigationApi = root.EverrealmGuildNavigation || (typeof require === "function" ? require("../../map/guild-navigation.js") : null);
   const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternGuildMap = api;
+  root.EverrealmGuildMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, interior, navigationApi) {
   "use strict";
   const { MAP_IDS, TILES } = constants;
@@ -32,8 +32,8 @@
       rect(8.5, 9.7, 5, 1, { id: "guild-lounge-table", kind: "table", name: "公會休憩桌", zone: "waiting-lounge", render: false, solid: false }),
     ];
     const decorations = [
-      { id: "guild-banner-left", kind: "banner", ...point(6, 1), color: "#e7ad48", emblem: "lantern", solid: false, render: false, zone: "reception-admin" },
-      { id: "guild-banner-right", kind: "banner", ...point(15, 1), color: "#e7ad48", emblem: "lantern", solid: false, render: false, zone: "reception-admin" },
+      { id: "guild-banner-left", kind: "banner", ...point(6, 1), color: "#e7ad48", emblem: "guild", solid: false, render: false, zone: "reception-admin" },
+      { id: "guild-banner-right", kind: "banner", ...point(15, 1), color: "#e7ad48", emblem: "guild", solid: false, render: false, zone: "reception-admin" },
       { id: "guild-fireplace", kind: "fireplace", ...point(10.5, 1), radius: 22, glow: "#ffb35c", solid: false, render: false, zone: "reception-admin" },
       { id: "guild-lamp-west", kind: "wallSconce", ...point(5, 6), radius: 8, solid: false, render: false, zone: "waiting-lounge" },
       { id: "guild-lamp-east", kind: "wallSconce", ...point(16, 6), radius: 8, solid: false, render: false, zone: "waiting-lounge" },

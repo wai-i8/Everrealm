@@ -9,28 +9,10 @@
     { id: "healing_potion", name: "小型回復藥", description: "回復 150 HP。", iconIndex: 0, kind: "consumable" },
     { id: "weak_potion", name: "弱氣之藥", description: "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。", iconIndex: 0, iconSrc: "assets/items/weak-potion-v1.png", kind: "consumable" },
     { id: "bright_feather", name: "亮羽", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "fox_fang", name: "霧狐尖牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "lantern_pelt", name: "燈紋毛皮", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "boar_tusk", name: "野豬獠牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "bear_claw", name: "岩穴熊爪", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "moss_shell", name: "苔甲碎片", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
     { id: "coyote_fang", name: "郊狼尖牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "mist_gland", name: "霧蛙腺囊", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "venom_sac", name: "毒霧囊", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "warden_lens", name: "看守者霧鏡", description: "深霧看守者的稀有霧鏡，映著地城最深處。", iconIndex: 14, kind: "material" },
-  ].map(Object.freeze));
-
-  const LEGACY_ITEMS = Object.freeze([
-    { id: "lamp_dust", name: "燈晶粉", description: "公會用來修補燈具的幼細晶粉。", iconIndex: 4, kind: "material", legacyOnly: true },
-    { id: "hound_fang", name: "獵犬牙", description: "霧犬留下的硬牙，可以磨成護符。", iconIndex: 5, kind: "material", legacyOnly: true },
-    { id: "bright_spore", name: "亮光孢子", description: "會在黑暗中發光的孢子。", iconIndex: 6, kind: "material", legacyOnly: true },
-    { id: "moth_scale", name: "晶翅鱗粉", description: "薄而閃亮的晶翅鱗粉。", iconIndex: 7, kind: "material", legacyOnly: true },
-    { id: "golem_core", name: "石像核心", description: "失控燈偶留下的動力核心。", iconIndex: 8, kind: "material", legacyOnly: true },
-    { id: "deep_crystal", name: "深層晶石", description: "只會在深層濃霧凝結的紫晶。", iconIndex: 9, kind: "material", legacyOnly: true },
-    { id: "moss_jelly", name: "青苔啫喱", description: "苔糰子留下的青苔啫喱。", iconIndex: 10, kind: "material", legacyOnly: true },
-    { id: "mist_wing", name: "霧翼膜", description: "幾乎沒有重量的翼膜。", iconIndex: 11, kind: "material", legacyOnly: true },
-    { id: "crag_tusk", name: "岩豚短牙", description: "岩甲小豚留下的硬牙。", iconIndex: 12, kind: "material", legacyOnly: true },
-    { id: "hollow_rune", name: "空殼符片", description: "空殼術士身上剝落的古老符片。", iconIndex: 13, kind: "material", legacyOnly: true },
   ].map(Object.freeze));
 
   function skillBookRankLabel(rank) {
@@ -48,23 +30,13 @@
 
   const ITEM_ID_ALIASES = Object.freeze({
     "bright-feather": "bright_feather",
-    "fox-fang": "fox_fang",
-    "lantern-pelt": "lantern_pelt",
     "boar-tusk": "boar_tusk",
     "bear-claw": "bear_claw",
     "moss-shell": "moss_shell",
     "coyote-fang": "coyote_fang",
-    "mist-gland": "mist_gland",
-    "venom-sac": "venom_sac",
-    "warden-lens": "warden_lens",
-    "golem-core": "golem_core",
-    "moss-jelly": "moss_jelly",
-    "mist-wing": "mist_wing",
-    "crag-tusk": "crag_tusk",
-    "hollow-rune": "hollow_rune",
   });
 
-  const ITEM_CATALOG = Object.freeze([...ACTIVE_ITEMS, ...LEGACY_ITEMS, ...UI_ITEMS]);
+  const ITEM_CATALOG = Object.freeze([...ACTIVE_ITEMS, ...UI_ITEMS]);
   const ITEM_BY_ID = Object.freeze(Object.fromEntries(ITEM_CATALOG.map((item) => [item.id, item])));
 
   function normalizeItemId(value) {
@@ -92,5 +64,5 @@
     return result;
   }
 
-  return { ACTIVE_ITEMS, LEGACY_ITEMS, UI_ITEMS, ITEM_CATALOG, ITEM_BY_ID, ITEM_ID_ALIASES, normalizeItemId, getItem, normalizeInventory };
+  return { ACTIVE_ITEMS, UI_ITEMS, ITEM_CATALOG, ITEM_BY_ID, ITEM_ID_ALIASES, normalizeItemId, getItem, normalizeInventory };
 });

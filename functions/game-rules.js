@@ -8,9 +8,7 @@ const HEALING_POTION_BASE_HEAL = 30;
 const HEALING_POTION_HEAL = HEALING_POTION_BASE_HEAL * HP_SCALE;
 const WEAK_POTION_TOTAL_STEPS = 500;
 const WEAK_POTION_WORLD_UNITS_PER_STEP = 32;
-const ECHO_LANTERN_SHRINE_ID = "echo-lantern-shrine";
-const ECHO_LANTERN_CHECKPOINT = Object.freeze({ mapId: "dungeon", x: 4722, y: 4680 });
-const CLASS_IDS = new Set(["warrior", "fighter", "elementalist"]);
+const CLASS_IDS = new Set(["fighter", "elementalist"]);
 const LEVEL_EXP_REQUIREMENTS = Object.freeze({
   1: 250, 2: 260, 3: 270, 4: 290, 5: 310,
   6: 340, 7: 370, 8: 410, 9: 450, 10: 500,
@@ -34,6 +32,7 @@ function clamp(value, min, max) {
 
 function normalizeClassId(value) {
   const id = String(value || "").trim();
+  if (id === "warrior") return "fighter";
   return CLASS_IDS.has(id) ? id : "fighter";
 }
 
@@ -164,24 +163,6 @@ function clinicHealResult(save) {
   };
 }
 
-function shrineRestResult(save, shrineId) {
-  const player = save?.player || {};
-  const expansion = save?.expansion || {};
-  const currentMapId = String(expansion.currentMapId || "");
-  const requestedShrineId = String(shrineId || "").trim();
-  if (currentMapId !== ECHO_LANTERN_CHECKPOINT.mapId) return { ok: false, reason: "wrong-map" };
-  if (requestedShrineId !== ECHO_LANTERN_SHRINE_ID) return { ok: false, reason: "unknown-shrine" };
-
-  const level = clamp(whole(player.level, 1), 1, LEVEL_CAP);
-  const maxHp = classMaxHp(expansion.classId, level);
-  return {
-    ok: true,
-    reason: null,
-    player: { hp: maxHp, maxHp },
-    checkpoint: { ...ECHO_LANTERN_CHECKPOINT },
-  };
-}
-
 function reviveResult(save, { returnToTown = false } = {}) {
   const player = save?.player || {};
   const expansion = save?.expansion || {};
@@ -218,8 +199,6 @@ module.exports = Object.freeze({
   HEALING_POTION_HEAL,
   WEAK_POTION_TOTAL_STEPS,
   WEAK_POTION_WORLD_UNITS_PER_STEP,
-  ECHO_LANTERN_SHRINE_ID,
-  ECHO_LANTERN_CHECKPOINT,
   normalizeClassId,
   classMaxHp,
   xpRequired,
@@ -227,6 +206,5 @@ module.exports = Object.freeze({
   healingPotionResult,
   weakPotionResult,
   clinicHealResult,
-  shrineRestResult,
   reviveResult,
 });

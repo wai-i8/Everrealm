@@ -54,7 +54,6 @@
       return callable("recoverPlayer", withCommandPosition({
         version: COMMAND_VERSION,
         action: command,
-        shrineId: String(options.shrineId || "").trim() || undefined,
       }));
     }
 

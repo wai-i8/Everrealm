@@ -1,11 +1,11 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
-  const navigationApi = root.LanternMountainSecondNavigation || (typeof require === "function" ? require("../map/mountain-second-navigation.js") : null);
-  const monsters = root.LanternMonsterBlueprints || (typeof require === "function" ? require("../map/monster-blueprints.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
+  const navigationApi = root.EverrealmMountainSecondNavigation || (typeof require === "function" ? require("../map/mountain-second-navigation.js") : null);
+  const monsters = root.EverrealmMonsterBlueprints || (typeof require === "function" ? require("../map/monster-blueprints.js") : null);
   const api = factory(constants, helpers, navigationApi, monsters);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMineMap = api;
+  root.EverrealmMountainSoutheastMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi, monsters) {
   "use strict";
 
@@ -58,11 +58,11 @@
     };
   }
 
-  function createMineMap() {
+  function createMountainSoutheastMap() {
     if (!fieldExitRegion || !southExitRegion) throw new Error("mountain2 cyan exits are unavailable");
 
     const exit = {
-      id: "dungeon-to-field",
+      id: "mountain-southeast-to-field",
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
@@ -71,7 +71,7 @@
       y: fieldExitRegion.centroid.y,
       radius: 38,
       targetMap: MAP_IDS.FIELD,
-      targetSpawn: "dungeonFront",
+      targetSpawn: "mountainSoutheastFront",
       targetPosition: null,
       targetFacing: "down",
       prompt: "返回欣梅爾山地東南偏南",
@@ -88,7 +88,7 @@
     };
 
     const southExit = {
-      id: "dungeon-to-mountain-south",
+      id: "mountain-southeast-to-mountain-south",
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
@@ -124,25 +124,12 @@
       monsterSpawn("snake-mountain-2-2", "snake", 3898, 3260),
     ];
 
-    const shrine = {
-      id: "echo-lantern-shrine",
-      kind: "shrine",
-      name: "山徑燈火",
-      x: 4680,
-      y: 4680,
-      radius: 19,
-      prompt: "E　點亮山徑燈火",
-      waypointId: "mountain-2-lantern",
-      services: ["heal", "save", "waypoint"],
-      render: false,
-    };
-
     const map = withMapCollections({
-      id: MAP_IDS.DUNGEON,
+      id: MAP_IDS.MOUNTAIN_SOUTHEAST,
       name: "欣梅爾山地東南部",
       shortName: "欣梅爾山地東南部",
-      kind: "dungeon",
-      type: "dungeon",
+      kind: "field",
+      type: "world",
       biome: "mountain",
       theme: "mountain-road",
       ambient: "sunlit-mountain",
@@ -157,7 +144,6 @@
       spawnPoints: {
         entrance: entranceSpawn,
         southEntrance: southEntranceSpawn,
-        waypoint: { x: shrine.x, y: shrine.y },
       },
       spawnFacings: {
         entrance: "up",
@@ -177,11 +163,8 @@
       npcs: [],
       enemySpawns,
       chests: [],
-      shrine,
-      waypoint: shrine,
-      worldPortalId: "field-to-dungeon",
+      worldPortalId: "field-to-mountain-southeast",
       objectives: {
-        waypoint: { x: shrine.x, y: shrine.y },
         exit: { x: exit.x, y: exit.y },
       },
       routeLayout: {
@@ -241,5 +224,5 @@
     return map;
   }
 
-  return { TILE, TILES, MAP_IDS, createMineMap, createDungeonMap: createMineMap, monsterSpawn };
+  return { TILE, TILES, MAP_IDS, createMountainSoutheastMap, monsterSpawn };
 });

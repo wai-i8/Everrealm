@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const generated = root.LanternMainTownNavigationGenerated || (typeof require === "function"
+  const generated = root.EverrealmMainTownNavigationGenerated || (typeof require === "function"
     ? require("./main-town-navigation.generated.js")
     : null);
   const api = factory(generated);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMainTownNavigation = api;
+  root.EverrealmMainTownNavigation = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (generated) {
   "use strict";
 

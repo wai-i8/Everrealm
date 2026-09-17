@@ -1,10 +1,10 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
-  const helpers = root.LanternInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
-  const navigationApi = root.LanternWeaponNavigation || (typeof require === "function" ? require("../../map/weapon-navigation.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../../map/map-constants.js") : null);
+  const helpers = root.EverrealmInteriorHelpers || (typeof require === "function" ? require("../../map/interior-helpers.js") : null);
+  const navigationApi = root.EverrealmWeaponNavigation || (typeof require === "function" ? require("../../map/weapon-navigation.js") : null);
   const api = factory(constants, helpers, navigationApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternEquipmentShopMap = api;
+  root.EverrealmEquipmentShopMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, interior, navigationApi) {
   "use strict";
   const { MAP_IDS, TILES } = constants;
@@ -31,7 +31,7 @@
     ];
     const decorations = [
       { id: "shop-forge", kind: "forgeFire", ...point(3.5, 10), radius: 24, glow: "#ff744c", solid: false, render: false, zone: "work-storage" },
-      { id: "shop-mannequin", kind: "mannequin", ...point(13.5, 5), displayItem: "mistguard-coat", solid: false, render: false, zone: "armour-display" },
+      { id: "shop-mannequin", kind: "mannequin", ...point(13.5, 5),  solid: false, render: false, zone: "armour-display" },
       { id: "shop-lamp-left", kind: "wallSconce", ...point(5, 4), radius: 8, solid: false, render: false, zone: "sales-counter" },
       { id: "shop-lamp-right", kind: "wallSconce", ...point(12, 4), radius: 8, solid: false, render: false, zone: "sales-counter" },
     ];

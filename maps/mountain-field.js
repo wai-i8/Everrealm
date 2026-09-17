@@ -1,11 +1,11 @@
 (function (root, factory) {
-  const constants = root.LanternMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
-  const helpers = root.LanternMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
-  const navigationApi = root.LanternFieldNavigation || (typeof require === "function" ? require("../map/field-navigation.js") : null);
-  const encounterApi = root.LanternFieldEncounters || (typeof require === "function" ? require("../map/field-encounters.generated.js") : null);
+  const constants = root.EverrealmMapConstants || (typeof require === "function" ? require("../map/map-constants.js") : null);
+  const helpers = root.EverrealmMapHelpers || (typeof require === "function" ? require("../map/map-helpers.js") : null);
+  const navigationApi = root.EverrealmFieldNavigation || (typeof require === "function" ? require("../map/field-navigation.js") : null);
+  const encounterApi = root.EverrealmFieldEncounters || (typeof require === "function" ? require("../map/field-encounters.generated.js") : null);
   const api = factory(constants, helpers, navigationApi, encounterApi);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.LanternMountainFieldMap = api;
+  root.EverrealmMountainFieldMap = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (constants, helpers, navigationApi, encounterApi) {
   "use strict";
 
@@ -173,8 +173,8 @@
       },
     };
 
-    const dungeonExit = {
-      id: "field-to-dungeon",
+    const southeastExit = {
+      id: "field-to-mountain-southeast",
       kind: "portal",
       interactionMode: "passage",
       transitionType: TRANSITION_TYPES.PHYSICAL_PASSAGE,
@@ -182,7 +182,7 @@
       x: northExitRegion.centroid?.x ?? (data.derived?.top_exit_center?.x || 3470),
       y: northExitRegion.centroid?.y ?? (data.derived?.top_exit_center?.y || 44),
       radius: 38,
-      targetMap: MAP_IDS.DUNGEON,
+      targetMap: MAP_IDS.MOUNTAIN_SOUTHEAST,
       targetSpawn: "entrance",
       targetPosition: null,
       targetFacing: "down",
@@ -190,7 +190,6 @@
       direction: "north",
       mapLabel: "欣梅爾山地東南部",
       alwaysVisible: true,
-      minLevel: 5,
       trigger: {
         shape: "rect",
         x: northTrigger.x,
@@ -233,7 +232,7 @@
       type: "world",
       biome: "mountain",
       theme: "forest-road",
-      ambient: "misty-woodland",
+      ambient: "mountain-woodland",
       recommendedLevel: 1,
       maxRecommendedLevel: 27,
       tileSize: TILE,
@@ -245,16 +244,16 @@
       spawnPoints: {
         entrance: start,
         westGate: { x: westSpawn.x, y: westSpawn.y },
-        dungeonFront: { x: northSpawn.x, y: northSpawn.y },
+        mountainSoutheastFront: { x: northSpawn.x, y: northSpawn.y },
         wishPoolApproach: { x: npcRegion.anchor?.x || 1770, y: npcRegion.anchor?.y || 938 },
       },
       spawnFacings: {
         entrance: "right",
         westGate: "right",
-        dungeonFront: "down",
+        mountainSoutheastFront: "down",
         wishPoolApproach: "down",
       },
-      exits: [westExit, dungeonExit],
+      exits: [westExit, southeastExit],
       houses: [],
       trees: [],
       rocks: [],
@@ -269,25 +268,23 @@
       enemySpawns,
       randomEncounters,
       chests,
-      shrine: null,
-      waypoint: null,
       worldPortalId: "world-to-field",
-      dungeonPortalId: dungeonExit.id,
+      mountainSoutheastPortalId: southeastExit.id,
       objectives: {
-        dungeon: { x: dungeonExit.x, y: dungeonExit.y },
+        mountainSoutheast: { x: southeastExit.x, y: southeastExit.y },
         town: { x: westExit.x, y: westExit.y },
       },
       battlefield: openingBattlefield,
       routeLayout: {
         style: "west-road-loop-north-climb",
         entrySide: "west",
-        dungeonSide: "north",
+        mountainSoutheastSide: "north",
         waypoints: [
           { x: westSpawn.x, y: westSpawn.y },
           { x: 2050, y: 2635 },
           { x: 3520, y: 2590 },
           { x: 3540, y: 1310 },
-          { x: dungeonExit.x, y: northSpawn.y },
+          { x: southeastExit.x, y: northSpawn.y },
         ],
         solidOutsideRoute: true,
       },

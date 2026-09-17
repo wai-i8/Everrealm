@@ -11,12 +11,12 @@ const root = path.resolve(__dirname, "..");
 let EXPECTED_WIDTH = 1672;
 let EXPECTED_HEIGHT = 941;
 const SCENES = Object.freeze({
-  mountain2: Object.freeze({ folder: "field", visible: "vanmer-mountains-2.jpg", authoring: "vanmer-mountains-2_walkable.png", expectedWidth: 5016, expectedHeight: 5016, output: "mountain-second-navigation.generated.js", global: "LanternMountainSecondNavigationGenerated", packageId: "mountain-second-navigation-flat-v1", requireNpc: false }),
-  hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "hospital-navigation.generated.js", global: "LanternHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
-  weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "weapon-navigation.generated.js", global: "LanternWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
-  inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "inn-navigation.generated.js", global: "LanternInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
-  item: Object.freeze({ folder: "item", visible: "item.png", authoring: "item_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "item-navigation.generated.js", global: "LanternItemNavigationGenerated", packageId: "item-navigation-flat-v1" }),
-  guild: Object.freeze({ folder: "guild", visible: "guild.png", authoring: "guild_walkable.png", expectedWidth: 3344, expectedHeight: 1882, output: "guild-navigation.generated.js", global: "LanternGuildNavigationGenerated", packageId: "guild-navigation-flat-v2" }),
+  mountain2: Object.freeze({ folder: "field", visible: "vanmer-mountains-2.jpg", authoring: "vanmer-mountains-2_walkable.png", expectedWidth: 5016, expectedHeight: 5016, output: "mountain-second-navigation.generated.js", global: "EverrealmMountainSecondNavigationGenerated", packageId: "mountain-second-navigation-flat-v1", requireNpc: false }),
+  hospital: Object.freeze({ folder: "hospital", visible: "hospital.png", authoring: "hospital_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "hospital-navigation.generated.js", global: "EverrealmHospitalNavigationGenerated", packageId: "hospital-navigation-prototype" }),
+  weapon: Object.freeze({ folder: "weapon", visible: "weapon.png", authoring: "weapon_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "weapon-navigation.generated.js", global: "EverrealmWeaponNavigationGenerated", packageId: "weapon-navigation-flat-v1" }),
+  inn: Object.freeze({ folder: "inn", visible: "inn.png", authoring: "inn_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "inn-navigation.generated.js", global: "EverrealmInnNavigationGenerated", packageId: "inn-navigation-flat-v1" }),
+  item: Object.freeze({ folder: "item", visible: "item.png", authoring: "item_walkable.png", expectedWidth: 1254, expectedHeight: 1254, output: "item-navigation.generated.js", global: "EverrealmItemNavigationGenerated", packageId: "item-navigation-flat-v1" }),
+  guild: Object.freeze({ folder: "guild", visible: "guild.png", authoring: "guild_walkable.png", expectedWidth: 3344, expectedHeight: 1882, output: "guild-navigation.generated.js", global: "EverrealmGuildNavigationGenerated", packageId: "guild-navigation-flat-v2" }),
 });
 
 function fail(scene, message) {

@@ -11,7 +11,6 @@
 
   const SFX_ENABLED_KEY = "everrealm-sfx-enabled-v1";
   const LEGACY_SOUND_KEY = "everrealm-sound";
-  const OLDEST_SOUND_KEY = "lanternbound-sound";
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const LEGACY_VOLUME_KEY = "everrealm-bgm-volume-v1";
   const INSTALL_KEY = "__everrealmBattleSfxRuntimeV1";
@@ -45,8 +44,7 @@
   function sfxEnabled(root) {
     const direct = readStorage(root, SFX_ENABLED_KEY);
     const legacy = readStorage(root, LEGACY_SOUND_KEY);
-    const oldest = readStorage(root, OLDEST_SOUND_KEY);
-    return (direct ?? legacy ?? oldest ?? "on") !== "off";
+    return (direct ?? legacy ?? "on") !== "off";
   }
 
   function sfxVolume(root) {
@@ -159,7 +157,7 @@
     };
     root[INSTALL_KEY] = runtime;
 
-    const Skills = root.LanternSkills;
+    const Skills = root.EverrealmSkills;
     if (Skills && typeof Skills.getSkill === "function" && typeof Skills.orderActionsBySpeed === "function") {
       const originalGetSkill = Skills.getSkill.bind(Skills);
       const originalOrderActionsBySpeed = Skills.orderActionsBySpeed.bind(Skills);
@@ -194,7 +192,7 @@
       };
     }
 
-    const Tactics = root.LanternTactics;
+    const Tactics = root.EverrealmTactics;
     if (Tactics && typeof Tactics.rollHit === "function") {
       const originalRollHit = Tactics.rollHit.bind(Tactics);
       Tactics.rollHit = function (...args) {
@@ -224,7 +222,7 @@
       };
     }
 
-    const originalArt = root.LanternArt;
+    const originalArt = root.EverrealmArt;
     if (originalArt && typeof originalArt.drawCharacter === "function" && typeof originalArt.drawEnemy === "function") {
       const wrappedArt = {
         ...originalArt,
@@ -264,10 +262,10 @@
           return originalArt.drawEnemy(ctx, options);
         },
       };
-      root.LanternArt = Object.freeze(wrappedArt);
+      root.EverrealmArt = Object.freeze(wrappedArt);
     }
 
-    const originalLocomotion = root.LanternLocomotion;
+    const originalLocomotion = root.EverrealmLocomotion;
     if (originalLocomotion && typeof originalLocomotion.sampleMovement === "function") {
       const originalSampleMovement = originalLocomotion.sampleMovement.bind(originalLocomotion);
       const wrappedLocomotion = {
@@ -287,7 +285,7 @@
           return result;
         },
       };
-      root.LanternLocomotion = Object.freeze(wrappedLocomotion);
+      root.EverrealmLocomotion = Object.freeze(wrappedLocomotion);
     }
 
     return runtime;
