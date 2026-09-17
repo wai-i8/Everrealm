@@ -3,7 +3,7 @@
 importScripts("runtime-assets.js");
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260917-14";
+const CACHE_VERSION = "everrealm-pwa-v2-20260917-15";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

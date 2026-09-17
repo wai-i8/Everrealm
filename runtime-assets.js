@@ -85,7 +85,7 @@
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
     "game/player-state-actions.js?v=20260916-01",
-    "game.js?v=20260917-12",
+    "game.js?v=20260917-13",
   ]);
 
   return Object.freeze({ scripts });

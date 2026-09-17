@@ -37,9 +37,13 @@
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const BattleVictory = window.EverrealmBattleVictory;
   const PlayerStateActions = window.EverrealmPlayerStateActions;
+  // Step 9C startup safety: the server API can be constructed before the map/player
+  // bindings exist, but it must never touch those later bindings during boot. Keep
+  // an inert provider until createPlayer() has completed, then arm it below.
+  let serverCommandPositionProvider = () => null;
   const ServerApi = window.EverrealmServerApi?.create?.({
     firebase: Firebase,
-    positionProvider: () => ({ mapId: currentMapId, x: player.x, y: player.y }),
+    positionProvider: () => serverCommandPositionProvider(),
   });
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
@@ -668,6 +672,7 @@
   let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
 
   const player = createPlayer();
+  serverCommandPositionProvider = () => ({ mapId: currentMapId, x: player.x, y: player.y });
 
   let worldTimeLoadStarted = false;
   let worldClockText = "";
