@@ -80,6 +80,24 @@ test("map transitions only allow authored adjacent maps", () => {
   assert.equal(invalid.reason, "invalid-transition");
 });
 
+
+test("battle start is idempotent for the same encounter and exposes orphan battle id for recovery", () => {
+  let save = baseSave({ expansion: { currentMapId: "field" } });
+  const first = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a" });
+  assert.equal(first.ok, true);
+  save = mergeAuthoritative(save, first.state);
+
+  const same = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a" });
+  assert.equal(same.ok, true);
+  assert.equal(same.reused, true);
+  assert.equal(same.battle.id, first.battle.id);
+
+  const different = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-b" });
+  assert.equal(different.ok, false);
+  assert.equal(different.reason, "battle-active");
+  assert.equal(different.battle.id, first.battle.id);
+});
+
 test("battle rewards cannot settle until server-tracked enemies are defeated", () => {
   let save = baseSave({ expansion: { currentMapId: "field" } });
   const started = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "test-chick" });

@@ -75,7 +75,7 @@
     "game/battle-sfx.js?v=20260915-03",
     "game/ui-dom-helpers.js",
     "game/ui-presentation-helpers.js",
-    "game/system-feedback.js",
+    "game/system-feedback.js?v=20260917-01",
     "game/dialogue-ui.js",
     "game/facility-basic-views.js?v=20260913-01",
     "game/facility-catalog-views.js",
@@ -85,7 +85,7 @@
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
     "game/player-state-actions.js?v=20260916-01",
-    "game.js?v=20260917-05",
+    "game.js?v=20260917-08",
   ]);
 
   return Object.freeze({ scripts });

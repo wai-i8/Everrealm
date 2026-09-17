@@ -7777,6 +7777,113 @@ html body [aria-disabled="true"] {
   }
 }
 
+/* Map transition cover: authoritative map changes keep server validation, while
+   the player sees an immediate intentional scene fade instead of network latency. */
+.map-transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: auto;
+  opacity: 0;
+  background: rgba(3, 7, 16, .18);
+  transition: opacity .18s ease, background-color .18s ease;
+}
+
+.map-transition-overlay[hidden] {
+  display: none !important;
+}
+
+.map-transition-overlay.is-visible {
+  opacity: 1;
+  background: rgba(3, 7, 16, .94);
+}
+
+.map-transition-overlay.is-leaving {
+  pointer-events: auto;
+}
+
+.map-transition-shade {
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255, 214, 116, .08), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(10, 17, 31, .12) 0 26%, rgba(2, 5, 12, .68) 72%, rgba(1, 3, 8, .96) 100%);
+  opacity: .9;
+  transform: scale(1.04);
+  animation: map-transition-breathe 1.15s ease-in-out infinite alternate;
+}
+
+.map-transition-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: .48rem;
+  padding: 1rem 1.4rem;
+  color: var(--cream);
+  text-align: center;
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, .98),
+    0 0 8px rgba(0, 0, 0, .9),
+    0 0 18px rgba(0, 0, 0, .7);
+  transform: translateY(5px);
+  opacity: 0;
+  transition: opacity .16s .05s ease, transform .2s .05s ease;
+}
+
+.map-transition-overlay.is-visible .map-transition-copy {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.map-transition-copy strong {
+  max-width: min(78vw, 30rem);
+  overflow: hidden;
+  font: 900 clamp(1rem, 2.35vw, 1.55rem)/1.2 "Noto Sans HK", "Microsoft JhengHei", system-ui, sans-serif;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-transition-dots {
+  display: flex;
+  align-items: center;
+  gap: .34rem;
+  height: .5rem;
+}
+
+.map-transition-dots i {
+  width: .23rem;
+  height: .23rem;
+  border-radius: 50%;
+  background: rgba(255, 216, 125, .9);
+  box-shadow: 0 0 8px rgba(255, 204, 86, .34);
+  animation: map-transition-dot .86s ease-in-out infinite;
+}
+
+.map-transition-dots i:nth-child(2) { animation-delay: .12s; }
+.map-transition-dots i:nth-child(3) { animation-delay: .24s; }
+
+@keyframes map-transition-breathe {
+  from { transform: scale(1.025); opacity: .74; }
+  to { transform: scale(1.07); opacity: 1; }
+}
+
+@keyframes map-transition-dot {
+  0%, 70%, 100% { transform: translateY(0) scale(.8); opacity: .34; }
+  35% { transform: translateY(-2px) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-transition-overlay,
+  .map-transition-copy { transition-duration: 0s !important; }
+  .map-transition-shade,
+  .map-transition-dots i { animation: none !important; }
+}
+
 /* Battle entry transition: masks the short authoritative battle-start round trip
    with an intentional encounter beat instead of leaving the player on a frozen frame. */
 .battle-entry-transition {
@@ -7851,7 +7958,9 @@ html body [aria-disabled="true"] {
   padding: 16px 28px;
   text-align: center;
   text-shadow: 0 3px 10px rgba(0, 0, 0, .92), 0 0 18px rgba(0, 0, 0, .72);
-  animation: battle-entry-copy .2s .08s ease-out both;
+  animation:
+    battle-entry-copy .2s .08s ease-out both,
+    battle-entry-copy-hold .65s .34s ease-in-out infinite alternate;
 }
 
 .battle-entry-copy span {
@@ -7906,4 +8015,9 @@ html body [aria-disabled="true"] {
 @keyframes battle-entry-copy {
   from { opacity: 0; transform: scale(.92); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes battle-entry-copy-hold {
+  from { filter: brightness(.96) drop-shadow(0 0 0 rgba(255, 209, 92, 0)); }
+  to { filter: brightness(1.08) drop-shadow(0 0 10px rgba(255, 209, 92, .16)); }
 }

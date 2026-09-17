@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260917-03"],
+          ["everrealmStyles", "styles.css?v=20260917-05"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -177,6 +177,14 @@
 
         <div id="interactionPrompt" class="interaction-prompt" hidden>
           <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
+        </div>
+
+        <div id="mapTransitionOverlay" class="map-transition-overlay" aria-hidden="true" hidden>
+          <div class="map-transition-shade" aria-hidden="true"></div>
+          <div class="map-transition-copy" aria-hidden="true">
+            <strong id="mapTransitionName">前往下一區域</strong>
+            <span class="map-transition-dots"><i></i><i></i><i></i></span>
+          </div>
         </div>
 
         <div id="battleEntryTransition" class="battle-entry-transition" aria-hidden="true" hidden>
@@ -539,7 +547,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-05")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-08")}"><\/script>`);
       })();
     </script>
 
@@ -575,7 +583,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-04", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-06", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

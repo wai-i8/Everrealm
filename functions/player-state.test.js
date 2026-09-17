@@ -10,10 +10,11 @@ const {
 
 test("new saves always start with canonical protected progression", () => {
   const save = canonicalInitialSave({
-    player: { name: "Wai", x: 123, y: 456, hp: 99999, coins: 99999, level: 45 },
+    player: { name: "Wai", gender: "female", x: 123, y: 456, hp: 99999, coins: 99999, level: 45 },
     expansion: { classId: "fighter", inventory: { weak_potion: 999 } },
   });
   assert.equal(save.player.name, "Wai");
+  assert.equal(save.player.gender, "female");
   assert.equal(save.player.x, 123);
   assert.equal(save.player.y, 456);
   assert.equal(save.player.level, 1);
@@ -25,14 +26,14 @@ test("new saves always start with canonical protected progression", () => {
   assert.equal(save.expansion.classId, "fighter");
 });
 
-test("normal client save can only move, advance play time, and consume weak-potion distance", () => {
+test("normal client save can only change cosmetic gender, move, advance play time, and consume weak-potion distance", () => {
   const current = canonicalInitialSave({ player: { x: 10, y: 20 }, expansion: { classId: "fighter" } });
   current.player.coins = 500;
   current.player.hp = 300;
   current.playTime = 100;
   current.expansion.weakPotion = { stepsRemaining: 100, distanceRemainder: 2 };
   const patch = clientOwnedPatch(current, {
-    player: { x: 88, y: 99, coins: 99999, hp: 99999 },
+    player: { gender: "female", x: 88, y: 99, coins: 99999, hp: 99999 },
     playTime: 120,
     expansion: {
       currentMapId: "dungeon",
@@ -41,6 +42,7 @@ test("normal client save can only move, advance play time, and consume weak-poti
     },
   });
   const next = mergeClientOwnedState(current, patch);
+  assert.equal(next.player.gender, "female");
   assert.equal(next.player.x, 88);
   assert.equal(next.player.y, 99);
   assert.equal(next.playTime, 120);

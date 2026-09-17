@@ -16,6 +16,7 @@
     const schedule = typeof options.setTimeout === "function"
       ? options.setTimeout
       : root.setTimeout.bind(root);
+    let lastAutoSystemLog = { text: "", at: 0 };
 
     function syncSystemLogCollapsed() {
       if (!dom.systemLog) return;
@@ -66,7 +67,11 @@
       const safeText = String(text || "").trim().replace(/。+$/u, "");
       if (!safeText) return;
       const entries = state.getEntries();
-      entries.push({ id: state.nextSerial(), type: safeType, text: safeText, tone: String(tone || "") });
+      const now = Date.now();
+      const safeTone = String(tone || "");
+      const last = entries[entries.length - 1];
+      if (last && last.type === safeType && last.text === safeText && last.tone === safeTone && now - Number(last.at || 0) < 800) return;
+      entries.push({ id: state.nextSerial(), type: safeType, text: safeText, tone: safeTone, at: now });
       if (entries.length > 800) entries.splice(0, entries.length - 800);
       renderSystemLog();
     }
@@ -82,10 +87,20 @@
     }
 
     function showToast(message, style = "") {
-      dom.toastElement.textContent = message;
-      dom.toastElement.className = `game-toast ${style}`.trim();
+      const text = String(message || "").trim();
+      const tone = String(style || "").trim();
+      dom.toastElement.textContent = text;
+      dom.toastElement.className = `game-toast ${tone}`.trim();
       void dom.toastElement.offsetWidth;
       dom.toastElement.classList.add("show");
+
+      if (text && (tone === "danger" || tone === "warning" || tone === "warn")) {
+        const now = Date.now();
+        if (lastAutoSystemLog.text !== text || now - lastAutoSystemLog.at > 800) {
+          lastAutoSystemLog = { text, at: now };
+          addSystemMessage("system", text, tone === "danger" ? "danger" : "warning");
+        }
+      }
     }
 
     function announce(message) {

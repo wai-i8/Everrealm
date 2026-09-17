@@ -88,6 +88,7 @@
   const MOBILE_PROJECTED_FACING_MAP = Object.freeze({ up: "right", right: "down", down: "left", left: "up" });
   const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
   const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
+  const PLAYER_GENDER_KEY = "everrealm-player-gender-v1";
   const INVENTORY_PAGE_SIZE = 15;
   const COMBAT_SCALE_VERSION = 2;
   const HP_SCALE = ClassData?.HP_SCALE || 5;
@@ -185,6 +186,8 @@
   const playerHudPortraitCanvas = document.getElementById("playerHudPortraitCanvas");
   const playerHudPortraitCtx = playerHudPortraitCanvas.getContext("2d");
   const battleHud = document.getElementById("battleHud");
+  const mapTransitionOverlay = document.getElementById("mapTransitionOverlay");
+  const mapTransitionName = document.getElementById("mapTransitionName");
   const battleEntryTransition = document.getElementById("battleEntryTransition");
   const battleEntryName = document.getElementById("battleEntryName");
   const battleFacingPicker = document.getElementById("battleFacingPicker");
@@ -482,6 +485,7 @@
   const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null;
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3") : null;
   const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
+  const encounterTransitionAudio = typeof Audio === "function" ? new Audio("assets/audio/sfx/battle/common/encounter-transition-v2.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
   // not. Low cover deliberately has four visual variants and picks one stable
@@ -503,6 +507,11 @@
     music.loop = true;
     music.preload = "auto";
     music.volume = bgmVolume;
+  }
+  if (encounterTransitionAudio) {
+    encounterTransitionAudio.loop = false;
+    encounterTransitionAudio.preload = "auto";
+    encounterTransitionAudio.volume = sfxVolume;
   }
   let pageAudioSuspended = document.visibilityState !== "visible";
   let audioGestureUnlocked = false;
@@ -539,6 +548,7 @@
     titleBgmAudio?.pause();
     battleBgmAudio?.pause();
     victoryBgmAudio?.pause();
+    encounterTransitionAudio?.pause();
   }
 
   function resumeGameAudio() {
@@ -586,6 +596,22 @@
     if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || (mode !== "title" && !musicEnabled))) return;
     audioGestureUnlocked = true;
     resumeGameAudio();
+  }
+
+  function playEncounterTransitionSfx() {
+    if (!encounterTransitionAudio || !sfxEnabled || sfxVolume <= 0 || pageAudioSuspended || document.visibilityState !== "visible") return;
+    encounterTransitionAudio.pause();
+    encounterTransitionAudio.volume = sfxVolume;
+    try { encounterTransitionAudio.currentTime = 0; } catch (_) {}
+    encounterTransitionAudio.play().catch(() => {});
+  }
+
+  function stopEncounterTransitionSfx({ reset = true } = {}) {
+    if (!encounterTransitionAudio) return;
+    encounterTransitionAudio.pause();
+    if (reset) {
+      try { encounterTransitionAudio.currentTime = 0; } catch (_) {}
+    }
   }
 
   function startBattleBgm() {
@@ -835,6 +861,37 @@
   function normalizeGender(value, fallback = "male") {
     const gender = String(value || "").trim().toLowerCase();
     return gender === "female" || gender === "male" ? gender : fallback;
+  }
+
+  function rememberPlayerGender(value) {
+    const gender = normalizeGender(value);
+    try { localStorage.setItem(PLAYER_GENDER_KEY, gender); } catch (_) {}
+    return gender;
+  }
+
+  function rememberedPlayerGender() {
+    try {
+      const stored = localStorage.getItem(PLAYER_GENDER_KEY);
+      if (stored === "female" || stored === "male") return stored;
+      for (const key of ["everrealm-save-v1", "lanternbound-save-v1"]) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const legacy = String(parsed?.player?.gender || "").trim().toLowerCase();
+          if (legacy === "female" || legacy === "male") return legacy;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function resolveMissingSavedGender() {
+    const remembered = rememberedPlayerGender();
+    if (remembered) return remembered;
+    if (testingMode || typeof window.confirm !== "function") return "male";
+    const useFemale = window.confirm("舊存檔未有角色性別資料。\n\n確定：女角色\n取消：男角色");
+    return useFemale ? "female" : "male";
   }
 
   function createPlayer() {
@@ -1428,7 +1485,7 @@
       || authenticatedUser()?.displayName
       || player?.name,
     );
-    playerGender = normalizeGender(gender);
+    playerGender = rememberPlayerGender(gender);
     resetPlayer();
     if (registeredName) player.name = registeredName;
     resetExpansionProgress(classId);
@@ -1507,8 +1564,12 @@
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
-    player.gender = normalizeGender(save.player?.gender);
-    playerGender = player.gender;
+    const remoteGender = String(rawSave?.player?.gender || "").trim().toLowerCase();
+    const missingRemoteGender = remoteGender !== "female" && remoteGender !== "male";
+    player.gender = missingRemoteGender
+      ? resolveMissingSavedGender()
+      : normalizeGender(remoteGender);
+    playerGender = rememberPlayerGender(player.gender);
     player.name = normalizeCharacterName(save.player?.name) || "阿巡";
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
@@ -1546,6 +1607,11 @@
     showLocation(zoneForPosition(player), true);
     systemLogEntries = [];
     addSystemMessage("system", `已載入 ${playerDisplayName()} 的旅程`);
+    if (missingRemoteGender && rememberedPlayerGender()) {
+      window.setTimeout(() => {
+        try { saveImportant(false); } catch (_) {}
+      }, 0);
+    }
     if (!options.silent) showToast(`歡迎返嚟，${playerDisplayName()}。`, "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
@@ -1978,6 +2044,7 @@
 
   function setSfxVolume(value, persist = true) {
     sfxVolume = Core.clamp(Number(value) || 0, 0, 1);
+    if (encounterTransitionAudio) encounterTransitionAudio.volume = sfxVolume;
     if (persist) {
       try { localStorage.setItem(SFX_VOLUME_KEY, sfxVolume.toFixed(2)); } catch (_) {}
     }
@@ -2023,8 +2090,10 @@
 
   function setSfxEnabled(enabled, persist = true) {
     sfxEnabled = Boolean(enabled);
-    if (!sfxEnabled) sound.suspend();
-    else if (!pageAudioSuspended) sound.resume();
+    if (!sfxEnabled) {
+      sound.suspend();
+      stopEncounterTransitionSfx();
+    } else if (!pageAudioSuspended) sound.resume();
     if (persist) {
       try { localStorage.setItem(SFX_ENABLED_KEY, sfxEnabled ? "on" : "off"); } catch (_) {}
     }
@@ -3431,6 +3500,42 @@
     return true;
   }
 
+  const MAP_TRANSITION_MIN_COVER_MS = reducedMotion ? 0 : 180;
+  const MAP_TRANSITION_SETTLE_MS = reducedMotion ? 0 : 48;
+  const MAP_TRANSITION_FADE_OUT_MS = reducedMotion ? 0 : 220;
+
+  function showMapTransitionOverlay(targetName) {
+    if (!mapTransitionOverlay) return performance.now();
+    if (mapTransitionName) mapTransitionName.textContent = targetName || "前往下一區域";
+    mapTransitionOverlay.hidden = false;
+    mapTransitionOverlay.setAttribute("aria-hidden", "false");
+    mapTransitionOverlay.classList.remove("is-leaving");
+    // Two frames ensure the hidden->visible transition is observable even on
+    // fast local map changes and when the browser has just resumed rendering.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!mapTransitionOverlay.hidden) mapTransitionOverlay.classList.add("is-visible");
+    }));
+    return performance.now();
+  }
+
+  async function waitForMapTransitionCover(startedAt) {
+    const elapsed = performance.now() - Number(startedAt || 0);
+    const remaining = Math.max(0, MAP_TRANSITION_MIN_COVER_MS - elapsed);
+    if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
+  }
+
+  async function hideMapTransitionOverlay() {
+    if (!mapTransitionOverlay || mapTransitionOverlay.hidden) return;
+    mapTransitionOverlay.classList.add("is-leaving");
+    mapTransitionOverlay.classList.remove("is-visible");
+    if (MAP_TRANSITION_FADE_OUT_MS > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, MAP_TRANSITION_FADE_OUT_MS));
+    }
+    mapTransitionOverlay.hidden = true;
+    mapTransitionOverlay.setAttribute("aria-hidden", "true");
+    mapTransitionOverlay.classList.remove("is-leaving");
+  }
+
   async function transitionMap(targetMapId, targetPosition, targetFacing = null, options = {}) {
     const target = maps[targetMapId];
     if (!target) return false;
@@ -3446,18 +3551,19 @@
 
     const transitionSerial = ++mapTransitionSerial;
     const sourceMapId = currentMapId;
-    if (!serverVerified) {
-      mapTransitionPending = true;
-      clearExplorePointerGesture();
-      clearExploreMovePath();
-      pendingClickInteractionId = null;
-      pendingClickInteractionPoint = null;
-      player.moving = false;
-    }
+    mapTransitionPending = true;
+    clearExplorePointerGesture();
+    clearExploreMovePath();
+    pendingClickInteractionId = null;
+    pendingClickInteractionPoint = null;
+    player.moving = false;
+    const overlayStartedAt = showMapTransitionOverlay(target.name);
 
+    let transitionSucceeded = false;
     try {
       if (!serverVerified) {
         if (!ServerApi?.map) {
+          await hideMapTransitionOverlay();
           showToast("伺服器地圖驗證尚未就緒。", "danger");
           return false;
         }
@@ -3468,16 +3574,25 @@
           // superseded or whose source map changed while the request was away.
           if (transitionSerial !== mapTransitionSerial || currentMapId !== sourceMapId) return false;
           if (!verified?.ok) {
+            await hideMapTransitionOverlay();
             showToast("呢個地圖轉移而家唔合法。", "danger");
             return false;
           }
         } catch (error) {
-          if (transitionSerial === mapTransitionSerial) serverCommandError(error, "伺服器暫時未能驗證地圖轉移。");
+          if (transitionSerial === mapTransitionSerial) {
+            await hideMapTransitionOverlay();
+            serverCommandError(error, "伺服器暫時未能驗證地圖轉移。");
+          }
           return false;
         }
       }
 
       if (transitionSerial !== mapTransitionSerial && !serverVerified) return false;
+      // If the server answered almost instantly, still give the fade enough
+      // time to read as an intentional scene transition rather than a flash.
+      await waitForMapTransitionCover(overlayStartedAt);
+      if (transitionSerial !== mapTransitionSerial && !serverVerified) return false;
+
       clearExplorePointerGesture();
       clearAllFacilityWindows();
       setSystemSettingsOpen(false);
@@ -3515,10 +3630,21 @@
       updateHud(true);
       syncRealtimeMap();
       saveImportant(false);
+      transitionSucceeded = true;
+
+      // Keep the cover up for at least one rendered frame after the map swap so
+      // the player never sees an in-between camera/spawn state.
+      if (MAP_TRANSITION_SETTLE_MS > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, MAP_TRANSITION_SETTLE_MS));
+      }
+      await hideMapTransitionOverlay();
       canvas.focus({ preventScroll: true });
       return true;
     } finally {
-      if (!serverVerified && transitionSerial === mapTransitionSerial) mapTransitionPending = false;
+      if (!transitionSucceeded && mapTransitionOverlay && !mapTransitionOverlay.hidden && transitionSerial === mapTransitionSerial) {
+        await hideMapTransitionOverlay();
+      }
+      if (transitionSerial === mapTransitionSerial) mapTransitionPending = false;
     }
   }
 
@@ -5740,7 +5866,7 @@
     return Array.from({ length: count }, (_, index) => createBattleEnemy(source, type, index, index === 0, battlefield));
   }
 
-  const BATTLE_ENTRY_TRANSITION_MIN_MS = 320;
+  const BATTLE_ENTRY_TRANSITION_MIN_MS = 1800;
 
   function showBattleEntryTransition(source) {
     if (!battleEntryTransition) return;
@@ -5748,9 +5874,7 @@
     battleEntryTransition.setAttribute("aria-hidden", "false");
     battleEntryTransition.dataset.encounterToken = String(battleToken + 1);
     if (battleEntryName) battleEntryName.textContent = source?.name || "遭遇戰";
-    // Two short tones make the network wait feel like an intentional encounter cue.
-    sound.tone(250, .07, { to: 520, gain: .032 });
-    window.setTimeout(() => sound.tone(720, .06, { to: 980, gain: .022 }), 72);
+    playEncounterTransitionSfx();
   }
 
   function hideBattleEntryTransition() {
@@ -5854,8 +5978,8 @@
     keys.clear();
     interactionPrompt.hidden = true;
     battleHud.hidden = true;
-    sound.boss();
-    startBattleBgm();
+    window.EverrealmFootstepsRuntime?.suspend();
+    bgm.setEnabled(false);
     announce(`遇上${source.name}。進入格仔回合戰。`);
     maintainGodModeState();
     authorizeBattleSession(battle, source);
@@ -5901,16 +6025,39 @@
     updateBattleUi();
     try {
       await flushForServerCommand();
-      const result = await ServerApi.battle("start", {
+      const startPayload = {
         monsterType: source.type,
         level: source.level,
         encounterId: source.instanceId || source.id || "",
-      });
+      };
+      let result = await ServerApi.battle("start", startPayload);
+      if (!battle || battle.token !== token || battle !== targetBattle) return false;
+
+      if (!result?.ok && result?.reason === "battle-active" && result?.battle?.id) {
+        console.warn("Recovering orphaned server battle before starting a new encounter.", result.battle);
+        addSystemMessage("system", "偵測到上一場未清除嘅戰鬥狀態，正在自動修復。", "warning");
+        try {
+          await ServerApi.battle("cancel", { battleId: result.battle.id });
+          if (!battle || battle.token !== token || battle !== targetBattle) return false;
+          result = await ServerApi.battle("start", startPayload);
+        } catch (recoveryError) {
+          console.warn("Orphaned battle recovery failed.", recoveryError);
+        }
+      }
+
       if (!battle || battle.token !== token || battle !== targetBattle) return false;
       if (!result?.ok || !result.battle?.id) {
-        showToast("伺服器未能建立戰鬥。", "danger");
+        const reason = String(result?.reason || "unknown");
+        console.warn("Battle start rejected by server.", { reason, result, source: startPayload });
+        const reasonText = ({
+          "battle-active": "上一場戰鬥狀態尚未清除",
+          "wrong-map": "伺服器判定目前地圖不符合呢場戰鬥",
+          "unknown-monster": "伺服器搵唔到呢種怪物",
+        })[reason] || "伺服器未能建立戰鬥";
+        showToast(`伺服器未能建立戰鬥：${reasonText}。`, "danger");
         source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
         hideBattleEntryTransition();
+        stopEncounterTransitionSfx();
         closeBattleHud();
         restoreExplorationUiAfterBattle();
         return false;
@@ -5922,6 +6069,7 @@
       if (!battle || battle.token !== token || battle !== targetBattle) return false;
       hideBattleEntryTransition();
       battleHud.hidden = false;
+      startBattleBgm();
       beginPlayerRound();
       return true;
     } catch (error) {
@@ -5929,6 +6077,7 @@
       serverCommandError(error, "暫時未能建立戰鬥。");
       source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
       hideBattleEntryTransition();
+      stopEncounterTransitionSfx();
       closeBattleHud();
       restoreExplorationUiAfterBattle();
       return false;
@@ -8037,6 +8186,7 @@
 
   function closeBattleHud() {
     hideBattleEntryTransition();
+    stopEncounterTransitionSfx();
     battleVictoryPresenter?.hide();
     battleVictoryOverlay.hidden = true;
     stopBattleBgm();
@@ -11802,7 +11952,7 @@
   document.getElementById("newGameButton").addEventListener("click", requestNewGame);
   for (const button of document.querySelectorAll("[data-gender-choice]")) {
     button.addEventListener("click", () => {
-      pendingPlayerGender = normalizeGender(button.dataset.genderChoice);
+      pendingPlayerGender = rememberPlayerGender(button.dataset.genderChoice);
       updateGenderChoiceUi();
       drawClassSelectionPreviews();
     });

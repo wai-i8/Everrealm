@@ -403,8 +403,18 @@ function battleCommand(save, input = {}) {
   const existing = state.expansion.serverBattle && typeof state.expansion.serverBattle === "object" ? state.expansion.serverBattle : null;
 
   if (action === "start") {
-    if (existing?.status === "active") return { ok: false, reason: "battle-active" };
-    const monsterType = MonsterBlueprints.normalizeMonsterId(input.monsterType);
+    const requestedEncounterId = String(input.encounterId || "");
+    const requestedMonsterType = MonsterBlueprints.normalizeMonsterId(input.monsterType);
+    if (existing?.status === "active") {
+      const sameEncounter = requestedEncounterId
+        && String(existing.encounterId || "") === requestedEncounterId
+        && String(existing.monsterType || "") === String(requestedMonsterType || "");
+      if (sameEncounter) {
+        return resultWithState(state, { action, reused: true, battle: clone(existing) });
+      }
+      return { ok: false, reason: "battle-active", battle: clone(existing) };
+    }
+    const monsterType = requestedMonsterType;
     const blueprint = monsterType ? MonsterBlueprints.monsterBlueprint(monsterType) : null;
     if (!blueprint) return { ok: false, reason: "unknown-monster" };
     const mapId = String(state.expansion.currentMapId || "");

@@ -3,7 +3,7 @@
 importScripts("runtime-assets.js");
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260917-07";
+const CACHE_VERSION = "everrealm-pwa-v2-20260917-10";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -31,6 +31,7 @@ const PRECACHE_URLS = [
   `${APP_BASE}assets/items/weak-potion-v1.png`,
   `${APP_BASE}assets/audio/bgm/victory-v1.mp3`,
   `${APP_BASE}assets/audio/sfx/battle/common/battle-miss.wav`,
+  `${APP_BASE}assets/audio/sfx/battle/common/encounter-transition-v2.mp3`,
   `${APP_BASE}assets/audio/sfx/battle/fighter/fighter-punch.wav`,
   `${APP_BASE}assets/audio/sfx/battle/fighter/fighter-utility-skill.wav`,
   `${APP_BASE}assets/audio/sfx/battle/chick/chick-attack.wav`,

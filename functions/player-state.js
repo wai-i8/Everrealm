@@ -39,14 +39,14 @@ function playerName(value, fallback = "阿巡") {
   return text || fallback;
 }
 
-function normalizeGender(value, fallback = "male") {
-  const gender = String(value || "").trim().toLowerCase();
-  return gender === "female" || gender === "male" ? gender : fallback;
-}
-
 function normalizeClassId(value) {
   const id = String(value || "").trim();
   return Skills.CLASS_IDS?.includes(id) ? id : (Skills.DEFAULT_CLASS_ID || "fighter");
+}
+
+function normalizeGender(value, fallback = "male") {
+  const gender = String(value || "").trim().toLowerCase();
+  return gender === "female" || gender === "male" ? gender : fallback;
 }
 
 function canonicalInitialSave(payload = {}) {
@@ -125,6 +125,7 @@ function clientOwnedPatch(existingSave, payload = {}) {
   const requestedPlayTime = clamp(Number(source.playTime) || 0, 0, MAX_PLAY_TIME);
 
   return {
+    "player.gender": normalizeGender(player.gender, normalizeGender(existing.player?.gender)),
     "player.x": finite(player.x, Number(existing.player?.x) || 0),
     "player.y": finite(player.y, Number(existing.player?.y) || 0),
     playTime: Math.max(previousPlayTime, requestedPlayTime),
@@ -140,6 +141,7 @@ function mergeClientOwnedState(existingSave, patch) {
   next.expansion.weakPotion = next.expansion.weakPotion && typeof next.expansion.weakPotion === "object"
     ? next.expansion.weakPotion
     : {};
+  next.player.gender = patch["player.gender"];
   next.player.x = patch["player.x"];
   next.player.y = patch["player.y"];
   next.playTime = patch.playTime;
