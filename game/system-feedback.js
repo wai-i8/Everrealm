@@ -86,15 +86,16 @@
       renderSystemLog();
     }
 
-    function showToast(message, style = "") {
+    function showToast(message, style = "", options = {}) {
       const text = String(message || "").trim();
       const tone = String(style || "").trim();
+      const autoLog = options?.log !== false;
       dom.toastElement.textContent = text;
       dom.toastElement.className = `game-toast ${tone}`.trim();
       void dom.toastElement.offsetWidth;
       dom.toastElement.classList.add("show");
 
-      if (text && (tone === "danger" || tone === "warning" || tone === "warn")) {
+      if (autoLog && text && (tone === "danger" || tone === "warning" || tone === "warn")) {
         const now = Date.now();
         if (lastAutoSystemLog.text !== text || now - lastAutoSystemLog.at > 800) {
           lastAutoSystemLog = { text, at: now };

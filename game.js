@@ -3507,7 +3507,7 @@
       } else {
         const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
         const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
-        showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+        showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger", { log: false });
         addSystemMessage("reward", `失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
       }
     } catch (error) {
@@ -9169,10 +9169,8 @@
     battleUi.apText.textContent = `${displayedAp} / ${BATTLE_AP_MAX}`;
     if (battleUi.commandAp) {
       const apValue = battleUi.commandAp.querySelector("strong");
-      const apMax = battleUi.commandAp.querySelector("em");
-      if (apValue) apValue.textContent = String(displayedAp);
-      if (apMax) apMax.textContent = `/ ${BATTLE_AP_MAX}`;
-      battleUi.commandAp.setAttribute("aria-label", `目前 AP ${displayedAp} / ${BATTLE_AP_MAX}`);
+      if (apValue) apValue.textContent = `${displayedAp} AP`;
+      battleUi.commandAp.setAttribute("aria-label", `目前 ${displayedAp} AP`);
       battleUi.commandAp.classList.toggle("is-low", displayedAp <= 1);
       battleUi.commandAp.classList.toggle("is-full", displayedAp >= BATTLE_AP_MAX);
     }
@@ -10743,6 +10741,41 @@
     if (canvas) canvas.dataset.exploreCursor = "default";
   }
 
+  function resetMobileTouchGestures({ cancelExplore = false } = {}) {
+    activeExploreTouches.clear();
+    explorePinchGesture = null;
+    suppressExploreTouchTap = false;
+    activeBattleTouches.clear();
+    battlePinchGesture = null;
+    suppressBattleTouchTap = false;
+    if (cancelExplore) cancelExplorePointerTracking();
+    else clearExplorePointerGesture();
+  }
+
+  function cleanupEndedTouchPointer(event) {
+    if (!event || event.pointerType !== "touch") return false;
+    const pointerId = event.pointerId;
+    const trackedExplore = activeExploreTouches.delete(pointerId);
+    const trackedBattle = activeBattleTouches.delete(pointerId);
+
+    if (explorePinchGesture?.pointerIds?.includes(pointerId) || activeExploreTouches.size < 2) {
+      explorePinchGesture = null;
+    }
+    if (battlePinchGesture?.pointerIds?.includes(pointerId) || activeBattleTouches.size < 2) {
+      battlePinchGesture = null;
+    }
+    if (activeExploreTouches.size === 0) suppressExploreTouchTap = false;
+    if (activeBattleTouches.size === 0) suppressBattleTouchTap = false;
+
+    // A release/cancel that escaped the canvas must never leave a latched
+    // one-finger gesture behind. Canvas pointerup still gets first chance to
+    // commit a normal tap; this fallback only acts if that gesture survived.
+    if ((trackedExplore || trackedBattle) && explorePointerGesture?.pointerId === pointerId) {
+      clearExplorePointerGesture(pointerId, false);
+    }
+    return trackedExplore || trackedBattle;
+  }
+
   function beginExplorePinch() {
     if (!usesMobileExploreControls() || activeExploreTouches.size < 2 || mode !== "playing") return false;
     const touches = [...activeExploreTouches.values()].slice(0, 2);
@@ -10839,6 +10872,9 @@
       const battleTouch = event.pointerType === "touch" && usesMobileExploreControls();
       if (!battleTouch) return handleBattlePointer(event);
       event.preventDefault();
+      if (event.isPrimary && activeBattleTouches.size > 0 && !activeBattleTouches.has(event.pointerId)) {
+        resetMobileTouchGestures();
+      }
       activeBattleTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
       try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
       if (activeBattleTouches.size >= 2) beginBattlePinch();
@@ -10849,6 +10885,11 @@
     const mobileTouch = event.pointerType === "touch" && usesMobileExploreControls();
     if (mobileTouch) {
       event.preventDefault();
+      if (event.isPrimary && activeExploreTouches.size > 0 && !activeExploreTouches.has(event.pointerId)) {
+        // Mobile Safari/Chromium can occasionally omit the final pointerup after
+        // an interrupted pinch. A fresh primary touch proves that old entry is stale.
+        resetMobileTouchGestures();
+      }
       activeExploreTouches.set(event.pointerId, { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
       try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
       if (activeExploreTouches.size >= 2) {
@@ -13136,8 +13177,13 @@
   canvas.addEventListener("pointerleave", clearExploreHoverPointer);
   canvas.addEventListener("pointerup", finishCanvasPointer);
   canvas.addEventListener("pointercancel", cancelExploreTouchPointer);
+  // Fallback for mobile browsers that end a captured touch outside the canvas
+  // or drop the canvas pointerup during a pinch/OS gesture transition.
+  document.addEventListener("pointerup", cleanupEndedTouchPointer);
+  document.addEventListener("pointercancel", cleanupEndedTouchPointer);
   canvas.addEventListener("wheel", handleExploreWheelZoom, { passive: false });
   canvas.addEventListener("lostpointercapture", (event) => {
+    cleanupEndedTouchPointer(event);
     if (explorePointerGesture?.pressed) cancelExplorePointerTracking(event.pointerId, false);
   });
   systemButton?.addEventListener("click", () => {
@@ -13171,23 +13217,18 @@
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("blur", () => {
     keys.clear();
-    activeExploreTouches.clear();
-    explorePinchGesture = null;
-    suppressExploreTouchTap = false;
-    activeBattleTouches.clear();
-    battlePinchGesture = null;
-    suppressBattleTouchTap = false;
-    cancelExplorePointerTracking();
+    resetMobileTouchGestures({ cancelExplore: true });
   });
   document.addEventListener("visibilitychange", () => {
     keys.clear();
-    cancelExplorePointerTracking();
+    resetMobileTouchGestures({ cancelExplore: true });
     previousTime = performance.now();
     if (document.visibilityState === "visible") resumeGameAudio();
     else suspendGameAudio();
   });
   window.addEventListener("pagehide", suspendGameAudio);
   window.addEventListener("pageshow", () => {
+    resetMobileTouchGestures();
     if (document.visibilityState === "visible") resumeGameAudio();
   });
   window.addEventListener("beforeunload", () => {

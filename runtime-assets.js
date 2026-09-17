@@ -1,3 +1,4 @@
+// battle command UI fixes: 20260918-battle-ui-01
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -74,7 +75,7 @@
     "game/battle-sfx.js?v=20260917-latency-cleanup-02",
     "game/ui-dom-helpers.js?v=20260917-latency-cleanup-02",
     "game/ui-presentation-helpers.js?v=20260917-latency-cleanup-02",
-    "game/system-feedback.js?v=20260917-latency-cleanup-02",
+    "game/system-feedback.js?v=20260918-defeat-position-01",
     "game/dialogue-ui.js?v=20260917-latency-cleanup-02",
     "game/facility-basic-views.js?v=20260917-latency-cleanup-02",
     "game/facility-catalog-views.js?v=20260917-latency-cleanup-02",
@@ -84,7 +85,7 @@
     "game/facility-action-router.js?v=20260917-latency-cleanup-02",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260917-server-tactical-01",
+    "game.js?v=20260918-battle-ui-01",
   ]);
 
   return Object.freeze({ scripts });

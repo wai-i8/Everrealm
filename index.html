@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260917-death-log-01"],
+          ["everrealmStyles", "styles.css?v=20260918-title-logo-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -236,7 +236,7 @@
           <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
             <div class="battle-action-heading" data-battle-command-drag-handle>
               <span>戰鬥指令</span>
-              <span id="battleCommandAp" class="battle-command-ap" role="status" aria-live="polite" aria-label="目前 AP 0 / 0"><small>AP</small><strong>0</strong><em>/ 0</em></span>
+              <span id="battleCommandAp" class="battle-command-ap" role="status" aria-live="polite" aria-label="目前 0 AP"><strong>0 AP</strong></span>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
               <span class="battle-actions-loading">戰鬥指令準備中</span>
@@ -286,8 +286,8 @@
         </section>
 
         <section id="titleScreen" class="overlay title-screen" aria-labelledby="gameTitle">
-          <h1 id="gameTitle"><span>永恆</span><span>國度</span></h1>
-          <p class="english-title">EVERREALM</p>
+          <h1 id="gameTitle" class="sr-only">永恆國度 Everrealm</h1>
+          <img class="title-logo" src="assets/ui/title/everrealm-logo-main-v1.png" alt="Everrealm 永恆國度">
           <div id="titleActions" class="title-actions" hidden>
             <button id="newGameButton" class="primary-button" type="button"><span>開始旅程</span></button>
             <button id="continueButton" class="secondary-button" type="button" hidden><span>繼續旅程</span></button>
@@ -461,9 +461,10 @@
 
         <section id="deathPanel" class="overlay modal-overlay death-panel" role="dialog" aria-modal="true" aria-labelledby="deathTitle" hidden>
           <div class="ui-modal-window death-window">
+            <img class="death-frame-art" src="assets/ui/defeat/defeat-frame-v1.png" alt="" aria-hidden="true">
             <h2 id="deathTitle" class="sr-only">戰鬥失敗</h2>
             <div class="death-logo-wrap">
-              <img class="death-logo" src="assets/ui/defeat/defeat-logo-v1.png" alt="DEFEAT">
+              <img class="death-logo" src="assets/ui/defeat/defeat-logo-v2.png" alt="DEFEAT">
             </div>
             <div class="death-divider" aria-hidden="true"><span></span></div>
             <div class="modal-actions death-actions">
@@ -522,7 +523,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-server-tactical-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260918-battle-ui-01")}"><\/script>`);
       })();
     </script>
 
@@ -558,7 +559,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-server-tactical-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-title-logo-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
