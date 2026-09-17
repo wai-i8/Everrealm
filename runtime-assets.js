@@ -7,7 +7,7 @@
 
   const scripts = Object.freeze([
     "data/classes.js?v=20260917-latency-cleanup-02",
-    "rpg-core.js?v=20260917-latency-cleanup-02",
+    "rpg-core.js?v=20260917-reconnect-01",
     "data/items.js?v=20260917-latency-cleanup-02",
     "data/equipment.js?v=20260917-latency-cleanup-02",
     "data/quests.js?v=20260917-latency-cleanup-02",
@@ -84,7 +84,7 @@
     "game/facility-action-router.js?v=20260917-latency-cleanup-02",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260917-guild-racefix-01",
+    "game.js?v=20260917-server-tactical-01",
   ]);
 
   return Object.freeze({ scripts });

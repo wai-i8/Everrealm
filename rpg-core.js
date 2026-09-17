@@ -465,7 +465,9 @@
         // back to that map's start only when the saved point is genuinely invalid.
         x: Number(player.x),
         y: Number(player.y),
-        hp: Math.max(1, Number(player.hp) || 1),
+        // HP=0 is a canonical defeated state. Do not coerce it back to 1 on
+        // reload or a dead character can briefly re-enter exploration/battle.
+        hp: Number.isFinite(Number(player.hp)) ? Math.max(0, Number(player.hp)) : 1,
         level,
         xp: level >= LEVEL_CAP ? 0 : clamp(Math.floor(Number(player.xp) || 0), 0, xpRequired(level) - 1),
         coins: clamp(Math.floor(Number(player.coins) || 0), 0, 99999),

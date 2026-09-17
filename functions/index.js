@@ -184,31 +184,75 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
 
 
     const returnToTown = action === "respawn_town";
+    const currentHp = Number(save?.player?.hp);
+    const activeBattle = save?.expansion?.serverBattle && typeof save.expansion.serverBattle === "object"
+      ? save.expansion.serverBattle
+      : null;
+
+    // A timed-out client may retry after the first recovery already committed.
+    // Treat that retry as an idempotent state resync instead of charging the
+    // EXP penalty twice or leaving the client stuck on the death screen.
+    if (Number.isFinite(currentHp) && currentHp > 0) {
+      if (activeBattle?.status === "active") return { ok: false, reason: "defeat-not-settled" };
+      const state = ServerGame.statePayload(save);
+      return {
+        ok: true,
+        reason: null,
+        alreadyRecovered: true,
+        player: state.player,
+        state,
+        respawn: {
+          mapId: state.expansion.currentMapId,
+          x: state.player.x,
+          y: state.player.y,
+        },
+      };
+    }
+
     const result = reviveResult(save, { returnToTown });
     if (!result.ok) return result;
 
+    const nextRevision = Math.max(0, Math.floor(Number(save.stateRevision) || 0)) + 1;
+    const nextState = {
+      ...save,
+      stateRevision: nextRevision,
+      player: {
+        ...(save.player || {}),
+        hp: result.player.hp,
+        level: result.player.level,
+        xp: result.player.xp,
+      },
+      expansion: { ...(save.expansion || {}) },
+    };
     const updates = {
+      stateRevision: nextRevision,
       "player.hp": result.player.hp,
       "player.level": result.player.level,
       "player.xp": result.player.xp,
       updatedAt: FieldValue.serverTimestamp(),
     };
 
+    let respawn = null;
     if (returnToTown) {
-      // Step 9B: respawning in town is itself an authoritative map change.
-      // Keep the canonical map, coordinates and trusted anchor in sync so the
-      // next legitimate doorway/exit transition is not rejected as stale.
-      const respawn = ServerGame.respawnTownStatePatch(save, { nowMs: Date.now() });
+      // Respawning in town is itself an authoritative map change. Keep the
+      // canonical map, coordinates and trusted anchor in sync.
+      respawn = ServerGame.respawnTownStatePatch(nextState, { nowMs: Date.now() });
+      nextState.player.x = respawn.x;
+      nextState.player.y = respawn.y;
+      nextState.expansion.currentMapId = respawn.mapId;
+      nextState.expansion.positionAuthority = respawn.positionAuthority;
       updates["player.x"] = respawn.x;
       updates["player.y"] = respawn.y;
       updates["expansion.currentMapId"] = respawn.mapId;
       updates["expansion.positionAuthority"] = respawn.positionAuthority;
-      transaction.update(playerRef, updates);
-      return { ...result, respawn: { mapId: respawn.mapId, x: respawn.x, y: respawn.y } };
     }
 
     transaction.update(playerRef, updates);
-    return result;
+    return {
+      ...result,
+      state: ServerGame.statePayload(nextState),
+      ...(respawn ? { respawn: { mapId: respawn.mapId, x: respawn.x, y: respawn.y } } : {}),
+    };
   });
 });
 

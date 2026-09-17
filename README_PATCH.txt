@@ -1,18 +1,17 @@
-Everrealm Legacy Cleanup Patch
+Everrealm Defeat + Revive Fix
+=============================
+Base: Everrealm-encounter-revive-hotfix
 
-用途：清走舊燈／霧／dungeon／Warrior 系統，同時保留舊 Firestore save ID 的一次性 migration。
+Changes:
+- Fix recovery buttons remaining disabled after a successful revive, which locked the second death.
+- Reset recovery lifecycle on every new death and invalidate stale recovery responses.
+- Treat HP=0 as a real authoritative death state; battle start no longer converts 0 HP to max HP.
+- Server rejects battle start with player-dead while HP is 0.
+- Equipment changes preserve HP=0 instead of silently raising it to 1.
+- Refresh-at-0HP encounter attempts reopen the recovery UI instead of entering battle.
+- Redesign defeat modal: DEFEATED title, compact fantasy panel, responsive buttons.
+- Keeps the previous shared encounter-mask validation for all field random encounters.
 
-套用：
-1. 將呢個 patch 內所有檔案解壓到 Everrealm project root，選擇覆蓋同名檔案。
-2. 在 project root 執行：
-   powershell -ExecutionPolicy Bypass -File .\APPLY_DELETIONS.ps1
-3. 驗證：
-   node --test
-4. functions/ 有修改；請按你現有流程重新 deploy Firebase Functions，web/client 檔案亦要重新發布。
-
-今次 patch：
-- modified: 104
-- new: 2
-- delete: 6
-
-重要：唔需要重建 Firebase project、Firestore 或 Realtime Database。現有舊 mapId=dungeon / classId=warrior 只作 migration input，下一次保存會寫回新 ID；舊 checkpoint/dungeon progression fields 會被清走。
+Deployment:
+- Overlay this ZIP onto the project root.
+- Redeploy Firebase Functions because functions/server-game.js changed.

@@ -7769,7 +7769,7 @@ html body [aria-disabled="true"] {
 .map-transition-overlay {
   position: absolute;
   inset: 0;
-  z-index: 70;
+  z-index: 12000;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -8007,4 +8007,118 @@ html body [aria-disabled="true"] {
 @keyframes battle-entry-copy-hold {
   from { filter: brightness(.96) drop-shadow(0 0 0 rgba(255, 209, 92, 0)); }
   to { filter: brightness(1.08) drop-shadow(0 0 10px rgba(255, 209, 92, .16)); }
+}
+
+
+/* --- Defeat overlay refresh: logo + translucent panel over battle scene --- */
+.death-panel {
+  background: radial-gradient(circle at center, rgba(8, 13, 22, .16), rgba(2, 4, 8, .42));
+}
+.death-panel .death-window {
+  max-height: calc(100vh - 1.5rem);
+  width: min(34rem, calc(100vw - 1.3rem));
+  padding: clamp(1.15rem, 3vw, 1.75rem);
+  border: 1px solid rgba(255, 200, 87, .24);
+  border-radius: 1rem;
+  color: var(--cream);
+  background: linear-gradient(155deg, rgba(10, 18, 33, .76), rgba(4, 9, 18, .68));
+  box-shadow: 0 1.15rem 2.8rem rgba(0, 0, 0, .38), inset 0 1px rgba(255,255,255,.05);
+  backdrop-filter: blur(12px) saturate(115%);
+  -webkit-backdrop-filter: blur(12px) saturate(115%);
+}
+.death-logo-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: .1rem auto .45rem;
+}
+.death-logo {
+  width: min(100%, 27rem);
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 .4rem .8rem rgba(0,0,0,.42));
+}
+.death-heading,
+.death-subtitle {
+  display: none !important;
+}
+.death-divider {
+  margin-top: .35rem;
+  margin-bottom: .85rem;
+  opacity: .62;
+}
+.death-actions {
+  gap: .65rem !important;
+  width: 100%;
+  margin-top: .3rem;
+}
+.death-choice-button {
+  min-height: 3.55rem;
+  color: var(--cream) !important;
+  font-size: .86rem;
+  background: linear-gradient(180deg, rgba(36, 55, 89, .78), rgba(18, 29, 50, .78));
+  border: 1px solid rgba(255,255,255,.12);
+  text-shadow: 0 1px 2px rgba(0,0,0,.75) !important;
+}
+.death-choice-button small {
+  display: block;
+  margin-top: .18rem;
+  color: rgba(245, 233, 202, .72) !important;
+}
+
+
+/* --- Latency UX polish: command AP + global short-wait cover --- */
+.battle-command-ap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .18rem;
+  min-width: 4.05rem;
+  justify-content: center;
+  padding: .16rem .38rem .18rem;
+  border: 1px solid rgba(94, 218, 255, .38);
+  border-radius: .48rem;
+  color: #dff8ff !important;
+  background:
+    radial-gradient(circle at 30% 0, rgba(99, 222, 255, .18), transparent 70%),
+    linear-gradient(180deg, rgba(15, 44, 70, .88), rgba(6, 22, 39, .9));
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 2px 8px rgba(0,0,0,.22);
+  letter-spacing: 0 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.72) !important;
+}
+.battle-command-ap small {
+  margin: 0 !important;
+  color: #8fe9ff !important;
+  font-size: .47rem !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em !important;
+}
+.battle-command-ap strong {
+  color: #fff4bf;
+  font-size: .76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+.battle-command-ap em {
+  color: rgba(218, 235, 248, .66);
+  font-size: .44rem;
+  font-style: normal;
+  font-weight: 800;
+}
+.battle-command-ap.is-full {
+  border-color: rgba(103, 235, 180, .5);
+  background: linear-gradient(180deg, rgba(18, 70, 57, .9), rgba(7, 35, 31, .92));
+}
+.battle-command-ap.is-low strong { color: #ffb0a8; }
+
+/* This is the one global wait/transition layer used for short authoritative
+   server waits too (skill-envelope reveal, revive, return-to-town). It must
+   beat inventory/facility/detail modals and also block double-clicks. */
+.map-transition-overlay {
+  isolation: isolate;
+  pointer-events: auto !important;
+}
+
+/* Defeat/recovery is a focused choice state: keep the persistent log out of the way. */
+.game-stage[data-game-state="dead"] .system-log {
+  display: none !important;
 }

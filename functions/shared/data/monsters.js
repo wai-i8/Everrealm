@@ -74,7 +74,7 @@
       stats: { hp: 800, attack: 225, defense: 80 },
       combat: { moveRange: 4, role: "ranged_control", skills: ["tongue_strike", "slime_shot"] },
       rewards: { baseXp: 100, coins: 0, drops: [] },
-      habitat: { maps: ["mountain-southeast"], zones: ["mountain-wetland"] },
+      habitat: { maps: ["field", "mountain-southeast"], zones: ["mountain-road", "mountain-wetland"] },
       questTags: ["amphibian", "ranged", "mountain"],
       locomotion: { status: "approved", assetKey: "frog", atlas: "assets/locomotion/frog-v1.png", sourceArt: "assets/monster-sources/frog.png" },
       codex: { summary: "棲息濕地與積水坑道的青蛙，以長舌和黏液彈控制中距離。" },

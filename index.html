@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260917-legacy-cleanup-01"],
+          ["everrealmStyles", "styles.css?v=20260917-death-log-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -236,6 +236,7 @@
           <section id="battleActionDock" class="battle-action-dock battle-card" data-battle-panel="actions" aria-label="可拖動戰鬥指令選單">
             <div class="battle-action-heading" data-battle-command-drag-handle>
               <span>戰鬥指令</span>
+              <span id="battleCommandAp" class="battle-command-ap" role="status" aria-live="polite" aria-label="目前 AP 0 / 0"><small>AP</small><strong>0</strong><em>/ 0</em></span>
             </div>
             <div id="battleSkillButtons" class="battle-skill-buttons">
               <span class="battle-actions-loading">戰鬥指令準備中</span>
@@ -460,7 +461,11 @@
 
         <section id="deathPanel" class="overlay modal-overlay death-panel" role="dialog" aria-modal="true" aria-labelledby="deathTitle" hidden>
           <div class="ui-modal-window death-window">
-            <h2 id="deathTitle">你倒下了</h2>
+            <h2 id="deathTitle" class="sr-only">戰鬥失敗</h2>
+            <div class="death-logo-wrap">
+              <img class="death-logo" src="assets/ui/defeat/defeat-logo-v1.png" alt="DEFEAT">
+            </div>
+            <div class="death-divider" aria-hidden="true"><span></span></div>
             <div class="modal-actions death-actions">
               <button id="reviveHereButton" class="primary-button death-choice-button" type="button"><span>原地復活</span></button>
               <button id="respawnButton" class="secondary-button death-choice-button" type="button"><span>返回主城</span></button>
@@ -517,7 +522,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-guild-racefix-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-server-tactical-01")}"><\/script>`);
       })();
     </script>
 
@@ -553,7 +558,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-10", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-server-tactical-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

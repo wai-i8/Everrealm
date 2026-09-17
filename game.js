@@ -90,6 +90,8 @@
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
+  const LOCAL_BATTLE_RESUME_KEY = "everrealm-battle-resume-v1";
+  const LOCAL_BATTLE_DEFEAT_KEY = "everrealm-battle-defeat-v1";
   const MOBILE_PROJECTED_FACING_MAP = Object.freeze({ up: "right", right: "down", down: "left", left: "up" });
   const SYSTEM_LOG_POSITION_KEY = "everrealm-system-log-position-v2";
   const SYSTEM_LOG_COLLAPSED_KEY = "everrealm-system-log-collapsed-v1";
@@ -213,6 +215,7 @@
     hpText: document.getElementById("selectedUnitHpText"),
     apFill: document.getElementById("selectedUnitApFill"),
     apText: document.getElementById("selectedUnitApText"),
+    commandAp: document.getElementById("battleCommandAp"),
     enemyRows: document.getElementById("battleEnemyRows"),
     potionCount: document.getElementById("battlePotionCount"),
     hint: document.getElementById("battleHint"),
@@ -286,6 +289,7 @@
   let guildEnvelopeOpenPending = false;
   let playerResetWrite = Promise.resolve({ saved: true, idle: true });
   let recoveryCommandPending = false;
+  let recoveryCommandSerial = 0;
   let mapTransitionPending = false;
   let mapTransitionSerial = 0;
   let authUser = null;
@@ -488,6 +492,7 @@
   const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null;
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3") : null;
   const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
+  const defeatBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/defeat-screen-v1.mp3") : null;
   const encounterTransitionAudio = typeof Audio === "function" ? new Audio("assets/audio/sfx/battle/common/encounter-transition-v2.mp3") : null;
   // Mountain battle obstacle art supplied as standalone PNGs. Every prop is
   // rendered with its native aspect ratio: resizing is allowed, stretching is
@@ -505,7 +510,7 @@
     if (image) image.src = entry.src;
     return { ...entry, image };
   });
-  for (const music of [titleBgmAudio, battleBgmAudio, victoryBgmAudio]) {
+  for (const music of [titleBgmAudio, battleBgmAudio, victoryBgmAudio, defeatBgmAudio]) {
     if (!music) continue;
     music.loop = true;
     music.preload = "auto";
@@ -551,6 +556,7 @@
     titleBgmAudio?.pause();
     battleBgmAudio?.pause();
     victoryBgmAudio?.pause();
+    defeatBgmAudio?.pause();
     encounterTransitionAudio?.pause();
   }
 
@@ -567,22 +573,30 @@
       titleBgmAudio?.pause();
       battleBgmAudio?.pause();
       victoryBgmAudio?.pause();
+      defeatBgmAudio?.pause();
       return;
     }
     stopTitleBgm({ reset: false });
-    if (mode === "battle" && battle) {
+    if ((mode === "battle" || mode === "dead") && battle) {
       bgm.setEnabled(false);
-      if (battle.phase === "victory") {
+      if (mode === "dead" || battle.phase === "defeat") {
         battleBgmAudio?.pause();
+        victoryBgmAudio?.pause();
+        defeatBgmAudio?.play().catch(() => {});
+      } else if (battle.phase === "victory") {
+        battleBgmAudio?.pause();
+        defeatBgmAudio?.pause();
         victoryBgmAudio?.play().catch(() => {});
       } else {
         victoryBgmAudio?.pause();
+        defeatBgmAudio?.pause();
         battleBgmAudio?.play().catch(() => {});
       }
       return;
     }
     battleBgmAudio?.pause();
     victoryBgmAudio?.pause();
+    defeatBgmAudio?.pause();
     bgm.setEnabled(true);
     bgm.resume?.();
     bgm.setMap(currentMapId);
@@ -591,11 +605,12 @@
   function unlockGameAudioFromGesture() {
     if ((mode !== "title" && !musicEnabled && !sfxEnabled) || document.visibilityState !== "visible") return;
     const titlePlaying = mode === "title" && titleBgmAudio && titleBgmAudio.paused === false;
-    const battlePlaying = mode === "battle" && battle && (
-      (battle.phase === "victory" && victoryBgmAudio && victoryBgmAudio.paused === false)
-      || (battle.phase !== "victory" && battleBgmAudio && battleBgmAudio.paused === false)
+    const battlePlaying = (mode === "battle" || mode === "dead") && battle && (
+      ((mode === "dead" || battle.phase === "defeat") && defeatBgmAudio && defeatBgmAudio.paused === false)
+      || (battle.phase === "victory" && victoryBgmAudio && victoryBgmAudio.paused === false)
+      || (battle.phase !== "victory" && battle.phase !== "defeat" && battleBgmAudio && battleBgmAudio.paused === false)
     );
-    const mapPlaying = mode !== "title" && mode !== "battle" && (bgm.snapshot?.().activeInstances || 0) > 0;
+    const mapPlaying = mode !== "title" && mode !== "battle" && mode !== "dead" && (bgm.snapshot?.().activeInstances || 0) > 0;
     if (audioGestureUnlocked && (titlePlaying || battlePlaying || mapPlaying || (mode !== "title" && !musicEnabled))) return;
     audioGestureUnlocked = true;
     resumeGameAudio();
@@ -621,6 +636,7 @@
     window.EverrealmFootstepsRuntime?.suspend();
     stopTitleBgm({ reset: false });
     pauseMusicElement(victoryBgmAudio, true);
+    pauseMusicElement(defeatBgmAudio, true);
     bgm.setEnabled(false);
     if (!battleBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { battleBgmAudio.currentTime = 0; } catch (_) {}
@@ -630,16 +646,29 @@
   function startVictoryBgm() {
     stopTitleBgm({ reset: false });
     pauseMusicElement(battleBgmAudio, true);
+    pauseMusicElement(defeatBgmAudio, true);
     bgm.setEnabled(false);
     if (!victoryBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
     try { victoryBgmAudio.currentTime = 0; } catch (_) {}
     victoryBgmAudio.play().catch(() => {});
   }
 
+  function startDefeatBgm() {
+    window.EverrealmFootstepsRuntime?.suspend();
+    stopTitleBgm({ reset: false });
+    pauseMusicElement(battleBgmAudio, true);
+    pauseMusicElement(victoryBgmAudio, true);
+    bgm.setEnabled(false);
+    if (!defeatBgmAudio || !musicEnabled || pageAudioSuspended || document.visibilityState !== "visible") return;
+    try { defeatBgmAudio.currentTime = 0; } catch (_) {}
+    defeatBgmAudio.play().catch(() => {});
+  }
+
   function stopBattleBgm() {
     window.EverrealmFootstepsRuntime?.resume();
     pauseMusicElement(battleBgmAudio, true);
     pauseMusicElement(victoryBgmAudio, true);
+    pauseMusicElement(defeatBgmAudio, true);
     // closeBattleHud() is also called while authentication/new-game flows are
     // still on the title screen. Do not briefly start map music underneath the
     // title/login track in that state; real battle exits still resume map BGM.
@@ -1533,6 +1562,206 @@
     newGame(false, classId, pendingPlayerGender);
   }
 
+  let battleSnapshotPersistTimer = null;
+
+  function safeLocalJsonGet(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function safeLocalJsonSet(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function safeLocalRemove(key) {
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
+
+  function clearBattlePersistenceSnapshots() {
+    if (battleSnapshotPersistTimer != null) {
+      window.clearTimeout(battleSnapshotPersistTimer);
+      battleSnapshotPersistTimer = null;
+    }
+    safeLocalRemove(LOCAL_BATTLE_RESUME_KEY);
+    safeLocalRemove(LOCAL_BATTLE_DEFEAT_KEY);
+  }
+
+  function normalizeStoredBattleSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    // Tactical cache has no time expiry. It is keyed by battleId and is cleared
+    // when the authoritative battle settles/cancels, so age alone must never
+    // destroy a resumable board state.
+    return snapshot.version === 1 ? snapshot : null;
+  }
+
+  function readPersistedBattleResumeSnapshot(expectedBattleId = null) {
+    const snapshot = normalizeStoredBattleSnapshot(safeLocalJsonGet(LOCAL_BATTLE_RESUME_KEY));
+    if (!snapshot) return null;
+    if (expectedBattleId && snapshot.battleId && String(snapshot.battleId) !== String(expectedBattleId)) return null;
+    return snapshot;
+  }
+
+  function readPersistedBattleDefeatSnapshot() {
+    const snapshot = normalizeStoredBattleSnapshot(safeLocalJsonGet(LOCAL_BATTLE_DEFEAT_KEY));
+    if (!snapshot) return null;
+    if (snapshot.phase !== "defeat" && Number(snapshot.hero?.hp) > 0) return null;
+    return snapshot;
+  }
+
+  function serializeLocalBattleUnit(unit) {
+    if (!unit) return null;
+    return {
+      id: String(unit.id || ""),
+      type: unit.type || "",
+      name: unit.name || "",
+      level: Math.max(1, Math.floor(Number(unit.level) || 1)),
+      hp: Math.max(0, Number(unit.hp) || 0),
+      maxHp: Math.max(1, Number(unit.maxHp) || 1),
+      alive: unit.alive !== false && Number(unit.hp) > 0,
+      cell: unit.cell ? copyBattleCell(unit.cell) : null,
+      facing: unit.facing || "right",
+      side: unit.side || "enemy",
+    };
+  }
+
+  function buildLocalBattleSnapshot(currentBattle = battle, options = {}) {
+    if (!currentBattle || !currentBattle.hero || !Array.isArray(currentBattle.enemies)) return null;
+    const defeatPhase = options.defeat === true || currentBattle.phase === "defeat" || mode === "dead" || Number(currentBattle.hero.hp) <= 0;
+    return {
+      version: 1,
+      storedAt: Date.now(),
+      mapId: currentMapId,
+      battleId: currentBattle.serverBattleId || null,
+      phase: defeatPhase ? "defeat" : "planning_move",
+      round: Math.max(1, Math.floor(Number(currentBattle.round) || 1)),
+      ap: Math.max(0, Number(currentBattle.ap) || 0),
+      source: {
+        id: String(currentBattle.source?.id || "resume-local"),
+        instanceId: String(currentBattle.source?.instanceId || currentBattle.source?.id || "resume-local"),
+        type: String(currentBattle.source?.type || ""),
+        name: currentBattle.source?.name || "戰鬥",
+        level: Math.max(1, Math.floor(Number(currentBattle.source?.level) || 1)),
+        boss: Boolean(currentBattle.source?.boss),
+        x: Number(currentBattle.source?.x) || 0,
+        y: Number(currentBattle.source?.y) || 0,
+      },
+      hero: serializeLocalBattleUnit(currentBattle.hero),
+      enemies: currentBattle.enemies.map((enemy) => serializeLocalBattleUnit(enemy)).filter(Boolean),
+    };
+  }
+
+  function persistBattleResumeState(options = {}) {
+    const snapshot = buildLocalBattleSnapshot(options.battle || battle, options);
+    if (!snapshot) return false;
+    safeLocalJsonSet(LOCAL_BATTLE_RESUME_KEY, snapshot);
+    if (options.defeat || snapshot.phase === "defeat") safeLocalJsonSet(LOCAL_BATTLE_DEFEAT_KEY, snapshot);
+    return true;
+  }
+
+  function schedulePersistBattleResumeState(options = {}) {
+    if (!(options.battle || battle)) return false;
+    if (battleSnapshotPersistTimer != null) window.clearTimeout(battleSnapshotPersistTimer);
+    battleSnapshotPersistTimer = window.setTimeout(() => {
+      battleSnapshotPersistTimer = null;
+      persistBattleResumeState(options);
+    }, Math.max(0, Number(options.delayMs) || 120));
+    return true;
+  }
+
+  function battleSourceFromLocalSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    const type = ExpansionWorld.normalizeMonsterId(snapshot.source?.type) || String(snapshot.source?.type || "").trim();
+    const blueprint = type ? ExpansionWorld.monsterBlueprint(type) : null;
+    const base = type ? enemyTypes[type] : null;
+    if (!type || (!blueprint && !base)) return null;
+    const level = Core.clamp(Math.floor(Number(snapshot.source?.level) || blueprint?.baseLevel || 1), 1, 45);
+    const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(type, level) : null;
+    const encounterId = String(snapshot.source?.instanceId || snapshot.source?.id || snapshot.battleId || `resume-${type}`);
+    return {
+      id: encounterId,
+      instanceId: encounterId,
+      alive: true,
+      encounterCooldown: 0,
+      type,
+      name: snapshot.source?.name || blueprint?.name_zh || base?.name || type,
+      level,
+      boss: Boolean(snapshot.source?.boss),
+      damage: stats?.attack || base?.damage || 1,
+      defence: stats?.defense ?? base?.defence ?? 0,
+      xp: blueprint?.rewards?.baseXp ?? base?.xp ?? 0,
+      coins: blueprint?.rewards?.coins ?? base?.coins ?? 0,
+      moveRange: blueprint?.moveRange ?? stats?.moveRange ?? base?.moveRange ?? 4,
+      x: Number(snapshot.source?.x) || Number(player.x) || 0,
+      y: Number(snapshot.source?.y) || Number(player.y) || 0,
+      color: base?.color || "#ffc857",
+    };
+  }
+
+  function applyLocalBattleSnapshot(targetBattle, snapshot, options = {}) {
+    if (!targetBattle || !snapshot || typeof snapshot !== "object") return false;
+    const authorityLocked = options.authorityLocked === true;
+    if (snapshot.hero?.cell) targetBattle.hero.cell = copyBattleCell(snapshot.hero.cell);
+    if (snapshot.hero?.facing) targetBattle.hero.facing = String(snapshot.hero.facing);
+    if (!authorityLocked && Number.isFinite(Number(snapshot.hero?.hp))) {
+      targetBattle.hero.hp = Core.clamp(Number(snapshot.hero.hp), 0, targetBattle.hero.maxHp);
+      targetBattle.hero.alive = targetBattle.hero.hp > 0;
+      player.hp = targetBattle.hero.hp;
+    }
+    for (let index = 0; index < targetBattle.enemies.length; index += 1) {
+      const local = targetBattle.enemies[index];
+      const stored = snapshot.enemies?.[index];
+      if (!local || !stored) continue;
+      if (stored.cell) local.cell = copyBattleCell(stored.cell);
+      if (stored.facing) local.facing = String(stored.facing);
+      if (!authorityLocked && Number.isFinite(Number(stored.maxHp))) local.maxHp = Math.max(1, Number(stored.maxHp));
+      if (!authorityLocked && Number.isFinite(Number(stored.hp))) local.hp = Core.clamp(Number(stored.hp), 0, local.maxHp);
+      if (!authorityLocked) local.alive = stored.alive !== false && local.hp > 0;
+    }
+    if (!authorityLocked && Number.isFinite(Number(snapshot.round))) targetBattle.round = Math.max(1, Math.floor(Number(snapshot.round)));
+    if (!authorityLocked && Number.isFinite(Number(snapshot.ap))) targetBattle.ap = Core.clamp(Math.floor(Number(snapshot.ap)), 0, BATTLE_AP_MAX);
+
+    const visualOnly = options.visualOnly === true;
+    targetBattle.phase = visualOnly ? "defeat" : "planning_move";
+    targetBattle.moveBonusNext = 0;
+    targetBattle.evasion = 0;
+    targetBattle.moved = false;
+    targetBattle.guard = false;
+    targetBattle.guardReduction = 0;
+    targetBattle.selectedAction = "move";
+    targetBattle.cursor = { ...targetBattle.hero.cell };
+    targetBattle.heroMoveDraft = [{ ...targetBattle.hero.cell }];
+    targetBattle.heroMoveCommands = [];
+    targetBattle.heroMovePlan = null;
+    targetBattle.awaitingFacing = true;
+    targetBattle.movementResolution = null;
+    targetBattle.actionResolution = null;
+    targetBattle.actingUnitId = null;
+    targetBattle.actingUnitIds = [];
+    targetBattle.predictedRoundPending = false;
+    targetBattle.serverSyncPending = false;
+    targetBattle.enemyPlans = visualOnly ? [] : planEnemyRound();
+    targetBattle.message = visualOnly ? "請選擇復活方式。" : "已重新連接上一場戰鬥。";
+    targetBattle.messageDanger = visualOnly;
+    updateHud(true);
+    updateBattleUi();
+    return true;
+  }
+
+  function resumeDefeatPresentationFromSnapshot(snapshot) {
+    const source = battleSourceFromLocalSnapshot(snapshot);
+    if (!source) return false;
+    return startBattle(source, true, { localResumeSnapshot: snapshot, localVisualOnly: true });
+  }
+
   function applySaveData(rawSave, options = {}) {
     const save = Core.sanitizeSave(rawSave);
     if (!save) {
@@ -1569,7 +1798,13 @@
     const loadedHp = save.combatScaleVersion >= COMBAT_SCALE_VERSION
       ? player.hp
       : Math.round(player.hp * HP_SCALE);
-    player.hp = Core.clamp(loadedHp, 1, stats.maxHp);
+    // Zero HP is meaningful server-authoritative state. Keep it across reloads
+    // so bootstrap can route straight to recovery instead of resurrecting the
+    // player into exploration for one frame.
+    player.hp = Core.clamp(loadedHp, 0, stats.maxHp);
+    const persistedServerBattle = rawSave?.expansion?.serverBattle && typeof rawSave.expansion.serverBattle === "object"
+      ? rawSave.expansion.serverBattle
+      : null;
     if (isBlocked(player)) {
       player.x = world.start.x;
       player.y = world.start.y;
@@ -1603,6 +1838,28 @@
     canvas.focus({ preventScroll: true });
     ensureWorldTimeLoaded();
     startRealtimeSession();
+
+    // Bootstrap routing is based on authoritative persisted state, not RTDB
+    // presence. Closing a tab, backgrounding a phone or losing connectivity is
+    // not a defeat by itself. On reconnect/reload we either resume the server
+    // battle, reopen recovery for HP=0, or remain in normal exploration.
+    if (persistedServerBattle?.status === "active") {
+      addSystemMessage("system", "偵測到未完成戰鬥，正在重新連接。", "info");
+      if (!resumeBattleFromServerSnapshot(persistedServerBattle)) {
+        console.warn("Everrealm could not rebuild the persisted battle session.", persistedServerBattle);
+        showToast("未能還原上一場戰鬥，請重新載入後再試。", "danger");
+      }
+    } else if (player.hp <= 0) {
+      addSystemMessage("system", "角色仍處於倒下狀態，請選擇復活方式。", "warning");
+      const defeatSnapshot = readPersistedBattleDefeatSnapshot();
+      if (defeatSnapshot && defeatSnapshot.mapId === currentMapId && resumeDefeatPresentationFromSnapshot(defeatSnapshot)) {
+        playerDeath({ silent: true, resumed: true });
+      } else {
+        playerDeath({ silent: true, resumed: true });
+      }
+    } else {
+      clearBattlePersistenceSnapshots();
+    }
     return true;
   }
 
@@ -1696,6 +1953,7 @@
   }
 
   function restoreExplorationUiAfterBattle() {
+    clearBattlePersistenceSnapshots();
     mode = "playing";
     stage.dataset.gameState = mode;
     syncExploreSidebarVisibility();
@@ -2036,6 +2294,7 @@
     if (titleBgmAudio) titleBgmAudio.volume = bgmVolume;
     if (battleBgmAudio) battleBgmAudio.volume = bgmVolume;
     if (victoryBgmAudio) victoryBgmAudio.volume = bgmVolume;
+    if (defeatBgmAudio) defeatBgmAudio.volume = bgmVolume;
     if (persist) {
       try { localStorage.setItem(BGM_VOLUME_KEY, bgmVolume.toFixed(2)); } catch (_) {}
     }
@@ -2061,17 +2320,26 @@
         stopTitleBgm({ reset: false });
         bgm.setEnabled(false);
       }
-    } else if (mode === "battle") {
+    } else if (mode === "battle" || mode === "dead") {
       stopTitleBgm({ reset: false });
       bgm.setEnabled(false);
-      if (battle?.phase === "victory") {
+      if (mode === "dead" || battle?.phase === "defeat") {
         battleBgmAudio?.pause();
+        victoryBgmAudio?.pause();
+        if (defeatBgmAudio) {
+          if (musicEnabled && !pageAudioSuspended) defeatBgmAudio.play().catch(() => {});
+          else defeatBgmAudio.pause();
+        }
+      } else if (battle?.phase === "victory") {
+        battleBgmAudio?.pause();
+        defeatBgmAudio?.pause();
         if (victoryBgmAudio) {
           if (musicEnabled && !pageAudioSuspended) victoryBgmAudio.play().catch(() => {});
           else victoryBgmAudio.pause();
         }
       } else {
         victoryBgmAudio?.pause();
+        defeatBgmAudio?.pause();
         if (battleBgmAudio) {
           if (musicEnabled && !pageAudioSuspended) battleBgmAudio.play().catch(() => {});
           else battleBgmAudio.pause();
@@ -2834,7 +3102,7 @@
       const nextMapId = expansion.currentMapId === "dungeon" ? "mountain-southeast" : expansion.currentMapId;
       if (hasMap(nextMapId)) currentMapId = nextMapId;
     }
-    markPersistenceDirty();
+    if (options.markDirty !== false) markPersistenceDirty();
     updateHud(true);
     if (guildStateIncluded) {
       updateMenuBadges();
@@ -3055,19 +3323,50 @@
     updateHud();
   }
 
-  function playerDeath() {
+  const RECOVERY_COMMAND_TIMEOUT_MS = 12000;
+  const DEFEAT_SETTLEMENT_WAIT_MS = 6000;
+
+  function withClientTimeout(promise, timeoutMs, label = "server-command") {
+    let timeoutId = null;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        const error = new Error(`${label} timed out after ${timeoutMs}ms`);
+        error.code = "client/timeout";
+        reject(error);
+      }, Math.max(1, Number(timeoutMs) || 1));
+    });
+    return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    });
+  }
+
+  function playerDeath(options = {}) {
+    const silent = options?.silent === true;
+    // A death screen is a new recovery lifecycle. Invalidate any stale
+    // recovery response from a previous death and always reset the reusable
+    // DOM buttons; successful recovery hides the panel before its finally
+    // block runs, so leaving them disabled there would lock the next death.
+    recoveryCommandSerial += 1;
+    recoveryCommandPending = false;
+    const reviveHereButton = document.getElementById("reviveHereButton");
+    const respawnButton = document.getElementById("respawnButton");
+    if (reviveHereButton) reviveHereButton.disabled = false;
+    if (respawnButton) respawnButton.disabled = false;
+
     mode = "dead";
     player.deathStartedAt = elapsed;
     stage.dataset.gameState = mode;
     syncRealtimeState("battle");
     keys.clear();
-    sound.death();
+    if (!silent) sound.death();
     battleHud.hidden = true;
     battleFacingPicker.hidden = true;
+    if (battle) persistBattleResumeState({ defeat: true });
+    startDefeatBgm();
     deathPanel.hidden = false;
     resetDraggableWindowPosition(deathPanel.querySelector(".ui-modal-window"));
-    document.getElementById("reviveHereButton").focus({ preventScroll: true });
-    announce("你倒下了。");
+    reviveHereButton?.focus({ preventScroll: true });
+    announce("Defeated.");
   }
 
   async function finishDeathRevive({ returnToTown = false } = {}) {
@@ -3076,27 +3375,80 @@
 
     const reviveHereButton = document.getElementById("reviveHereButton");
     const respawnButton = document.getElementById("respawnButton");
+    const commandSerial = ++recoveryCommandSerial;
     recoveryCommandPending = true;
     if (reviveHereButton) reviveHereButton.disabled = true;
     if (respawnButton) respawnButton.disabled = true;
+    const recoveryLabel = returnToTown ? "返回主城" : "原地復活";
+    const overlayStartedAt = showMapTransitionOverlay(returnToTown ? "返回主城中" : "復活中");
+    addSystemMessage("system", `${recoveryLabel}中`, "info");
 
     try {
-      // Persist the zero-HP death state first. The server refuses revival when
-      // the canonical cloud save is not actually dead, so a normal client race
-      // cannot turn this into a free heal command.
-      saveImportant(false);
-      const flush = await savePersistence?.flushCloud?.();
-      if (flush?.error) throw flush.error;
+      // If the defeat settlement was still in flight when the death panel
+      // appeared, wait for that SAME request instead of firing a duplicate
+      // settle command. A later click can retry this wait without duplicating
+      // the authoritative defeat transaction.
+      if (battle?.phase === "defeat" && battle.serverReady && !battle.serverDefeatSettled) {
+        let previousSettled = false;
+        if (battle.defeatSettlementPromise) {
+          try {
+            previousSettled = Boolean(await withClientTimeout(battle.defeatSettlementPromise, DEFEAT_SETTLEMENT_WAIT_MS, "battle-defeat-settle"));
+          } catch (error) {
+            if (String(error?.code || "") === "client/timeout") {
+              throw Object.assign(new Error("Defeat settlement is still pending."), { code: "client/defeat-settle-timeout" });
+            }
+            throw error;
+          }
+        }
+        // If the original settle definitely finished but failed, retry once on
+        // the user's recovery action. This is not a duplicate while the first
+        // request is still pending.
+        if (!previousSettled && !battle.serverDefeatSettled) {
+          const retrySettlement = settleBattleDefeatState(battle);
+          battle.defeatSettlementPromise = retrySettlement;
+          try {
+            await withClientTimeout(retrySettlement, DEFEAT_SETTLEMENT_WAIT_MS, "battle-defeat-settle-retry");
+          } catch (error) {
+            if (String(error?.code || "") === "client/timeout") {
+              throw Object.assign(new Error("Defeat settlement retry is still pending."), { code: "client/defeat-settle-timeout" });
+            }
+            throw error;
+          }
+        }
+        if (!battle.serverDefeatSettled) {
+          throw Object.assign(new Error("Defeat settlement is not confirmed."), { code: "client/defeat-not-settled" });
+        }
+      }
 
-      const result = await ServerApi.recoverPlayer(returnToTown ? "respawn_town" : "revive_here");
+      // A normal server-settled battle defeat has already committed HP=0, so
+      // no pre-revive cloud save is needed. Keep a bounded fallback only for
+      // non-battle deaths/debug paths that do not have an authoritative settle.
+      const serverDeathConfirmed = battle?.serverDefeatSettled === true;
+      if (!serverDeathConfirmed) {
+        saveImportant(false);
+        const flush = await withClientTimeout(savePersistence?.flushCloud?.(), 6000, "pre-revive-flush");
+        if (flush?.error) throw flush.error;
+      }
+
+      const result = await withClientTimeout(
+        ServerApi.recoverPlayer(returnToTown ? "respawn_town" : "revive_here"),
+        RECOVERY_COMMAND_TIMEOUT_MS,
+        "recover-player",
+      );
+      if (commandSerial !== recoveryCommandSerial) return;
+      if (!result?.ok && result?.reason === "defeat-not-settled") {
+        throw Object.assign(new Error("Server defeat state is not settled."), { code: "client/defeat-not-settled" });
+      }
       if (!result?.ok && result?.reason === "not-dead") {
-        return showToast("雲端角色狀態未確認倒下，暫時未能復活。", "danger");
+        throw Object.assign(new Error("Server player is not dead."), { code: "client/not-dead" });
       }
       if (!result?.ok) return showToast("今次未能完成復活。", "danger");
 
-      const nextLevel = Core.clamp(Math.floor(Number(result.player?.level) || player.level), 1, Expansion.LEVEL_CAP);
-      const nextXp = Math.max(0, Math.floor(Number(result.player?.xp) || 0));
-      const nextHp = Math.max(1, Number(result.player?.hp) || 1);
+      if (result.state) applyAuthoritativeState(result.state, { markDirty: false });
+      const authoritativePlayer = result.state?.player || result.player || {};
+      const nextLevel = Core.clamp(Math.floor(Number(authoritativePlayer.level) || player.level), 1, Expansion.LEVEL_CAP);
+      const nextXp = Math.max(0, Math.floor(Number(authoritativePlayer.xp) || 0));
+      const nextHp = Math.max(1, Number(authoritativePlayer.hp) || 1);
       player.level = nextLevel;
       player.xp = nextXp;
       player.hp = Core.clamp(nextHp, 1, playerStats().maxHp);
@@ -3112,7 +3464,14 @@
       const removedItems = equipmentResult.removedItems;
       const deducted = Math.max(0, Math.floor(Number(result.deducted) || 0));
       const levelsLost = Math.max(0, Math.floor(Number(result.levelsLost) || 0));
+      const authoritativeMapId = String(result.state?.expansion?.currentMapId || result.respawn?.mapId || currentMapId);
+      const authoritativePosition = {
+        x: Number(result.respawn?.x ?? result.state?.player?.x),
+        y: Number(result.respawn?.y ?? result.state?.player?.y),
+      };
+      const hasAuthoritativePosition = Number.isFinite(authoritativePosition.x) && Number.isFinite(authoritativePosition.y);
 
+      clearBattlePersistenceSnapshots();
       closeBattleHud();
       encounterGrace = 1.8;
       player.invulnerable = 1.8;
@@ -3121,12 +3480,15 @@
       deathPanel.hidden = true;
       mode = "playing";
       stage.dataset.gameState = mode;
-      if (returnToTown) {
-        // Use the normal map-transition path so BGM, pathing, portal state,
-        // particles and camera all reset exactly as they do on any other return.
-        transitionMap("world", overworld.start, null, { serverVerified: true });
+
+      if (authoritativeMapId !== currentMapId || returnToTown) {
+        const targetMap = maps[authoritativeMapId] || overworld;
+        const targetPosition = hasAuthoritativePosition ? authoritativePosition : targetMap.start;
+        await transitionMap(authoritativeMapId, targetPosition, null, { serverVerified: true });
         player.invulnerable = 1.8;
       } else {
+        await waitForMapTransitionCover(overlayStartedAt);
+        await hideMapTransitionOverlay();
         resetEnemies();
         camera.x = player.x;
         camera.y = player.y;
@@ -3139,21 +3501,38 @@
 
       syncRealtimeState("exploring");
 
-      const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
-      const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
-      showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
-      addSystemMessage("system", `失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+      if (result.alreadyRecovered) {
+        showToast("復活狀態已重新同步。", "good");
+        addSystemMessage("system", "伺服器其實已完成復活，角色狀態已重新同步。", "good");
+      } else {
+        const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
+        const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
+        showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+        addSystemMessage("reward", `失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+      }
     } catch (error) {
+      if (commandSerial !== recoveryCommandSerial) return;
+      await hideMapTransitionOverlay();
       console.warn("Everrealm server revive command failed.", error);
       const code = String(error?.code || "");
-      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      if (code === "client/timeout") {
+        showToast("伺服器回覆逾時，未確認復活結果；可以再試一次。", "danger");
+        addSystemMessage("system", "復活請求逾時；按鈕已重新開放，可以再試一次。", "warning");
+      } else if (code === "client/defeat-settle-timeout" || code === "client/defeat-not-settled") {
+        showToast("戰敗狀態仍在同步，請稍後再試復活。", "danger");
+        addSystemMessage("system", "戰敗狀態尚未完成同步，復活未被扣除任何額外代價。", "warning");
+      } else if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
       else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
       else showToast("伺服器暫時未能處理復活。", "danger");
     } finally {
-      recoveryCommandPending = false;
-      if (mode === "dead") {
+      if (commandSerial === recoveryCommandSerial) {
+        recoveryCommandPending = false;
+        // These buttons are persistent DOM nodes. Re-enable them even after a
+        // successful recovery (when mode is already "playing") so the next
+        // death cannot inherit disabled controls from the previous one.
         if (reviveHereButton) reviveHereButton.disabled = false;
         if (respawnButton) respawnButton.disabled = false;
+        if (mode === "dead") await hideMapTransitionOverlay();
       }
     }
   }
@@ -5677,7 +6056,7 @@
     if (!ServerApi?.economy) return showToast("伺服器獎勵指令尚未就緒。", "danger");
     if (guildEnvelopeOpenPending) return;
     guildEnvelopeOpenPending = true;
-    const overlayStartedAt = showMapTransitionOverlay("開封中...");
+    const overlayStartedAt = showMapTransitionOverlay("開封中");
     try {
       const result = await ServerApi.economy("open-envelope", { star: safeStar });
       await waitForMapTransitionCover(overlayStartedAt, reducedMotion ? 0 : 650);
@@ -6090,8 +6469,25 @@
     if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
   }
 
-  function startBattle(source, instant = false) {
+  function startBattle(source, instant = false, options = {}) {
+    const resumeSnapshot = options?.serverSnapshot && typeof options.serverSnapshot === "object"
+      ? options.serverSnapshot
+      : null;
+    const localResumeSnapshot = options?.localResumeSnapshot && typeof options.localResumeSnapshot === "object"
+      ? options.localResumeSnapshot
+      : null;
+    const localVisualOnly = options?.localVisualOnly === true;
+    const resumingServerBattle = Boolean(resumeSnapshot?.id && resumeSnapshot?.status === "active");
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
+    // HP=0 is a real persisted death state, not a missing value. A normal new
+    // encounter must never hydrate it back to max HP. The only exception is a
+    // persisted active server battle being reconstructed after reload; that
+    // session may itself contain the final 0-HP round and must be settled.
+    if (Number(player.hp) <= 0 && !resumingServerBattle && !localVisualOnly) {
+      showToast("角色已倒下，請先復活。", "danger");
+      playerDeath();
+      return false;
+    }
     hideAllOverlays();
     activeBattleTouches.clear();
     battlePinchGesture = null;
@@ -6102,7 +6498,8 @@
     const battlefield = battleFieldContextFor(currentMapId);
     const dimensions = battleDimensionsFor(battlefield);
     const heroSpawn = battleDeploymentCell(battlefield, "ally", 0);
-    showBattleEntryTransition(source);
+    if (!resumingServerBattle && !localResumeSnapshot) showBattleEntryTransition(source);
+    else hideBattleEntryTransition();
     const entryTransitionStartedAt = performance.now();
     battleToken += 1;
     const hero = {
@@ -6112,7 +6509,7 @@
       name: playerDisplayName(),
       level: player.level,
       cell: { ...heroSpawn },
-      hp: Math.ceil(player.hp),
+      hp: Math.max(0, Math.ceil(player.hp)),
       maxHp: stats.maxHp,
       attack: stats.attack,
       defence: stats.defence,
@@ -6125,7 +6522,7 @@
       facingReserve: BATTLE_FINAL_FACING_RESERVE,
       attackRange: 1,
       initiative: stats.initiative,
-      alive: true,
+      alive: Number(player.hp) > 0,
       facing: "right",
       hitFlash: 0,
     };
@@ -6180,18 +6577,45 @@
     battleHud.hidden = true;
     window.EverrealmFootstepsRuntime?.suspend();
     bgm.setEnabled(false);
-    announce(`遇上${source.name}。進入格仔回合戰。`);
+    announce(resumingServerBattle ? `重新連接${source.name}戰鬥。` : `遇上${source.name}。進入格仔回合戰。`);
     maintainGodModeState();
-    authorizeBattleSession(battle, source);
+    if (resumingServerBattle) restorePersistedBattleSession(battle, resumeSnapshot, { localSnapshot: localResumeSnapshot });
+    else if (localResumeSnapshot) {
+      applyLocalBattleSnapshot(battle, localResumeSnapshot, { visualOnly: localVisualOnly });
+      battle.serverReady = !localVisualOnly && Boolean(localResumeSnapshot.battleId);
+      battle.serverBattleId = localResumeSnapshot.battleId || null;
+      if (localVisualOnly) {
+        battleHud.hidden = true;
+      } else {
+        battleHud.hidden = false;
+        startBattleBgm();
+        addSystemMessage("system", `已重新連接上一場戰鬥 · 第 ${battle.round} 輪`, "info");
+        announce(`已重新連接第 ${battle.round} 輪戰鬥。`);
+      }
+      schedulePersistBattleResumeState({ delayMs: 0 });
+    } else {
+      authorizeBattleSession(battle, source);
+    }
     return true;
   }
 
   function syncServerBattleSnapshot(targetBattle, snapshot, options = {}) {
     if (!targetBattle || !snapshot || typeof snapshot !== "object") return false;
+    if (snapshot.id) targetBattle.serverBattleId = String(snapshot.id);
+    if (Number.isFinite(Number(snapshot.round))) targetBattle.round = Math.max(1, Math.floor(Number(snapshot.round)));
     if (Number.isFinite(Number(snapshot.heroHp))) {
       targetBattle.hero.hp = Core.clamp(Number(snapshot.heroHp), 0, targetBattle.hero.maxHp);
       targetBattle.hero.alive = targetBattle.hero.hp > 0;
       player.hp = targetBattle.hero.hp;
+    }
+    if (snapshot.heroCell && Tactics.isInside(targetBattle.grid, snapshot.heroCell)) {
+      targetBattle.hero.cell = copyBattleCell(snapshot.heroCell);
+    }
+    if (["up", "right", "down", "left"].includes(String(snapshot.heroFacing || ""))) {
+      targetBattle.hero.facing = String(snapshot.heroFacing);
+    }
+    if (snapshot.heroStatusEffects && typeof snapshot.heroStatusEffects === "object") {
+      targetBattle.hero.statusEffects = Object.fromEntries(Object.entries(snapshot.heroStatusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
     }
     if (Number.isFinite(Number(snapshot.ap))) targetBattle.ap = Core.clamp(Math.floor(Number(snapshot.ap)), 0, BATTLE_AP_MAX);
     if (Array.isArray(snapshot.enemies)) {
@@ -6202,13 +6626,133 @@
         if (Number.isFinite(Number(canonical.maxHp))) local.maxHp = Math.max(1, Number(canonical.maxHp));
         if (Number.isFinite(Number(canonical.hp))) local.hp = Core.clamp(Number(canonical.hp), 0, local.maxHp);
         local.alive = canonical.alive !== false && local.hp > 0;
+        if (canonical.cell && Tactics.isInside(targetBattle.grid, canonical.cell)) local.cell = copyBattleCell(canonical.cell);
+        if (["up", "right", "down", "left"].includes(String(canonical.facing || ""))) local.facing = String(canonical.facing);
+        if (Number.isFinite(Number(canonical.ap))) local.ap = Core.clamp(Math.floor(Number(canonical.ap)), 0, BATTLE_AP_MAX);
+        if (canonical.statusEffects && typeof canonical.statusEffects === "object") {
+          local.statusEffects = Object.fromEntries(Object.entries(canonical.statusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
+        }
+        local.defenceDown = Math.max(0, Number(canonical.defenceDown) || 0);
+        local.defenceDownUntilRound = Math.max(0, Math.floor(Number(canonical.defenceDownUntilRound) || 0));
+        local.moveDown = Math.max(0, Number(canonical.moveDown) || 0);
+        local.moveDownUntilRound = Math.max(0, Math.floor(Number(canonical.moveDownUntilRound) || 0));
       }
     }
     if (options.render !== false) {
       updateHud(true);
       updateBattleUi();
+      schedulePersistBattleResumeState();
     }
     return true;
+  }
+
+  function battleSourceFromServerSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    const type = ExpansionWorld.normalizeMonsterId(snapshot.monsterType) || String(snapshot.monsterType || "").trim();
+    const blueprint = type ? ExpansionWorld.monsterBlueprint(type) : null;
+    const base = type ? enemyTypes[type] : null;
+    if (!type || (!blueprint && !base)) return null;
+    const level = Core.clamp(Math.floor(Number(snapshot.level) || blueprint?.baseLevel || 1), 1, 45);
+    const stats = blueprint ? ExpansionWorld.monsterStatsAtLevel(type, level) : null;
+    const encounterId = String(snapshot.encounterId || snapshot.id || `resume-${type}`);
+    return {
+      id: encounterId,
+      instanceId: encounterId,
+      alive: true,
+      encounterCooldown: 0,
+      type,
+      name: blueprint?.name_zh || base?.name || type,
+      level,
+      damage: stats?.attack || base?.damage || 1,
+      defence: stats?.defense ?? base?.defence ?? 0,
+      xp: blueprint?.rewards?.baseXp ?? base?.xp ?? 0,
+      coins: blueprint?.rewards?.coins ?? base?.coins ?? 0,
+      moveRange: blueprint?.moveRange ?? stats?.moveRange ?? base?.moveRange ?? 4,
+      // The original exploration encounter entity no longer exists after a
+      // page reload. Keep a harmless local stand-in at the player's saved
+      // position so victory/flee presentation helpers still have valid coords.
+      x: Number(player.x) || 0,
+      y: Number(player.y) || 0,
+      color: base?.color || "#ffc857",
+    };
+  }
+
+  function restorePersistedBattleSession(targetBattle, snapshot, options = {}) {
+    if (!targetBattle || !snapshot || typeof snapshot !== "object") return false;
+    targetBattle.serverBattleId = String(snapshot.id || "");
+    targetBattle.serverReady = Boolean(targetBattle.serverBattleId);
+    syncServerBattleSnapshot(targetBattle, snapshot, { render: false });
+    hideBattleEntryTransition();
+    stopEncounterTransitionSfx();
+    battleHud.hidden = false;
+    startBattleBgm();
+
+    // The server snapshot is captured after the previous resolved action and
+    // before the next-round AP grant. Rebuild the same planning state that a
+    // continuously connected client would already have predicted locally.
+    targetBattle.ap = godModeActive
+      ? BATTLE_AP_MAX
+      : Math.min(BATTLE_AP_MAX, Math.max(0, Number(snapshot.ap) || 0) + BATTLE_AP_GAIN);
+    for (const enemy of targetBattle.enemies) {
+      enemy.ap = enemy.alive ? Math.min(BATTLE_AP_MAX, Math.max(0, Number(enemy.ap) || 0) + BATTLE_AP_GAIN) : 0;
+    }
+
+    if (!targetBattle.hero.alive || targetBattle.hero.hp <= 0) {
+      targetBattle.phase = "resolving_action";
+      finishBattleDefeat();
+      return true;
+    }
+    if (livingBattleEnemies().length === 0) {
+      targetBattle.phase = "resolving_action";
+      finishBattleVictory();
+      return true;
+    }
+
+    targetBattle.phase = "planning_move";
+    targetBattle.hero.moveRange = FighterEffects?.isDisabled(targetBattle.hero, targetBattle.round, "move") ? 0
+      : Math.max(0, targetBattle.hero.baseMoveRange - (FighterEffects?.movementPenalty(targetBattle.hero, targetBattle.round) || 0));
+    targetBattle.moveBonusNext = 0;
+    targetBattle.evasion = 0;
+    targetBattle.moved = false;
+    targetBattle.guard = false;
+    targetBattle.guardReduction = 0;
+    targetBattle.selectedAction = "move";
+    targetBattle.cursor = { ...targetBattle.hero.cell };
+    targetBattle.enemyPlans = planEnemyRound();
+    targetBattle.heroMoveDraft = [{ ...targetBattle.hero.cell }];
+    targetBattle.heroMoveCommands = [];
+    targetBattle.heroMovePlan = null;
+    targetBattle.awaitingFacing = true;
+    targetBattle.movementResolution = null;
+    targetBattle.actionResolution = null;
+    targetBattle.message = "已重新連接上一場戰鬥。";
+    targetBattle.messageDanger = false;
+    targetBattle.actingUnitId = null;
+    targetBattle.actingUnitIds = [];
+    targetBattle.predictedRoundPending = false;
+    targetBattle.serverSyncPending = false;
+    // Server tactical v1 owns cells/facing. LocalStorage is only a migration
+    // fallback for battles created by an older server schema.
+    if (options.localSnapshot && Number(snapshot.tacticalVersion || 0) < 1) {
+      applyLocalBattleSnapshot(targetBattle, options.localSnapshot, { authorityLocked: true });
+    }
+    updateHud(true);
+    updateBattleUi();
+    schedulePersistBattleResumeState({ delayMs: 0 });
+    addSystemMessage("system", `已重新連接上一場戰鬥 · 第 ${targetBattle.round} 輪`, "info");
+    announce(`已重新連接第 ${targetBattle.round} 輪戰鬥。`);
+    canvas.focus({ preventScroll: true });
+    return true;
+  }
+
+  function resumeBattleFromServerSnapshot(snapshot) {
+    if (!snapshot || snapshot.status !== "active" || !snapshot.id) return false;
+    const source = battleSourceFromServerSnapshot(snapshot);
+    if (!source) return false;
+    const localSnapshot = Number(snapshot.tacticalVersion || 0) < 1
+      ? readPersistedBattleResumeSnapshot(snapshot.id)
+      : null;
+    return startBattle(source, true, { serverSnapshot: snapshot, localResumeSnapshot: localSnapshot });
   }
 
   async function authorizeBattleSession(targetBattle, source) {
@@ -6224,7 +6768,6 @@
     targetBattle.message = "正在向伺服器確認戰鬥…";
     updateBattleUi();
     try {
-      await flushForServerCommand();
       const startPayload = {
         monsterType: source.type,
         level: source.level,
@@ -6251,7 +6794,12 @@
         console.warn("Battle start rejected by server.", { reason, result, source: startPayload });
         const reasonText = ({
           "battle-active": "上一場戰鬥狀態尚未清除",
+          "player-dead": "角色仍然處於倒下狀態",
           "wrong-map": "伺服器判定目前地圖不符合呢場戰鬥",
+          "invalid-encounter-zone": "目前位置唔屬於隨機遇怪區域",
+          "monster-not-in-encounter-zone": "呢種怪物唔屬於目前遇怪區域",
+          "encounter-level-mismatch": "怪物等級同目前遇怪區域唔一致",
+          "invalid-monster-level": "怪物等級資料無效",
           "unknown-monster": "伺服器搵唔到呢種怪物",
         })[reason] || "伺服器未能建立戰鬥";
         showToast(`伺服器未能建立戰鬥：${reasonText}。`, "danger");
@@ -6259,7 +6807,12 @@
         hideBattleEntryTransition();
         stopEncounterTransitionSfx();
         closeBattleHud();
-        restoreExplorationUiAfterBattle();
+        if (reason === "player-dead") {
+          player.hp = 0;
+          playerDeath();
+        } else {
+          restoreExplorationUiAfterBattle();
+        }
         return false;
       }
       targetBattle.serverBattleId = result.battle.id;
@@ -6271,6 +6824,7 @@
       battleHud.hidden = false;
       startBattleBgm();
       beginPlayerRound();
+      schedulePersistBattleResumeState({ delayMs: 0 });
       return true;
     } catch (error) {
       if (!battle || battle.token !== token || battle !== targetBattle) return false;
@@ -7311,7 +7865,16 @@
     const pathFor = (id) => (movement.unitResults?.[id]?.completedPath || [battleUnits().find((unit) => unit.id === id)?.cell])
       .filter(Boolean)
       .map(copyBattleCell);
-    battle.heroMovePlan = { path: pathFor(battle.hero.id), move: copyBattleCell(battle.hero.cell), facing: battle.hero.facing };
+    const completedHeroCommands = (battle.heroMovePlan?.commands || battle.heroMoveCommands || []).map((command) => ({
+      ...command,
+      to: command.to ? copyBattleCell(command.to) : undefined,
+    }));
+    battle.heroMovePlan = {
+      path: pathFor(battle.hero.id),
+      commands: completedHeroCommands,
+      move: copyBattleCell(battle.hero.cell),
+      facing: battle.hero.facing,
+    };
     for (const plan of battle.enemyPlans) {
       const enemy = battle.enemies.find((unit) => unit.id === plan.enemyId);
       if (!enemy?.alive || !movement.unitResults?.[enemy.id]) continue;
@@ -7519,6 +8082,11 @@
       applied: false,
       completed: false,
       heroAction,
+      moveCommands: (battle.heroMovePlan?.commands || battle.heroMoveCommands || []).map((command) => ({
+        ...command,
+        to: command.to ? copyBattleCell(command.to) : undefined,
+      })),
+      finalFacing: battle.hero.facing,
       actionOrder,
       pendingActions: [heroPending, ...enemyPending],
       resolvedActorIds: [],
@@ -7626,9 +8194,19 @@
       const result = await ServerApi.battle("act", {
         battleId: battle.serverBattleId,
         round: Math.max(1, Math.floor(Number(resolution.serverRound) || battle.round)),
+        tacticalVersion: 1,
+        moveCommands: (resolution.moveCommands || []).map((command) => ({
+          type: command.type,
+          ...(command.to ? { to: copyBattleCell(command.to) } : {}),
+          ...(command.facing ? { facing: command.facing } : {}),
+        })),
+        finalFacing: resolution.finalFacing || undefined,
         heroAction: action.type || "wait",
         skillId: action.skillId || undefined,
+        targetCell: action.targetCell ? copyBattleCell(action.targetCell) : undefined,
         targetIndexes: Array.isArray(resolution.serverTargetIndexes) ? resolution.serverTargetIndexes : [],
+        // Kept for older deployed Functions during rolling updates; tactical v1
+        // Functions ignore this report and calculate incoming damage themselves.
         heroHp: battle.hero.hp,
       });
       if (!battle || battle.token !== token) return false;
@@ -8299,6 +8877,7 @@
   function exitBattleVictory() {
     if (!battle || battle.phase !== "victory" || !battle.victoryResult) return false;
     battleVictoryPresenter?.hide();
+    clearBattlePersistenceSnapshots();
     closeBattleHud();
     restoreExplorationUiAfterBattle();
     encounterGrace = 1;
@@ -8321,39 +8900,77 @@
     battle.messageDanger = false;
     addSystemMessage("combat", "戰鬥獲勝！", "good");
     const token = battle.token;
+    const finished = battle;
     startVictoryBgm();
     updateBattleUi();
+
+    // Start authoritative settlement now instead of after the victory beat. The
+    // existing presentation delay masks normal network latency without changing
+    // reward authority or letting the client grant anything early.
+    const settlement = settleBattleVictoryRewards(finished);
     scheduleBattle(async () => {
       if (!battle || battle.token !== token || battle.phase !== "victory") return;
-      const result = await settleBattleVictoryRewards(battle);
+      const result = await settlement;
       if (!battle || battle.token !== token || battle.phase !== "victory" || !result) return;
       ensureBattleVictoryPresenter().show(result);
       battleVictoryContinue?.focus({ preventScroll: true });
     }, reducedMotion ? 40 : 520);
   }
 
+  async function settleBattleDefeatState(finished) {
+    if (!finished?.serverReady || !finished.serverBattleId || !ServerApi?.battle) return false;
+    try {
+      const result = await ServerApi.battle("settle", { battleId: finished.serverBattleId, outcome: "defeat" });
+      if (result?.ok) {
+        applyAuthoritativeState(result.state);
+        finished.serverDefeatSettled = true;
+        return true;
+      }
+      // A dropped response can leave the client unsure even though the first
+      // transaction committed. In the defeat flow, no-battle means there is no
+      // longer an active authoritative battle; recoverPlayer will still verify
+      // HP before applying any penalty, so it is safe to continue.
+      if (result?.reason === "no-battle") {
+        finished.serverDefeatSettled = true;
+        return true;
+      }
+      console.warn("Battle defeat settlement rejected.", result);
+      return false;
+    } catch (error) {
+      console.warn("Battle defeat settlement failed.", error);
+      return false;
+    }
+  }
+
   function finishBattleDefeat() {
     if (!battle) return;
     const token = battle.token;
+    const finished = battle;
     battle.phase = "defeat";
     battle.message = "你倒下了……";
     battle.messageDanger = true;
     addSystemMessage("combat", "戰鬥失敗。", "danger");
+    persistBattleResumeState({ defeat: true, battle: finished });
     updateBattleUi();
+
+    // Start the authoritative settle immediately. Keep the promise on the
+    // battle object so recovery can wait for the same request rather than
+    // issuing a duplicate settlement while it is still pending.
+    const settlement = settleBattleDefeatState(finished);
+    finished.defeatSettlementPromise = settlement;
+
     scheduleBattle(async () => {
-      if (!battle || battle.token !== token) return;
-      const finished = battle;
       try {
-        if (finished.serverReady && finished.serverBattleId && ServerApi?.battle) {
-          const result = await ServerApi.battle("settle", { battleId: finished.serverBattleId, outcome: "defeat" });
-          if (result?.ok) applyAuthoritativeState(result.state);
-        }
+        await withClientTimeout(settlement, DEFEAT_SETTLEMENT_WAIT_MS, "battle-defeat-settle");
       } catch (error) {
-        serverCommandError(error, "戰鬥失敗狀態同步失敗。");
+        console.warn("Battle defeat settlement is still pending while opening recovery UI.", error);
       }
-      if (!battle || battle.token !== token) return;
+      if (!battle || battle.token !== token || battle !== finished) return;
       player.hp = 0;
       playerDeath();
+      if (!finished.serverDefeatSettled) {
+        addSystemMessage("system", "戰敗狀態仍在同步；復活時會先等伺服器確認。", "warning");
+      }
     }, 620);
   }
 
@@ -8375,6 +8992,7 @@
     const away = Core.normalize({ x: player.x - source.x, y: player.y - source.y });
     source.encounterCooldown = 3;
     moveEntity(player, (away.x || -1) * 54, away.y * 54);
+    clearBattlePersistenceSnapshots();
     closeBattleHud();
     restoreExplorationUiAfterBattle();
     encounterGrace = 1.4;
@@ -8549,6 +9167,15 @@
     const displayedAp = authorizing ? BATTLE_AP_GAIN : battle.ap;
     battleUi.apFill.style.width = `${Core.clamp(displayedAp / BATTLE_AP_MAX, 0, 1) * 100}%`;
     battleUi.apText.textContent = `${displayedAp} / ${BATTLE_AP_MAX}`;
+    if (battleUi.commandAp) {
+      const apValue = battleUi.commandAp.querySelector("strong");
+      const apMax = battleUi.commandAp.querySelector("em");
+      if (apValue) apValue.textContent = String(displayedAp);
+      if (apMax) apMax.textContent = `/ ${BATTLE_AP_MAX}`;
+      battleUi.commandAp.setAttribute("aria-label", `目前 AP ${displayedAp} / ${BATTLE_AP_MAX}`);
+      battleUi.commandAp.classList.toggle("is-low", displayedAp <= 1);
+      battleUi.commandAp.classList.toggle("is-full", displayedAp >= BATTLE_AP_MAX);
+    }
     renderBattleEnemyRows();
     if (battleUi.potionCount) battleUi.potionCount.textContent = player.potions;
     battleUi.hint.textContent = battle.message;
@@ -8557,6 +9184,7 @@
     renderBattleActionButtons();
     syncBattleFacingPicker();
     syncBattleCommandMenu();
+    schedulePersistBattleResumeState();
   }
 
   function battleCommandBounds() {

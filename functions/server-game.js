@@ -4,8 +4,11 @@ const Expansion = require("./shared/expansion-core.js");
 const Guild = require("./shared/guild-commission-core.js");
 const Skills = require("./shared/skill-core.js");
 const Tactics = require("./shared/tactics-core.js");
+const MonsterAI = require("./shared/monster-ai.js");
+const FighterEffects = require("./shared/fighter-effects.js");
 const ItemData = require("./shared/data/items.js");
 const MonsterBlueprints = require("./shared/map/monster-blueprints.js");
+const FieldEncounters = require("./shared/map/field-encounters.generated.js");
 const { classMaxHp, normalizeClassId } = require("./game-rules.js");
 const PlayerState = require("./player-state.js");
 
@@ -34,6 +37,53 @@ const MAP_LINKS = Object.freeze({
 const MAP_TRANSITION_POSITION_MARGIN = 180;
 const POSITION_AUTHORITY_VERSION = 1;
 const WORLD_RESPAWN = Object.freeze({ mapId: "world", x: 3663, y: 1746 });
+const FIELD_ENCOUNTER_LEVEL_VARIANCE = Object.freeze({ minDelta: -2, maxDelta: 3, floor: 1, cap: 45 });
+
+function fieldEncounterLevelWindow(blueprint) {
+  const baseLevel = clamp(whole(blueprint?.baseLevel, 1), 1, FIELD_ENCOUNTER_LEVEL_VARIANCE.cap);
+  const minLevel = Math.max(FIELD_ENCOUNTER_LEVEL_VARIANCE.floor, baseLevel + FIELD_ENCOUNTER_LEVEL_VARIANCE.minDelta);
+  const maxLevel = Math.max(minLevel, Math.min(FIELD_ENCOUNTER_LEVEL_VARIANCE.cap, baseLevel + FIELD_ENCOUNTER_LEVEL_VARIANCE.maxDelta));
+  return [minLevel, maxLevel];
+}
+
+function validateFieldRandomEncounter(position, blueprint, level) {
+  const zone = FieldEncounters?.zoneAtWorldPosition?.(
+    Number(position?.x),
+    Number(position?.y),
+    Number(FieldEncounters?.source?.width) || 4096,
+    Number(FieldEncounters?.source?.height) || 4096,
+  );
+  if (!zone) return { ok: false, reason: "invalid-encounter-zone" };
+
+  const [monsterMinLevel, monsterMaxLevel] = fieldEncounterLevelWindow(blueprint);
+  const zoneMinLevel = clamp(whole(zone.minLevel, 1), 1, 45);
+  const zoneMaxLevel = clamp(whole(zone.maxLevel, zoneMinLevel), zoneMinLevel, 45);
+  if (monsterMaxLevel < zoneMinLevel || monsterMinLevel > zoneMaxLevel) {
+    return {
+      ok: false,
+      reason: "monster-not-in-encounter-zone",
+      encounterZone: zone.label || null,
+      zoneLevelRange: [zoneMinLevel, zoneMaxLevel],
+      monsterLevelRange: [monsterMinLevel, monsterMaxLevel],
+    };
+  }
+  if (level < zoneMinLevel || level > zoneMaxLevel || level < monsterMinLevel || level > monsterMaxLevel) {
+    return {
+      ok: false,
+      reason: "encounter-level-mismatch",
+      encounterZone: zone.label || null,
+      zoneLevelRange: [zoneMinLevel, zoneMaxLevel],
+      monsterLevelRange: [monsterMinLevel, monsterMaxLevel],
+      requestedLevel: level,
+    };
+  }
+  return {
+    ok: true,
+    encounterZone: zone.label || null,
+    zoneLevelRange: [zoneMinLevel, zoneMaxLevel],
+    monsterLevelRange: [monsterMinLevel, monsterMaxLevel],
+  };
+}
 
 // Phase 3 Step 9C: important gameplay commands carry the player's current
 // exploration position. The server never trusts that point directly: it first
@@ -457,7 +507,7 @@ function economyCommand(save, input = {}, options = {}) {
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.equipped = result.state.equipped;
     const maxHp = classMaxHp(state.expansion.classId, state.player.level) + Math.max(0, whole(Expansion.equipmentStats(state.expansion.equipped).maxHp, 0));
-    state.player.hp = clamp(Number(state.player.hp) || 1, 1, maxHp);
+    state.player.hp = Number.isFinite(Number(state.player.hp)) ? clamp(Number(state.player.hp), 0, maxHp) : 1;
     return resultWithState(state, { action, itemId, itemName: result.item?.name || itemId });
   }
 
@@ -475,7 +525,7 @@ function economyCommand(save, input = {}, options = {}) {
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.equipped = result.state.equipped;
     const maxHp = classMaxHp(state.expansion.classId, state.player.level) + Math.max(0, whole(Expansion.equipmentStats(state.expansion.equipped).maxHp, 0));
-    state.player.hp = clamp(Number(state.player.hp) || 1, 1, maxHp);
+    state.player.hp = Number.isFinite(Number(state.player.hp)) ? clamp(Number(state.player.hp), 0, maxHp) : 1;
     return resultWithState(state, { action, itemId, itemName: item.name });
   }
 
@@ -662,6 +712,623 @@ function recordServerKill(state, monsterType, instanceId) {
   return progress;
 }
 
+
+const SERVER_BATTLE_TACTICAL_VERSION = 1;
+const SERVER_BATTLE_TURN_COST = .5;
+const SERVER_BATTLE_FINAL_FACING_RESERVE = 1;
+const SERVER_BATTLE_SIDE_DAMAGE_BONUS = .15;
+const SERVER_BATTLE_REAR_DAMAGE_BONUS = .35;
+const SERVER_BATTLE_DEFAULT_WIDTH = 9;
+const SERVER_BATTLE_DEFAULT_HEIGHT = 7;
+const SERVER_BATTLE_FIELD_OPENING = Object.freeze({
+  id: "mountain-opening-v3",
+  width: 8,
+  height: 3,
+  deploymentZones: Object.freeze({
+    ally: Object.freeze([{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 0 }]),
+    enemy: Object.freeze([{ x: 6, y: 1 }, { x: 6, y: 0 }, { x: 6, y: 2 }]),
+  }),
+  heightMap: Object.freeze({ "6,1": 1, "7,1": 1, "6,2": 1, "7,2": 1 }),
+  terrainCells: Object.freeze({
+    "3,0": Object.freeze({ kind: "tree", obstacleHeight: "high", movementBlocked: true, blocksLinear: true, blocksArc: true, occupiedHeight: 3.2 }),
+    "5,2": Object.freeze({ kind: "scrub", obstacleHeight: "low", movementBlocked: true, blocksLinear: false, blocksArc: false, occupiedHeight: .65 }),
+  }),
+});
+
+function canonicalBattleFacing(value, fallback = "right") {
+  const next = String(value || "").toLowerCase();
+  return ["up", "right", "down", "left"].includes(next) ? next : fallback;
+}
+
+function serverBattlefieldFor(mapId, monsterType) {
+  const normalizedMap = normalizeMapId(mapId);
+  if (normalizedMap === "field" || normalizedMap === "mountain-southeast") {
+    return {
+      ...SERVER_BATTLE_FIELD_OPENING,
+      deploymentZones: {
+        ally: SERVER_BATTLE_FIELD_OPENING.deploymentZones.ally.map((cell) => ({ ...cell })),
+        enemy: SERVER_BATTLE_FIELD_OPENING.deploymentZones.enemy.map((cell) => ({ ...cell })),
+      },
+      heightMap: { ...SERVER_BATTLE_FIELD_OPENING.heightMap },
+      terrainCells: Object.fromEntries(Object.entries(SERVER_BATTLE_FIELD_OPENING.terrainCells).map(([key, value]) => [key, { ...value }])),
+    };
+  }
+  if (normalizedMap === "mountain-south") {
+    return {
+      id: "server-mountain-south-v1",
+      width: SERVER_BATTLE_DEFAULT_WIDTH,
+      height: SERVER_BATTLE_DEFAULT_HEIGHT,
+      deploymentZones: {
+        ally: [{ x: 1, y: 3 }],
+        enemy: [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }],
+      },
+      heightMap: {},
+      terrainCells: {},
+    };
+  }
+  const layouts = {
+    chick: [[3, 1], [3, 5], [5, 2], [5, 4]],
+    fox: [[3, 2], [3, 4], [5, 1], [5, 5]],
+    raccoon: [[4, 1], [4, 5], [5, 3]],
+    frog: [[3, 3], [5, 1], [5, 5]],
+    coyote: [[3, 2], [3, 4], [5, 1], [5, 5]],
+    turtle: [[3, 2], [3, 4], [5, 1], [5, 5]],
+    snake: [[3, 1], [3, 5], [5, 3]],
+    bear: [[3, 1], [3, 5], [5, 1], [5, 5]],
+  };
+  const blocked = layouts[monsterType] || layouts.raccoon;
+  return {
+    id: `server-${normalizedMap || "battle"}-default-v1`,
+    width: SERVER_BATTLE_DEFAULT_WIDTH,
+    height: SERVER_BATTLE_DEFAULT_HEIGHT,
+    deploymentZones: {
+      ally: [{ x: 1, y: 3 }],
+      enemy: [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }],
+    },
+    heightMap: {},
+    terrainCells: Object.fromEntries(blocked.map(([x, y]) => [`${x},${y}`, { movementBlocked: true, obstacleHeight: "high", blocksLinear: true, blocksArc: true }])),
+  };
+}
+
+function serverBattleGrid(battlefield) {
+  const blocked = Object.entries(battlefield?.terrainCells || {})
+    .filter(([, terrain]) => terrain?.movementBlocked !== false)
+    .map(([key]) => {
+      const [x, y] = key.split(",").map(Number);
+      return { x, y };
+    });
+  const grid = Tactics.createGrid(
+    Math.max(1, whole(battlefield?.width, SERVER_BATTLE_DEFAULT_WIDTH)),
+    Math.max(1, whole(battlefield?.height, SERVER_BATTLE_DEFAULT_HEIGHT)),
+    blocked,
+  );
+  grid.heightMap = { ...(battlefield?.heightMap || {}) };
+  grid.terrainCells = { ...(battlefield?.terrainCells || {}) };
+  return grid;
+}
+
+function serverBattleDeploymentCell(battlefield, side, index = 0) {
+  const fallback = side === "enemy"
+    ? [{ x: 7, y: 3 }, { x: 7, y: 1 }, { x: 7, y: 5 }]
+    : [{ x: 1, y: 3 }];
+  const cells = battlefield?.deploymentZones?.[side]?.length ? battlefield.deploymentZones[side] : fallback;
+  const chosen = cells[Math.min(Math.max(0, index), cells.length - 1)] || fallback[0];
+  return { x: whole(chosen.x, 0), y: whole(chosen.y, 0) };
+}
+
+function serverHeroBattleStats(state) {
+  const classId = normalizeClassId(state.expansion.classId);
+  const level = clamp(whole(state.player.level, 1), 1, Expansion.LEVEL_CAP);
+  const base = Expansion.classStatsAtLevel(classId, level);
+  const gear = Expansion.equipmentStats(state.expansion.equipped);
+  const skillState = Skills.normalizeSkillState(state.expansion.skills, { classId });
+  const passives = FighterEffects.passiveModifiers((skillState.unlockedSkillIds || []).map((id) => Skills.getSkill(id)).filter(Boolean));
+  const baseMove = clamp((Number(base.moveRange) || 0) + (Number(gear.moveRange) || 0), 2, 7);
+  return {
+    maxHp: Math.max(1, whole(classMaxHp(classId, level), 1)),
+    attack: Math.max(0, Math.round(((Number(base.attack) || 0) + (Number(gear.attack) || 0)) * (passives.attackMultiplier || 1))),
+    defence: Math.max(0, Math.round(((Number(base.defence) || 0) + (Number(gear.defense) || 0)) * (passives.defenceMultiplier || 1))),
+    accuracy: Math.max(0, 99 + (Number(gear.accuracy) || 0) + (passives.accuracy || 0) * 100),
+    evasion: Math.max(0, (Number(gear.evasion) || 0) + (passives.evasion || 0) * 100),
+    weight: Math.max(0, Number(gear.weight) || 0),
+    initiative: Math.max(5, Math.round(14 + (Number(gear.speed) || 0) * .35 + (passives.speedBonus || 0))),
+    baseMoveRange: baseMove,
+    facingReserve: classId === "fighter" ? SERVER_BATTLE_FINAL_FACING_RESERVE : 0,
+    moveRange: baseMove + (classId === "fighter" ? SERVER_BATTLE_FINAL_FACING_RESERVE : 0),
+    passives,
+  };
+}
+
+function ensureServerBattleTacticalState(state, battle) {
+  const mapId = normalizeMapId(battle.mapId || state.expansion.currentMapId);
+  const battlefield = serverBattlefieldFor(mapId, battle.monsterType);
+  battle.mapId = mapId;
+  battle.tacticalVersion = SERVER_BATTLE_TACTICAL_VERSION;
+  if (!battle.heroCell || !Tactics.isInside(serverBattleGrid(battlefield), battle.heroCell)) {
+    battle.heroCell = serverBattleDeploymentCell(battlefield, "ally", 0);
+  } else {
+    battle.heroCell = { x: whole(battle.heroCell.x, 0), y: whole(battle.heroCell.y, 0) };
+  }
+  battle.heroFacing = canonicalBattleFacing(battle.heroFacing, "right");
+  battle.heroStatusEffects = battle.heroStatusEffects && typeof battle.heroStatusEffects === "object" ? battle.heroStatusEffects : {};
+  for (let index = 0; index < battle.enemies.length; index += 1) {
+    const enemy = battle.enemies[index];
+    if (!enemy.cell || !Tactics.isInside(serverBattleGrid(battlefield), enemy.cell)) enemy.cell = serverBattleDeploymentCell(battlefield, "enemy", index);
+    else enemy.cell = { x: whole(enemy.cell.x, 0), y: whole(enemy.cell.y, 0) };
+    enemy.facing = canonicalBattleFacing(enemy.facing, "left");
+    enemy.ap = clamp(whole(enemy.ap, 0), 0, Skills.MAX_AP);
+    enemy.statusEffects = enemy.statusEffects && typeof enemy.statusEffects === "object" ? enemy.statusEffects : {};
+    enemy.id = String(enemy.id || (index === 0 ? `battle-${battle.encounterId || battle.id}` : `battle-${battle.encounterId || battle.id}-pack-${index + 1}`));
+  }
+  return { battlefield, grid: serverBattleGrid(battlefield) };
+}
+
+function serverEnemyUnit(battle, enemy, index) {
+  const blueprint = MonsterBlueprints.monsterBlueprint(enemy.type || battle.monsterType);
+  const stats = MonsterBlueprints.monsterStatsAtLevel(enemy.type || battle.monsterType, enemy.level || battle.level);
+  const skills = blueprint?.skills || [];
+  const skill = skills[0] || null;
+  return {
+    id: String(enemy.id || `battle-${battle.encounterId || battle.id}-pack-${index + 1}`),
+    side: "enemy",
+    type: enemy.type || battle.monsterType,
+    name: blueprint?.name_zh || enemy.type || battle.monsterType,
+    level: enemy.level || battle.level,
+    cell: { ...enemy.cell },
+    facing: canonicalBattleFacing(enemy.facing, "left"),
+    hp: Math.max(0, Number(enemy.hp) || 0),
+    maxHp: Math.max(1, Number(enemy.maxHp) || 1),
+    alive: enemy.alive !== false && Number(enemy.hp) > 0,
+    attack: Math.max(1, Number(stats?.attack) || 1),
+    defence: Math.max(0, Number(stats?.defense) || 0),
+    accuracy: 99,
+    evasion: 0,
+    weight: 0,
+    moveRange: Math.max(0, Number(blueprint?.moveRange ?? stats?.moveRange) || 4),
+    attackRange: skill?.range?.max || 1,
+    minAttackRange: skill?.range?.min || 1,
+    initiative: 8,
+    ap: clamp(whole(enemy.ap, 0), 0, Skills.MAX_AP),
+    skillCost: skill?.apCost || 0,
+    skillId: skill?.id || null,
+    skill,
+    skills,
+    skillName: skill?.name || "普通攻擊",
+    speedGrade: skill?.speedGrade || "C",
+    targetArc: ["front", "side"],
+    statusEffects: clone(enemy.statusEffects || {}),
+    defenceDown: Math.max(0, Number(enemy.defenceDown) || 0),
+    defenceDownUntilRound: Math.max(0, whole(enemy.defenceDownUntilRound, 0)),
+    moveDown: Math.max(0, Number(enemy.moveDown) || 0),
+    moveDownUntilRound: Math.max(0, whole(enemy.moveDownUntilRound, 0)),
+  };
+}
+
+function serverBattleUnits(state, battle) {
+  const heroStats = serverHeroBattleStats(state);
+  const hero = {
+    id: "battle-player",
+    side: "ally",
+    type: "player",
+    cell: { ...battle.heroCell },
+    facing: canonicalBattleFacing(battle.heroFacing, "right"),
+    hp: Math.max(0, Number(battle.heroHp) || 0),
+    maxHp: Math.max(1, Number(battle.heroMaxHp) || heroStats.maxHp),
+    alive: Number(battle.heroHp) > 0,
+    statusEffects: clone(battle.heroStatusEffects || {}),
+    ...heroStats,
+  };
+  const enemies = battle.enemies.map((enemy, index) => serverEnemyUnit(battle, enemy, index));
+  return { hero, enemies, units: [hero, ...enemies] };
+}
+
+function sanitizeServerMoveCommands(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 48).map((command) => {
+    const type = String(command?.type || "");
+    if (type === "move") return { type, to: { x: whole(command?.to?.x, NaN), y: whole(command?.to?.y, NaN) } };
+    if (["face", "turn", "wait"].includes(type)) return { type: "face", facing: canonicalBattleFacing(command?.facing, "down") };
+    return { type: "invalid" };
+  });
+}
+
+function serverEnemyPlans(state, battle, grid, hero, enemies) {
+  const simulated = [hero, ...enemies].map((unit) => ({ ...unit, cell: { ...unit.cell } }));
+  const plans = [];
+  const enemyOrder = Tactics.buildTurnOrder(enemies.filter((unit) => unit.alive));
+  for (const actual of enemyOrder) {
+    const enemy = simulated.find((unit) => unit.id === actual.id);
+    const simulatedHero = simulated.find((unit) => unit.id === hero.id);
+    if (!enemy || !simulatedHero) continue;
+    if (actual.moveDownUntilRound >= battle.round) enemy.moveRange = Math.max(0, enemy.moveRange - (actual.moveDown || 0));
+    enemy.moveRange = Math.max(0, enemy.moveRange - (FighterEffects.movementPenalty(actual, battle.round) || 0));
+    if (FighterEffects.isDisabled(actual, battle.round, "move")) {
+      plans.push({ enemyId: actual.id, move: { ...actual.cell }, path: [{ ...actual.cell }], commands: [], facing: actual.facing, willAttack: false, targetCells: [], skill: actual.skill, skillId: actual.skillId, apCost: actual.skillCost || 0, speedGrade: actual.speedGrade || "C" });
+      continue;
+    }
+    const action = MonsterAI.planEnemyAction({
+      grid,
+      enemy,
+      targets: [simulatedHero],
+      units: simulated,
+      skills: actual.skills,
+      apGain: Skills.ROUND_AP_GAIN,
+      canDirectTarget: (unit) => FighterEffects.isDirectTargetable(unit, battle.round),
+    }) || Tactics.chooseEnemyAction({ grid, enemy, targets: [simulatedHero], units: simulated });
+    if (!action) continue;
+    const selectedSkill = action.skill || action.setupSkill || null;
+    enemy.cell = { ...(action.previewCell || action.move || enemy.cell) };
+    enemy.facing = canonicalBattleFacing(action.facing, enemy.facing);
+    const willAttack = Boolean(action.attackTargetId && action.skill) && (actual.ap || 0) >= (action.skill?.apCost || 0);
+    const previewOrigin = action.attackOrigin || action.move || enemy.cell;
+    const previewFacing = action.attackFacing || action.facing || actual.facing;
+    const targetCells = willAttack
+      ? Skills.patternCells(action.skill, previewOrigin, simulatedHero.cell, { grid, heightMap: grid.heightMap, facing: previewFacing })
+      : [];
+    plans.push({
+      enemyId: actual.id,
+      move: { ...(action.move || actual.cell) },
+      path: (action.path?.length ? action.path : [actual.cell]).map((cell) => ({ ...cell })),
+      commands: (action.commands || []).map((command) => ({ ...command, to: command.to ? { ...command.to } : undefined })),
+      facing: canonicalBattleFacing(action.facing, actual.facing),
+      willAttack,
+      targetCells,
+      skill: action.skill || selectedSkill || actual.skill,
+      skillId: action.skill?.id || selectedSkill?.id || actual.skillId,
+      apCost: action.skill?.apCost || selectedSkill?.apCost || actual.skillCost || 0,
+      speedGrade: action.skill?.speedGrade || selectedSkill?.speedGrade || actual.speedGrade || "C",
+    });
+  }
+  return plans;
+}
+
+function deterministicBattleRng(battle, round, salt = "") {
+  return Tactics.createSeededRng(`server:${battle.id}:${round}:${salt}`);
+}
+
+function validateServerHeroMovement(state, battle, grid, hero, enemyPlans, enemies, input) {
+  const commands = sanitizeServerMoveCommands(input.moveCommands);
+  if (commands.some((command) => command.type === "invalid" || (command.type === "move" && (!Number.isFinite(command.to.x) || !Number.isFinite(command.to.y))))) {
+    return { ok: false, reason: "invalid-movement-command" };
+  }
+  const schedule = Tactics.movementCommandEvents(hero.cell, commands, {
+    turnCost: SERVER_BATTLE_TURN_COST,
+    initialFacing: hero.facing,
+  });
+  if (!Number.isFinite(schedule.totalCost) || schedule.events.some((event) => event.type === "invalid")) {
+    return { ok: false, reason: "invalid-movement-path" };
+  }
+  const heroMoveLimit = FighterEffects.isDisabled(hero, battle.round, "move")
+    ? 0
+    : Math.max(0, hero.moveRange - (FighterEffects.movementPenalty(hero, battle.round) || 0));
+  if (schedule.totalCost > heroMoveLimit + 1e-7) {
+    return { ok: false, reason: "movement-range", cost: schedule.totalCost, limit: heroMoveLimit };
+  }
+  const routeLimit = Math.max(0, heroMoveLimit - Math.max(0, Number(hero.facingReserve) || 0));
+  let prefixCost = 0;
+  for (const event of schedule.events) {
+    prefixCost += Math.max(0, Number(event.duration) || 0);
+    // Fighter's extra point is reserved for final facing/footwork. It cannot be
+    // forged into an extra movement cell by editing the client command list.
+    if (event.type === "move" && prefixCost > routeLimit + 1e-7) {
+      return { ok: false, reason: "movement-route-range", cost: prefixCost, limit: routeLimit };
+    }
+  }
+  for (const event of schedule.events) {
+    if (event.type !== "move") continue;
+    if (!Tactics.isInside(grid, event.to) || !Tactics.isWalkable(grid, event.to, [])) {
+      return { ok: false, reason: "movement-blocked" };
+    }
+  }
+  const routes = new Map();
+  routes.set(hero.id, { path: schedule.path, commands, finalFacing: schedule.finalTravelFacing || hero.facing });
+  for (const plan of enemyPlans) {
+    const enemy = enemies.find((unit) => unit.id === plan.enemyId);
+    if (!enemy?.alive) continue;
+    routes.set(enemy.id, {
+      path: (plan.path?.length ? plan.path : [enemy.cell]).map((cell) => ({ ...cell })),
+      commands: (plan.commands || []).map((command) => ({ ...command, to: command.to ? { ...command.to } : undefined })),
+    });
+  }
+  const movement = Tactics.resolveSimultaneousMovement({
+    timed: true,
+    grid,
+    units: [hero, ...enemies].filter((unit) => unit.alive),
+    routes,
+    turnCost: SERVER_BATTLE_TURN_COST,
+    priorityUnitId: hero.id,
+  });
+  const heroResult = movement.unitResults?.[hero.id];
+  if (!heroResult) return { ok: false, reason: "movement-resolution" };
+  battle.heroCell = { ...heroResult.cell };
+  battle.heroFacing = canonicalBattleFacing(heroResult.facing, hero.facing);
+  hero.cell = { ...battle.heroCell };
+  hero.facing = battle.heroFacing;
+  for (let index = 0; index < battle.enemies.length; index += 1) {
+    const enemyState = battle.enemies[index];
+    const enemyUnit = enemies[index];
+    const result = movement.unitResults?.[enemyUnit.id];
+    if (!result) continue;
+    enemyState.cell = { ...result.cell };
+    enemyState.facing = canonicalBattleFacing(result.facing, enemyState.facing);
+    enemyUnit.cell = { ...enemyState.cell };
+    enemyUnit.facing = enemyState.facing;
+  }
+  return { ok: true, movement };
+}
+
+function battleTargetUnitAtServer(hero, enemies, cell, preferredTeam = null) {
+  const enemy = enemies.find((unit) => unit.alive && Tactics.cellKey(unit.cell) === Tactics.cellKey(cell)) || null;
+  const self = Tactics.cellKey(hero.cell) === Tactics.cellKey(cell) ? hero : null;
+  if (preferredTeam === "enemy") return enemy;
+  if (preferredTeam === "ally" || preferredTeam === "self") return self;
+  return enemy || self;
+}
+
+function serverSkillTargets(skill, hero, enemies, grid, input) {
+  let targetCell = input.targetCell && Number.isFinite(Number(input.targetCell.x)) && Number.isFinite(Number(input.targetCell.y))
+    ? { x: whole(input.targetCell.x, 0), y: whole(input.targetCell.y, 0) }
+    : null;
+  if (!targetCell) {
+    const legacyIndex = (Array.isArray(input.targetIndexes) ? input.targetIndexes : [input.targetIndex])
+      .map((value) => whole(value, -1)).find((value) => value >= 0 && value < enemies.length);
+    if (legacyIndex != null) targetCell = { ...enemies[legacyIndex].cell };
+  }
+  if (!targetCell) targetCell = { ...hero.cell };
+  if (!Tactics.isInside(grid, targetCell)) return { ok: false, reason: "target-outside-grid" };
+  const targetUnit = battleTargetUnitAtServer(hero, enemies, targetCell, skill.targeting?.team);
+  const validation = Skills.validateSkillTarget(skill, hero.cell, targetCell, {
+    grid,
+    heightMap: grid.heightMap,
+    facing: hero.facing,
+    actorTeam: "ally",
+    actorId: hero.id,
+    targetUnit: targetUnit ? { ...targetUnit, team: targetUnit.side } : null,
+    canDirectTarget: (unit) => FighterEffects.isDirectTargetable(unit, Math.max(1, whole(input.round, 1))),
+  });
+  if (!validation.ok) return { ok: false, reason: `skill-${validation.reason || "target"}` };
+
+  let affected = [];
+  const pattern = Skills.patternCells(skill, hero.cell, targetCell, { grid, heightMap: grid.heightMap, facing: hero.facing });
+  const patternKeys = new Set(pattern.map((cell) => Tactics.cellKey(cell)));
+  affected = enemies.filter((enemy) => enemy.alive && patternKeys.has(Tactics.cellKey(enemy.cell)));
+  let attackPath = [];
+  if (Tactics.usesAttackPath(skill.deliveryMode)) {
+    attackPath = Tactics.facingOrthogonalPriority(hero.cell, targetCell, hero.facing);
+    const trace = Tactics.traceAttackPath({
+      origin: hero.cell,
+      target: targetCell,
+      path: attackPath,
+      facing: hero.facing,
+      grid,
+      units: [hero, ...enemies],
+      actorId: hero.id,
+      deliveryMode: skill.deliveryMode,
+      blocksByTerrain: skill.blocksByTerrain,
+      blocksByUnits: skill.blocksByUnits,
+      arcHeight: skill.arcHeight,
+      piercing: skill.piercing,
+      maxPierce: skill.maxPierce,
+      friendlyFire: Tactics.FRIENDLY_FIRE,
+    });
+    if (trace.stoppedReason === "terrain") return { ok: false, reason: "skill-blocked-path" };
+    affected = trace.piercing ? (trace.impactedUnits || []).filter((unit) => unit.side === "enemy")
+      : trace.actualTarget?.side === "enemy" ? [trace.actualTarget] : [];
+  }
+  const isAllySkill = skill.targeting?.team === "ally" || skill.targeting?.team === "self" || skill.tags?.includes("heal");
+  if (!affected.length && !isAllySkill && skill.targeting?.mode !== "ground") return { ok: false, reason: "target" };
+  return { ok: true, targetCell, targetUnit, affected, attackPath, pattern };
+}
+
+function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyPlans) {
+  const heroAction = String(input.heroAction || "wait");
+  let skill = null;
+  let targetResult = null;
+  let guardReduction = 0;
+  let evasionBonus = 0;
+  if (heroAction === "potion") {
+    const count = clamp(whole(state.player.potions, 0), 0, 9);
+    if (count <= 0) return { ok: false, reason: "empty" };
+    if (battle.heroHp >= battle.heroMaxHp) return { ok: false, reason: "full" };
+  } else if (heroAction === "skill") {
+    const skillId = Skills.canonicalSkillId(String(input.skillId || ""));
+    skill = Skills.getSkill(skillId);
+    const skillState = Skills.normalizeSkillState(state.expansion.skills, { classId: state.expansion.classId });
+    if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skillId) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === skillId)) {
+      return { ok: false, reason: "skill-not-equipped" };
+    }
+    if (battle.ap < skill.apCost) return { ok: false, reason: "ap" };
+    targetResult = serverSkillTargets(skill, hero, enemies, grid, input);
+    if (!targetResult.ok) return targetResult;
+    for (const effect of skill.effects || []) {
+      if (effect.type === "guard") guardReduction = Math.max(guardReduction, Number(effect.amount) || 0);
+      if (effect.type === "evasion") evasionBonus = Math.max(evasionBonus, Number(effect.amount) || 0);
+    }
+  } else if (heroAction !== "wait") {
+    return { ok: false, reason: "unsupported-battle-action" };
+  }
+
+  const enemyAttacks = enemyPlans.filter((plan) => plan.willAttack).map((plan) => {
+    const enemy = enemies.find((candidate) => candidate.id === plan.enemyId);
+    return { actorId: plan.enemyId, kind: "enemy", speedGrade: plan.speedGrade || enemy?.speedGrade || "C", initiative: enemy?.initiative || 0, plan, enemy };
+  });
+  const heroSpeedGrade = skill?.speedGrade || (heroAction === "potion" ? "S" : "F");
+  const order = Skills.orderActionsBySpeed([
+    { actorId: hero.id, kind: "hero", speedGrade: heroSpeedGrade, initiative: hero.initiative || 0 },
+    ...enemyAttacks,
+  ]);
+
+  const executeHero = () => {
+    if (!hero.alive || hero.hp <= 0) return;
+    if (heroAction === "potion") {
+      state.player.potions = Math.max(0, whole(state.player.potions, 0) - 1);
+      battle.heroHp = Math.min(battle.heroMaxHp, battle.heroHp + 150);
+      hero.hp = battle.heroHp;
+      return;
+    }
+    if (heroAction !== "skill") return;
+    battle.ap = Math.max(0, battle.ap - skill.apCost);
+    const heals = (skill.effects || []).filter((effect) => effect.type === "heal");
+    const damageEffect = (skill.effects || []).find((effect) => effect.type === "damage");
+    const pierceEffect = (skill.effects || []).find((effect) => effect.type === "armor_pierce");
+    const defenceDownEffect = (skill.effects || []).find((effect) => effect.type === "defense_down");
+    const moveDownEffect = (skill.effects || []).find((effect) => effect.type === "move_down");
+    const specialHpEffect = (skill.effects || []).find((effect) => ["halve_hp", "set_hp"].includes(effect.type));
+    if (damageEffect) {
+      const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(skill)) || 0);
+      const hitCount = Math.max(1, whole(skill.hitResolution?.hit_count || damageEffect.hits, 1));
+      for (const target of targetResult.affected.slice(0, 3)) {
+        const index = enemies.findIndex((enemy) => enemy.id === target.id);
+        const enemyState = battle.enemies[index];
+        if (!enemyState?.alive) continue;
+        const existingDebuff = target.defenceDownUntilRound >= battle.round ? target.defenceDown || 0 : 0;
+        const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
+        const positional = Tactics.positionalAttack(hero, target, {
+          attackPath: targetResult.attackPath,
+          facing: hero.facing,
+          side: 1 + SERVER_BATTLE_SIDE_DAMAGE_BONUS,
+          rear: 1 + SERVER_BATTLE_REAR_DAMAGE_BONUS,
+        });
+        let damage = Tactics.calculateDamage(hero, target, {
+          defence,
+          multiplier: authoredMultiplier * positional.multiplier,
+          minimum: Tactics.MIN_DIRECT_DAMAGE,
+        });
+        damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(damage, Tactics.MIN_DIRECT_DAMAGE) * hitCount);
+        if (specialHpEffect?.type === "halve_hp") damage = Math.max(damage, Math.floor(enemyState.hp / 2));
+        if (specialHpEffect?.type === "set_hp") damage = Math.max(damage, Math.max(0, enemyState.hp - Math.max(0, whole(specialHpEffect.value, 1))));
+        enemyState.hp = Math.max(0, enemyState.hp - damage);
+        enemyState.alive = enemyState.hp > 0;
+        target.hp = enemyState.hp;
+        target.alive = enemyState.alive;
+      }
+    }
+    if (heals.length) {
+      const healAmount = heals.reduce((sum, effect) => sum + Math.max(0, whole(effect.flat, 0)) + Math.floor(battle.heroMaxHp * Math.max(0, Number(effect.maxHpRatio) || 0)), 0);
+      battle.heroHp = Math.min(battle.heroMaxHp, battle.heroHp + healAmount);
+      hero.hp = battle.heroHp;
+    }
+    if (defenceDownEffect || moveDownEffect) {
+      for (const target of targetResult.affected) {
+        if (!target.alive || target.hp <= 0) continue;
+        if (defenceDownEffect) {
+          target.defenceDown = Math.max(target.defenceDown || 0, Number(defenceDownEffect.amount) || 0);
+          target.defenceDownUntilRound = battle.round + Math.max(1, whole(defenceDownEffect.duration, 1));
+        }
+        if (moveDownEffect) {
+          target.moveDown = Math.max(target.moveDown || 0, Number(moveDownEffect.amount) || 0);
+          target.moveDownUntilRound = battle.round + Math.max(1, whole(moveDownEffect.duration, 1));
+        }
+      }
+    }
+    const effectTargets = skill.targeting?.team === "ally" || skill.targeting?.team === "self"
+      ? [hero]
+      : targetResult.affected;
+    const handled = new Set(["damage", "heal", "guard", "move_up", "evasion", "defense_down", "move_down", "armor_pierce", "halve_hp", "set_hp"]);
+    const additionalEffects = (skill.effects || []).filter((effect) => !handled.has(effect.type));
+    if (additionalEffects.length) {
+      FighterEffects.applySkillEffects({
+        skill: { ...skill, effects: additionalEffects },
+        caster: hero,
+        targets: effectTargets,
+        units: [hero, ...enemies],
+        grid,
+        round: battle.round,
+        random: deterministicBattleRng(battle, battle.round, `hero:${skill.id}`),
+      });
+    }
+    battle.heroHp = Math.max(0, hero.hp);
+  };
+
+  const executeEnemy = (entry) => {
+    const enemy = entry.enemy;
+    const plan = entry.plan;
+    if (!enemy?.alive || enemy.hp <= 0 || !hero.alive || hero.hp <= 0) return;
+    const skillToUse = plan.skill || enemy.skill;
+    if (!skillToUse || enemy.ap < (plan.apCost || skillToUse.apCost || 0)) return;
+    const valid = MonsterAI.validateSkillFrom(skillToUse, enemy, enemy.cell, enemy.facing, hero, grid, [hero, ...enemies], { canDirectTarget: (unit) => FighterEffects.isDirectTargetable(unit, battle.round) });
+    if (!valid) return;
+    const targetCells = Skills.patternCells(skillToUse, enemy.cell, hero.cell, { grid, heightMap: grid.heightMap, facing: enemy.facing });
+    if (!targetCells.some((cell) => Tactics.cellKey(cell) === Tactics.cellKey(hero.cell))) return;
+    const battleEnemyState = battle.enemies[enemies.indexOf(enemy)];
+    battleEnemyState.ap = Math.max(0, whole(battleEnemyState.ap, 0) - (plan.apCost || skillToUse.apCost || 0));
+    enemy.ap = battleEnemyState.ap;
+    const rng = deterministicBattleRng(battle, battle.round, enemy.id);
+    const hitRoll = Tactics.rollHit({
+      accuracy: enemy.accuracy,
+      accuracyMultiplier: skillToUse.accuracyMultiplier ?? 1,
+      evasion: Math.max(0, hero.evasion + evasionBonus * 100 + (FighterEffects.statusEvasion(hero, battle.round, {}) || 0) * 100),
+      accuracyPenalties: [(FighterEffects.accuracyPenalty(enemy, battle.round) || 0) * 100],
+    }, rng);
+    if (!hitRoll.hit) return;
+    const positional = Tactics.positionalAttack(enemy, hero, {
+      attackPath: Tactics.facingOrthogonalPriority(enemy.cell, hero.cell, enemy.facing),
+      facing: enemy.facing,
+      side: 1 + SERVER_BATTLE_SIDE_DAMAGE_BONUS,
+      rear: 1 + SERVER_BATTLE_REAR_DAMAGE_BONUS,
+    });
+    let damage = Tactics.calculateDamage(enemy, hero, {
+      multiplier: (skillToUse.damageModel?.scale || 1) * positional.multiplier,
+      guarded: guardReduction > 0,
+      guardMultiplier: 1 - guardReduction,
+      minimum: Tactics.MIN_DIRECT_DAMAGE,
+    });
+    damage = Math.max(1, Math.round(whole(damage, 1) * (FighterEffects.damageMultiplier(hero, battle.round) ?? 1)));
+    const counter = FighterEffects.resolveCounter({
+      defender: hero,
+      attacker: enemy,
+      damage,
+      isProjectile: skillToUse.isProjectile === true,
+      round: battle.round,
+    });
+    damage = counter.damage;
+    const counterEnemyIndex = enemies.indexOf(enemy);
+    if (counterEnemyIndex >= 0) {
+      battle.enemies[counterEnemyIndex].hp = Math.max(0, enemy.hp);
+      battle.enemies[counterEnemyIndex].alive = enemy.hp > 0;
+    }
+    battle.heroHp = Math.max(0, battle.heroHp - damage);
+    hero.hp = battle.heroHp;
+    hero.alive = hero.hp > 0;
+    if (hero.alive && skillToUse.effects?.length) {
+      FighterEffects.applySkillEffects({ skill: skillToUse, caster: enemy, targets: [hero], units: [hero, ...enemies], grid, round: battle.round, random: rng });
+      battle.heroHp = Math.max(0, hero.hp);
+      hero.alive = hero.hp > 0;
+    }
+  };
+
+  for (const entry of order) {
+    if (entry.actorId === hero.id) executeHero();
+    else {
+      const enemyEntry = enemyAttacks.find((candidate) => candidate.actorId === entry.actorId);
+      if (enemyEntry) executeEnemy(enemyEntry);
+    }
+  }
+  return { ok: true };
+}
+
+function persistServerBattleUnits(battle, hero, enemies) {
+  battle.heroHp = Math.max(0, Number(hero.hp) || 0);
+  battle.heroCell = { ...hero.cell };
+  battle.heroFacing = canonicalBattleFacing(hero.facing, battle.heroFacing);
+  battle.heroStatusEffects = clone(hero.statusEffects || {});
+  for (let index = 0; index < battle.enemies.length; index += 1) {
+    const stateEnemy = battle.enemies[index];
+    const unit = enemies[index];
+    if (!stateEnemy || !unit) continue;
+    stateEnemy.hp = Math.max(0, Number(unit.hp) || 0);
+    stateEnemy.alive = unit.alive !== false && stateEnemy.hp > 0;
+    stateEnemy.cell = { ...unit.cell };
+    stateEnemy.facing = canonicalBattleFacing(unit.facing, stateEnemy.facing);
+    stateEnemy.ap = clamp(whole(unit.ap, stateEnemy.ap || 0), 0, Skills.MAX_AP);
+    stateEnemy.statusEffects = clone(unit.statusEffects || {});
+    stateEnemy.defenceDown = Math.max(0, Number(unit.defenceDown) || 0);
+    stateEnemy.defenceDownUntilRound = Math.max(0, whole(unit.defenceDownUntilRound, 0));
+    stateEnemy.moveDown = Math.max(0, Number(unit.moveDown) || 0);
+    stateEnemy.moveDownUntilRound = Math.max(0, whole(unit.moveDownUntilRound, 0));
+  }
+}
+
 function battleCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
@@ -671,119 +1338,113 @@ function battleCommand(save, input = {}, options = {}) {
     const requestedEncounterId = String(input.encounterId || "");
     const requestedMonsterType = MonsterBlueprints.normalizeMonsterId(input.monsterType);
     if (existing?.status === "active") {
+      ensureServerBattleTacticalState(state, existing);
       const sameEncounter = requestedEncounterId
         && String(existing.encounterId || "") === requestedEncounterId
         && String(existing.monsterType || "") === String(requestedMonsterType || "");
-      if (sameEncounter) {
-        return resultWithState(state, { action, reused: true, battle: clone(existing) });
-      }
+      if (sameEncounter) return resultWithState(state, { action, reused: true, battle: clone(existing) });
       return { ok: false, reason: "battle-active", battle: clone(existing) };
     }
+    const persistedHeroHp = Number(state.player.hp);
+    if (!Number.isFinite(persistedHeroHp) || persistedHeroHp <= 0) return { ok: false, reason: "player-dead" };
+
     const monsterType = requestedMonsterType;
     const blueprint = monsterType ? MonsterBlueprints.monsterBlueprint(monsterType) : null;
     if (!blueprint) return { ok: false, reason: "unknown-monster" };
     const mapId = normalizeMapId(state.expansion.currentMapId);
-    if (Array.isArray(blueprint.habitat?.maps) && blueprint.habitat.maps.length && !blueprint.habitat.maps.includes(mapId)) {
-      return { ok: false, reason: "wrong-map" };
-    }
     const positionCheck = validateCommandPositionState(state, input, options);
     if (!positionCheck.ok) return positionCheck;
-    const level = clamp(whole(input.level, blueprint.baseLevel || 1), 1, 45);
+    const level = whole(input.level, blueprint.baseLevel || 1);
+    if (level < 1 || level > 45) return { ok: false, reason: "invalid-monster-level" };
+
+    let fieldEncounter = null;
+    if (mapId === "field") {
+      fieldEncounter = validateFieldRandomEncounter(positionCheck.position, blueprint, level);
+      if (!fieldEncounter.ok) return fieldEncounter;
+    } else if (Array.isArray(blueprint.habitat?.maps) && blueprint.habitat.maps.length && !blueprint.habitat.maps.includes(mapId)) {
+      return { ok: false, reason: "wrong-map" };
+    }
     const stats = MonsterBlueprints.monsterStatsAtLevel(monsterType, level);
     const count = clamp(whole(blueprint.encounterCount, 1), 1, 3);
     const hpMultiplier = MonsterBlueprints.encounterHpMultiplier(count);
+    const battlefield = serverBattlefieldFor(mapId, monsterType);
+    const battleId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const enemies = Array.from({ length: count }, (_, index) => ({
       index,
+      id: index === 0 ? `battle-${requestedEncounterId || battleId}` : `battle-${requestedEncounterId || battleId}-pack-${index + 1}`,
       type: monsterType,
       level,
       hp: Math.max(1, Math.round(stats.hp * hpMultiplier)),
       maxHp: Math.max(1, Math.round(stats.hp * hpMultiplier)),
       alive: true,
+      ap: 0,
+      cell: serverBattleDeploymentCell(battlefield, "enemy", index),
+      facing: "left",
+      statusEffects: {},
+      defenceDown: 0,
+      defenceDownUntilRound: 0,
+      moveDown: 0,
+      moveDownUntilRound: 0,
     }));
-    const battleId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const heroMaxHp = classMaxHp(state.expansion.classId, state.player.level) + Math.max(0, whole(Expansion.equipmentStats(state.expansion.equipped).maxHp, 0));
     state.expansion.serverBattle = {
       id: battleId,
       status: "active",
+      tacticalVersion: SERVER_BATTLE_TACTICAL_VERSION,
+      mapId,
       monsterType,
-      encounterId: String(input.encounterId || ""),
+      encounterId: requestedEncounterId,
       level,
       round: 1,
       ap: 0,
-      heroHp: clamp(Number(state.player.hp) || heroMaxHp, 1, heroMaxHp),
+      heroHp: clamp(persistedHeroHp, 1, heroMaxHp),
       heroMaxHp,
+      heroCell: serverBattleDeploymentCell(battlefield, "ally", 0),
+      heroFacing: "right",
+      heroStatusEffects: {},
       enemies,
     };
-    return resultWithState(state, { action, battle: clone(state.expansion.serverBattle) });
+    return resultWithState(state, {
+      action,
+      battle: clone(state.expansion.serverBattle),
+      ...(fieldEncounter ? { encounterZone: fieldEncounter.encounterZone } : {}),
+    });
   }
 
   if (!existing || existing.status !== "active") return { ok: false, reason: "no-battle" };
   if (String(input.battleId || "") !== String(existing.id)) return { ok: false, reason: "battle-id" };
+  const tactical = ensureServerBattleTacticalState(state, existing);
 
   if (action === "act") {
     const requestedRound = whole(input.round, -1);
     if (requestedRound !== whole(existing.round, 1)) return { ok: false, reason: "round", battle: clone(existing) };
-    const heroAction = String(input.heroAction || "skill");
     existing.ap = Math.min(Skills.MAX_AP, Math.max(0, whole(existing.ap, 0)) + Skills.ROUND_AP_GAIN);
-
-    if (heroAction === "potion") {
-      const count = clamp(whole(state.player.potions, 0), 0, 9);
-      if (count <= 0) return { ok: false, reason: "empty" };
-      if (existing.heroHp >= existing.heroMaxHp) return { ok: false, reason: "full" };
-      state.player.potions = count - 1;
-      existing.heroHp = Math.min(existing.heroMaxHp, existing.heroHp + 150);
-    } else if (heroAction === "skill") {
-      const skillId = Skills.canonicalSkillId(String(input.skillId || ""));
-      const skill = Skills.getSkill(skillId);
-      const skillState = Skills.normalizeSkillState(state.expansion.skills, { classId: state.expansion.classId });
-      if (!skill || !skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skillId) || !skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === skillId)) {
-        return { ok: false, reason: "skill-not-equipped" };
-      }
-      if (existing.ap < skill.apCost) return { ok: false, reason: "ap" };
-      existing.ap -= skill.apCost;
-
-      const targets = [...new Set((Array.isArray(input.targetIndexes) ? input.targetIndexes : [input.targetIndex])
-        .map((v) => whole(v, -1))
-        .filter((v) => v >= 0 && v < existing.enemies.length))];
-      const heals = (skill.effects || []).filter((effect) => effect.type === "heal");
-      const isAllySkill = skill.targeting?.team === "ally" || skill.tags?.includes("heal");
-      if (!targets.length && !isAllySkill) return { ok: false, reason: "target" };
-
-      const gear = Expansion.equipmentStats(state.expansion.equipped);
-      const attack = Math.max(0, Number(gear.attack) || 0);
-      const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(skill)) || 0);
-      const hitCount = Math.max(1, whole(skill.hitResolution?.hit_count || skill.effects?.find((effect) => effect.type === "damage")?.hits, 1));
-      const specialHpEffect = (skill.effects || []).find((effect) => ["halve_hp", "set_hp"].includes(effect.type));
-
-      for (const index of targets.slice(0, 3)) {
-        const enemy = existing.enemies[index];
-        if (!enemy?.alive) continue;
-        const stats = MonsterBlueprints.monsterStatsAtLevel(enemy.type, enemy.level);
-        let damage = Tactics.calculateDamage({ attack }, { defence: stats.defense }, {
-          multiplier: authoredMultiplier,
-          minimum: Tactics.MIN_DIRECT_DAMAGE,
-        });
-        damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(damage, Tactics.MIN_DIRECT_DAMAGE) * hitCount);
-        if (specialHpEffect?.type === "halve_hp") damage = Math.max(damage, Math.floor(enemy.hp / 2));
-        if (specialHpEffect?.type === "set_hp") damage = Math.max(damage, Math.max(0, enemy.hp - Math.max(0, whole(specialHpEffect.value, 1))));
-        enemy.hp = Math.max(0, enemy.hp - damage);
-        enemy.alive = enemy.hp > 0;
-      }
-
-      if (heals.length) {
-        const healAmount = heals.reduce((sum, effect) => sum + Math.max(0, whole(effect.flat, 0)) + Math.floor(existing.heroMaxHp * Math.max(0, Number(effect.maxHpRatio) || 0)), 0);
-        existing.heroHp = Math.min(existing.heroMaxHp, existing.heroHp + healAmount);
-      }
-    } else if (heroAction !== "wait") {
-      return { ok: false, reason: "unsupported-battle-action" };
+    for (const enemy of existing.enemies) {
+      if (enemy.alive && enemy.hp > 0) enemy.ap = Math.min(Skills.MAX_AP, Math.max(0, whole(enemy.ap, 0)) + Skills.ROUND_AP_GAIN);
     }
 
-    // Until Step 9 makes tactical/world position fully authoritative, the client
-    // may report battle damage taken, but can never increase HP through this path.
-    const reportedHp = Number(input.heroHp);
-    if (Number.isFinite(reportedHp)) existing.heroHp = clamp(Math.min(existing.heroHp, reportedHp), 0, existing.heroMaxHp);
-    state.player.hp = existing.heroHp;
+    const units = serverBattleUnits(state, existing);
+    if (!units.hero.alive || units.hero.hp <= 0) {
+      state.player.hp = 0;
+      state.expansion.serverBattle = existing;
+      return resultWithState(state, { action, battle: clone(existing) });
+    }
+    const enemyPlans = serverEnemyPlans(state, existing, tactical.grid, units.hero, units.enemies);
+    const movement = validateServerHeroMovement(state, existing, tactical.grid, units.hero, enemyPlans, units.enemies, input);
+    if (!movement.ok) return { ...movement, battle: clone(existing) };
+
+    const actionResult = applyServerHeroAction(state, existing, units.hero, units.enemies, tactical.grid, input, enemyPlans);
+    if (!actionResult.ok) return { ...actionResult, battle: clone(existing) };
+    persistServerBattleUnits(existing, units.hero, units.enemies);
+
     existing.round = Math.max(1, whole(existing.round, 1) + 1);
+    // Persist the exact next planning-state status tick now, before returning
+    // the snapshot. This keeps refresh/reconnect identical to the continuously
+    // connected client's predicted next round instead of ticking twice later.
+    FighterEffects.tickStatuses(units.hero, existing.round, units.hero.passives || {});
+    for (const enemy of units.enemies) FighterEffects.tickStatuses(enemy, existing.round, {});
+    persistServerBattleUnits(existing, units.hero, units.enemies);
+    state.player.hp = clamp(existing.heroHp, 0, existing.heroMaxHp);
     state.expansion.serverBattle = existing;
     return resultWithState(state, { action, battle: clone(existing) });
   }

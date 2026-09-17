@@ -290,25 +290,27 @@ test("Step 9C battle start rejects an impossible exploration position claim", ()
 });
 
 test("battle start is idempotent for the same encounter and exposes orphan battle id for recovery", () => {
-  let save = baseSave({ expansion: { currentMapId: "field" } });
-  const first = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a" });
+  const position = { mapId: "field", x: 1856, y: 2336 };
+  let save = baseSave({ player: { x: position.x, y: position.y }, expansion: { currentMapId: "field" } });
+  const first = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a", position });
   assert.equal(first.ok, true);
   save = mergeAuthoritative(save, first.state);
 
-  const same = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a" });
+  const same = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a", position });
   assert.equal(same.ok, true);
   assert.equal(same.reused, true);
   assert.equal(same.battle.id, first.battle.id);
 
-  const different = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-b" });
+  const different = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-b", position });
   assert.equal(different.ok, false);
   assert.equal(different.reason, "battle-active");
   assert.equal(different.battle.id, first.battle.id);
 });
 
 test("battle rewards cannot settle until server-tracked enemies are defeated", () => {
-  let save = baseSave({ expansion: { currentMapId: "field" } });
-  const started = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "test-chick" });
+  const position = { mapId: "field", x: 1856, y: 2336 };
+  let save = baseSave({ player: { x: position.x, y: position.y }, expansion: { currentMapId: "field" } });
+  const started = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "test-chick", position });
   assert.equal(started.ok, true);
   save = mergeAuthoritative(save, started.state);
   const battleId = started.battle.id;
@@ -317,24 +319,30 @@ test("battle rewards cannot settle until server-tracked enemies are defeated", (
   assert.equal(premature.ok, false);
   assert.equal(premature.reason, "battle-not-won");
 
-  let round = 1;
-  let snapshot = started.battle;
-  while (snapshot.enemies.some((enemy) => enemy.alive) && round < 100) {
-    const acted = ServerGame.battleCommand(save, {
-      action: "act",
-      battleId,
-      round,
-      heroAction: "skill",
-      skillId: "straight_punch",
-      targetIndexes: [0],
-      heroHp: 300,
-    });
-    assert.equal(acted.ok, true);
-    save = mergeAuthoritative(save, acted.state);
-    snapshot = acted.battle;
-    round = snapshot.round;
-  }
-  assert.equal(snapshot.enemies.some((enemy) => enemy.alive), false);
+  // Put the server-owned test enemy one legal punch away from defeat. The act
+  // still has to pass the tactical position/range checks before victory can be
+  // settled; client-reported HP/target indexes are no longer trusted.
+  save.expansion.serverBattle.enemies[0].hp = 5;
+  save.expansion.serverBattle.enemies[0].cell = { x: 2, y: 1 };
+  save.expansion.serverBattle.enemies[0].facing = "left";
+  save.expansion.serverBattle.heroCell = { x: 1, y: 1 };
+  save.expansion.serverBattle.heroFacing = "right";
+
+  const acted = ServerGame.battleCommand(save, {
+    action: "act",
+    battleId,
+    round: 1,
+    tacticalVersion: 1,
+    moveCommands: [],
+    heroAction: "skill",
+    skillId: "straight_punch",
+    targetCell: { x: 2, y: 1 },
+    heroHp: 999999,
+  });
+  assert.equal(acted.ok, true);
+  assert.equal(acted.battle.enemies[0].alive, false);
+  assert.notEqual(acted.battle.heroHp, 999999);
+  save = mergeAuthoritative(save, acted.state);
 
   const settled = ServerGame.battleCommand(save, { action: "settle", battleId, outcome: "victory" });
   assert.equal(settled.ok, true);
@@ -342,6 +350,69 @@ test("battle rewards cannot settle until server-tracked enemies are defeated", (
   assert.ok(settled.earnedXp > 0);
   assert.ok(settled.coins >= 0);
   assert.equal(settled.state.expansion.serverBattle, null);
+});
+
+test("tactical battle rejects forged teleports and out-of-range attacks", () => {
+  const position = { mapId: "field", x: 1856, y: 2336 };
+  let save = baseSave({ player: { x: position.x, y: position.y, hp: 300 }, expansion: { currentMapId: "field" } });
+  const started = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "anti-cheat", position });
+  assert.equal(started.ok, true);
+  save = mergeAuthoritative(save, started.state);
+
+  const teleport = ServerGame.battleCommand(save, {
+    action: "act",
+    battleId: started.battle.id,
+    round: 1,
+    tacticalVersion: 1,
+    moveCommands: [{ type: "move", to: { x: 7, y: 1 } }],
+    heroAction: "wait",
+  });
+  assert.equal(teleport.ok, false);
+  assert.equal(teleport.reason, "invalid-movement-path");
+
+  const forgedRange = ServerGame.battleCommand(save, {
+    action: "act",
+    battleId: started.battle.id,
+    round: 1,
+    tacticalVersion: 1,
+    moveCommands: [],
+    heroAction: "skill",
+    skillId: "straight_punch",
+    targetCell: { x: 7, y: 2 },
+  });
+  assert.equal(forgedRange.ok, false);
+  assert.equal(forgedRange.reason, "skill-out-of-range");
+});
+
+test("server battle snapshot persists authoritative cells and facing for reconnect", () => {
+  const position = { mapId: "field", x: 1856, y: 2336 };
+  let save = baseSave({ player: { x: position.x, y: position.y, hp: 300 }, expansion: { currentMapId: "field" } });
+  const started = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "resume-tactical", position });
+  assert.equal(started.ok, true);
+  save = mergeAuthoritative(save, started.state);
+
+  const acted = ServerGame.battleCommand(save, {
+    action: "act",
+    battleId: started.battle.id,
+    round: 1,
+    tacticalVersion: 1,
+    moveCommands: [{ type: "move", to: { x: 2, y: 1 } }, { type: "face", facing: "down" }],
+    heroAction: "wait",
+    heroHp: 999999,
+  });
+  assert.equal(acted.ok, true);
+  assert.deepEqual(acted.battle.heroCell, { x: 2, y: 1 });
+  assert.equal(acted.battle.heroFacing, "down");
+  assert.ok(acted.battle.enemies[0].cell);
+  assert.ok(["up", "right", "down", "left"].includes(acted.battle.enemies[0].facing));
+  assert.notEqual(acted.battle.heroHp, 999999);
+  save = mergeAuthoritative(save, acted.state);
+
+  const reused = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "resume-tactical", position });
+  assert.equal(reused.ok, true);
+  assert.equal(reused.reused, true);
+  assert.deepEqual(reused.battle.heroCell, acted.battle.heroCell);
+  assert.equal(reused.battle.heroFacing, acted.battle.heroFacing);
 });
 
 test("skill manual mutation is executed through the server economy command", () => {
@@ -380,3 +451,96 @@ test("2-star wish commission accepts anywhere inside the authoritative guild map
   assert.equal(result.commission.id, "guild_wish_pool_2star");
   assert.equal(result.state.expansion.guildCommission.status, "active");
 });
+
+test("field random encounters use the authored encounter mask instead of per-monster habitat", () => {
+  const cases = [
+    { position: { x: 1856, y: 2336 }, monsterType: "chick", level: 1, zone: "Lv1–2" },
+    { position: { x: 1856, y: 480 }, monsterType: "fox", level: 5, zone: "Lv2–5" },
+    { position: { x: 1312, y: 704 }, monsterType: "raccoon", level: 10, zone: "Lv6–10" },
+    { position: { x: 3296, y: 0 }, monsterType: "frog", level: 15, zone: "Lv11–15" },
+  ];
+
+  for (const entry of cases) {
+    const save = baseSave({
+      player: { x: entry.position.x, y: entry.position.y },
+      expansion: { currentMapId: "field" },
+    });
+    const result = ServerGame.battleCommand(save, {
+      action: "start",
+      monsterType: entry.monsterType,
+      level: entry.level,
+      encounterId: `field-${entry.monsterType}-regression`,
+      position: { mapId: "field", ...entry.position },
+    }, { nowMs: Date.now() });
+    assert.equal(result.ok, true, `${entry.monsterType} should be valid in ${entry.zone}`);
+    assert.equal(result.battle?.monsterType, entry.monsterType);
+    assert.equal(result.encounterZone, entry.zone);
+  }
+});
+
+
+test("dead players cannot start a new battle and are never hydrated back to full HP", () => {
+  const save = baseSave({
+    player: { hp: 0, x: 3296, y: 0 },
+    expansion: { currentMapId: "field" },
+  });
+  const result = ServerGame.battleCommand(save, {
+    action: "start",
+    monsterType: "frog",
+    level: 15,
+    encounterId: "dead-player-field-encounter",
+    position: { mapId: "field", x: 3296, y: 0 },
+  }, { nowMs: Date.now() });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "player-dead");
+  assert.equal(save.player.hp, 0);
+  assert.equal(save.expansion.serverBattle, undefined);
+});
+
+test("equipment changes preserve the authoritative zero-HP death state", () => {
+  const save = baseSave({
+    player: { hp: 0 },
+    expansion: {
+      currentMapId: "world",
+      ownedEquipment: ["novice_gloves"],
+      equipped: {},
+    },
+  });
+  const result = ServerGame.economyCommand(save, { action: "equip", itemId: "novice_gloves" });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.player.hp, 0);
+});
+
+test("field random encounter rejects monsters and levels that the client mask could not generate", () => {
+  const zonePosition = { x: 3296, y: 0 }; // authored Lv11–15 zone
+  const wrongMonster = ServerGame.battleCommand(baseSave({ expansion: { currentMapId: "field" } }), {
+    action: "start",
+    monsterType: "snake",
+    level: 15,
+    encounterId: "field-wrong-monster",
+    position: { mapId: "field", ...zonePosition },
+  }, { nowMs: Date.now() });
+  assert.equal(wrongMonster.ok, false);
+  assert.equal(wrongMonster.reason, "monster-not-in-encounter-zone");
+
+  const wrongLevel = ServerGame.battleCommand(baseSave({ expansion: { currentMapId: "field" } }), {
+    action: "start",
+    monsterType: "frog",
+    level: 18,
+    encounterId: "field-wrong-level",
+    position: { mapId: "field", ...zonePosition },
+  }, { nowMs: Date.now() });
+  assert.equal(wrongLevel.ok, false);
+  assert.equal(wrongLevel.reason, "encounter-level-mismatch");
+
+  const noZone = ServerGame.battleCommand(baseSave({ expansion: { currentMapId: "field" } }), {
+    action: "start",
+    monsterType: "chick",
+    level: 1,
+    encounterId: "field-no-zone",
+    position: { mapId: "field", x: 100, y: 100 },
+  }, { nowMs: Date.now() });
+  assert.equal(noZone.ok, false);
+  assert.equal(noZone.reason, "invalid-encounter-zone");
+});
+
