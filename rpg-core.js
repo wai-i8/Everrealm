@@ -456,6 +456,9 @@
       version: 1,
       player: {
         name: String(player.name || "").trim().slice(0, 24) || "阿巡",
+        gender: ["male", "female"].includes(String(player.gender || "").trim().toLowerCase())
+          ? String(player.gender).trim().toLowerCase()
+          : "male",
         // Map dimensions are no longer fixed to the legacy 2760x1800 world.
         // Preserve finite authored coordinates here; game.js validates the loaded
         // position against the active map's authoritative navigation and falls

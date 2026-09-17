@@ -6865,6 +6865,33 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   gap: .85rem;
   margin: .65rem 0 1rem;
 }
+.gender-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  margin: .15rem 0 .35rem;
+}
+.gender-choice-label { color: var(--muted); font-size: .72rem; }
+.gender-choice-options { display: flex; gap: .35rem; }
+.gender-choice-button {
+  min-width: 4.2rem;
+  padding: .35rem .8rem;
+  border: 1px solid rgba(129,151,190,.52);
+  border-radius: .55rem;
+  color: #d8deed;
+  background: rgba(17,29,51,.9);
+  cursor: pointer;
+  font: 800 .72rem/1.2 "Noto Sans HK", "Microsoft JhengHei", sans-serif;
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+.gender-choice-button:hover,
+.gender-choice-button:focus-visible,
+.gender-choice-button.is-selected {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(84,64,32,.82);
+}
 .class-choice-grid--six {
   width: min(68rem, 100%);
   max-width: 100%;
@@ -6936,7 +6963,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 @media (max-height: 680px) {
   .class-select-panel {
     display: grid;
-    grid-template-rows: auto auto auto minmax(0,1fr) auto;
+    grid-template-rows: auto auto auto auto minmax(0,1fr) auto;
     align-content: stretch;
     justify-content: stretch;
     justify-items: center;
@@ -6967,7 +6994,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 @media (max-width: 520px) {
   .class-select-panel {
     display: grid;
-    grid-template-rows: auto auto auto minmax(0,1fr) auto;
+    grid-template-rows: auto auto auto auto minmax(0,1fr) auto;
     align-content: stretch;
     justify-content: stretch;
     justify-items: center;

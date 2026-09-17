@@ -39,6 +39,11 @@ function playerName(value, fallback = "阿巡") {
   return text || fallback;
 }
 
+function normalizeGender(value, fallback = "male") {
+  const gender = String(value || "").trim().toLowerCase();
+  return gender === "female" || gender === "male" ? gender : fallback;
+}
+
 function normalizeClassId(value) {
   const id = String(value || "").trim();
   return Skills.CLASS_IDS?.includes(id) ? id : (Skills.DEFAULT_CLASS_ID || "fighter");
@@ -59,6 +64,7 @@ function canonicalInitialSave(payload = {}) {
     combatScaleVersion: COMBAT_SCALE_VERSION,
     player: {
       name: playerName(sourcePlayer.name),
+      gender: normalizeGender(sourcePlayer.gender),
       x,
       y,
       hp: maxHp,
@@ -172,6 +178,7 @@ function sanitizeLegacySave(payload = {}) {
     combatScaleVersion: COMBAT_SCALE_VERSION,
     player: {
       name: playerName(sourcePlayer.name),
+      gender: normalizeGender(sourcePlayer.gender),
       x,
       y,
       hp: clamp(whole(sourcePlayer.hp, maxHp), 1, maxHp),

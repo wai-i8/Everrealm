@@ -61,6 +61,7 @@
       uid: safeUid,
       name: safeName(source.name),
       classId: String(source.classId || "warrior").trim() || "warrior",
+      gender: String(source.gender || "").trim().toLowerCase() === "female" ? "female" : "male",
       x,
       y,
       facing: validFacing(source.facing),
@@ -77,6 +78,7 @@
     return previous.mapId !== next.mapId
       || previous.name !== next.name
       || previous.classId !== next.classId
+      || previous.gender !== next.gender
       || previous.facing !== next.facing
       || previous.state !== next.state
       || Boolean(previous.moving) !== Boolean(next.moving)
@@ -88,6 +90,7 @@
     return previous.mapId !== next.mapId
       || previous.name !== next.name
       || previous.classId !== next.classId
+      || previous.gender !== next.gender
       || previous.facing !== next.facing
       || previous.state !== next.state
       || Boolean(previous.moving) !== Boolean(next.moving)
@@ -105,6 +108,7 @@
     if (!previous) return true;
     return previous.x !== next.x
       || previous.y !== next.y
+      || previous.gender !== next.gender
       || previous.facing !== next.facing
       || previous.state !== next.state
       || Boolean(previous.moving) !== Boolean(next.moving)
@@ -531,6 +535,7 @@
         mapId: resolvedMapId,
         name: safeName(value.name),
         classId: String(value.classId || "warrior").trim() || "warrior",
+        gender: String(value.gender || "").trim().toLowerCase() === "female" ? "female" : "male",
         x,
         y,
         facing: validFacing(value.facing),
@@ -660,6 +665,7 @@
           uid: snapshot.uid,
           name: snapshot.name,
           classId: snapshot.classId,
+          gender: snapshot.gender,
           x: snapshot.x,
           y: snapshot.y,
           facing: snapshot.facing,

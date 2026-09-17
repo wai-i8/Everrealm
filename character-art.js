@@ -94,7 +94,7 @@
   });
 
   function locomotionWorldFrame(id) {
-    return ["fighter", "warrior"].includes(id)
+    return ["fighter", "fighterFemale", "warrior"].includes(id)
       ? locomotionWorldFrames.player
       : locomotionWorldFrames.monster;
   }
@@ -314,7 +314,7 @@
     markers: { src: null, columns: 2, rows: 2, image: null, ready: false, failed: false },
   };
 
-  for (const [id, src] of Object.entries(Locomotion.assets)) {
+  for (const [id, src] of Object.entries({ ...Locomotion.assets, ...(Locomotion.characterVariants || {}) })) {
     const m = Locomotion.STANDARD_MOBILE_UNIT_SPRITE;
     spriteAtlases[`locomotion_${id}`] = {
       src,
@@ -563,8 +563,11 @@
     return settings.classId === "fighter" ? fighterAnimationFrame(settings) : heroAnimationFrame(settings);
   }
 
-  function portraitFrameFor(actor, classId) {
-    if (actor === "player" && classId === "fighter") return { atlas: spriteAtlases.fighter, index: 0 };
+  function portraitFrameFor(actor, classId, gender) {
+    if (actor === "player" && classId === "fighter") {
+      const id = Locomotion.assetKeyForCharacter?.(classId, gender) || classId;
+      return { atlas: spriteAtlases[`locomotion_${id}`] || spriteAtlases.fighter, index: 0 };
+    }
     if (actor === "player") return { atlas: spriteAtlases.heroLegacy, index: 0 };
     return { atlas: spriteAtlases.npcPortraits, index: npcArtIndices[actor] ?? npcArtIndices.villager };
   }
@@ -694,7 +697,8 @@
   function drawBattleFighterDiagonal(ctx, settings) {
     if (!(settings?.battleDiagonal || settings?.battleProjected) || settings.classId !== "fighter") return false;
     if ((settings.actor || settings.kind) !== "player") return false;
-    return drawBattleDiagonalUnit(ctx, settings, "fighter");
+    const id = Locomotion.assetKeyForCharacter?.(settings.classId, settings.gender) || settings.classId;
+    return drawBattleDiagonalUnit(ctx, settings, id);
   }
 
   function drawBattleMonsterDiagonal(ctx, settings) {
@@ -851,13 +855,14 @@
 
   function drawBitmapCharacter(ctx, settings) {
     if ((settings.actor || settings.kind) === "player") {
+      const id = Locomotion.assetKeyForCharacter?.(settings.classId || "warrior", settings.gender) || settings.classId || "warrior";
       const battleDiagonal = drawBattleFighterDiagonal(ctx, settings);
       if (battleDiagonal) return battleDiagonal;
       if (["attack", "hurt", "stop"].includes(settings.state)) {
-        const reaction = drawLocomotionReaction(ctx, settings, settings.classId || "warrior");
+        const reaction = drawLocomotionReaction(ctx, settings, id);
         if (reaction) return reaction;
       }
-      const standard = drawLocomotion(ctx, settings, settings.classId || "warrior");
+      const standard = drawLocomotion(ctx, settings, id);
       if (standard) return standard;
       // The legacy hero atlas is not a load-error fallback. If the current
       // locomotion art is unavailable, leave the player visual empty until the
@@ -1008,7 +1013,7 @@
       }
       return true;
     }
-    const selected = portraitFrameFor(actor, settings.classId);
+    const selected = portraitFrameFor(actor, settings.classId, settings.gender);
     if (!selected.atlas.ready || !selected.atlas.image) return false;
     const frame = selected.atlas === spriteAtlases.npcPortraits
       ? safeAtlasFrame(selected.atlas, selected.index)

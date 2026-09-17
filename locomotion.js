@@ -31,17 +31,20 @@
     idleColumn: 0, walkColumns: Object.freeze([0, 1, 2]), attackColumn: 3, hurtColumn: 4, deathColumn: 5, walkFps: 8,
   });
 
+  const fighterBattleAsset = (src) => Object.freeze({
+    src,
+    columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+    rowByFacing: Object.freeze({ right: 0, down: 1, left: 2, up: 3 }),
+    attackSourceFacing: Object.freeze({ right: "right", down: "down", left: "down", up: "right" }),
+    attackMirrorFacing: Object.freeze({ right: false, down: false, left: true, up: true }),
+    visualProfile: "player",
+    idleColumn: 0, walkColumns: Object.freeze([1, 2]),
+    attackColumn: 3, hurtColumn: 4, walkFps: 8,
+  });
+
   const BATTLE_DIAGONAL_ASSETS = Object.freeze({
-    fighter: Object.freeze({
-      src: "assets/battle/fighter/fighter-battle-diagonal-v1.png",
-      columns: 5, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
-      rowByFacing: Object.freeze({ right: 0, down: 1, left: 2, up: 3 }),
-      attackSourceFacing: Object.freeze({ right: "right", down: "down", left: "down", up: "right" }),
-      attackMirrorFacing: Object.freeze({ right: false, down: false, left: true, up: true }),
-      visualProfile: "player",
-      idleColumn: 0, walkColumns: Object.freeze([1, 2]),
-      attackColumn: 3, hurtColumn: 4, walkFps: 8,
-    }),
+    fighter: fighterBattleAsset("assets/battle/fighter/fighter-battle-diagonal-v1.png"),
+    fighterFemale: fighterBattleAsset("assets/battle/fighter/fighter-battle-diagonal-female-v1.png"),
     chick: ordinaryMonsterBattleAsset("chick"),
     fox: ordinaryMonsterBattleAsset("fox"),
     raccoon: ordinaryMonsterBattleAsset("raccoon"),
@@ -88,6 +91,14 @@
     wisp: "assets/locomotion/chick-v1.png",
     hound: "assets/locomotion/fox-v1.png",
   });
+  const characterVariants = Object.freeze({
+    fighterFemale: "assets/locomotion/fighter-female-v1.png",
+  });
+  function assetKeyForCharacter(classId, gender = "male") {
+    return String(classId || "").trim() === "fighter" && String(gender || "").trim().toLowerCase() === "female"
+      ? "fighterFemale"
+      : String(classId || "").trim();
+  }
   const visualBounds = Object.freeze({ ...STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, slime: STANDARD_MOBILE_UNIT_VISUAL_BOUNDS.raccoon, wisp: STANDARD_MOBILE_UNIT_VISUAL_BOUNDS.chick, hound: STANDARD_MOBILE_UNIT_VISUAL_BOUNDS.fox });
   const sourceArt = Object.freeze({
     snake: "assets/monster-sources/snake.png",
@@ -180,5 +191,5 @@
     }
     return { state: moving ? "walk" : "idle", facing, time: moving ? Math.max(0, time - times[start]) * movement.stepDuration : 0 };
   }
-  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, BATTLE_DIAGONAL_VISUAL_PROFILES, BATTLE_DIAGONAL_ASSETS, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, sourceArt, create, update, frame, frameVisualBounds, stableVisualBounds, layout, facingFromDelta, sampleMovement });
+  return Object.freeze({ STANDARD_MOBILE_UNIT_SPRITE, BATTLE_DIAGONAL_VISUAL_PROFILES, BATTLE_DIAGONAL_ASSETS, STANDARD_MOBILE_UNIT_VISUAL_BOUNDS, assets, characterVariants, sourceArt, assetKeyForCharacter, create, update, frame, frameVisualBounds, stableVisualBounds, layout, facingFromDelta, sampleMovement });
 });

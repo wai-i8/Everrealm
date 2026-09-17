@@ -27,7 +27,7 @@ Firebase Auth email/password accounts use `uid` as the player identity. The curr
 players/{uid}
   version: 1
   combatScaleVersion: 2 (after the one-time balance migration)
-  player: { name, x, y, hp, level, xp, coins, potions, weaponLevel, upgrades }
+  player: { name, gender, x, y, hp, level, xp, coins, potions, weaponLevel, upgrades }
   pendingLevelUps
   openedChests[]
   playTime

@@ -297,6 +297,8 @@
   let defeatedDungeonBosses = new Set();
   let skillState = Skills.createSkillState();
   let playerClassId = Skills.DEFAULT_CLASS_ID || "warrior";
+  let playerGender = "male";
+  let pendingPlayerGender = "male";
   let exploreMoveTarget = null;
   let exploreMovePath = [];
   let explorePortalIntentId = null;
@@ -649,6 +651,7 @@
       mapId: currentMapId,
       name: playerDisplayName(),
       classId: playerClassId,
+      gender: normalizeGender(player.gender),
       x: player.x,
       y: player.y,
       facing: player.facing,
@@ -829,9 +832,15 @@
   }
   const sound = new SoundEngine();
 
+  function normalizeGender(value, fallback = "male") {
+    const gender = String(value || "").trim().toLowerCase();
+    return gender === "female" || gender === "male" ? gender : fallback;
+  }
+
   function createPlayer() {
     return {
       name: "阿巡",
+      gender: normalizeGender(playerGender),
       x: world.start.x,
       y: world.start.y,
       radius: 12,
@@ -1318,6 +1327,7 @@
       combatScaleVersion: COMBAT_SCALE_VERSION,
       player: {
         name: playerDisplayName(),
+        gender: normalizeGender(player.gender),
         x: player.x,
         y: player.y,
         hp: player.hp,
@@ -1402,7 +1412,7 @@
     return { ok: true, reason: null, active: godModeActive, skillResult };
   }
 
-  function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "warrior") {
+  function newGame(skipIntro = false, classId = Skills.DEFAULT_CLASS_ID || "warrior", gender = playerGender) {
     if (!requireAuthenticatedGameplay()) return false;
     sound.ensure();
     closeBattleHud();
@@ -1418,6 +1428,7 @@
       || authenticatedUser()?.displayName
       || player?.name,
     );
+    playerGender = normalizeGender(gender);
     resetPlayer();
     if (registeredName) player.name = registeredName;
     resetExpansionProgress(classId);
@@ -1469,14 +1480,16 @@
   function requestNewGame() {
     if (!requireAuthenticatedGameplay()) return;
     if (!testingMode && savePersistence?.hasCloudSave?.() && !window.confirm("開始新旅程會覆蓋而家嘅存檔。確定重新出發？")) return;
+    pendingPlayerGender = normalizeGender(player.gender);
     classSelectPanel.hidden = false;
+    updateGenderChoiceUi();
     drawClassSelectionPreviews();
     classSelectPanel.querySelector("[data-class-choice]")?.focus({ preventScroll: true });
   }
 
   function startNewGameWithClass(classId) {
     classSelectPanel.hidden = true;
-    newGame(false, classId);
+    newGame(false, classId, pendingPlayerGender);
   }
 
   function applySaveData(rawSave, options = {}) {
@@ -1494,6 +1507,8 @@
     pendingClickInteractionId = null;
     resetPlayer();
     Object.assign(player, save.player);
+    player.gender = normalizeGender(save.player?.gender);
+    playerGender = player.gender;
     player.name = normalizeCharacterName(save.player?.name) || "阿巡";
     player.upgrades = { ...save.player.upgrades };
     openedChests = new Set(save.openedChests);
@@ -2690,7 +2705,7 @@
 
   function getPersistenceFingerprint() {
     return JSON.stringify({
-      player: { x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
+      player: { gender: normalizeGender(player.gender), x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
       pendingLevelUps, openedChests: [...openedChests].sort(),
       expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder }, monsterKills, dungeonClears, defeatedDungeonBosses: [...defeatedDungeonBosses].sort(), skills: skillState, checkpoint },
     });
@@ -3767,6 +3782,7 @@
       height: playerHudPortraitCanvas.height,
       actor: "player",
       classId: playerClassId,
+      gender: player.gender,
       expression: "determined",
       background: "#315d66",
       backgroundEnd: "#111a31",
@@ -3790,6 +3806,7 @@
     Art.drawCharacter(previewCtx, {
       actor: "player",
       classId: "fighter",
+      gender: pendingPlayerGender,
       x: preview.width / 2,
       y: preview.height - 26,
       scale: 2.05,
@@ -3798,6 +3815,14 @@
       phase: elapsed,
       bitmap: true,
     });
+  }
+
+  function updateGenderChoiceUi() {
+    for (const button of document.querySelectorAll("[data-gender-choice]")) {
+      const selected = normalizeGender(button.dataset.genderChoice) === pendingPlayerGender;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    }
   }
 
   function advanceDialogue() {
@@ -4202,7 +4227,7 @@
     if (!doll) return;
     const dollCtx = doll.getContext("2d");
     dollCtx.clearRect(0, 0, doll.width, doll.height);
-    Art.drawCharacter(dollCtx, { actor: "player", classId: playerClassId, x: doll.width / 2, y: doll.height - 8, scale: 1.8, state: "idle", facing: "down", phase: elapsed, bitmap: true });
+    Art.drawCharacter(dollCtx, { actor: "player", classId: playerClassId, gender: player.gender, x: doll.width / 2, y: doll.height - 8, scale: 1.8, state: "idle", facing: "down", phase: elapsed, bitmap: true });
   }
 
   function renderEquipmentFacility() {
@@ -9444,6 +9469,7 @@
         scale: heroScale,
         actor: "player",
         classId: playerClassId,
+        gender: player.gender,
         facing: attackFacing,
         battleDiagonal: layout.projected,
         state: visualState,
@@ -10903,6 +10929,7 @@
       scale: camera.zoom,
       actor: "player",
       classId: playerClassId,
+      gender: player.gender,
       facing: player.facing,
       state,
       walk,
@@ -10925,6 +10952,7 @@
       scale,
       actor: "player",
       classId: remote.classId || "warrior",
+      gender: remote.gender,
       facing: remote.facing,
       state: remote.moving ? "walk" : "idle",
       locomotion: remote.locomotion,
@@ -11398,11 +11426,12 @@
     if (!testingMode) return;
     window.__RPG_DEBUG__ = {
       ready: true,
-      newGame: (classId) => newGame(true, classId),
+      newGame: (classId, gender) => newGame(true, classId, gender),
       snapshot: () => ({
         mode, elapsedSeconds: elapsed, level: player.level, xp: player.xp, hp: player.hp, maxHp: playerStats().maxHp,
         stats: playerStats(),
         classId: playerClassId,
+        gender: player.gender,
         x: player.x, y: player.y, facing: player.facing, moving: player.moving, locomotion: player.locomotion ? { ...player.locomotion } : null,
         movementOdometer: { distanceWorldUnits: player.explorationDistance, movingSeconds: player.explorationMoveSeconds },
         currentMapId, bgm: bgm.snapshot(), pendingLevelUps,
@@ -11771,6 +11800,13 @@
   }
 
   document.getElementById("newGameButton").addEventListener("click", requestNewGame);
+  for (const button of document.querySelectorAll("[data-gender-choice]")) {
+    button.addEventListener("click", () => {
+      pendingPlayerGender = normalizeGender(button.dataset.genderChoice);
+      updateGenderChoiceUi();
+      drawClassSelectionPreviews();
+    });
+  }
   for (const card of document.querySelectorAll("[data-class-choice]")) {
     card.addEventListener("click", () => {
       if (card.dataset.classLocked === "true") {
