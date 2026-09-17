@@ -192,7 +192,7 @@
       if (!local) throw new Error("The legacy local save is no longer available to claim.");
       let migration;
       try {
-        migration = await cloud.createIfAbsent(safeUid, local.data);
+        migration = await cloud.createIfAbsent(safeUid, local.data, { migration: true });
       } catch (error) {
         setStatus("cloud-error", error);
         throw error;
@@ -231,6 +231,28 @@
       return { ok: true, queued: true };
     }
 
+    async function resetCloudSave(data) {
+      if (!activeUid || !cloudReady || !cloud || typeof cloud.reset !== "function") {
+        throw new Error("An authenticated server save session is required to reset the journey.");
+      }
+      if (pendingTimer != null) {
+        clearTimeout(pendingTimer);
+        pendingTimer = null;
+      }
+      pendingPayload = null;
+      setStatus("syncing");
+      try {
+        const result = await cloud.reset(activeUid, clone(data));
+        cloudData = clone(result.data || data);
+        cloudExists = true;
+        setStatus("cloud-ready");
+        return { ...result, data: clone(cloudData) };
+      } catch (error) {
+        setStatus("cloud-error", error);
+        throw error;
+      }
+    }
+
     function deactivateUser() {
       ++resolutionToken;
       activeUid = null;
@@ -254,6 +276,7 @@
       claimLegacySave,
       declineLegacySave,
       flushCloud,
+      resetCloudSave,
       deactivateUser,
       getActiveUid: () => activeUid,
       getCloudData: () => clone(cloudData),

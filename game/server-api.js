@@ -39,11 +39,39 @@
       });
     }
 
+    async function economy(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("economyCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
+    async function quest(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("questCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
+    async function battle(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("battleCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
+    async function map(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("mapCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
       useItem,
       recoverPlayer,
+      economy,
+      quest,
+      battle,
+      map,
     });
   }
 

@@ -274,6 +274,7 @@
   let savePersistence = null;
   let healingPotionCommandPending = false;
   let weakPotionCommandPending = false;
+  let playerResetWrite = Promise.resolve({ saved: true, idle: true });
   let recoveryCommandPending = false;
   let authUser = null;
   let authMode = "login";
@@ -1441,7 +1442,23 @@
     if (!skipIntro) showToast("沿山路自由探索；想接工作就隨時返公會查看委託。", "good");
     updateHud(true);
     canvas.focus({ preventScroll: true });
-    if (!testingMode) saveImportant(false);
+    if (!testingMode) {
+      if (savePersistence?.hasCloudSave?.() && typeof savePersistence.resetCloudSave === "function") {
+        const resetPayload = buildSaveData();
+        playerResetWrite = savePersistence.resetCloudSave(resetPayload).then((result) => {
+          persistenceFingerprint = getPersistenceFingerprint();
+          persistence?.markSaved(persistenceFingerprint);
+          syncAccountStatus(savePersistence?.getCloudStatus?.());
+          return result;
+        }).catch((error) => {
+          console.warn("Everrealm server-authoritative journey reset failed.", error);
+          showToast("新旅程未能同步到伺服器，請重新登入後再試。", "danger");
+          return { saved: false, error };
+        });
+      } else {
+        saveImportant(false);
+      }
+    }
     ensureWorldTimeLoaded();
     startRealtimeSession();
     if (registeredName) pendingRegistrationCharacterName = "";
@@ -1529,6 +1546,10 @@
   function saveGame(showNotice = true, force = false) {
     if (!isGameplayAuthorized()) return false;
     if (testingMode && !force) return true;
+    // While an authoritative battle session is active, the server owns HP,
+    // rewards and the private serverBattle snapshot. A normal client autosave
+    // must not replace the Firestore document and erase that server-only state.
+    if (!force && battle?.serverReady && battle?.serverBattleId) return true;
     if (!force && persistence && !persistence.needsSave()) return true;
     const payload = buildSaveData();
     try {
@@ -2652,6 +2673,56 @@
     return saveGame(showNotice);
   }
 
+
+  async function flushForServerCommand() {
+    const reset = await playerResetWrite;
+    if (reset?.error) throw reset.error;
+    saveImportant(false);
+    const flush = await savePersistence?.flushCloud?.();
+    if (flush?.error) throw flush.error;
+    return true;
+  }
+
+  function applyAuthoritativeState(snapshot, options = {}) {
+    if (!snapshot || typeof snapshot !== "object") return false;
+    const nextPlayer = snapshot.player || {};
+    if (Number.isFinite(Number(nextPlayer.hp))) player.hp = Number(nextPlayer.hp);
+    if (Number.isFinite(Number(nextPlayer.level))) player.level = Math.max(1, Math.floor(Number(nextPlayer.level)));
+    if (Number.isFinite(Number(nextPlayer.xp))) player.xp = Math.max(0, Math.floor(Number(nextPlayer.xp)));
+    if (Number.isFinite(Number(nextPlayer.coins))) player.coins = Core.clamp(Math.floor(Number(nextPlayer.coins)), 0, 99999);
+    if (Number.isFinite(Number(nextPlayer.potions))) player.potions = Core.clamp(Math.floor(Number(nextPlayer.potions)), 0, 9);
+
+    const expansion = snapshot.expansion || {};
+    if (expansion.inventory && typeof expansion.inventory === "object") inventory = { ...expansion.inventory };
+    if (Array.isArray(expansion.ownedEquipment)) ownedEquipment = [...expansion.ownedEquipment];
+    if (expansion.equipped && typeof expansion.equipped === "object") equipped = { ...expansion.equipped };
+    if (expansion.guildCommission && typeof expansion.guildCommission === "object") guildCommissionState = Guild.normalizeState(expansion.guildCommission);
+    if (Number.isFinite(Number(expansion.guildMarks))) guildMarks = Math.max(0, Math.floor(Number(expansion.guildMarks)));
+    if (Number.isFinite(Number(expansion.guildRenown))) guildRenown = Math.max(0, Math.floor(Number(expansion.guildRenown)));
+    if (expansion.skills && typeof expansion.skills === "object") skillState = Skills.normalizeSkillState(expansion.skills, { classId: playerClassId });
+    if (expansion.weakPotion && typeof expansion.weakPotion === "object") {
+      weakPotionStepsRemaining = Math.max(0, Math.floor(Number(expansion.weakPotion.stepsRemaining) || 0));
+      weakPotionDistanceRemainder = Math.max(0, Number(expansion.weakPotion.distanceRemainder) || 0);
+    }
+    if (expansion.monsterKills && typeof expansion.monsterKills === "object") monsterKills = { ...expansion.monsterKills };
+    if (Number.isFinite(Number(expansion.dungeonClears))) dungeonClears = Math.max(0, Math.floor(Number(expansion.dungeonClears)));
+    if (Array.isArray(expansion.defeatedDungeonBosses)) defeatedDungeonBosses = new Set(expansion.defeatedDungeonBosses.map(String));
+    if (expansion.checkpoint && typeof expansion.checkpoint === "object") checkpoint = { ...expansion.checkpoint };
+    if (Array.isArray(snapshot.openedChests)) openedChests = new Set(snapshot.openedChests.map(String));
+    if (options.applyMap === true && typeof expansion.currentMapId === "string" && hasMap(expansion.currentMapId)) currentMapId = expansion.currentMapId;
+    markPersistenceDirty();
+    updateHud(true);
+    return true;
+  }
+
+  function serverCommandError(error, fallback = "伺服器暫時未能處理呢個操作。") {
+    console.warn("Everrealm authoritative command failed.", error);
+    const code = String(error?.code || "");
+    if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+    else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+    else showToast(fallback, "danger");
+  }
+
   persistence = SaveSystem.create({
     intervalMs: 5000,
     fingerprint: getPersistenceFingerprint,
@@ -2686,7 +2757,7 @@
     enemy.respawnTimer = 11 + Math.random() * 5;
     enemy.windup = 0;
     spawnBurst(enemy.x, enemy.y, enemy.color, 24, 90);
-    recordDefeatedMonster(enemy);
+    if (options.recordDefeat !== false) recordDefeatedMonster(enemy);
     if (options.grantXp !== false) {
       const rewardXp = ExpansionWorld.xpReward(enemy.xp, enemy.level, player.level);
       gainXp(rewardXp);
@@ -2830,7 +2901,7 @@
       if (returnToTown) {
         // Use the normal map-transition path so BGM, pathing, portal state,
         // particles and camera all reset exactly as they do on any other return.
-        transitionMap("world", overworld.start);
+        transitionMap("world", overworld.start, null, { serverVerified: true });
         player.invulnerable = 1.8;
       } else {
         resetEnemies();
@@ -3166,34 +3237,27 @@
     else startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "米克雷帝國今晚比平時熱鬧，多得你周圍探索。"] });
   }
 
-  function interactDeliveryRecipient(npc) {
+  async function interactDeliveryRecipient(npc) {
     const commission = activeGuildCommission();
     if (!commission || commission.type !== "delivery") {
-      return startDialogue({
-        speaker: npc.name,
-        color: npc.color,
-        lines: [npc.chatter || "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。"],
-      });
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: [npc.chatter || "山路北面風大，信件交畀我保管就唔會畀霧氣浸壞。"] });
     }
     if (guildCommissionState.status === "ready_to_report" && guildCommissionState.deliveryCompleted) {
       return startDialogue({ speaker: npc.name, color: npc.color, lines: ["公會封信我已經收妥喇。你返公會回報，就可以領取委託報酬。"] });
     }
-    const result = Guild.deliver(guildCommissionState, npc.id);
-    if (!result.changed) {
-      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["你手上而家冇要交畀我嘅公會信件。"] });
-    }
-    guildCommissionState = result.state;
-    sound.crystal();
-    showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
-    saveImportant(false);
-    startDialogue({
-      speaker: npc.name,
-      color: npc.color,
-      lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返公會向接待員回報，就可以領取技能書信封。"],
-    });
+    if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.quest("delivery", { npcId: npc.id });
+      if (!result?.ok) return startDialogue({ speaker: npc.name, color: npc.color, lines: ["你手上而家冇要交畀我嘅公會信件。"] });
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      showToast(`信件已送達：${commission.title} · 返公會回報`, "good");
+      startDialogue({ speaker: npc.name, color: npc.color, lines: ["收到了，封印完整，沿途辛苦你喇。", "信件已送達；返公會向接待員回報，就可以領取技能書信封。"] });
+    } catch (error) { serverCommandError(error, "伺服器暫時未能記錄送信任務。"); }
   }
 
-  function interactWishPool(pool) {
+  async function interactWishPool(pool) {
     const commission = activeGuildCommission();
     if (!commission || commission.type !== "wish") {
       return startDialogue({
@@ -3209,21 +3273,21 @@
         lines: ["你已經替委託人許過願。至於靈唔靈……交畀個水池自己負責。"],
       });
     }
-    const result = Guild.recordInteraction(guildCommissionState, pool.id);
-    if (!result.changed) {
-      return startDialogue({ speaker: pool.name || "古怪水池", color: "#a88cff", lines: ["而家似乎冇需要喺呢度代人許願。"] });
-    }
-    guildCommissionState = result.state;
-    sound.crystal();
-    showToast(`委託完成：${commission.title} · 返公會回報`, "good");
-    addSystemMessage("quest", `委託完成：${commission.title} · 返公會回報`);
-    updateHud(true);
-    saveImportant(false);
-    startDialogue({
-      speaker: pool.name || "古怪水池",
-      color: "#a88cff",
-      lines: ["你替委託人認真許咗個願。", "至於靈唔靈……交畀個水池自己負責。"],
-    });
+    if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.quest("interaction", { interactionId: pool.id });
+      if (!result?.ok) return startDialogue({ speaker: pool.name || "古怪水池", color: "#a88cff", lines: ["而家似乎冇需要喺呢度代人許願。"] });
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      showToast(`委託完成：${commission.title} · 返公會回報`, "good");
+      addSystemMessage("quest", `委託完成：${commission.title} · 返公會回報`);
+      startDialogue({
+        speaker: pool.name || "古怪水池",
+        color: "#a88cff",
+        lines: ["你替委託人認真許咗個願。", "至於靈唔靈……交畀個水池自己負責。"],
+      });
+    } catch (error) { serverCommandError(error, "伺服器暫時未能記錄任務互動。"); }
   }
 
   function usePortal(portal) {
@@ -3277,13 +3341,27 @@
     return true;
   }
 
-  function transitionMap(targetMapId, targetPosition, targetFacing = null) {
+  async function transitionMap(targetMapId, targetPosition, targetFacing = null, options = {}) {
     const target = maps[targetMapId];
     if (!target) return false;
     const destination = targetPosition && Number.isFinite(targetPosition.x) ? targetPosition : target.start;
     if (target.navigation?.authoritative && isBlocked({ x: destination.x, y: destination.y, radius: target.navigation.feetRadiusPx || player.radius }, target, targetMapId)) {
       console.error("Authoritative map transition arrival is not a valid navigation position", { targetMapId, destination });
       return false;
+    }
+    if (!options.serverVerified) {
+      if (!ServerApi?.map) return showToast("伺服器地圖驗證尚未就緒。", "danger"), false;
+      try {
+        await flushForServerCommand();
+        const verified = await ServerApi.map("transition", { targetMapId });
+        if (!verified?.ok) {
+          showToast("呢個地圖轉移而家唔合法。", "danger");
+          return false;
+        }
+      } catch (error) {
+        serverCommandError(error, "伺服器暫時未能驗證地圖轉移。");
+        return false;
+      }
     }
     clearExplorePointerGesture();
     clearAllFacilityWindows();
@@ -4141,55 +4219,60 @@
     });
   }
 
-  function buyGeneralStoreItem(itemId) {
+  async function buyGeneralStoreItem(itemId) {
     const item = GENERAL_STORE_GOODS_BY_ID.get(itemId);
     if (!item || currentMapId !== "general-store") return showToast("呢件商品而家買唔到。", "danger");
-    const purchase = PlayerStateActions.buyGeneralStoreItem({ player, inventory, itemId, price: item.price });
-    if (!purchase.ok && purchase.reason === "coins") return showToast("金幣唔夠。", "danger");
-    if (!purchase.ok) return showToast("呢件商品而家買唔到。", "danger");
-    markPersistenceDirty();
-    sound.coin();
-    showToast(`買到 ${item.name}`, "good");
-    addSystemMessage("item", `購買 ${item.name} · -${item.price} 金幣`);
-    updateHud(true);
-    renderFacility();
-    saveImportant(false);
+    if (!ServerApi?.economy) return showToast("伺服器交易指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("buy-store-item", { itemId });
+      if (!result?.ok && result?.reason === "coins") return showToast("金幣唔夠。", "danger");
+      if (!result?.ok && result?.reason === "full") return showToast("已經帶到上限。", "danger");
+      if (!result?.ok) return showToast("呢件商品而家買唔到。", "danger");
+      applyAuthoritativeState(result.state);
+      sound.coin();
+      showToast(`買到 ${item.name}`, "good");
+      addSystemMessage("item", `購買 ${item.name} · -${result.price ?? item.price} 金幣`);
+      renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能完成購買。"); }
   }
 
-  function sellEquipmentItem(itemId) {
+  async function sellEquipmentItem(itemId) {
     if (!['shop', 'general-store'].includes(currentMapId)) return showToast("出售物品要親身去商店。", "danger");
     const item = equipmentItem(itemId);
-    if (!item || !ownedEquipment.includes(item.id)) return showToast("你冇呢件裝備。", "danger");
-    const ownedCount = ownedEquipment.filter((id) => id === item.id).length;
-    if (Expansion.isEquipmentEquipped({ equipped }, item.id) && ownedCount <= 1) return showToast("請先卸下裝備。", "danger");
-    const sellPrice = equipmentSellPrice(item);
-    if (sellPrice <= 0) return showToast("呢件裝備唔可以出售。", "danger");
-    const ownedIndex = ownedEquipment.indexOf(item.id);
-    ownedEquipment.splice(ownedIndex, 1);
-    PlayerStateActions.grantCoins(player, sellPrice, { maxCoins: 99999 });
-    selectedShopItemId = null;
-    sound.coin();
-    showToast(`已出售：${item.name} · +${sellPrice} 金幣`, "good");
-    addSystemMessage("item", `出售 ${item.name} · +${sellPrice} 金幣`);
-    renderFacility();
-    updateHud(true);
-    saveImportant(false);
+    if (!item) return showToast("你冇呢件裝備。", "danger");
+    if (!ServerApi?.economy) return showToast("伺服器交易指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("sell-equipment", { itemId });
+      if (!result?.ok && result?.reason === "equipped") return showToast("請先卸下裝備。", "danger");
+      if (!result?.ok && result?.reason === "missing") return showToast("你冇呢件裝備。", "danger");
+      if (!result?.ok) return showToast("呢件裝備唔可以出售。", "danger");
+      applyAuthoritativeState(result.state);
+      selectedShopItemId = null;
+      sound.coin();
+      showToast(`已出售：${item.name} · +${result.price} 金幣`, "good");
+      addSystemMessage("item", `出售 ${item.name} · +${result.price} 金幣`);
+      renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能完成出售。"); }
   }
 
-  function sellGeneralStoreItem(itemId) {
+  async function sellGeneralStoreItem(itemId) {
     if (!['shop', 'general-store'].includes(currentMapId)) return showToast("出售物品要親身去商店。", "danger");
-    const sellPrice = generalStoreSellPrice(itemId);
-    if (sellPrice <= 0) return showToast("呢件物品唔可以出售。", "danger");
+    if (!ServerApi?.economy) return showToast("伺服器交易指令尚未就緒。", "danger");
     const itemName = inventoryItemName(itemId);
-    const sale = PlayerStateActions.sellGeneralStoreItem({ player, inventory, itemId, sellPrice });
-    if (!sale.ok) return showToast("你冇呢件物品。", "danger");
-    selectedShopItemId = null;
-    sound.coin();
-    showToast(`已出售：${itemName} · +${sellPrice} 金幣`, "good");
-    addSystemMessage("item", `出售 ${itemName} · +${sellPrice} 金幣`);
-    renderFacility();
-    updateHud(true);
-    saveImportant(false);
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("sell-store-item", { itemId });
+      if (!result?.ok && result?.reason === "missing") return showToast("你冇呢件物品。", "danger");
+      if (!result?.ok) return showToast("呢件物品唔可以出售。", "danger");
+      applyAuthoritativeState(result.state);
+      selectedShopItemId = null;
+      sound.coin();
+      showToast(`已出售：${itemName} · +${result.price} 金幣`, "good");
+      addSystemMessage("item", `出售 ${itemName} · +${result.price} 金幣`);
+      renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能完成出售。"); }
   }
 
   function skillRangePatternMarkup(skill) {
@@ -4474,18 +4557,25 @@
     }
   }
 
-  function openGuildSkillBook(star) {
-    const result = Skills.openOwnedSkillBook(star, { seed: "mist-harbour-guild-skills", serial: skillState.drawSerial }, skillState);
-    if (!result.ok) return showToast("你冇呢個星級嘅技能書，或者目前職業冇對應技能池。", "danger");
-    skillState = result.state;
-    sound.crystal();
-    const openedBookRank = Skills.formatSkillBookRank(star);
-    const openedBookMessage = `獲得技能書：${openedBookRank}「${result.skill.name}」`;
-    showToast(`抽到 ${openedBookRank}「${result.skill.name}」技能書，已放入物品欄。`, "good");
-    addSystemMessage("reward", openedBookMessage);
-    announce(openedBookMessage);
-    renderFacility();
-    saveImportant(false);
+  async function openGuildSkillBook(star) {
+    if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("open-skill-book", { star });
+      if (!result?.ok) return showToast("你冇呢個星級嘅技能書，或者目前職業冇對應技能池。", "danger");
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      const openedBookRank = Skills.formatSkillBookRank(star);
+      const skillName = result.skill?.name || "未知技能";
+      const openedBookMessage = `獲得技能書：${openedBookRank}「${skillName}」`;
+      showToast(`抽到 ${openedBookRank}「${skillName}」技能書，已放入物品欄。`, "good");
+      addSystemMessage("reward", openedBookMessage);
+      announce(openedBookMessage);
+      renderFacility();
+      saveImportant(false);
+    } catch (error) {
+      serverCommandError(error, "暫時未能打開技能書。");
+    }
   }
 
   function openSkillManualConfirm(skillId) {
@@ -4520,32 +4610,34 @@
     facilityContent.focus({ preventScroll: true });
   }
 
-  function learnSkillManualImmediately(skillId) {
+  async function learnSkillManualImmediately(skillId) {
     if (!skillId) return false;
+    if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger"), false;
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
     const learnability = Skills.skillLearnability(skillState, skillId);
-    if (learnability.status === "learned") {
-      showToast("已學習", "good");
+    if (learnability.status === "learned") return showToast("已學習", "good"), false;
+    if (learnability.status !== "canLearn") return showToast("無法學習", "danger"), false;
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("learn-skill-manual", { skillId });
+      if (!result?.ok) {
+        showToast(result?.reason === "already-learned" ? "已學習" : "無法學習", result?.reason === "already-learned" ? "good" : "danger");
+        return false;
+      }
+      applyAuthoritativeState(result.state);
+      pendingManualSkillId = null;
+      skillBookConfirmPanel.hidden = true;
+      sound.crystal();
+      const skillName = result.skill?.name || Skills.getSkill(skillId)?.name || skillId;
+      showToast(`已學識「${skillName}」；去城門面板配置先可出戰。`, "good");
+      addSystemMessage("reward", `學會新技能：${skillName}`);
+      renderFacility();
+      saveImportant(false);
+      return true;
+    } catch (error) {
+      serverCommandError(error, "暫時未能學習技能。");
       return false;
     }
-    if (learnability.status !== "canLearn") {
-      showToast("無法學習", "danger");
-      return false;
-    }
-    const result = Skills.learnSkillFromManual(skillState, skillId);
-    if (!result.ok) {
-      showToast(result.reason === "already-learned" ? "已學習" : "無法學習", result.reason === "already-learned" ? "good" : "danger");
-      return false;
-    }
-    skillState = result.state;
-    pendingManualSkillId = null;
-    skillBookConfirmPanel.hidden = true;
-    sound.crystal();
-    showToast(`已學識「${result.skill.name}」；去城門面板配置先可出戰。`, "good");
-    addSystemMessage("reward", `學會新技能：${result.skill.name}`);
-    renderFacility();
-    saveImportant(false);
-    return true;
   }
 
   function useSkillManualFromBag(skillId) {
@@ -4573,30 +4665,43 @@
     return useHealingPotionCommand({ fromBag: true });
   }
 
-  function changeSkillLoadout(skillId, equip, options = {}) {
+  async function changeSkillLoadout(skillId, equip, options = {}) {
     if (!options.force && !(facilityContext === "deck" && currentMapId === "world")) {
       return showToast("而家只可查看；要去舊港城門面板配置先可以換技。", "danger");
     }
-    const result = equip ? Skills.equipSkill(skillState, skillId) : Skills.unequipSkill(skillState, skillId);
-    if (!result.ok) return showToast(result.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
-    skillState = result.state;
-    showToast(`${equip ? "已配置" : "已移除"}：${Skills.getSkill(skillId).name}`, "good");
-    renderFacility();
-    saveImportant(false);
+    if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy(equip ? "equip-skill" : "unequip-skill", { skillId });
+      if (!result?.ok) return showToast(result?.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+      applyAuthoritativeState(result.state);
+      showToast(`${equip ? "已配置" : "已移除"}：${Skills.getSkill(skillId)?.name || skillId}`, "good");
+      renderFacility();
+      saveImportant(false);
+    } catch (error) {
+      serverCommandError(error, "暫時未能更改技能配置。");
+    }
   }
 
-  function configureSkillInDeckSlot(skillId, slotIndex) {
+  async function configureSkillInDeckSlot(skillId, slotIndex) {
     if (!(facilityContext === "deck" && currentMapId === "world")) return false;
-    const result = Skills.equipSkill(skillState, skillId, slotIndex);
-    if (!result.ok) {
-      showToast(result.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+    if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger"), false;
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("equip-skill", { skillId, slot: slotIndex });
+      if (!result?.ok) {
+        showToast(result?.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+        return false;
+      }
+      applyAuthoritativeState(result.state);
+      showToast(`已配置：${Skills.getSkill(skillId)?.name || skillId}`, "good");
+      renderFacility();
+      saveImportant(false);
+      return true;
+    } catch (error) {
+      serverCommandError(error, "暫時未能更改技能配置。");
       return false;
     }
-    skillState = result.state;
-    showToast(`已配置：${Skills.getSkill(skillId).name}`, "good");
-    renderFacility();
-    saveImportant(false);
-    return true;
   }
 
   function beginSkillTreePan(event) {
@@ -4742,13 +4847,20 @@
     event.preventDefault();
   }
 
-  function masterSkill(skillId) {
-    const result = Skills.unlockSkillWithShards(skillState, skillId);
-    if (!result.ok) return showToast("精通碎片未夠。", "danger");
-    skillState = result.state;
-    showToast(`用 ${result.cost} 碎片領悟「${result.skill.name}」！`, "good");
-    renderFacility();
-    saveImportant(false);
+  async function masterSkill(skillId) {
+    if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("master-skill", { skillId });
+      if (!result?.ok) return showToast("精通碎片未夠。", "danger");
+      applyAuthoritativeState(result.state);
+      const skillName = result.skill?.name || Skills.getSkill(skillId)?.name || skillId;
+      showToast(`用 ${result.cost} 碎片領悟「${skillName}」！`, "good");
+      renderFacility();
+      saveImportant(false);
+    } catch (error) {
+      serverCommandError(error, "暫時未能領悟技能。");
+    }
   }
 
   function renderCodexFacility() {
@@ -5011,36 +5123,43 @@
     return openFacility("deck", "deck-view");
   }
 
-  function acceptGuildOffer(offerId) {
+  async function acceptGuildOffer(offerId) {
     if (currentMapId !== "guild") return showToast("要親身返公會先接到委託。", "danger");
-    const result = Guild.accept(guildCommissionState, offerId);
-    if (!result.ok) return showToast(result.reason === "already-active" ? "同一時間只可以接一份委託。" : "搵唔到呢份委託。", "danger");
-    guildCommissionState = result.state;
-    sound.crystal();
-    showToast(`已接委託：${result.commission.title}`, "good");
-    addSystemMessage("quest", `已接委託：${result.commission.title}`);
-    closeGuildCommissionDetail();
-    closeGuildFacility();
-    saveImportant(false);
+    if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.quest("accept", { commissionId: offerId });
+      if (!result?.ok && result?.reason === "already-active") return showToast("同一時間只可以接一份委託。", "danger");
+      if (!result?.ok) return showToast("搵唔到呢份委託。", "danger");
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      showToast(`已接委託：${result.commission.title}`, "good");
+      addSystemMessage("quest", `已接委託：${result.commission.title}`);
+      closeGuildCommissionDetail();
+      closeGuildFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能接取委託。"); }
   }
 
-  function claimGuildContract(contractId) {
+  async function claimGuildContract(contractId) {
     if (currentMapId !== "guild") return showToast("要返公會先可以回報。", "danger");
     const active = activeGuildCommission();
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (contractId && expectedId && contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
-    const result = Guild.report(guildCommissionState);
-    if (!result.ok) return showToast(result.reason === "not-ready" ? "委託仲未完成。" : "呢份委託已經回報過喇。", "danger");
-    guildCommissionState = result.state;
-    const rewardCoins = Math.max(0, Math.floor(Number(result.reward.coins) || 0));
-    PlayerStateActions.grantCoins(player, rewardCoins);
-    sound.level();
-    const rewardText = `委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1 + ${rewardCoins.toLocaleString("zh-HK")} 金幣`;
-    showToast(rewardText, "good");
-    addSystemMessage("reward", rewardText);
-    closeGuildCommissionDetail();
-    renderFacility();
-    saveImportant(false);
+    if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.quest("report", {});
+      if (!result?.ok && result?.reason === "not-ready") return showToast("委託仲未完成。", "danger");
+      if (!result?.ok) return showToast("呢份委託已經回報過喇。", "danger");
+      applyAuthoritativeState(result.state);
+      const rewardCoins = Math.max(0, Math.floor(Number(result.reward?.coins) || 0));
+      sound.level();
+      const rewardText = `委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1 + ${rewardCoins.toLocaleString("zh-HK")} 金幣`;
+      showToast(rewardText, "good");
+      addSystemMessage("reward", rewardText);
+      closeGuildCommissionDetail();
+      renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能回報委託。"); }
   }
 
   function openAbandonCommission(contractId) {
@@ -5060,184 +5179,102 @@
     if (restoreFocus && facilityWindows.size) facilityContent.focus({ preventScroll: true });
   }
 
-  function confirmAbandonCommission() {
+  async function confirmAbandonCommission() {
     const active = activeGuildCommission();
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (!pendingAbandonContractId || pendingAbandonContractId !== expectedId) {
       closeAbandonCommission(false);
       return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     }
-    const result = Guild.abandon(guildCommissionState);
-    if (!result.ok) {
+    if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.quest("abandon", {});
+      if (!result?.ok) {
+        closeAbandonCommission(false);
+        return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
+      }
+      applyAuthoritativeState(result.state);
       closeAbandonCommission(false);
-      return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
-    }
-    guildCommissionState = result.state;
-    closeAbandonCommission(false);
-    showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
-    addSystemMessage("quest", `已放棄委託：${result.commission.title}`);
-    closeGuildCommissionDetail();
-    renderFacility();
-    saveImportant(false);
+      showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
+      addSystemMessage("quest", `已放棄委託：${result.commission.title}`);
+      closeGuildCommissionDetail();
+      renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能放棄委託。"); }
   }
 
-  function openGuildEnvelope(star) {
+  async function openGuildEnvelope(star) {
     const safeStar = Number(star);
-    const commissionState = Guild.normalizeState(guildCommissionState);
-    const skill = Skills.drawFighterGuildSkillBook(safeStar, {
-      seed: "everrealm-guild-envelope",
-      serial: commissionState.envelopeDrawSerial,
-    });
-    if (!skill) return showToast("呢個星級暫時冇可抽取嘅格鬥士技能。", "danger");
-    const consumed = Guild.consumeEnvelope(commissionState, safeStar);
-    if (!consumed.ok) return showToast("你冇呢一星級嘅技能書信封。", "danger");
-    const granted = Skills.grantSkillManuals(skillState, skill.id, 1);
-    if (!granted.ok) return showToast("未能將技能書放入物品欄。", "danger");
-    guildCommissionState = consumed.state;
-    skillState = granted.state;
-    sound.crystal();
-    const envelopeMessage = `獲得格鬥士技能書：${Skills.formatSkillBookRank(safeStar)}「${skill.name}」`;
-    showToast(`開封抽到「${skill.name}」技能書；仍須符合格鬥士前置先可以學習。`, "good");
-    addSystemMessage("reward", envelopeMessage);
-    announce(envelopeMessage);
-    if (facilityWindows.size) renderFacility();
-    updateHud(true);
-    saveImportant(false);
+    if (!ServerApi?.economy) return showToast("伺服器獎勵指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("open-envelope", { star: safeStar });
+      if (!result?.ok && result?.reason === "no-envelope") return showToast("你冇呢一星級嘅技能書信封。", "danger");
+      if (!result?.ok) return showToast("呢個星級暫時冇可抽取嘅技能。", "danger");
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      const skillName = result.skill?.name || result.skill?.id || "技能書";
+      const envelopeMessage = `獲得格鬥士技能書：${Skills.formatSkillBookRank(safeStar)}「${skillName}」`;
+      showToast(`開封抽到「${skillName}」技能書；仍須符合前置先可以學習。`, "good");
+      addSystemMessage("reward", envelopeMessage);
+      announce(envelopeMessage);
+      if (facilityWindows.size) renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能開啟技能書信封。"); }
   }
 
-  function changeEquipment(itemId, buyFirst = false) {
+  async function changeEquipment(itemId, buyFirst = false) {
     const requestedItem = equipmentItem(itemId);
     if (!equipmentMatchesClass(requestedItem)) return showToast("呢件裝備唔適合目前職業。", "danger");
-    let state = { coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped };
-    if (buyFirst) {
-      if (currentMapId !== "shop") return showToast("購買裝備要親身去裝備店。", "danger");
-      const item = equipmentItem(itemId);
-      const discountedCost = item ? Math.max(0, Math.floor(item.cost * (1 - guildDiscountRate()))) : 0;
-      if (item && player.coins < discountedCost) return showToast("金幣唔夠。", "danger");
-      const discount = item ? item.cost - discountedCost : 0;
-      state = { ...state, coins: state.coins + discount };
-      const purchase = Expansion.purchaseEquipment(state, itemId);
-      if (!purchase.ok) {
-        const reason = purchase.reason === "coins" ? "金幣唔夠。" : "呢件裝備而家買唔到。";
-        return showToast(reason, "danger");
-      }
-      player.coins = purchase.state.coins;
-      ownedEquipment = purchase.state.ownedEquipment;
+    if (!ServerApi?.economy) return showToast("伺服器裝備指令尚未就緒。", "danger");
+    if (buyFirst && currentMapId !== "shop") return showToast("購買裝備要親身去裝備店。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy(buyFirst ? "buy-equipment" : "equip", { itemId });
+      if (!result?.ok && result?.reason === "coins") return showToast("金幣唔夠。", "danger");
+      if (!result?.ok && result?.reason === "level") return showToast("等級未足夠裝備呢件物品。", "danger");
+      if (!result?.ok && result?.reason === "class") return showToast("呢件裝備唔適合目前職業。", "danger");
+      if (!result?.ok) return showToast(buyFirst ? "呢件裝備而家買唔到。" : "未可以裝備呢件物品。", "danger");
+      applyAuthoritativeState(result.state);
       sound.coin();
-      showToast(`已購買：${purchase.item.name}`, "good");
+      showToast(`${buyFirst ? "已購買" : "已裝備"}：${requestedItem?.name || itemId}`, "good");
       renderFacility();
-      updateHud(true);
-      saveImportant(false);
-      return;
-    }
-    const result = Expansion.equipItem({ ...state, ownedEquipment, equipped }, itemId);
-    if (!result.ok) return showToast("未可以裝備呢件物品。", "danger");
-    equipped = result.state.equipped;
-    player.hp = Core.clamp(player.hp, 1, playerStats().maxHp);
-    sound.coin();
-    showToast(`已裝備：${result.item.name}`, "good");
-    renderFacility();
-    updateHud(true);
-    saveImportant(false);
+    } catch (error) { serverCommandError(error, "伺服器暫時未能處理裝備操作。"); }
   }
 
-  function unequipEquipment(itemId) {
+  async function unequipEquipment(itemId) {
     const item = equipmentItem(itemId);
-    if (!item || !Expansion.isEquipmentEquipped({ equipped }, item.id)) return showToast("呢件裝備目前冇裝備緊。", "danger");
-    const occupiedSlot = item.occupiesSlots.find((slot) => equipped[slot] === item.id);
-    if (!occupiedSlot) return showToast("未能找到裝備槽位。", "danger");
-    const result = Expansion.unequipItem({ coins: player.coins, level: player.level, classId: playerClassId, ownedEquipment, equipped }, occupiedSlot);
-    if (!result.ok) return showToast("未能卸下呢件裝備。", "danger");
-    equipped = result.state.equipped;
-    player.hp = Core.clamp(player.hp, 1, playerStats().maxHp);
-    selectedInventoryItemId = null;
-    pendingInventoryDestroyItemId = null;
-    sound.coin();
-    showToast(`已卸下：${item.name}`, "good");
-    if (facilityWindows.size) renderFacility();
-    updateHud(true);
-    saveImportant(false);
+    if (!item) return showToast("呢件裝備目前冇裝備緊。", "danger");
+    if (!ServerApi?.economy) return showToast("伺服器裝備指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("unequip", { itemId });
+      if (!result?.ok) return showToast("未能卸下呢件裝備。", "danger");
+      applyAuthoritativeState(result.state);
+      selectedInventoryItemId = null;
+      pendingInventoryDestroyItemId = null;
+      sound.coin();
+      showToast(`已卸下：${item.name}`, "good");
+      if (facilityWindows.size) renderFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能處理卸裝。"); }
   }
 
-  function destroyInventoryItem(itemId) {
+  async function destroyInventoryItem(itemId) {
     const id = String(itemId || "").trim();
     if (!id) return showToast("呢件物品唔可以銷毀。", "danger");
-    let itemName = inventoryItemName(id);
-    let destroyed = false;
-
-    const equipment = equipmentItem(id);
-    if (equipment && ownedEquipment.includes(equipment.id)) {
-      if (Expansion.isEquipmentEquipped({ equipped }, equipment.id)) return showToast("請先卸下裝備。", "danger");
-      const ownedIndex = ownedEquipment.indexOf(equipment.id);
-      ownedEquipment.splice(ownedIndex, 1);
-      itemName = equipment.name;
-      destroyed = true;
-    } else if (id === "healing_potion") {
-      if (player.potions > 0) {
-        player.potions -= 1;
-        itemName = "小型回復藥";
-        destroyed = true;
-      }
-    } else if (id === "weak_potion") {
-      const amount = Math.max(0, Math.floor(Number(inventory.weak_potion) || 0));
-      if (amount > 0) {
-        inventory.weak_potion = amount - 1;
-        if (inventory.weak_potion <= 0) delete inventory.weak_potion;
-        destroyed = true;
-      }
-    } else {
-      const envelopeMatch = id.match(/^skill_envelope_(\d+)$/);
-      const bookMatch = id.match(/^skill_book_(\d+)$/);
-      const manualMatch = id.match(/^manual_(.+)$/);
-      if (envelopeMatch) {
-        const star = Number(envelopeMatch[1]);
-        const state = Guild.normalizeState(guildCommissionState);
-        if ((state.envelopes[star] || 0) > 0) {
-          guildCommissionState = { ...state, envelopes: { ...state.envelopes, [star]: state.envelopes[star] - 1 } };
-          itemName = `${skillStars(star)} 技能書信封`;
-          destroyed = true;
-        }
-      } else if (bookMatch) {
-        const star = Number(bookMatch[1]);
-        const state = Skills.normalizeSkillState(skillState);
-        if ((state.books[star] || 0) > 0) {
-          skillState = { ...state, books: { ...state.books, [star]: state.books[star] - 1 } };
-          itemName = `${Skills.formatSkillBookRank(star)} 技能書`;
-          destroyed = true;
-        }
-      } else if (manualMatch) {
-        const skillId = manualMatch[1];
-        const state = Skills.normalizeSkillState(skillState);
-        const amount = Math.max(0, Math.floor(Number(state.manualCounts[skillId]) || 0));
-        if (amount > 0) {
-          const manualCounts = { ...state.manualCounts, [skillId]: amount - 1 };
-          if (manualCounts[skillId] <= 0) delete manualCounts[skillId];
-          skillState = { ...state, manualCounts };
-          itemName = `技能書：${Skills.getSkill(skillId)?.name || skillId}`;
-          destroyed = true;
-        }
-      } else {
-        const itemData = ItemData?.getItem?.(id);
-        const amount = Math.max(0, Math.floor(Number(inventory[id]) || 0));
-        // UI/currency/unknown identifiers are treated as protected.  Only
-        // ordinary inventory consumables/materials can be destroyed here.
-        if (itemData && !["ui", "currency", "quest"].includes(itemData.kind) && itemData.destroyable !== false && amount > 0) {
-          inventory[id] = amount - 1;
-          if (inventory[id] <= 0) delete inventory[id];
-          itemName = itemData.name || itemName;
-          destroyed = true;
-        }
-      }
-    }
-
-    if (!destroyed) return showToast("呢件物品唔可以銷毀。", "danger");
-    pendingInventoryDestroyItemId = null;
-    selectedInventoryItemId = null;
-    showToast(`已銷毀：${itemName}`, "good");
-    addSystemMessage("item", `銷毀 ${itemName}`);
-    renderBagFacility();
-    updateHud(true);
-    saveImportant(false);
+    if (!ServerApi?.economy) return showToast("伺服器物品指令尚未就緒。", "danger");
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("destroy-item", { itemId: id });
+      if (!result?.ok && result?.reason === "equipped") return showToast("請先卸下裝備。", "danger");
+      if (!result?.ok) return showToast("呢件物品唔可以銷毀。", "danger");
+      applyAuthoritativeState(result.state);
+      pendingInventoryDestroyItemId = null;
+      selectedInventoryItemId = null;
+      const itemName = result.itemName || inventoryItemName(id);
+      showToast(`已銷毀：${itemName}`, "good");
+      addSystemMessage("item", `銷毀 ${itemName}`);
+      renderBagFacility();
+    } catch (error) { serverCommandError(error, "伺服器暫時未能銷毀物品。"); }
   }
 
   const DEFAULT_BATTLE_WIDTH = 9;
@@ -5471,6 +5508,9 @@
       actionResolution: null,
       selectedEnemyId: null,
       autoTimer: .35,
+      serverBattleId: null,
+      serverReady: false,
+      serverSyncPending: false,
     };
     mode = "battle";
     stage.dataset.gameState = mode;
@@ -5483,8 +5523,79 @@
     startBattleBgm();
     announce(`遇上${source.name}。進入格仔回合戰。`);
     maintainGodModeState();
-    beginPlayerRound();
+    authorizeBattleSession(battle, source);
     return true;
+  }
+
+  function syncServerBattleSnapshot(targetBattle, snapshot) {
+    if (!targetBattle || !snapshot || typeof snapshot !== "object") return false;
+    if (Number.isFinite(Number(snapshot.heroHp))) {
+      targetBattle.hero.hp = Core.clamp(Number(snapshot.heroHp), 0, targetBattle.hero.maxHp);
+      targetBattle.hero.alive = targetBattle.hero.hp > 0;
+      player.hp = targetBattle.hero.hp;
+    }
+    if (Number.isFinite(Number(snapshot.ap))) targetBattle.ap = Core.clamp(Math.floor(Number(snapshot.ap)), 0, BATTLE_AP_MAX);
+    if (Array.isArray(snapshot.enemies)) {
+      for (let index = 0; index < targetBattle.enemies.length; index += 1) {
+        const canonical = snapshot.enemies[index];
+        const local = targetBattle.enemies[index];
+        if (!canonical || !local) continue;
+        if (Number.isFinite(Number(canonical.maxHp))) local.maxHp = Math.max(1, Number(canonical.maxHp));
+        if (Number.isFinite(Number(canonical.hp))) local.hp = Core.clamp(Number(canonical.hp), 0, local.maxHp);
+        local.alive = canonical.alive !== false && local.hp > 0;
+      }
+    }
+    updateHud(true);
+    updateBattleUi();
+    return true;
+  }
+
+  async function authorizeBattleSession(targetBattle, source) {
+    if (!targetBattle || !source || !ServerApi?.battle) {
+      showToast("伺服器戰鬥指令尚未就緒。", "danger");
+      if (battle === targetBattle) {
+        closeBattleHud();
+        mode = "playing";
+        stage.dataset.gameState = mode;
+        syncRealtimeState("exploring");
+      }
+      return false;
+    }
+    const token = targetBattle.token;
+    targetBattle.message = "正在向伺服器確認戰鬥…";
+    updateBattleUi();
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.battle("start", {
+        monsterType: source.type,
+        level: source.level,
+        encounterId: source.instanceId || source.id || "",
+      });
+      if (!battle || battle.token !== token || battle !== targetBattle) return false;
+      if (!result?.ok || !result.battle?.id) {
+        showToast("伺服器未能建立戰鬥。", "danger");
+        source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
+        closeBattleHud();
+        mode = "playing";
+        stage.dataset.gameState = mode;
+        syncRealtimeState("exploring");
+        return false;
+      }
+      targetBattle.serverBattleId = result.battle.id;
+      targetBattle.serverReady = true;
+      syncServerBattleSnapshot(targetBattle, result.battle);
+      beginPlayerRound();
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token || battle !== targetBattle) return false;
+      serverCommandError(error, "暫時未能建立戰鬥。");
+      source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
+      closeBattleHud();
+      mode = "playing";
+      stage.dataset.gameState = mode;
+      syncRealtimeState("exploring");
+      return false;
+    }
   }
 
   function beginPlayerRound() {
@@ -6797,10 +6908,65 @@
       const cancelled = [...new Set(resolution.cancelledActors || [])];
       if (cancelled.length) summaries.push(`${cancelled.join("、")}因倒下或異常狀態取消行動`);
       if (summaries.length) battle.message = `${summaries.join("；")}。`;
-      if (battle.hero.hp <= 0) return finishBattleDefeat();
-      if (livingBattleEnemies().length === 0) return finishBattleVictory();
-      battle.round += 1;
+      syncBattleRoundAuthority(resolution);
+    }
+  }
+
+  async function syncBattleRoundAuthority(resolution) {
+    if (!battle || !resolution || resolution.serverSyncPending) return false;
+    if (!battle.serverReady || !battle.serverBattleId || !ServerApi?.battle) {
+      showToast("伺服器戰鬥狀態未就緒。", "danger");
+      return false;
+    }
+    resolution.serverSyncPending = true;
+    battle.serverSyncPending = true;
+    battle.message = "正在同步戰鬥結果…";
+    updateBattleUi();
+    const token = battle.token;
+    const action = resolution.heroAction || {};
+    try {
+      const result = await ServerApi.battle("act", {
+        battleId: battle.serverBattleId,
+        round: battle.round,
+        heroAction: action.type || "wait",
+        skillId: action.skillId || undefined,
+        targetIndexes: Array.isArray(resolution.serverTargetIndexes) ? resolution.serverTargetIndexes : [],
+        heroHp: battle.hero.hp,
+      });
+      if (!battle || battle.token !== token) return false;
+      if (!result?.ok || !result.battle) {
+        console.warn("Battle authority rejected round.", result);
+        showToast("伺服器拒絕咗今個回合，戰鬥已中止。", "danger");
+        try { await ServerApi.battle("cancel", { battleId: battle.serverBattleId }); } catch (_) {}
+        const source = battle.source;
+        if (source) source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
+        closeBattleHud();
+        mode = "playing";
+        stage.dataset.gameState = mode;
+        syncRealtimeState("exploring");
+        return false;
+      }
+      applyAuthoritativeState(result.state);
+      syncServerBattleSnapshot(battle, result.battle);
+      battle.round = Math.max(1, Math.floor(Number(result.battle.round) || battle.round + 1));
+      battle.serverSyncPending = false;
+      if (battle.hero.hp <= 0) return finishBattleDefeat(), true;
+      if (livingBattleEnemies().length === 0) return finishBattleVictory(), true;
       beginPlayerRound();
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token) return false;
+      battle.serverSyncPending = false;
+      serverCommandError(error, "戰鬥同步失敗，已中止今場戰鬥。");
+      const source = battle.source;
+      if (source) source.encounterCooldown = Math.max(source.encounterCooldown || 0, 1.5);
+      closeBattleHud();
+      mode = "playing";
+      stage.dataset.gameState = mode;
+      syncRealtimeState("exploring");
+      return false;
+    } finally {
+      if (resolution) resolution.serverSyncPending = false;
     }
   }
 
@@ -6865,6 +7031,9 @@
           : projectileTrace.actualTarget ? [projectileTrace.actualTarget] : [];
         affectedUnits = tracedUnits;
       }
+      resolution.serverTargetIndexes = [...new Set(affectedUnits
+        .map((unit) => battle.enemies.indexOf(unit))
+        .filter((index) => index >= 0))];
       effectTargets = skill.targeting.team === "ally" ? [battle.hero].filter((unit) => pattern.has(Tactics.cellKey(unit.cell))) : affectedUnits;
       if (damageEffect) {
         const hitCount = Math.max(1, Math.floor(Number(skill.hitResolution?.hit_count || damageEffect.hits) || 1));
@@ -7355,46 +7524,66 @@
     return battleVictoryPresenter;
   }
 
-  function settleBattleVictoryRewards(finished) {
-    if (!finished || finished.victoryResult) return finished?.victoryResult || null;
-    const bonusUnits = finished.enemies.filter((unit) => !unit.primary);
-    const encounterCount = Math.max(1, finished.enemies.length);
-    const rewardLevel = Math.max(finished.source.level || 1, ...finished.enemies.map((unit) => Number(unit.level) || 1));
-    const blueprint = ExpansionWorld.monsterBlueprint(finished.source.type);
-    const baseXp = blueprint?.rewards?.baseXp ?? 100;
-    const earnedXp = ExpansionWorld.battleXpReward(rewardLevel, player.level, encounterCount, baseXp);
-    const earnedCoins = finished.enemies.reduce((sum, unit) => sum + Math.max(0, Math.round(Number(unit.coins) || 0)), 0);
-    const beforeLevel = player.level;
-    const beforeXp = player.xp;
-
-    player.hp = Math.max(1, finished.hero.hp);
-    killEnemy(finished.source, { grantXp: false });
-    for (const unit of bonusUnits) recordDefeatedMonster(unit);
-    if (earnedCoins > 0) {
-      PlayerStateActions.grantCoins(player, earnedCoins);
-      markPersistenceDirty();
-      addSystemMessage("reward", `獲得 ${earnedCoins} 金幣`);
+  async function settleBattleVictoryRewards(finished) {
+    if (!finished) return null;
+    if (finished.victoryResult) return finished.victoryResult;
+    if (finished.victorySettlementPending) return finished.victorySettlementPending;
+    if (!finished.serverReady || !finished.serverBattleId || !ServerApi?.battle) {
+      showToast("伺服器戰鬥獎勵尚未就緒。", "danger");
+      return null;
     }
-    gainXp(earnedXp, { deferPresentation: true });
-
-    const result = {
-      earnedXp,
-      coins: earnedCoins,
-      drops: [],
-      beforeLevel,
-      beforeXp,
-      afterLevel: player.level,
-      afterXp: player.xp,
-    };
-    finished.victoryResult = result;
-    updateHud(true);
-    saveImportant(false);
-    return result;
+    const token = finished.token;
+    finished.victorySettlementPending = (async () => {
+      try {
+        const result = await ServerApi.battle("settle", {
+          battleId: finished.serverBattleId,
+          outcome: "victory",
+        });
+        if (!battle || battle.token !== token || battle !== finished) return null;
+        if (!result?.ok || result.outcome !== "victory") {
+          console.warn("Battle settlement rejected.", result);
+          showToast("伺服器未能確認戰鬥勝利。", "danger");
+          return null;
+        }
+        applyAuthoritativeState(result.state);
+        finished.hero.hp = player.hp;
+        killEnemy(finished.source, { grantXp: false, recordDefeat: false });
+        if (result.earnedXp > 0) addSystemMessage("reward", `獲得 ${result.earnedXp} EXP`);
+        if (result.coins > 0) addSystemMessage("reward", `獲得 ${result.coins} 金幣`);
+        if (result.questProgress?.changed) {
+          const active = activeGuildCommission();
+          const questText = guildCommissionState.status === "ready_to_report" && active
+            ? `委託完成：${active.title} · 返公會回報`
+            : active ? `${active.title} ${guildCommissionState.progress} / ${active.objective.count}` : "委託進度已更新";
+          showToast(questText, "good");
+          addSystemMessage("quest", questText);
+        }
+        const presentation = {
+          earnedXp: Math.max(0, Number(result.earnedXp) || 0),
+          coins: Math.max(0, Number(result.coins) || 0),
+          drops: Array.isArray(result.drops) ? result.drops : [],
+          beforeLevel: Math.max(1, Number(result.beforeLevel) || player.level),
+          beforeXp: Math.max(0, Number(result.beforeXp) || 0),
+          afterLevel: Math.max(1, Number(result.afterLevel) || player.level),
+          afterXp: Math.max(0, Number(result.afterXp) || player.xp),
+        };
+        finished.victoryResult = presentation;
+        finished.serverReady = false;
+        updateHud(true);
+        saveImportant(false);
+        return presentation;
+      } catch (error) {
+        if (battle && battle.token === token) serverCommandError(error, "戰鬥獎勵同步失敗。");
+        return null;
+      } finally {
+        if (finished) finished.victorySettlementPending = null;
+      }
+    })();
+    return finished.victorySettlementPending;
   }
 
   function exitBattleVictory() {
-    if (!battle || battle.phase !== "victory") return false;
-    if (!battle.victoryResult) settleBattleVictoryRewards(battle);
+    if (!battle || battle.phase !== "victory" || !battle.victoryResult) return false;
     battleVictoryPresenter?.hide();
     closeBattleHud();
     mode = "playing";
@@ -7423,9 +7612,10 @@
     const token = battle.token;
     startVictoryBgm();
     updateBattleUi();
-    scheduleBattle(() => {
+    scheduleBattle(async () => {
       if (!battle || battle.token !== token || battle.phase !== "victory") return;
-      const result = settleBattleVictoryRewards(battle);
+      const result = await settleBattleVictoryRewards(battle);
+      if (!battle || battle.token !== token || battle.phase !== "victory" || !result) return;
       ensureBattleVictoryPresenter().show(result);
       battleVictoryContinue?.focus({ preventScroll: true });
     }, reducedMotion ? 40 : 520);
@@ -7439,7 +7629,17 @@
     battle.messageDanger = true;
     addSystemMessage("combat", "戰鬥失敗。", "danger");
     updateBattleUi();
-    scheduleBattle(() => {
+    scheduleBattle(async () => {
+      if (!battle || battle.token !== token) return;
+      const finished = battle;
+      try {
+        if (finished.serverReady && finished.serverBattleId && ServerApi?.battle) {
+          const result = await ServerApi.battle("settle", { battleId: finished.serverBattleId, outcome: "defeat" });
+          if (result?.ok) applyAuthoritativeState(result.state);
+        }
+      } catch (error) {
+        serverCommandError(error, "戰鬥失敗狀態同步失敗。");
+      }
       if (!battle || battle.token !== token) return;
       player.hp = 0;
       playerDeath();
@@ -7457,6 +7657,10 @@
       return updateBattleUi();
     }
     const source = battle.source;
+    const serverBattleId = battle.serverBattleId;
+    if (battle.serverReady && serverBattleId && ServerApi?.battle) {
+      ServerApi.battle("cancel", { battleId: serverBattleId }).catch((error) => console.warn("Battle cancel sync failed.", error));
+    }
     const away = Core.normalize({ x: player.x - source.x, y: player.y - source.y });
     source.encounterCooldown = 3;
     moveEntity(player, (away.x || -1) * 54, away.y * 54);

@@ -62,10 +62,10 @@
     "save-system.js",
     "firebase-config.js",
     "firebase-client.js?v=20260916-02",
-    "game/server-api.js?v=20260916-02",
+    "game/server-api.js?v=20260917-01",
     "chat.js?v=20260916-01",
-    "cloud-save.js",
-    "save-persistence.js",
+    "cloud-save.js?v=20260917-01",
+    "save-persistence.js?v=20260917-01",
     "world-time.js?v=20260916-02",
     "fighter-effects.js",
     "locomotion.js?v=20260915-04",
@@ -85,7 +85,7 @@
     "game/facility-action-router.js",
     "game/battle-victory.js?v=20260913-01",
     "game/player-state-actions.js?v=20260916-01",
-    "game.js?v=20260916-14",
+    "game.js?v=20260917-02",
   ]);
 
   return Object.freeze({ scripts });

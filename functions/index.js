@@ -2,6 +2,7 @@
 
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const {
   HEALING_POTION_ID,
@@ -12,12 +13,15 @@ const {
   shrineRestResult,
   reviveResult,
 } = require("./game-rules");
+const ServerGame = require("./server-game");
+const PlayerState = require("./player-state");
 
 initializeApp();
 
 const db = getFirestore();
 const REGION = "europe-west2";
 const COMMAND_VERSION = 1;
+const LEGACY_MIGRATION_ACCOUNT_CUTOFF_MS = Date.parse("2026-09-17T12:00:00.000Z");
 
 function authenticatedUid(request) {
   const uid = String(request.auth?.uid || "").trim();
@@ -42,6 +46,67 @@ async function withPlayerTransaction(uid, callback) {
     return callback({ transaction, playerRef, save: snapshot.data() });
   });
 }
+
+
+function playerDataWithoutMetadata(data) {
+  const source = data && typeof data === "object" ? data : {};
+  const { updatedAt, ...rest } = source;
+  return rest;
+}
+
+exports.playerStateCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) => {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  const action = String(request.data?.action || "").trim();
+  const payload = request.data?.payload && typeof request.data.payload === "object" ? request.data.payload : {};
+  if (!["create", "save", "reset", "migrate"].includes(action)) {
+    return { ok: false, reason: "unsupported-action", action };
+  }
+
+  if (action === "migrate") {
+    const account = await getAuth().getUser(uid);
+    const createdAt = Date.parse(account.metadata?.creationTime || "");
+    if (!Number.isFinite(createdAt) || createdAt > LEGACY_MIGRATION_ACCOUNT_CUTOFF_MS) {
+      return { ok: false, reason: "legacy-migration-closed" };
+    }
+  }
+
+  const playerRef = db.doc(`players/${uid}`);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(playerRef);
+    const existing = snapshot.exists ? playerDataWithoutMetadata(snapshot.data()) : null;
+
+    if (action === "create") {
+      if (existing) return { ok: true, created: false, data: existing };
+      const next = PlayerState.canonicalInitialSave(payload);
+      transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
+      return { ok: true, created: true, data: next };
+    }
+
+    if (action === "migrate") {
+      if (existing) return { ok: true, created: false, data: existing };
+      const next = PlayerState.sanitizeLegacySave(payload);
+      transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
+      return { ok: true, created: true, migrated: true, data: next };
+    }
+
+    if (action === "reset") {
+      const next = PlayerState.canonicalInitialSave(payload);
+      transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
+      return { ok: true, created: !existing, reset: true, data: next };
+    }
+
+    if (!existing) {
+      const next = PlayerState.canonicalInitialSave(payload);
+      transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
+      return { ok: true, created: true, data: next };
+    }
+
+    const patch = PlayerState.clientOwnedPatch(existing, payload);
+    transaction.update(playerRef, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+    return { ok: true, saved: true, data: PlayerState.mergeClientOwnedState(existing, patch) };
+  });
+});
 
 exports.useItem = onCall({ region: REGION, maxInstances: 10 }, async (request) => {
   const uid = authenticatedUid(request);
@@ -124,3 +189,33 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
     return result;
   });
 });
+
+
+async function runAuthoritativeCommand(request, command) {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  return withPlayerTransaction(uid, ({ transaction, playerRef, save }) => {
+    const result = command(save, request.data || {});
+    if (!result?.ok || !result.state) return result;
+    const payload = result.state;
+    transaction.update(playerRef, {
+      player: { ...(save.player || {}), ...(payload.player || {}) },
+      expansion: { ...(save.expansion || {}), ...(payload.expansion || {}) },
+      openedChests: Array.isArray(payload.openedChests) ? payload.openedChests : (save.openedChests || []),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return result;
+  });
+}
+
+exports.economyCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
+  runAuthoritativeCommand(request, ServerGame.economyCommand));
+
+exports.questCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
+  runAuthoritativeCommand(request, ServerGame.questCommand));
+
+exports.battleCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
+  runAuthoritativeCommand(request, ServerGame.battleCommand));
+
+exports.mapCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
+  runAuthoritativeCommand(request, ServerGame.mapCommand));

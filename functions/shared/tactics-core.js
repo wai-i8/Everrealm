@@ -1,0 +1,1833 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.LanternTactics = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const MIN_DIRECT_DAMAGE = 5;
+  const FRIENDLY_FIRE = true;
+  const PATHLESS_DELIVERIES = Object.freeze(new Set(["pathless", "pathless-area"]));
+
+  const DIRECTIONS = Object.freeze([
+    Object.freeze({ x: 0, y: -1, name: "up" }),
+    Object.freeze({ x: -1, y: 0, name: "left" }),
+    Object.freeze({ x: 1, y: 0, name: "right" }),
+    Object.freeze({ x: 0, y: 1, name: "down" }),
+  ]);
+
+  const FACING_VECTORS = Object.freeze({
+    up: Object.freeze({ x: 0, y: -1 }),
+    down: Object.freeze({ x: 0, y: 1 }),
+    left: Object.freeze({ x: -1, y: 0 }),
+    right: Object.freeze({ x: 1, y: 0 }),
+  });
+
+  const POSITIONAL_MULTIPLIERS = Object.freeze({ front: 1, side: 1.15, rear: 1.35 });
+
+  function cellKey(cell) {
+    return `${cell.x},${cell.y}`;
+  }
+
+  function usesAttackPath(deliveryMode) {
+    return !PATHLESS_DELIVERIES.has(String(deliveryMode || "pathless"));
+  }
+
+  function copyCell(cell) {
+    return { x: Math.trunc(Number(cell.x)), y: Math.trunc(Number(cell.y)) };
+  }
+
+  function validCell(cell) {
+    return Boolean(cell) && Number.isFinite(Number(cell.x)) && Number.isFinite(Number(cell.y));
+  }
+
+  function createGrid(width, height, blockedCells = []) {
+    const safeWidth = Math.trunc(Number(width));
+    const safeHeight = Math.trunc(Number(height));
+    if (safeWidth < 1 || safeHeight < 1) throw new RangeError("Grid dimensions must be positive integers.");
+    const grid = { width: safeWidth, height: safeHeight, blocked: new Set() };
+    for (const value of blockedCells || []) {
+      const cell = typeof value === "string" ? parseCellKey(value) : value;
+      if (validCell(cell) && isInside(grid, cell)) grid.blocked.add(cellKey(copyCell(cell)));
+    }
+    return grid;
+  }
+
+  function parseCellKey(value) {
+    const match = /^(-?\d+),(-?\d+)$/.exec(String(value));
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+  }
+
+  function isInside(grid, cell) {
+    if (!grid || !validCell(cell)) return false;
+    const x = Math.trunc(Number(cell.x));
+    const y = Math.trunc(Number(cell.y));
+    return x >= 0 && y >= 0 && x < grid.width && y < grid.height;
+  }
+
+  function manhattan(a, b) {
+    if (!validCell(a) || !validCell(b)) return Infinity;
+    return Math.abs(Math.trunc(a.x) - Math.trunc(b.x)) + Math.abs(Math.trunc(a.y) - Math.trunc(b.y));
+  }
+
+  function facingVector(facing) {
+    const vector = FACING_VECTORS[String(facing || "").toLowerCase()] || FACING_VECTORS.down;
+    return { x: vector.x, y: vector.y };
+  }
+
+  function facingFromStep(from, to, fallback = "down") {
+    if (!validCell(from) || !validCell(to)) return String(fallback || "down");
+    const dx = Math.trunc(Number(to.x)) - Math.trunc(Number(from.x));
+    const dy = Math.trunc(Number(to.y)) - Math.trunc(Number(from.y));
+    if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) return dx > 0 ? "right" : "left";
+    if (dy !== 0) return dy > 0 ? "down" : "up";
+    return String(fallback || "down");
+  }
+
+  function relativePosition(defenderCell, defenderFacing, attackerCell) {
+    const defender = cellOf(defenderCell);
+    const attacker = cellOf(attackerCell);
+    if (!defender || !attacker || sameCell(defender, attacker)) return "front";
+    const forward = facingVector(defenderFacing);
+    const dot = (attacker.x - defender.x) * forward.x + (attacker.y - defender.y) * forward.y;
+    if (dot < 0) return "rear";
+    if (dot > 0) return "front";
+    return "side";
+  }
+
+  function isInFacingArc(origin, target, facing) {
+    const source = cellOf(origin);
+    const destination = cellOf(target);
+    if (!source || !destination) return false;
+    if (sameCell(source, destination)) return true;
+    return relativePosition(source, facing, destination) !== "rear";
+  }
+
+  function positionalApproachCell(attacker, defender, options = {}) {
+    const origin = cellOf(options.origin || attacker);
+    const defenderCell = cellOf(defender);
+    if (!origin || !defenderCell || sameCell(origin, defenderCell)) return origin;
+
+    const suppliedPath = Array.isArray(options.attackPath)
+      ? options.attackPath.filter(validCell).map(copyCell)
+      : [];
+    const facing = options.facing || attacker?.facing || "down";
+    const route = suppliedPath.length
+      ? suppliedPath
+      : facingOrthogonalPriority(origin, defenderCell, facing);
+    const impactIndex = route.findIndex((cell) => sameCell(cell, defenderCell));
+    if (impactIndex >= 0) return impactIndex > 0 ? copyCell(route[impactIndex - 1]) : copyCell(origin);
+
+    // Area/pathless effects have no interception route, but positional damage
+    // still needs a deterministic incoming direction.  Derive the same virtual
+    // forward-first orthogonal route that an ordinary linear attack would use.
+    const virtualRoute = facingOrthogonalPriority(origin, defenderCell, facing);
+    if (!virtualRoute.length) return copyCell(origin);
+    return virtualRoute.length > 1 ? copyCell(virtualRoute[virtualRoute.length - 2]) : copyCell(origin);
+  }
+
+  function positionalAttack(attacker, defender, options = {}) {
+    const defenderCell = cellOf(defender);
+    const approachCell = positionalApproachCell(attacker, defender, options);
+    const position = relativePosition(defenderCell, defender && defender.facing, approachCell);
+    const defaults = POSITIONAL_MULTIPLIERS;
+    const multiplier = Math.max(0, finiteStat(options[position], defaults[position]));
+    return { position, multiplier, approachCell };
+  }
+
+  function sameCell(a, b) {
+    return Boolean(a && b && Number(a.x) === Number(b.x) && Number(a.y) === Number(b.y));
+  }
+
+  function cellOf(value) {
+    if (!value) return null;
+    return validCell(value.cell) ? copyCell(value.cell) : validCell(value) ? copyCell(value) : null;
+  }
+
+  function unitIsAlive(unit) {
+    return Boolean(unit) && unit.alive !== false && !(Number.isFinite(unit.hp) && unit.hp <= 0);
+  }
+
+  function terrainIsBlocked(grid, cell) {
+    if (!isInside(grid, cell)) return true;
+    if (typeof grid.isBlocked === "function" && grid.isBlocked(copyCell(cell))) return true;
+    if (typeof grid.blocked === "function") return Boolean(grid.blocked(copyCell(cell)));
+    const key = cellKey(cell);
+    if (grid.blocked instanceof Set) return grid.blocked.has(key);
+    if (Array.isArray(grid.blocked)) {
+      return grid.blocked.some((value) => (typeof value === "string" ? value === key : validCell(value) && cellKey(copyCell(value)) === key));
+    }
+    return false;
+  }
+
+  function terrainCellData(grid, cell) {
+    if (!grid || !validCell(cell)) return null;
+    const key = cellKey(copyCell(cell));
+    const source = grid.terrainCells || grid.terrain || null;
+    if (!source) return null;
+    if (source instanceof Map) return source.get(key) || source.get(copyCell(cell)) || null;
+    if (typeof source === "function") return source(copyCell(cell)) || null;
+    return source[key] || null;
+  }
+
+  function terrainHeightAt(grid, cell) {
+    if (!grid || !validCell(cell)) return 0;
+    const key = cellKey(copyCell(cell));
+    const source = grid.heightMap || null;
+    let value = 0;
+    if (source instanceof Map) value = source.get(key) ?? 0;
+    else if (typeof source === "function") value = source(copyCell(cell));
+    else if (source && typeof source === "object") value = source[key] ?? 0;
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function arcTrajectoryHeight(grid, origin, target, stepIndex, stepCount, arcHeight = 1.5) {
+    const count = Math.max(1, Math.trunc(Number(stepCount) || 1));
+    const progress = Math.max(0, Math.min(1, (Math.trunc(Number(stepIndex) || 0) + 1) / count));
+    const startHeight = terrainHeightAt(grid, origin);
+    const targetHeight = terrainHeightAt(grid, target);
+    const apex = arcHeight == null ? 1.5 : Math.max(0, Number(arcHeight) || 0);
+    return startHeight + (targetHeight - startHeight) * progress + 4 * apex * progress * (1 - progress);
+  }
+
+  function terrainBlocksDelivery(grid, cell, deliveryMode = "linear", projectileHeight = null) {
+    if (!isInside(grid, cell)) return true;
+    const mode = String(deliveryMode || "linear");
+    const metadata = terrainCellData(grid, cell);
+    const blocked = terrainIsBlocked(grid, cell);
+    if (mode !== "arc") {
+      // Obstacle height is a gameplay classification, not only renderer
+      // metadata. High obstacles occupy the full attack lane; low cover still
+      // occupies the movement cell but does not intercept ground-level linear
+      // deliveries such as linear/contact/leap attacks.
+      if (metadata?.obstacleHeight === "high") return true;
+      if (metadata?.obstacleHeight === "low") return false;
+      if (metadata && metadata.blocksLinear === false) return false;
+      return Boolean(metadata?.blocksLinear) || blocked;
+    }
+
+    const surfaceHeight = terrainHeightAt(grid, cell);
+    const flightHeight = Number(projectileHeight);
+    // Raised ground itself is solid volume.  Equal height at the destination
+    // remains legal so a projectile can arrive at a unit standing on it.
+    if (Number.isFinite(flightHeight) && flightHeight < surfaceHeight - 1e-7) return true;
+    if (metadata?.blocksArc === false) return false;
+    if (metadata?.blocksArc === true) {
+      if (!Number.isFinite(flightHeight)) return true;
+      const defaultObstacleHeight = metadata.obstacleHeight === "high" ? 2.4 : metadata.obstacleHeight === "low" ? .7 : 1;
+      const occupiedTop = surfaceHeight + Math.max(0, Number(metadata.occupiedHeight ?? defaultObstacleHeight) || 0);
+      return flightHeight <= occupiedTop + 1e-7;
+    }
+    // Legacy blocked grids predate height metadata; keep their old conservative
+    // behaviour for arc delivery until a map explicitly authors the blocker.
+    return blocked;
+  }
+
+  function arcIntersectsUnit(grid, cell, unit, projectileHeight) {
+    if (!unit || !Number.isFinite(Number(projectileHeight))) return true;
+    const footHeight = terrainHeightAt(grid, cell);
+    const bodyHeight = Math.max(.1, Number(unit.bodyHeight) || 1);
+    return Number(projectileHeight) <= footHeight + bodyHeight + 1e-7;
+  }
+
+  function occupiedKeys(occupants, ignoreUnitId) {
+    const keys = new Set();
+    if (!occupants) return keys;
+    for (const value of occupants instanceof Set ? occupants : occupants) {
+      if (typeof value === "string") {
+        keys.add(value);
+        continue;
+      }
+      if (!unitIsAlive(value) || (ignoreUnitId != null && String(value.id) === String(ignoreUnitId))) continue;
+      const cell = cellOf(value);
+      if (cell) keys.add(cellKey(cell));
+    }
+    return keys;
+  }
+
+  function localRelativeCell(origin, target, facing = "down") {
+    const dx = Math.trunc(Number(target.x)) - Math.trunc(Number(origin.x));
+    const dy = Math.trunc(Number(target.y)) - Math.trunc(Number(origin.y));
+    switch (normalizeFacing(facing)) {
+      case "up": return { lateral: -dx, depth: -dy };
+      case "right": return { lateral: dy, depth: dx };
+      case "left": return { lateral: -dy, depth: -dx };
+      default: return { lateral: dx, depth: dy };
+    }
+  }
+
+  function localToWorld(origin, lateral, depth, facing = "down") {
+    let dx = lateral;
+    let dy = depth;
+    switch (normalizeFacing(facing)) {
+      case "up": dx = -lateral; dy = -depth; break;
+      case "right": dx = depth; dy = lateral; break;
+      case "left": dx = -depth; dy = -lateral; break;
+      default: break;
+    }
+    return { x: Math.trunc(Number(origin.x)) + dx, y: Math.trunc(Number(origin.y)) + dy };
+  }
+
+  // Shared deterministic route for ordinary Linear skills.  The route does
+  // not include the caster, but always includes the intended target cell.
+  function facingOrthogonalPriority(originOrOptions, target, facing = "down") {
+    let origin = originOrOptions;
+    let destination = target;
+    let direction = facing;
+    if (originOrOptions && originOrOptions.origin) {
+      ({ origin, target: destination, facing: direction = "down" } = originOrOptions);
+    }
+    if (!validCell(origin) || !validCell(destination)) return [];
+    const relative = localRelativeCell(origin, destination, direction);
+    const path = [];
+    let lateral = 0;
+    let depth = 0;
+    const push = () => path.push(localToWorld(origin, lateral, depth, direction));
+    if (relative.depth > 0) {
+      while (depth < relative.depth) { depth += 1; push(); }
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+    } else if (relative.depth < 0) {
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+      while (depth > relative.depth) { depth -= 1; push(); }
+    } else {
+      while (lateral !== relative.lateral) { lateral += Math.sign(relative.lateral); push(); }
+    }
+    return path;
+  }
+
+  function traceAttackPath(options = {}) {
+    const origin = cellOf(options.origin || options.caster);
+    const target = cellOf(options.target || options.intendedTarget);
+    if (!origin || !target) return { path: [], intendedTarget: null, actualTarget: null, candidateUnits: [], firstImpactCell: null, blocked: false, stoppedReason: "invalid-cell" };
+    const deliveryMode = options.deliveryMode || "linear";
+    const path = PATHLESS_DELIVERIES.has(deliveryMode)
+      ? []
+      : Array.isArray(options.path) && options.path.length ? options.path.filter(validCell).map(copyCell)
+        : facingOrthogonalPriority(origin, target, options.facing || options.caster?.facing || "down");
+    const units = Array.isArray(options.units) ? options.units : [];
+    const ignoreUnitId = options.actorId ?? options.caster?.id;
+    const result = {
+      path,
+      intendedTarget: copyCell(target),
+      actualTarget: null,
+      candidateUnits: [],
+      impactedUnits: [],
+      firstImpactCell: null,
+      blocked: false,
+      blockedBy: null,
+      stoppedReason: null,
+      friendlyFire: FRIENDLY_FIRE,
+      piercing: options.piercing === true,
+      deliveryMode,
+      impactHeight: null,
+    };
+    if (PATHLESS_DELIVERIES.has(deliveryMode)) return result;
+    for (let index = 0; index < path.length; index += 1) {
+      const cell = path[index];
+      const projectileHeight = deliveryMode === "arc"
+        ? arcTrajectoryHeight(options.grid, origin, target, index, path.length, options.arcHeight)
+        : null;
+      if (options.blocksByTerrain !== false && options.grid
+        && terrainBlocksDelivery(options.grid, cell, deliveryMode, projectileHeight)) {
+        result.firstImpactCell = copyCell(cell);
+        result.blocked = true;
+        result.stoppedReason ||= "terrain";
+        result.impactHeight = projectileHeight;
+        break;
+      }
+      const canCheckUnits = deliveryMode === "arc" || options.blocksByUnits !== false;
+      const unit = !canCheckUnits ? null : units.find((candidate) => unitIsAlive(candidate)
+        && (ignoreUnitId == null || String(candidate.id) !== String(ignoreUnitId))
+        && sameCell(cellOf(candidate), cell)
+        && (deliveryMode !== "arc" || arcIntersectsUnit(options.grid, cell, candidate, projectileHeight)));
+      if (unit) {
+        const firstUnitImpact = !result.firstImpactCell;
+        if (firstUnitImpact) result.firstImpactCell = copyCell(cell);
+        if (!result.actualTarget) result.actualTarget = unit;
+        result.candidateUnits.push(unit);
+        if (result.piercing || result.impactedUnits.length === 0) result.impactedUnits.push(unit);
+        result.blocked = true;
+        result.blockedBy ||= unit;
+        result.stoppedReason ||= "unit";
+        if (firstUnitImpact) result.impactHeight = projectileHeight;
+        const maxPierce = options.maxPierce == null ? Infinity : Math.max(1, Math.trunc(Number(options.maxPierce) || 1));
+        if (result.piercing && result.impactedUnits.length >= maxPierce) break;
+      }
+    }
+    return result;
+  }
+
+  function isWalkable(grid, cell, occupants = [], options = {}) {
+    if (terrainIsBlocked(grid, cell)) return false;
+    return !occupiedKeys(occupants, options.ignoreUnitId).has(cellKey(copyCell(cell)));
+  }
+
+  function neighbours(grid, cell) {
+    const result = [];
+    for (const direction of DIRECTIONS) {
+      const next = { x: cell.x + direction.x, y: cell.y + direction.y };
+      if (isInside(grid, next)) result.push(next);
+    }
+    return result;
+  }
+
+  function reconstructPath(parents, endKey) {
+    const path = [];
+    let key = endKey;
+    while (key != null) {
+      path.push(parseCellKey(key));
+      key = parents.get(key);
+    }
+    return path.reverse();
+  }
+
+  function movementPathCost(path, turnCost = .5) {
+    const route = Array.isArray(path) ? path.filter(validCell).map(copyCell) : [];
+    const options = typeof turnCost === "object" && turnCost
+      ? turnCost
+      : { turnCost, initialFacing: arguments[2] };
+    const turn = Math.max(0, finiteStat(options.turnCost, .5));
+    let cost = 0;
+    let previousDirection = normalizeFacing(options.initialFacing);
+    for (let index = 1; index < route.length; index += 1) {
+      if (manhattan(route[index - 1], route[index]) !== 1) return Infinity;
+      const direction = facingFromStep(route[index - 1], route[index]);
+      cost += 1;
+      if (previousDirection && direction !== previousDirection) cost += turn;
+      previousDirection = direction;
+    }
+    return cost;
+  }
+
+  function truncatePathByCost(path, budget, turnCost = .5) {
+    const route = Array.isArray(path) ? path.filter(validCell).map(copyCell) : [];
+    if (!route.length) return [];
+    const options = typeof turnCost === "object" && turnCost
+      ? turnCost
+      : { turnCost, initialFacing: arguments[3] };
+    const limit = Math.max(0, finiteStat(budget, 0));
+    const result = [route[0]];
+    for (let index = 1; index < route.length; index += 1) {
+      const candidate = [...result, route[index]];
+      if (movementPathCost(candidate, options) > limit + 1e-9) break;
+      result.push(route[index]);
+    }
+    return result;
+  }
+
+  function normalizeFacing(value) {
+    const facing = String(value || "").toLowerCase();
+    return Object.prototype.hasOwnProperty.call(FACING_VECTORS, facing) ? facing : null;
+  }
+
+  function facingQuarterTurns(fromFacing, toFacing) {
+    const order = ["up", "right", "down", "left"];
+    const from = order.indexOf(normalizeFacing(fromFacing));
+    const to = order.indexOf(normalizeFacing(toFacing));
+    if (from < 0 || to < 0) return 0;
+    const delta = Math.abs(from - to);
+    return Math.min(delta, 4 - delta);
+  }
+
+  function facingTurnCost(fromFacing, toFacing, quarterTurnCost = .5, footwork = false) {
+    const base = Math.max(0, finiteStat(quarterTurnCost, .5));
+    const quarters = facingQuarterTurns(fromFacing, toFacing);
+    if (footwork && quarters === 0) return base;
+    return quarters * base;
+  }
+
+  function movementEvents(path, options = {}) {
+    const route = Array.isArray(path) ? path.filter(validCell).map(copyCell) : [];
+    const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
+    let facing = normalizeFacing(options.initialFacing);
+    if (!facing && route.length > 1 && manhattan(route[0], route[1]) === 1) {
+      // Callers which pre-date facing-aware movement did not pay an implicit
+      // opening turn. Infer their first travel direction to preserve that API.
+      facing = facingFromStep(route[0], route[1]);
+    }
+    const initialFacing = facing;
+    const events = [];
+    let totalCost = 0;
+    for (let index = 1; index < route.length; index += 1) {
+      const from = route[index - 1];
+      const to = route[index];
+      const distance = manhattan(from, to);
+      if (distance === 0) {
+        events.push({ type: "wait", from: copyCell(from), to: copyCell(to), duration: 1, routeIndex: index });
+        totalCost += 1;
+        continue;
+      }
+      if (distance !== 1) {
+        events.push({ type: "invalid", from: copyCell(from), to: copyCell(to), duration: 0, routeIndex: index });
+        break;
+      }
+      const direction = facingFromStep(from, to, facing || "down");
+      if (facing && direction !== facing && turnCost > 0) {
+        const turnDuration = facingTurnCost(facing, direction, turnCost);
+        events.push({
+          type: "turn",
+          cell: copyCell(from),
+          fromFacing: facing,
+          facing: direction,
+          duration: turnDuration,
+          routeIndex: index,
+        });
+        totalCost += turnDuration;
+      }
+      facing = direction;
+      events.push({
+        type: "move",
+        from: copyCell(from),
+        to: copyCell(to),
+        facing: direction,
+        duration: 1,
+        routeIndex: index,
+      });
+      totalCost += 1;
+    }
+    return {
+      path: route,
+      initialFacing,
+      finalTravelFacing: facing,
+      events,
+      totalCost,
+    };
+  }
+
+  /**
+   * Builds a deterministic movement schedule from explicit player commands.
+   * Unlike destination pathfinding, commands preserve every tactical step:
+   * revisiting a cell still costs a full step and a facing command always
+   * spends the authored half-step turn/footwork cost, even when the unit stays
+   * on the same cell.
+   */
+  function movementCommandEvents(start, commands, options = {}) {
+    if (!validCell(start)) return { path: [], initialFacing: null, finalTravelFacing: null, events: [], totalCost: Infinity };
+    const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
+    let facing = normalizeFacing(options.initialFacing);
+    const initialFacing = facing;
+    let current = copyCell(start);
+    const path = [copyCell(current)];
+    const events = [];
+    let totalCost = 0;
+
+    for (let index = 0; index < (Array.isArray(commands) ? commands.length : 0); index += 1) {
+      const command = commands[index] || {};
+      if (command.type === "face" || command.type === "turn" || command.type === "wait") {
+        const requested = normalizeFacing(command.facing) || facing || "down";
+        if (turnCost <= 0) {
+          facing = requested;
+          continue;
+        }
+        const turnDuration = facingTurnCost(facing || requested, requested, turnCost, true);
+        events.push({
+          type: "turn",
+          cell: copyCell(current),
+          fromFacing: facing || requested,
+          facing: requested,
+          duration: turnDuration,
+          commandIndex: index,
+          footwork: true,
+        });
+        totalCost += turnDuration;
+        facing = requested;
+        continue;
+      }
+      if (command.type !== "move" || !validCell(command.to)) continue;
+      const to = copyCell(command.to);
+      if (manhattan(current, to) !== 1) {
+        events.push({ type: "invalid", from: copyCell(current), to, duration: 0, commandIndex: index });
+        break;
+      }
+      const direction = facingFromStep(current, to, facing || "down");
+      if (facing && direction !== facing && turnCost > 0) {
+        const turnDuration = facingTurnCost(facing, direction, turnCost);
+        events.push({
+          type: "turn",
+          cell: copyCell(current),
+          fromFacing: facing,
+          facing: direction,
+          duration: turnDuration,
+          commandIndex: index,
+        });
+        totalCost += turnDuration;
+      }
+      facing = direction;
+      events.push({
+        type: "move",
+        from: copyCell(current),
+        to: copyCell(to),
+        facing: direction,
+        duration: 1,
+        commandIndex: index,
+      });
+      totalCost += 1;
+      current = copyCell(to);
+      path.push(copyCell(current));
+    }
+
+    return { path, initialFacing, finalTravelFacing: facing, events, totalCost };
+  }
+
+  function movementCommandCost(start, commands, options = {}) {
+    return movementCommandEvents(start, commands, options).totalCost;
+  }
+
+  function reachableTilesWithTurns(grid, start, moveRange, occupants, options) {
+    const origin = copyCell(start);
+    const limit = Math.max(0, finiteStat(moveRange, 0));
+    const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
+    const occupied = occupiedKeys(occupants, options.ignoreUnitId);
+    occupied.delete(cellKey(origin));
+    const initialFacing = normalizeFacing(options.initialFacing);
+    const startState = `${cellKey(origin)}|${initialFacing || "none"}`;
+    const costs = new Map([[startState, 0]]);
+    const parents = new Map([[startState, null]]);
+    const cells = new Map([[startState, origin]]);
+    const directions = new Map([[startState, initialFacing]]);
+    const open = [startState];
+
+    const statePath = (stateKey) => {
+      const path = [];
+      let key = stateKey;
+      while (key != null) {
+        path.push(copyCell(cells.get(key)));
+        key = parents.get(key);
+      }
+      return path.reverse();
+    };
+
+    while (open.length) {
+      open.sort((left, right) => costs.get(left) - costs.get(right)
+        || cells.get(left).y - cells.get(right).y
+        || cells.get(left).x - cells.get(right).x
+        || String(directions.get(left) || "").localeCompare(String(directions.get(right) || "")));
+      const stateKey = open.shift();
+      const current = cells.get(stateKey);
+      const currentCost = costs.get(stateKey);
+      const previousDirection = directions.get(stateKey);
+      for (const next of neighbours(grid, current)) {
+        const key = cellKey(next);
+        if (terrainIsBlocked(grid, next) || occupied.has(key)) continue;
+        const direction = facingFromStep(current, next);
+        const nextCost = currentCost + 1 + (previousDirection && direction !== previousDirection ? facingTurnCost(previousDirection, direction, turnCost) : 0);
+        if (nextCost > limit + 1e-9) continue;
+        const nextState = `${key}|${direction}`;
+        const known = costs.get(nextState);
+        if (known != null && known < nextCost - 1e-9) continue;
+        if (known != null && Math.abs(known - nextCost) < 1e-9) {
+          const candidatePath = [...statePath(stateKey), copyCell(next)];
+          const knownPath = statePath(nextState);
+          if (compareStraightFirstPaths(candidatePath, knownPath, initialFacing) >= 0) continue;
+        }
+        costs.set(nextState, nextCost);
+        parents.set(nextState, stateKey);
+        cells.set(nextState, copyCell(next));
+        directions.set(nextState, direction);
+        if (!open.includes(nextState)) open.push(nextState);
+      }
+    }
+
+    const bestByCell = new Map();
+    for (const [stateKey, cost] of costs) {
+      const cell = cells.get(stateKey);
+      const key = cellKey(cell);
+      const candidate = { x: cell.x, y: cell.y, cost, path: statePath(stateKey) };
+      const known = bestByCell.get(key);
+      if (!known || candidate.cost < known.cost - 1e-9
+        || (Math.abs(candidate.cost - known.cost) < 1e-9
+          && compareStraightFirstPaths(candidate.path, known.path, initialFacing) < 0)) {
+        bestByCell.set(key, candidate);
+      }
+    }
+    const tiles = [...bestByCell.values()].sort(compareReachableTiles);
+    return options.includeStart === false ? tiles.filter((tile) => tile.cost > 0) : tiles;
+  }
+
+  function comparePaths(left, right) {
+    const length = Math.min(left.length, right.length);
+    for (let index = 0; index < length; index += 1) {
+      const order = left[index].y - right[index].y || left[index].x - right[index].x;
+      if (order) return order;
+    }
+    return left.length - right.length;
+  }
+
+  function pathTurnIndices(path, initialFacing = null) {
+    const route = Array.isArray(path) ? path : [];
+    let previousDirection = normalizeFacing(initialFacing);
+    const turns = [];
+    for (let index = 1; index < route.length; index += 1) {
+      if (manhattan(route[index - 1], route[index]) !== 1) continue;
+      const direction = facingFromStep(route[index - 1], route[index]);
+      if (previousDirection && direction !== previousDirection) turns.push(index);
+      previousDirection = direction;
+    }
+    return turns;
+  }
+
+  function compareStraightFirstPaths(left, right, initialFacing = null) {
+    const leftTurns = pathTurnIndices(left, initialFacing);
+    const rightTurns = pathTurnIndices(right, initialFacing);
+    if (leftTurns.length !== rightTurns.length) return leftTurns.length - rightTurns.length;
+    for (let index = 0; index < leftTurns.length; index += 1) {
+      // A later turn means the current straight segment was completed first.
+      if (leftTurns[index] !== rightTurns[index]) return rightTurns[index] - leftTurns[index];
+    }
+    return comparePaths(left, right);
+  }
+
+  function reachableTiles(grid, start, moveRange, occupants = [], options = {}) {
+    if (!validCell(start) || !isInside(grid, start) || terrainIsBlocked(grid, start)) return [];
+    if (finiteStat(options.turnCost, 0) > 0) {
+      return reachableTilesWithTurns(grid, start, moveRange, occupants, options);
+    }
+    const origin = copyCell(start);
+    const limit = Math.max(0, Math.trunc(Number(moveRange) || 0));
+    const occupied = occupiedKeys(occupants, options.ignoreUnitId);
+    occupied.delete(cellKey(origin));
+    const originKey = cellKey(origin);
+    const queue = [origin];
+    const distances = new Map([[originKey, 0]]);
+    const parents = new Map([[originKey, null]]);
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index];
+      const cost = distances.get(cellKey(current));
+      if (cost >= limit) continue;
+      for (const next of neighbours(grid, current)) {
+        const key = cellKey(next);
+        if (distances.has(key) || terrainIsBlocked(grid, next) || occupied.has(key)) continue;
+        distances.set(key, cost + 1);
+        parents.set(key, cellKey(current));
+        queue.push(next);
+      }
+    }
+
+    const tiles = [...distances.entries()].map(([key, cost]) => {
+      const cell = parseCellKey(key);
+      return { x: cell.x, y: cell.y, cost, path: reconstructPath(parents, key) };
+    });
+    tiles.sort(compareReachableTiles);
+    return options.includeStart === false ? tiles.filter((tile) => tile.cost > 0) : tiles;
+  }
+
+  function compareReachableTiles(a, b) {
+    return a.cost - b.cost || a.y - b.y || a.x - b.x;
+  }
+
+  function findPath(grid, start, goal, occupants = [], options = {}) {
+    if (!validCell(start) || !validCell(goal) || !isInside(grid, start) || !isInside(grid, goal)) return [];
+    const origin = copyCell(start);
+    const destination = copyCell(goal);
+    if (terrainIsBlocked(grid, origin) || terrainIsBlocked(grid, destination)) return [];
+    const startKey = cellKey(origin);
+    const goalKey = cellKey(destination);
+    if (startKey === goalKey) return [origin];
+
+    const occupied = occupiedKeys(occupants, options.ignoreUnitId);
+    occupied.delete(startKey);
+    if (options.allowGoalOccupied) occupied.delete(goalKey);
+    if (occupied.has(goalKey)) return [];
+
+    if (finiteStat(options.turnCost, 0) > 0) {
+      const turnCost = Math.max(0, finiteStat(options.turnCost, .5));
+      const maximumCost = Number.isFinite(options.maxDistance)
+        ? Math.max(0, Number(options.maxDistance))
+        : grid.width * grid.height * (1 + turnCost);
+      const candidates = reachableTilesWithTurns(grid, origin, maximumCost, occupied, {
+        includeStart: true,
+        turnCost,
+        initialFacing: options.initialFacing,
+      }).filter((tile) => tile.x === destination.x && tile.y === destination.y);
+      return candidates[0]?.path || [];
+    }
+
+    const maxDistance = Number.isFinite(options.maxDistance)
+      ? Math.max(0, Math.trunc(options.maxDistance))
+      : Infinity;
+    const queue = [origin];
+    const distances = new Map([[startKey, 0]]);
+    const parents = new Map([[startKey, null]]);
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index];
+      const currentKey = cellKey(current);
+      const distance = distances.get(currentKey);
+      if (distance >= maxDistance) continue;
+      for (const next of neighbours(grid, current)) {
+        const key = cellKey(next);
+        if (distances.has(key) || terrainIsBlocked(grid, next) || occupied.has(key)) continue;
+        parents.set(key, currentKey);
+        distances.set(key, distance + 1);
+        if (key === goalKey) return reconstructPath(parents, goalKey);
+        queue.push(next);
+      }
+    }
+    return [];
+  }
+
+  function resolveLegacySimultaneousMovement({ grid, units = [], routes = {}, priorityUnitId = null } = {}) {
+    const actors = (Array.isArray(units) ? units : []).filter(unitIsAlive).filter((unit) => cellOf(unit));
+    const routeFor = (id) => routes instanceof Map ? routes.get(id) : routes && routes[id];
+    const normalizedRoutes = new Map();
+    for (const actor of actors) {
+      const start = cellOf(actor);
+      const supplied = Array.isArray(routeFor(actor.id)) ? routeFor(actor.id).filter(validCell).map(copyCell) : [];
+      if (!supplied.length || !sameCell(supplied[0], start)) supplied.unshift(copyCell(start));
+      normalizedRoutes.set(actor.id, supplied);
+    }
+    const positions = new Map(actors.map((unit) => [unit.id, cellOf(unit)]));
+    const snapshot = () => Object.fromEntries([...positions].map(([id, cell]) => [id, copyCell(cell)]));
+    const frames = [snapshot()];
+    const cancelled = new Set();
+    const maximumSteps = Math.max(0, ...[...normalizedRoutes.values()].map((route) => route.length - 1));
+
+    for (let step = 1; step <= maximumSteps; step += 1) {
+      const intentions = new Map();
+      for (const actor of actors) {
+        const current = positions.get(actor.id);
+        const route = normalizedRoutes.get(actor.id);
+        const proposed = cancelled.has(actor.id) ? current : route[Math.min(step, route.length - 1)];
+        if (!proposed || manhattan(current, proposed) > 1 || (grid && terrainIsBlocked(grid, proposed))) {
+          cancelled.add(actor.id);
+          intentions.set(actor.id, copyCell(current));
+        } else intentions.set(actor.id, copyCell(proposed));
+      }
+
+      const stopAtCurrentCell = (id) => {
+        const current = positions.get(id);
+        const proposed = intentions.get(id);
+        cancelled.add(id);
+        if (sameCell(proposed, current)) return false;
+        intentions.set(id, copyCell(current));
+        return true;
+      };
+
+      let changed = true;
+      let collisionPasses = 0;
+      while (changed && collisionPasses < actors.length * 4 + 4) {
+        collisionPasses += 1;
+        changed = false;
+
+        // Several actors may propose the same cell only when it will be empty
+        // after this frame. The priority actor may win that empty cell; every
+        // other contender stops at its own previous cell. A unit already
+        // staying on the target always keeps it, regardless of priority.
+        const targetGroups = new Map();
+        for (const actor of actors) {
+          const key = cellKey(intentions.get(actor.id));
+          if (!targetGroups.has(key)) targetGroups.set(key, []);
+          targetGroups.get(key).push(actor.id);
+        }
+        for (const ids of targetGroups.values()) {
+          if (ids.length < 2) continue;
+          const stationary = ids.filter((id) => sameCell(intentions.get(id), positions.get(id)));
+          const priority = stationary.length === 0
+            ? ids.find((id) => priorityUnitId != null && String(id) === String(priorityUnitId))
+            : null;
+          for (const id of ids) {
+            cancelled.add(id);
+            if (priority != null && id === priority) continue;
+            changed = stopAtCurrentCell(id) || changed;
+          }
+        }
+
+        // A head-on exchange is not movement through one another. Both units
+        // remain in their last legal cells and their remaining routes end.
+        for (let firstIndex = 0; firstIndex < actors.length; firstIndex += 1) {
+          for (let secondIndex = firstIndex + 1; secondIndex < actors.length; secondIndex += 1) {
+            const first = actors[firstIndex].id;
+            const second = actors[secondIndex].id;
+            if (!sameCell(intentions.get(first), positions.get(second)) || !sameCell(intentions.get(second), positions.get(first))
+              || sameCell(positions.get(first), positions.get(second))) continue;
+            changed = stopAtCurrentCell(first) || changed;
+            changed = stopAtCurrentCell(second) || changed;
+          }
+        }
+
+        // Collision decisions can make a formerly moving occupant stay put.
+        // Propagate that reservation backwards through followers so nobody can
+        // end the frame on the same square as the stopped unit.
+        const occupantByCell = new Map(actors.map((actor) => [cellKey(positions.get(actor.id)), actor.id]));
+        for (const actor of actors) {
+          const id = actor.id;
+          const proposed = intentions.get(id);
+          if (sameCell(proposed, positions.get(id))) continue;
+          const occupantId = occupantByCell.get(cellKey(proposed));
+          if (occupantId == null || occupantId === id) continue;
+          if (!sameCell(intentions.get(occupantId), positions.get(occupantId))) continue;
+          changed = stopAtCurrentCell(id) || changed;
+          cancelled.add(occupantId);
+        }
+      }
+
+      // Valid input positions are unique, and the resolver must preserve that
+      // invariant on every frame. Keep this guard close to the state update so
+      // future collision-rule changes cannot silently reintroduce overlap.
+      const finalCells = new Set();
+      for (const actor of actors) {
+        const key = cellKey(intentions.get(actor.id));
+        if (finalCells.has(key)) {
+          throw new Error(`Movement collision resolver produced an occupied cell: ${key}`);
+        }
+        finalCells.add(key);
+      }
+
+      for (const actor of actors) positions.set(actor.id, copyCell(intentions.get(actor.id)));
+      frames.push(snapshot());
+    }
+    return { actors: actors.map((unit) => unit.id), frames, cancelled: [...cancelled] };
+  }
+
+  function resolveTimedSimultaneousMovement({
+    grid,
+    units = [],
+    routes = {},
+    priorityUnitId = null,
+    turnCost = .5,
+    finalFacings = {},
+    friendlyRetryDelay = .25,
+  } = {}) {
+    const actors = (Array.isArray(units) ? units : []).filter(unitIsAlive).filter((unit) => cellOf(unit));
+    const valueFor = (collection, id) => collection instanceof Map ? collection.get(id) : collection && collection[id];
+    const cancelled = new Set();
+    const states = new Map();
+    const retryDelay = Math.max(.05, finiteStat(friendlyRetryDelay, .25));
+
+    for (const actor of actors) {
+      const start = cellOf(actor);
+      const routeValue = valueFor(routes, actor.id);
+      const suppliedPath = Array.isArray(routeValue) ? routeValue : routeValue?.path;
+      const route = Array.isArray(suppliedPath) ? suppliedPath.filter(validCell).map(copyCell) : [];
+      if (!route.length || !sameCell(route[0], start)) route.unshift(copyCell(start));
+      const actorTurnCost = Math.max(0, finiteStat(routeValue?.turnCost, finiteStat(actor.turnCost, turnCost)));
+      const explicitCommands = Array.isArray(routeValue?.commands) ? routeValue.commands : null;
+      const schedule = explicitCommands
+        ? movementCommandEvents(start, explicitCommands, { initialFacing: actor.facing, turnCost: actorTurnCost })
+        : movementEvents(route, { initialFacing: actor.facing, turnCost: actorTurnCost });
+      const requestedFinalFacing = normalizeFacing(routeValue?.finalFacing || valueFor(finalFacings, actor.id));
+      states.set(actor.id, {
+        id: actor.id,
+        actor,
+        team: String(actor.side ?? actor.team ?? ""),
+        weight: finiteStat(actor.weight, 0),
+        initiative: finiteStat(actor.initiative, finiteStat(actor.speed, 0)),
+        position: copyCell(start),
+        renderCell: copyCell(start),
+        facing: schedule.initialFacing || normalizeFacing(actor.facing) || "down",
+        requestedFinalFacing,
+        schedule,
+        eventIndex: 0,
+        active: null,
+        completedPath: [copyCell(start)],
+        elapsedCost: 0,
+        blocked: false,
+        blockReason: null,
+        blockedBy: new Set(),
+        routeCancelled: false,
+        completed: false,
+        friendlyWaits: 0,
+      });
+    }
+
+    const log = [];
+    const addLog = (time, state, type, details = {}) => {
+      log.push({ time, unitId: state.id, type, ...details });
+    };
+    const sameTeam = (first, second) => Boolean(first && second && first.team && second.team && first.team === second.team);
+    const hasRouteRemaining = (state) => Boolean(state && !state.blocked && !state.routeCancelled && !state.completed
+      && (state.active || state.eventIndex < state.schedule.events.length));
+    const pendingMoveEvent = (state) => {
+      if (!state || state.blocked || state.routeCancelled) return null;
+      if (state.active?.type === "move") return state.active;
+      // A friendly traffic wait retries the SAME scheduled move.  Peek through
+      // that temporary wait so a teammate approaching from the other side can
+      // still recognise a reciprocal head-on pass and break the wait cycle.
+      if (state.active && state.active.type !== "friendly-wait") return null;
+      const event = state.schedule.events[state.eventIndex];
+      return event?.type === "move" ? event : null;
+    };
+    const friendlyPriority = (ids) => [...ids].sort((leftId, rightId) => {
+      const left = states.get(leftId);
+      const right = states.get(rightId);
+      return finiteStat(left?.weight, 0) - finiteStat(right?.weight, 0)
+        || (String(leftId) === String(priorityUnitId) ? -1 : 0)
+        || (String(rightId) === String(priorityUnitId) ? 1 : 0)
+        || finiteStat(right?.initiative, 0) - finiteStat(left?.initiative, 0)
+        || String(leftId).localeCompare(String(rightId));
+    })[0];
+
+    const markBlocked = (state, reason, blockers = [], time = 0) => {
+      if (!state) return false;
+      const firstBlock = !state.blocked;
+      state.blocked = true;
+      state.completed = false;
+      state.routeCancelled = true;
+      state.blockReason = state.blockReason || reason;
+      for (const id of blockers) {
+        if (id != null && String(id) !== String(state.id)) state.blockedBy.add(id);
+      }
+      cancelled.add(state.id);
+      if (firstBlock) addLog(time, state, "blocked", { reason, blockedBy: [...state.blockedBy] });
+      return firstBlock;
+    };
+
+    const finishIfDone = (state, time) => {
+      if (state.completed || state.blocked || state.routeCancelled || state.active || state.eventIndex < state.schedule.events.length) return;
+      state.completed = true;
+      if (state.requestedFinalFacing) state.facing = state.requestedFinalFacing;
+      addLog(time, state, "complete", { cell: copyCell(state.position), facing: state.facing });
+    };
+
+    const startNextEvent = (state, time) => {
+      if (state.blocked || state.routeCancelled || state.active) return;
+      while (state.eventIndex < state.schedule.events.length) {
+        const event = state.schedule.events[state.eventIndex];
+        if (event.type === "invalid") {
+          markBlocked(state, "invalid-route", [], time);
+          return;
+        }
+        if (event.duration <= 0) {
+          if (event.type === "turn") state.facing = event.facing;
+          state.eventIndex += 1;
+          continue;
+        }
+        state.active = { ...event, startTime: time, endTime: time + event.duration };
+        return;
+      }
+      finishIfDone(state, time);
+    };
+
+    for (const state of states.values()) startNextEvent(state, 0);
+
+    const snapshot = (time, events = []) => {
+      const positions = {};
+      const renderCells = {};
+      const facings = {};
+      for (const state of states.values()) {
+        positions[state.id] = copyCell(state.position);
+        facings[state.id] = state.facing;
+        if (state.active?.type === "move" && !state.blocked) {
+          const duration = Math.max(1e-9, state.active.duration);
+          const progress = Math.max(0, Math.min(1, (time - state.active.startTime) / duration));
+          renderCells[state.id] = {
+            x: state.active.from.x + (state.active.to.x - state.active.from.x) * progress,
+            y: state.active.from.y + (state.active.to.y - state.active.from.y) * progress,
+          };
+        } else renderCells[state.id] = copyCell(state.position);
+      }
+      return { time, positions, renderCells, facings, events };
+    };
+
+    const timeline = [snapshot(0)];
+    let time = 0;
+    let guard = 0;
+    while (guard < 10000) {
+      guard += 1;
+      const activeStates = [...states.values()].filter((state) => state.active && !state.blocked && !state.routeCancelled);
+      if (!activeStates.length) break;
+      const nextTime = Math.min(...activeStates.map((state) => state.active.endTime));
+      const completedNow = activeStates.filter((state) => Math.abs(state.active.endTime - nextTime) < 1e-9);
+      const tickLogStart = log.length;
+
+      // Friendly traffic waits are temporal only: they do not spend movement
+      // budget and, crucially, they do not cancel the remaining route.  Once
+      // the short wait expires the exact same scheduled step is retried.
+      for (const state of completedNow) {
+        const action = state.active;
+        if (action?.type !== "friendly-wait" && action?.type !== "friendly-delay") continue;
+        state.active = null;
+        addLog(nextTime, state, "friendly-resume", { waited: action.duration, blockedBy: action.blockedBy || [], afterPass: action.type === "friendly-delay" });
+      }
+
+      // A completed turn changes facing before movement due at this same
+      // instant is checked. It still leaves the unit occupying its old cell.
+      for (const state of completedNow) {
+        const action = state.active;
+        if (!action || action.type !== "turn") continue;
+        state.facing = action.facing;
+        state.elapsedCost += action.duration;
+        state.eventIndex += 1;
+        state.active = null;
+        addLog(nextTime, state, "turn", { facing: state.facing, cost: action.duration });
+      }
+      for (const state of completedNow) {
+        const action = state.active;
+        if (!action || action.type !== "wait") continue;
+        state.elapsedCost += action.duration;
+        state.eventIndex += 1;
+        state.active = null;
+        addLog(nextTime, state, "wait", { cell: copyCell(state.position), cost: action.duration });
+      }
+
+      const completingMovers = completedNow.filter((state) => state.active?.type === "move");
+      const completingIds = new Set(completingMovers.map((state) => state.id));
+      const forcedFriendlySwaps = new Set();
+      const permittedFriendlySwapPairs = new Set();
+      const friendlySwapParticipants = new Set();
+      const postSwapWaitById = new Map();
+      const friendlyPairKey = (leftId, rightId) => [String(leftId), String(rightId)].sort().join("\u0000");
+      const permitFriendlySwap = (leftId, rightId) => {
+        permittedFriendlySwapPairs.add(friendlyPairKey(leftId, rightId));
+        friendlySwapParticipants.add(leftId);
+        friendlySwapParticipants.add(rightId);
+        const priority = friendlyPriority([leftId, rightId]);
+        const yieldingId = String(priority) === String(leftId) ? rightId : leftId;
+        postSwapWaitById.set(yieldingId, [priority]);
+      };
+      const isPermittedFriendlySwap = (leftId, rightId) => permittedFriendlySwapPairs.has(friendlyPairKey(leftId, rightId));
+      const intentions = new Map([...states.values()].map((state) => [state.id, copyCell(state.position)]));
+      const collisionPeers = new Map();
+      const friendlyPaused = new Set();
+      const rememberPeers = (id, peers) => {
+        if (!collisionPeers.has(id)) collisionPeers.set(id, new Set());
+        for (const peer of peers) if (String(peer) !== String(id)) collisionPeers.get(id).add(peer);
+      };
+
+      for (const state of completingMovers) {
+        const target = state.active.to;
+        if (!target || manhattan(state.position, target) !== 1) {
+          markBlocked(state, "invalid-route", [], nextTime);
+        } else if (grid && terrainIsBlocked(grid, target)) {
+          markBlocked(state, "terrain", [], nextTime);
+        } else intentions.set(state.id, copyCell(target));
+      }
+
+      const stopAtCurrentCell = (id, peers = [], reason = "unit-collision") => {
+        const state = states.get(id);
+        const proposed = intentions.get(id);
+        rememberPeers(id, peers);
+        const newlyBlocked = markBlocked(state, reason, peers, nextTime);
+        intentions.set(id, copyCell(state.position));
+        return newlyBlocked || !sameCell(proposed, state.position);
+      };
+      const pauseAtCurrentCell = (id, peers = []) => {
+        const state = states.get(id);
+        if (!state || state.blocked || state.routeCancelled) return false;
+        const proposed = intentions.get(id);
+        rememberPeers(id, peers);
+        friendlyPaused.add(id);
+        intentions.set(id, copyCell(state.position));
+        return !sameCell(proposed, state.position);
+      };
+
+      // Resolve friendly reciprocal/head-on traffic BEFORE generic target
+      // grouping. Two allies are allowed to exchange cells: this represents
+      // passing one another rather than becoming permanent blockers.  If both
+      // steps finish together, swap them immediately. If timings differ, the
+      // lighter/higher-priority unit controls the pass; the other unit yields
+      // briefly AFTER the exchange and then continues its untouched route.
+      const startOccupants = new Map([...states.values()].map((state) => [cellKey(state.position), state.id]));
+      const inspectedFriendlyPairs = new Set();
+      for (const state of [...completingMovers]) {
+        const proposed = intentions.get(state.id);
+        if (sameCell(proposed, state.position)) continue;
+        const occupantId = startOccupants.get(cellKey(proposed));
+        if (occupantId == null || occupantId === state.id) continue;
+        const occupant = states.get(occupantId);
+        const reciprocalMove = pendingMoveEvent(occupant);
+        if (!sameTeam(state, occupant) || !reciprocalMove || !sameCell(reciprocalMove.to, state.position)) continue;
+        const pairKey = friendlyPairKey(state.id, occupantId);
+        if (inspectedFriendlyPairs.has(pairKey)) continue;
+        inspectedFriendlyPairs.add(pairKey);
+
+        const occupantCompletesNow = completingIds.has(occupantId)
+          && occupant.active?.type === "move"
+          && Math.abs(occupant.active.endTime - nextTime) < 1e-9;
+        if (occupantCompletesNow) {
+          intentions.set(occupantId, copyCell(reciprocalMove.to));
+          permitFriendlySwap(state.id, occupantId);
+          continue;
+        }
+
+        const priority = friendlyPriority([state.id, occupantId]);
+        if (String(priority) !== String(state.id)) {
+          pauseAtCurrentCell(state.id, [occupantId]);
+          continue;
+        }
+
+        // The priority ally arrives first. Complete the reciprocal teammate's
+        // pending step at this instant so the exchange never requires either
+        // unit to occupy the same logical cell. Its remaining route survives.
+        if (!occupant.active || occupant.active.type === "friendly-wait") {
+          occupant.active = { ...reciprocalMove, startTime: nextTime, endTime: nextTime };
+        }
+        intentions.set(occupantId, copyCell(reciprocalMove.to));
+        if (!completingIds.has(occupantId)) {
+          completingIds.add(occupantId);
+          completingMovers.push(occupant);
+          forcedFriendlySwaps.add(occupantId);
+        }
+        permitFriendlySwap(state.id, occupantId);
+      }
+
+      let changed = true;
+      let collisionPasses = 0;
+      while (changed && collisionPasses < actors.length * 6 + 8) {
+        collisionPasses += 1;
+        changed = false;
+        const targetGroups = new Map();
+        for (const state of states.values()) {
+          const key = cellKey(intentions.get(state.id));
+          if (!targetGroups.has(key)) targetGroups.set(key, []);
+          targetGroups.get(key).push(state.id);
+        }
+
+        for (const ids of targetGroups.values()) {
+          if (ids.length < 2) continue;
+          const groupStates = ids.map((id) => states.get(id));
+          const allFriendly = groupStates.every((state) => sameTeam(groupStates[0], state));
+          const stationary = ids.filter((id) => !completingIds.has(id) || sameCell(intentions.get(id), states.get(id).position));
+
+          if (allFriendly) {
+            if (stationary.length) {
+              const holderIds = stationary;
+              for (const id of ids) {
+                if (holderIds.includes(id) || friendlyPaused.has(id)) continue;
+                // A permitted reciprocal pass is already resolved as a pair;
+                // do not reinterpret one half as a stationary blocker merely
+                // because the other half was forced to this completion tick.
+                if (holderIds.some((holderId) => isPermittedFriendlySwap(id, holderId))) continue;
+                const holders = holderIds.map((holderId) => states.get(holderId));
+                const willClear = holders.every((holder) => hasRouteRemaining(holder));
+                changed = (willClear
+                  ? pauseAtCurrentCell(id, holderIds)
+                  : stopAtCurrentCell(id, holderIds, "friendly-route-blocked")) || changed;
+              }
+              continue;
+            }
+            // A reciprocal friendly pass reserves both exchange cells for
+            // that tick. A third teammate arriving at one of those cells must
+            // yield, otherwise breaking the swap would strand the other half
+            // and can create a three-unit deadlock.
+            const swapContenders = ids.filter((id) => friendlySwapParticipants.has(id));
+            const winner = swapContenders.length ? friendlyPriority(swapContenders) : friendlyPriority(ids);
+            for (const id of ids) {
+              if (id === winner || friendlyPaused.has(id)) continue;
+              changed = pauseAtCurrentCell(id, ids.filter((other) => other !== id)) || changed;
+            }
+            continue;
+          }
+
+          // Opposing teams use arrival/vacate timing, not a static occupancy
+          // snapshot. At this tick every non-stationary member is ARRIVING at
+          // the grouped cell. A unit which still occupies that cell only owns
+          // it safely when it has no later route to vacate. If it was planning
+          // to leave AFTER the opponent arrives, the earlier claim pins that
+          // occupant as well: neither side may pass through the other.
+          //
+          // When the cell starts empty (stationary.length === 0), the first
+          // arrival already won on an earlier resolver tick. Exact-time ties
+          // are resolved by priorityUnitId (the player in the current battle).
+          if (stationary.length) {
+            for (const holderId of stationary) {
+              const holder = states.get(holderId);
+              const opposingArrivals = ids.filter((id) => id !== holderId
+                && !stationary.includes(id)
+                && !sameTeam(holder, states.get(id)));
+              if (opposingArrivals.length && hasRouteRemaining(holder)) {
+                changed = stopAtCurrentCell(holderId, opposingArrivals, "opponent-pin") || changed;
+              }
+            }
+            for (const id of ids) {
+              if (stationary.includes(id)) continue;
+              changed = stopAtCurrentCell(id, ids.filter((other) => other !== id), "unit-collision") || changed;
+            }
+            continue;
+          }
+
+          const priority = ids.find((id) => priorityUnitId != null && String(id) === String(priorityUnitId));
+          for (const id of ids) {
+            if (priority != null && id === priority) continue;
+            changed = stopAtCurrentCell(id, ids.filter((other) => other !== id), "contested") || changed;
+          }
+        }
+
+        // A permitted friendly exchange is atomic from the occupancy point of
+        // view. If one half is later stopped by a third unit/opponent during
+        // this same collision pass, the partner cannot enter the cell that was
+        // supposed to be vacated. Propagate that failure before finalising the
+        // tick; the outer collision loop will then re-evaluate any followers.
+        for (const pairKey of permittedFriendlySwapPairs) {
+          const [leftId, rightId] = pairKey.split("\u0000");
+          const left = states.get(leftId);
+          const right = states.get(rightId);
+          if (!left || !right) continue;
+          const leftStays = sameCell(intentions.get(leftId), left.position);
+          const rightStays = sameCell(intentions.get(rightId), right.position);
+          if (leftStays && !rightStays && sameCell(intentions.get(rightId), left.position)) {
+            changed = (left.blocked
+              ? stopAtCurrentCell(rightId, [leftId], "friendly-route-blocked")
+              : pauseAtCurrentCell(rightId, [leftId])) || changed;
+          }
+          if (rightStays && !leftStays && sameCell(intentions.get(leftId), right.position)) {
+            changed = (right.blocked
+              ? stopAtCurrentCell(leftId, [rightId], "friendly-route-blocked")
+              : pauseAtCurrentCell(leftId, [rightId])) || changed;
+          }
+        }
+
+        const stateList = [...states.values()];
+        for (let firstIndex = 0; firstIndex < stateList.length; firstIndex += 1) {
+          for (let secondIndex = firstIndex + 1; secondIndex < stateList.length; secondIndex += 1) {
+            const first = stateList[firstIndex];
+            const second = stateList[secondIndex];
+            if (!completingIds.has(first.id) || !completingIds.has(second.id)
+              || !sameCell(intentions.get(first.id), second.position)
+              || !sameCell(intentions.get(second.id), first.position)
+              || sameCell(first.position, second.position)) continue;
+            if (sameTeam(first, second)) {
+              // Friendly head-on traffic may pass through/swap.  End-of-tick
+              // cells remain unique, neither route is cancelled, and the
+              // lower-priority (normally heavier) unit yields briefly after
+              // the exchange before starting its next scheduled action.
+              if (!isPermittedFriendlySwap(first.id, second.id)) permitFriendlySwap(first.id, second.id);
+              continue;
+            }
+            changed = stopAtCurrentCell(first.id, [second.id]) || changed;
+            changed = stopAtCurrentCell(second.id, [first.id]) || changed;
+          }
+        }
+
+        const occupantByCell = new Map([...states.values()].map((state) => [cellKey(state.position), state.id]));
+        for (const state of states.values()) {
+          const proposed = intentions.get(state.id);
+          if (sameCell(proposed, state.position)) continue;
+          const occupantId = occupantByCell.get(cellKey(proposed));
+          if (occupantId == null || occupantId === state.id) continue;
+          const occupant = states.get(occupantId);
+          if (!sameCell(intentions.get(occupantId), occupant.position)) continue;
+          if (sameTeam(state, occupant)) {
+            if (isPermittedFriendlySwap(state.id, occupantId)) continue;
+            const reciprocalMove = pendingMoveEvent(occupant);
+            const reciprocal = reciprocalMove && sameCell(reciprocalMove.to, state.position);
+            if (reciprocal) {
+              // Any reciprocal exchange that reaches this late collision pass
+              // was not ready in the pre-pass.  Let the higher-priority ally
+              // drive the exchange; otherwise this unit waits and retries.
+              const priority = friendlyPriority([state.id, occupantId]);
+              if (String(priority) === String(state.id)) {
+                if (!occupant.active || occupant.active.type === "friendly-wait") {
+                  occupant.active = { ...reciprocalMove, startTime: nextTime, endTime: nextTime };
+                }
+                intentions.set(occupantId, copyCell(reciprocalMove.to));
+                if (!completingIds.has(occupantId)) {
+                  completingIds.add(occupantId);
+                  completingMovers.push(occupant);
+                  forcedFriendlySwaps.add(occupantId);
+                }
+                permitFriendlySwap(state.id, occupantId);
+                changed = true;
+                continue;
+              }
+              changed = pauseAtCurrentCell(state.id, [occupantId]) || changed;
+              continue;
+            }
+            changed = (hasRouteRemaining(occupant)
+              ? pauseAtCurrentCell(state.id, [occupantId])
+              : stopAtCurrentCell(state.id, [occupantId], "friendly-route-blocked")) || changed;
+            continue;
+          }
+          changed = stopAtCurrentCell(state.id, [occupantId]) || changed;
+          stopAtCurrentCell(occupantId, [state.id]);
+        }
+      }
+
+      const finalCells = new Set();
+      for (const state of states.values()) {
+        const key = cellKey(intentions.get(state.id));
+        if (finalCells.has(key)) throw new Error(`Timed movement collision resolver produced an occupied cell: ${key}`);
+        finalCells.add(key);
+      }
+
+      for (const state of completingMovers) {
+        const action = state.active;
+        if (!action) continue;
+        if (friendlyPaused.has(state.id) && !state.blocked) {
+          state.friendlyWaits += 1;
+          state.active = {
+            type: "friendly-wait",
+            duration: retryDelay,
+            startTime: nextTime,
+            endTime: nextTime + retryDelay,
+            blockedBy: [...(collisionPeers.get(state.id) || [])],
+          };
+          addLog(nextTime, state, "friendly-wait", { blockedBy: state.active.blockedBy, duration: retryDelay });
+          continue;
+        }
+        state.elapsedCost += action.duration;
+        if (!state.blocked && sameCell(intentions.get(state.id), action.to)) {
+          state.position = copyCell(action.to);
+          state.facing = action.facing;
+          state.completedPath.push(copyCell(action.to));
+          state.eventIndex += 1;
+          addLog(nextTime, state, "move", {
+            from: copyCell(action.from), to: copyCell(action.to), facing: state.facing, cost: action.duration,
+            ...(forcedFriendlySwaps.has(state.id) || friendlySwapParticipants.has(state.id) ? { friendlyPass: true } : {}),
+          });
+        }
+        state.active = null;
+        const postSwapBlockers = postSwapWaitById.get(state.id);
+        if (!state.blocked && postSwapBlockers && sameCell(state.position, action.to)) {
+          state.friendlyWaits += 1;
+          state.active = {
+            type: "friendly-delay",
+            duration: retryDelay,
+            startTime: nextTime,
+            endTime: nextTime + retryDelay,
+            blockedBy: postSwapBlockers,
+          };
+          addLog(nextTime, state, "friendly-wait", { blockedBy: postSwapBlockers, duration: retryDelay, afterPass: true });
+        }
+      }
+
+      // A unit may be hit while it is still turning or half-way through a
+      // step. It never vacated its logical source cell, so discard that action
+      // and charge only the elapsed fraction before a HARD STOP. Friendly
+      // traffic waits are deliberately excluded because their route survives.
+      for (const state of states.values()) {
+        if (!state.blocked || !state.active) continue;
+        state.elapsedCost += Math.max(0, nextTime - state.active.startTime);
+        state.active = null;
+      }
+
+      for (const state of states.values()) startNextEvent(state, nextTime);
+      time = nextTime;
+      timeline.push(snapshot(time, log.slice(tickLogStart)));
+    }
+    if (guard >= 10000) throw new Error("Timed movement resolver exceeded its safety limit.");
+
+    const unitResults = {};
+    for (const state of states.values()) {
+      finishIfDone(state, time);
+      unitResults[state.id] = {
+        id: state.id,
+        start: copyCell(state.schedule.path[0] || state.position),
+        cell: copyCell(state.position),
+        completedPath: state.completedPath.map(copyCell),
+        facing: state.facing,
+        blocked: state.blocked,
+        blockReason: state.blockReason,
+        blockedBy: [...state.blockedBy],
+        completed: state.completed,
+        elapsedCost: state.elapsedCost,
+        friendlyWaits: state.friendlyWaits,
+      };
+    }
+    return {
+      actors: actors.map((unit) => unit.id),
+      frames: timeline.map((frame) => frame.positions),
+      frameTimes: timeline.map((frame) => frame.time),
+      timeline,
+      events: log,
+      cancelled: [...cancelled],
+      unitResults,
+    };
+  }
+
+  function resolveSimultaneousMovement(options = {}) {
+    return options && (options.timed === true || options.temporal === true)
+      ? resolveTimedSimultaneousMovement(options)
+      : resolveLegacySimultaneousMovement(options);
+  }
+
+  function attackTiles(grid, origin, maxRange = 1, minRange = 1) {
+    if (!validCell(origin) || !isInside(grid, origin)) return [];
+    const center = copyCell(origin);
+    const maximum = Math.max(0, Math.trunc(Number(maxRange) || 0));
+    const minimum = Math.min(maximum, Math.max(0, Math.trunc(Number(minRange) || 0)));
+    const cells = [];
+    for (let y = Math.max(0, center.y - maximum); y <= Math.min(grid.height - 1, center.y + maximum); y += 1) {
+      for (let x = Math.max(0, center.x - maximum); x <= Math.min(grid.width - 1, center.x + maximum); x += 1) {
+        const distance = manhattan(center, { x, y });
+        if (distance >= minimum && distance <= maximum) cells.push({ x, y, distance });
+      }
+    }
+    cells.sort((a, b) => a.distance - b.distance || a.y - b.y || a.x - b.x);
+    return cells;
+  }
+
+  function isInAttackRange(origin, target, maxRange = 1, minRange = 1) {
+    const distance = manhattan(origin, target);
+    const maximum = Math.max(0, Math.trunc(Number(maxRange) || 0));
+    const minimum = Math.min(maximum, Math.max(0, Math.trunc(Number(minRange) || 0)));
+    return distance >= minimum && distance <= maximum;
+  }
+
+  function buildTurnOrder(units) {
+    return (Array.isArray(units) ? units : [])
+      .map((unit, index) => ({ unit, index }))
+      .filter(({ unit }) => unitIsAlive(unit))
+      .sort((a, b) => {
+        const initiativeA = finiteStat(a.unit.initiative, finiteStat(a.unit.speed, 0));
+        const initiativeB = finiteStat(b.unit.initiative, finiteStat(b.unit.speed, 0));
+        const priorityA = finiteStat(a.unit.turnPriority, 0);
+        const priorityB = finiteStat(b.unit.turnPriority, 0);
+        return initiativeB - initiativeA || priorityB - priorityA || String(a.unit.id).localeCompare(String(b.unit.id)) || a.index - b.index;
+      })
+      .map(({ unit }) => unit);
+  }
+
+  function advanceTurn(order, currentIndex = -1, round = 1) {
+    if (!Array.isArray(order) || order.length === 0) return { index: -1, round, unit: null, wrapped: false };
+    const safeIndex = Number.isFinite(currentIndex) ? Math.trunc(currentIndex) : -1;
+    const index = (safeIndex + 1 + order.length) % order.length;
+    const wrapped = safeIndex >= 0 && index <= safeIndex;
+    return { index, round: wrapped ? round + 1 : round, unit: order[index], wrapped };
+  }
+
+  function chooseEnemyAction({ grid, enemy, targets = [], units = [] } = {}) {
+    const start = cellOf(enemy);
+    if (!grid || !start || !unitIsAlive(enemy)) return null;
+    const livingTargets = targets.filter(unitIsAlive).filter((target) => cellOf(target));
+    const moveRange = Math.max(0, Math.trunc(finiteStat(enemy.moveRange, 3)));
+    const allUnits = uniqueUnits([enemy, ...units, ...livingTargets]);
+    const waitAction = {
+      type: "wait",
+      move: copyCell(start),
+      path: [copyCell(start)],
+      targetId: null,
+      attackTargetId: null,
+    };
+    if (livingTargets.length === 0) return waitAction;
+
+    const maximumRange = Math.max(1, Math.trunc(finiteStat(enemy.attackRange, 1)));
+    const minimumRange = Math.min(maximumRange, Math.max(1, Math.trunc(finiteStat(enemy.minAttackRange, 1))));
+    const turnCost = Math.max(0, finiteStat(enemy.turnCost, .5));
+    const initialFacing = normalizeFacing(enemy.facing);
+    const routes = [];
+    for (const target of livingTargets) {
+      const targetCell = cellOf(target);
+      if (maximumRange === 1 && minimumRange === 1) {
+        const fullPath = findPath(grid, start, targetCell, allUnits, {
+          ignoreUnitId: enemy.id,
+          allowGoalOccupied: true,
+          turnCost,
+          initialFacing,
+        });
+        if (!fullPath.length) continue;
+        const attackApproach = fullPath.slice(0, -1);
+        routes.push({
+          target,
+          destination: targetCell,
+          path: fullPath,
+          bandDistance: 1,
+          pathCost: movementPathCost(fullPath, { turnCost, initialFacing }),
+          attackCost: movementPathCost(attackApproach, { turnCost, initialFacing }),
+          pursueOccupiedGoal: true,
+        });
+        continue;
+      }
+      for (const destination of attackTiles(grid, targetCell, maximumRange, minimumRange)) {
+        if (!isWalkable(grid, destination, allUnits, { ignoreUnitId: enemy.id })) continue;
+        const path = findPath(grid, start, destination, allUnits, {
+          ignoreUnitId: enemy.id, turnCost, initialFacing,
+        });
+        if (!path.length) continue;
+        const pathCost = movementPathCost(path, { turnCost, initialFacing });
+        routes.push({ target, destination, path, bandDistance: destination.distance, pathCost, attackCost: pathCost, pursueOccupiedGoal: false });
+      }
+    }
+    routes.sort((a, b) => a.pathCost - b.pathCost
+      || a.path.length - b.path.length
+      || finiteStat(a.target.hp, Infinity) - finiteStat(b.target.hp, Infinity)
+      || compareIds(a.target.id, b.target.id)
+      || a.bandDistance - b.bandDistance
+      || a.destination.y - b.destination.y
+      || a.destination.x - b.destination.x);
+    const best = routes[0];
+    if (!best) return waitAction;
+    const path = truncatePathByCost(best.path, moveRange, { turnCost, initialFacing });
+    const move = copyCell(path[path.length - 1]);
+    const moved = !sameCell(move, start);
+    const canReachAttackBand = best.attackCost <= moveRange + 1e-9;
+    return {
+      type: canReachAttackBand ? (moved ? "move-attack" : "attack") : moved ? "move" : "wait",
+      move,
+      path,
+      targetId: best.target.id,
+      attackTargetId: canReachAttackBand ? best.target.id : null,
+      movementCost: movementPathCost(path, { turnCost, initialFacing }),
+      facing: path.length > 1 ? facingFromStep(path[path.length - 2], path[path.length - 1], enemy.facing) : enemy.facing,
+    };
+  }
+
+  function compareIds(a, b) {
+    return String(a).localeCompare(String(b));
+  }
+
+  function uniqueUnits(units) {
+    const result = [];
+    const seen = new Set();
+    for (const unit of units) {
+      if (!unit) continue;
+      const key = unit.id == null ? unit : `id:${unit.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(unit);
+    }
+    return result;
+  }
+
+  function finiteStat(value, fallback) {
+    return Number.isFinite(Number(value)) ? Number(value) : fallback;
+  }
+
+  function sumModifiers(value) {
+    if (Array.isArray(value)) return value.reduce((sum, entry) => sum + finiteStat(entry, 0), 0);
+    return finiteStat(value, 0);
+  }
+
+  // Accuracy/evasion are percentage points. Accuracy intentionally remains
+  // unbounded until after evasion is applied so accuracy bonuses can counter
+  // evasive builds.
+  function resolveHitChance(options = {}) {
+    const baseAccuracy = finiteStat(options.baseAccuracy, finiteStat(options.accuracy, 99));
+    const baseEvasion = finiteStat(options.baseEvasion, finiteStat(options.evasion, 0));
+    const effectiveAccuracy = baseAccuracy
+      + sumModifiers(options.accuracyBonuses)
+      - sumModifiers(options.accuracyPenalties);
+    const effectiveEvasion = baseEvasion
+      + sumModifiers(options.evasionBonuses)
+      - sumModifiers(options.evasionPenalties);
+    const accuracyMultiplier = Math.max(0, finiteStat(options.accuracyMultiplier, 1));
+    const rawHitChance = (effectiveAccuracy / 100) * accuracyMultiplier * (1 - effectiveEvasion / 100);
+    return {
+      baseAccuracy,
+      baseEvasion,
+      effectiveAccuracy,
+      effectiveEvasion,
+      accuracyMultiplier,
+      rawHitChance,
+      hitChance: Math.min(1, Math.max(0, rawHitChance)),
+    };
+  }
+
+  function calculateHitChance(options = {}) {
+    return resolveHitChance(options).hitChance;
+  }
+
+  function rollHit(options = {}, random = Math.random) {
+    const resolved = resolveHitChance(options);
+    const source = typeof random === "function" ? random() : random;
+    const roll = Math.min(.999999999, Math.max(0, finiteStat(source, 0)));
+    return { ...resolved, roll, hit: roll < resolved.hitChance };
+  }
+
+  function createSeededRng(seed = 0) {
+    let state = 2166136261;
+    for (const character of String(seed)) {
+      state ^= character.charCodeAt(0);
+      state = Math.imul(state, 16777619);
+    }
+    state >>>= 0;
+    return function seededRandom() {
+      state = (state + 0x6D2B79F5) | 0;
+      let value = Math.imul(state ^ (state >>> 15), 1 | state);
+      value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function createPendingAction(options = {}) {
+    const durability = options.skillDurability != null && Number.isFinite(Number(options.skillDurability))
+      ? Math.max(0, Number(options.skillDurability))
+      : null;
+    return {
+      id: String(options.id || `${options.actorId || "actor"}:${options.skillId || "action"}`),
+      actorId: options.actorId ?? options.actor?.id ?? null,
+      targetId: options.targetId ?? options.target?.id ?? null,
+      targetCell: options.targetCell ? { x: Number(options.targetCell.x), y: Number(options.targetCell.y) } : null,
+      skillId: options.skillId ?? null,
+      deliveryMode: options.deliveryMode || "pathless",
+      attackPath: Array.isArray(options.attackPath) ? options.attackPath.map((cell) => ({ x: Number(cell.x), y: Number(cell.y) })) : [],
+      rangeMin: options.rangeMin == null ? null : Math.max(0, Number(options.rangeMin) || 0),
+      rangeMax: options.rangeMax == null ? null : Math.max(0, Number(options.rangeMax) || 0),
+      targetArc: Array.isArray(options.targetArc) ? [...options.targetArc] : null,
+      blocksByTerrain: options.blocksByTerrain,
+      blocksByUnits: options.blocksByUnits,
+      arcHeight: options.arcHeight == null ? null : Math.max(0, Number(options.arcHeight) || 0),
+      piercing: options.piercing === true,
+      maxPierce: options.maxPierce == null ? null : Math.max(1, Math.trunc(Number(options.maxPierce) || 1)),
+      friendlyFire: FRIENDLY_FIRE,
+      avoidFriendlyImpact: options.avoidFriendlyImpact === true,
+      skillDurability: durability,
+      accumulatedInterrupt: 0,
+      remainingSkillDurability: durability,
+      interrupted: false,
+      status: "pending",
+    };
+  }
+
+  function applyInterrupt(action, amount) {
+    if (!action || action.interrupted) return action;
+    const parsedAmount = typeof amount === "string" && amount.includes("*")
+      ? amount.split("*").reduce((product, part) => product * finiteStat(part, 0), 1)
+      : finiteStat(amount, 0);
+    const interrupt = Math.max(0, parsedAmount);
+    action.accumulatedInterrupt = Math.max(0, finiteStat(action.accumulatedInterrupt, 0) + interrupt);
+    action.remainingSkillDurability = action.skillDurability == null
+      ? null
+      : Math.max(0, action.skillDurability - action.accumulatedInterrupt);
+    if (action.skillDurability != null && action.accumulatedInterrupt >= action.skillDurability) {
+      action.interrupted = true;
+      action.status = "interrupted";
+    }
+    return action;
+  }
+
+  function isPendingActionInterrupted(action) {
+    return Boolean(action?.interrupted)
+      || (action?.skillDurability != null && Number(action.accumulatedInterrupt || 0) >= Number(action.skillDurability));
+  }
+
+  function resolveUnitFromState(state, id, direct) {
+    if (direct) return direct;
+    if (typeof state?.resolveUnit === "function") return state.resolveUnit(id);
+    if (Array.isArray(state?.units)) return state.units.find((unit) => unit?.id === id) || null;
+    if (state?.units && typeof state.units === "object") return state.units[id] || null;
+    return null;
+  }
+
+  function revalidatePendingAction(action, state = {}) {
+    if (!action) return { ok: false, reason: "missing-action", action };
+    if (isPendingActionInterrupted(action)) {
+      action.interrupted = true;
+      action.status = "interrupted";
+      return { ok: false, reason: "interrupted", action };
+    }
+    const actor = resolveUnitFromState(state, action.actorId, state.actor);
+    const target = resolveUnitFromState(state, action.targetId, state.target);
+    const alive = (unit) => unit && unit.alive !== false && (unit.hp === undefined || unit.hp > 0);
+    if (!alive(actor)) return { ok: false, reason: "actor-defeated", action, actor, target };
+    if (action.targetId != null && !alive(target)) return { ok: false, reason: "target-defeated", action, actor, target };
+    if (typeof state.canAct === "function" && !state.canAct(actor, action)) return { ok: false, reason: "action-prevented", action, actor, target };
+    if (typeof state.rangeResolver === "function" && !state.rangeResolver({ action, actor, target })) return { ok: false, reason: "out-of-range", action, actor, target };
+    if (typeof state.pathResolver === "function" && !state.pathResolver({ action, actor, target })) return { ok: false, reason: "invalid-path", action, actor, target };
+    if (usesAttackPath(action.deliveryMode) && actor?.cell && target?.cell && state.grid) {
+      const selectedCell = target?.cell || action.targetCell;
+      const path = facingOrthogonalPriority(actor.cell, selectedCell, actor.facing);
+      const trace = traceAttackPath({
+        origin: actor.cell,
+        target: selectedCell,
+        path,
+        facing: actor.facing,
+        grid: state.grid,
+        units: state.units || [],
+        actorId: actor.id,
+        deliveryMode: action.deliveryMode,
+        blocksByTerrain: action.blocksByTerrain,
+        blocksByUnits: action.blocksByUnits,
+        arcHeight: action.arcHeight,
+        piercing: action.piercing,
+        maxPierce: action.maxPierce,
+        friendlyFire: FRIENDLY_FIRE,
+      });
+      const candidateUnits = trace.candidateUnits || trace.impactedUnits || [];
+      const friendlyImpact = trace.actualTarget
+        && String(trace.actualTarget.id) !== String(action.targetId)
+        && (typeof state.isFriendlyUnit === "function"
+          ? state.isFriendlyUnit(actor, trace.actualTarget)
+          : Boolean(actor?.side && trace.actualTarget?.side && actor.side === trace.actualTarget.side));
+      if (action.avoidFriendlyImpact && friendlyImpact) {
+        return { ok: false, reason: "friendly-fire", action, actor, target, path, trace };
+      }
+      const hasImpactForAction = action.targetId == null
+        ? Boolean(trace.actualTarget) || trace.stoppedReason !== "terrain"
+        : Boolean(trace.actualTarget) || candidateUnits.some((unit) => String(unit.id) === String(action.targetId));
+      const invalidated = !hasImpactForAction;
+      if (invalidated) {
+        return { ok: false, reason: "invalid-path", action, actor, target, path, trace };
+      }
+      action.attackPath = trace.path.map((cell) => ({ ...cell }));
+      action.resolvedTargetId = trace.actualTarget?.id || null;
+    }
+    action.status = "validated";
+    return { ok: true, reason: null, action, actor, target };
+  }
+
+  function calculateDamage(attacker, defender, options = {}) {
+    const attack = Math.max(0, finiteStat(options.attack, finiteStat(attacker && (attacker.attack ?? attacker.power), 0)));
+    const defence = Math.max(0, finiteStat(options.defence, finiteStat(defender && (defender.defence ?? defender.defense), 0)));
+    const bonus = finiteStat(options.bonus, 0);
+    const multiplier = Math.max(0, finiteStat(options.multiplier, 1));
+    const criticalMultiplier = options.critical ? Math.max(1, finiteStat(options.criticalMultiplier, 1.5)) : 1;
+    const guardMultiplier = options.guarded ? Math.max(0, finiteStat(options.guardMultiplier, 0.65)) : 1;
+    const minimum = Math.max(0, Math.trunc(finiteStat(options.minimum, MIN_DIRECT_DAMAGE)));
+    const baseDamage = Math.max(0, attack + bonus - defence);
+    return Math.max(minimum, Math.floor(baseDamage * multiplier * criticalMultiplier * guardMultiplier));
+  }
+
+  function applyDamage(unit, amount) {
+    const hpBefore = Math.max(0, Math.trunc(finiteStat(unit && unit.hp, 0)));
+    const requestedDamage = Math.max(0, Math.trunc(finiteStat(amount, 0)));
+    const appliedDamage = Math.min(hpBefore, requestedDamage);
+    const hpAfter = hpBefore - appliedDamage;
+    return {
+      unit: { ...unit, hp: hpAfter, alive: hpAfter > 0 },
+      // `damage` remains the actual HP loss for compatibility with callers that
+      // need health accounting; presentation uses requestedDamage so an
+      // overkill hit still reports the attack's real calculated strength.
+      damage: appliedDamage,
+      requestedDamage,
+      appliedDamage,
+      hpBefore,
+      hpAfter,
+      defeated: hpBefore > 0 && hpAfter === 0,
+    };
+  }
+
+  return {
+    MIN_DIRECT_DAMAGE,
+    FRIENDLY_FIRE,
+    usesAttackPath,
+    DIRECTIONS,
+    FACING_VECTORS,
+    POSITIONAL_MULTIPLIERS,
+    cellKey,
+    createGrid,
+    isInside,
+    isWalkable,
+    terrainCellData,
+    terrainHeightAt,
+    terrainBlocksDelivery,
+    arcTrajectoryHeight,
+    manhattan,
+    neighbours,
+    reachableTiles,
+    findPath,
+    movementPathCost,
+    truncatePathByCost,
+    movementEvents,
+    movementCommandEvents,
+    movementCommandCost,
+    facingQuarterTurns,
+    facingTurnCost,
+    resolveSimultaneousMovement,
+    resolveTimedSimultaneousMovement,
+    attackTiles,
+    isInAttackRange,
+    facingVector,
+    facingFromStep,
+    localRelativeCell,
+    facingOrthogonalPriority,
+    traceAttackPath,
+    relativePosition,
+    isInFacingArc,
+    positionalAttack,
+    buildTurnOrder,
+    advanceTurn,
+    chooseEnemyAction,
+    resolveHitChance,
+    calculateHitChance,
+    rollHit,
+    createSeededRng,
+    createPendingAction,
+    applyInterrupt,
+    isPendingActionInterrupted,
+    revalidatePendingAction,
+    calculateDamage,
+    applyDamage,
+  };
+});
