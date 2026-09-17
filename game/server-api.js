@@ -29,10 +29,21 @@
       });
     }
 
+    async function recoverPlayer(action, options = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("recoverPlayer", {
+        version: COMMAND_VERSION,
+        action: command,
+        shrineId: String(options.shrineId || "").trim() || undefined,
+      });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
       useItem,
+      recoverPlayer,
     });
   }
 

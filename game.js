@@ -273,6 +273,8 @@
   let persistence = null;
   let savePersistence = null;
   let healingPotionCommandPending = false;
+  let weakPotionCommandPending = false;
+  let recoveryCommandPending = false;
   let authUser = null;
   let authMode = "login";
   let pendingRegistrationCharacterName = "";
@@ -2497,16 +2499,41 @@
     }
   }
 
-  function useWeakPotion() {
-    const consumed = PlayerStateActions.consumeInventoryItem(inventory, "weak_potion", 1);
-    if (!consumed.ok) return showToast("你身上冇弱氣之藥。", "danger");
-    weakPotionStepsRemaining = WEAK_POTION_TOTAL_STEPS;
-    weakPotionDistanceRemainder = 0;
-    markPersistenceDirty();
-    showToast("弱氣之藥生效 · 500 步", "good");
-    addSystemMessage("item", "使用弱氣之藥；效果持續 500 步");
-    renderFacility();
-    saveImportant(false);
+  async function useWeakPotion() {
+    if (mode !== "playing" || weakPotionCommandPending) return;
+    const current = Math.max(0, Math.floor(Number(inventory.weak_potion) || 0));
+    if (current <= 0) return showToast("你身上冇弱氣之藥。", "danger");
+    if (!ServerApi?.useItem) return showToast("伺服器道具指令尚未就緒。", "danger");
+
+    weakPotionCommandPending = true;
+    try {
+      saveImportant(false);
+      const flush = await savePersistence?.flushCloud?.();
+      if (flush?.error) throw flush.error;
+
+      const result = await ServerApi.useItem("weak_potion");
+      if (!result?.ok && result?.reason === "empty") return showToast("你身上冇弱氣之藥。", "danger");
+      if (!result?.ok) return showToast("今次未能使用弱氣之藥。", "danger");
+
+      const quantity = Math.max(0, Math.floor(Number(result.inventory?.quantity) || 0));
+      if (quantity > 0) inventory.weak_potion = quantity;
+      else delete inventory.weak_potion;
+      weakPotionStepsRemaining = Core.clamp(Math.floor(Number(result.weakPotion?.stepsRemaining) || 0), 0, WEAK_POTION_TOTAL_STEPS);
+      weakPotionDistanceRemainder = Core.clamp(Number(result.weakPotion?.distanceRemainder) || 0, 0, WEAK_POTION_WORLD_UNITS_PER_STEP - .001);
+      markPersistenceDirty();
+      showToast(`弱氣之藥生效 · ${weakPotionStepsRemaining} 步`, "good");
+      addSystemMessage("item", `使用弱氣之藥；效果持續 ${weakPotionStepsRemaining} 步`);
+      renderFacility();
+      saveImportant(false);
+    } catch (error) {
+      console.warn("Everrealm server weak-potion command failed.", error);
+      const code = String(error?.code || "");
+      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+      else showToast("伺服器暫時未能使用弱氣之藥。", "danger");
+    } finally {
+      weakPotionCommandPending = false;
+    }
   }
 
   function performAttack() {
@@ -2548,9 +2575,9 @@
 
     healingPotionCommandPending = true;
     try {
-      // Make sure the callable reads the latest canonical cloud save before it
-      // applies the transaction.  This closes the normal client-save race; the
-      // next migration steps will move more fields behind the same boundary.
+      // Queue the current local snapshot before flushing so the callable reads
+      // the latest normal-game HP/inventory state rather than a stale autosave.
+      saveImportant(false);
       const flush = await savePersistence?.flushCloud?.();
       if (flush?.error) throw flush.error;
 
@@ -2734,33 +2761,6 @@
     updateHud();
   }
 
-  function deathExpPenaltyAmount() {
-    return Math.max(1, Math.round(Expansion.xpRequired(player.level) * .05));
-  }
-
-  function applyDeathExpPenalty() {
-    const penalty = deathExpPenaltyAmount();
-    const result = Expansion.loseExperience(player.level, player.xp, penalty);
-    const previousLevel = player.level;
-    player.level = result.level;
-    player.xp = result.xp;
-    const equipmentResult = Expansion.unequipIneligibleEquipment({
-      coins: player.coins,
-      level: player.level,
-      classId: playerClassId,
-      ownedEquipment,
-      equipped,
-    });
-    equipped = equipmentResult.state.equipped;
-    markPersistenceDirty();
-    return {
-      penalty,
-      deducted: result.deducted,
-      levelsLost: previousLevel - player.level,
-      removedItems: equipmentResult.removedItems,
-    };
-  }
-
   function playerDeath() {
     mode = "dead";
     player.deathStartedAt = elapsed;
@@ -2776,40 +2776,92 @@
     announce("你倒下了。");
   }
 
-  function finishDeathRevive({ returnToTown = false } = {}) {
-    if (mode !== "dead") return;
-    closeBattleHud();
-    encounterGrace = 1.8;
-    const { deducted, levelsLost, removedItems } = applyDeathExpPenalty();
-    player.hp = returnToTown ? playerStats().maxHp : 1;
-    player.invulnerable = 1.8;
-    player.knockback = { x: 0, y: 0 };
-    player.deathStartedAt = null;
-    deathPanel.hidden = true;
-    mode = "playing";
-    stage.dataset.gameState = mode;
-    if (returnToTown) {
-      // Use the normal map-transition path so BGM, pathing, portal state,
-      // particles and camera all reset exactly as they do on any other return.
-      transitionMap("world", overworld.start);
-      player.invulnerable = 1.8;
-    } else {
-      resetEnemies();
-      camera.x = player.x;
-      camera.y = player.y;
-      camera.zoom = targetZoom();
-      showLocation(zoneForPosition(player), true);
-      updateHud(true);
+  async function finishDeathRevive({ returnToTown = false } = {}) {
+    if (mode !== "dead" || recoveryCommandPending) return;
+    if (!ServerApi?.recoverPlayer) return showToast("伺服器復活指令尚未就緒。", "danger");
+
+    const reviveHereButton = document.getElementById("reviveHereButton");
+    const respawnButton = document.getElementById("respawnButton");
+    recoveryCommandPending = true;
+    if (reviveHereButton) reviveHereButton.disabled = true;
+    if (respawnButton) respawnButton.disabled = true;
+
+    try {
+      // Persist the zero-HP death state first. The server refuses revival when
+      // the canonical cloud save is not actually dead, so a normal client race
+      // cannot turn this into a free heal command.
       saveImportant(false);
-      canvas.focus({ preventScroll: true });
+      const flush = await savePersistence?.flushCloud?.();
+      if (flush?.error) throw flush.error;
+
+      const result = await ServerApi.recoverPlayer(returnToTown ? "respawn_town" : "revive_here");
+      if (!result?.ok && result?.reason === "not-dead") {
+        return showToast("雲端角色狀態未確認倒下，暫時未能復活。", "danger");
+      }
+      if (!result?.ok) return showToast("今次未能完成復活。", "danger");
+
+      const nextLevel = Core.clamp(Math.floor(Number(result.player?.level) || player.level), 1, Expansion.LEVEL_CAP);
+      const nextXp = Math.max(0, Math.floor(Number(result.player?.xp) || 0));
+      const nextHp = Math.max(1, Number(result.player?.hp) || 1);
+      player.level = nextLevel;
+      player.xp = nextXp;
+      player.hp = Core.clamp(nextHp, 1, playerStats().maxHp);
+
+      const equipmentResult = Expansion.unequipIneligibleEquipment({
+        coins: player.coins,
+        level: player.level,
+        classId: playerClassId,
+        ownedEquipment,
+        equipped,
+      });
+      equipped = equipmentResult.state.equipped;
+      const removedItems = equipmentResult.removedItems;
+      const deducted = Math.max(0, Math.floor(Number(result.deducted) || 0));
+      const levelsLost = Math.max(0, Math.floor(Number(result.levelsLost) || 0));
+
+      closeBattleHud();
+      encounterGrace = 1.8;
+      player.invulnerable = 1.8;
+      player.knockback = { x: 0, y: 0 };
+      player.deathStartedAt = null;
+      deathPanel.hidden = true;
+      mode = "playing";
+      stage.dataset.gameState = mode;
+      if (returnToTown) {
+        // Use the normal map-transition path so BGM, pathing, portal state,
+        // particles and camera all reset exactly as they do on any other return.
+        transitionMap("world", overworld.start);
+        player.invulnerable = 1.8;
+      } else {
+        resetEnemies();
+        camera.x = player.x;
+        camera.y = player.y;
+        camera.zoom = targetZoom();
+        showLocation(zoneForPosition(player), true);
+        updateHud(true);
+        saveImportant(false);
+        canvas.focus({ preventScroll: true });
+      }
+
+      syncRealtimeState("exploring");
+
+      const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
+      const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
+      showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+      addSystemMessage("system", `失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
+    } catch (error) {
+      console.warn("Everrealm server revive command failed.", error);
+      const code = String(error?.code || "");
+      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+      else showToast("伺服器暫時未能處理復活。", "danger");
+    } finally {
+      recoveryCommandPending = false;
+      if (mode === "dead") {
+        if (reviveHereButton) reviveHereButton.disabled = false;
+        if (respawnButton) respawnButton.disabled = false;
+      }
     }
-
-    syncRealtimeState("exploring");
-
-    const levelText = levelsLost > 0 ? ` · 降至 LV.${player.level}` : "";
-    const equipmentText = removedItems.length ? ` · 已卸下 ${removedItems.map((item) => item.name).join("、")}` : "";
-    showToast(`失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
-    addSystemMessage("system", `失去 ${deducted} EXP${levelText}${equipmentText}`, "danger");
   }
 
   function reviveHere() {
@@ -3283,6 +3335,39 @@
     });
   }
 
+  async function healAtClinicCommand() {
+    if (recoveryCommandPending) return;
+    if (!ServerApi?.recoverPlayer) return showToast("伺服器治療指令尚未就緒。", "danger");
+    recoveryCommandPending = true;
+    try {
+      saveImportant(false);
+      const flush = await savePersistence?.flushCloud?.();
+      if (flush?.error) throw flush.error;
+
+      const result = await ServerApi.recoverPlayer("clinic");
+      if (!result?.ok && result?.reason === "wrong-map") return showToast("你而家唔喺療癒所。", "danger");
+      if (!result?.ok) return showToast("今次未能完成治療。", "danger");
+
+      const hp = Number(result.player?.hp);
+      if (!Number.isFinite(hp)) throw new Error("recoverPlayer returned an invalid clinic HP state.");
+      player.hp = Core.clamp(hp, 1, playerStats().maxHp);
+      markPersistenceDirty();
+      sound.heal();
+      showToast("HP 已完全恢復", "good");
+      addSystemMessage("system", "護士治療完成 · HP 已完全恢復", "good");
+      saveImportant(false);
+      updateHud(true);
+    } catch (error) {
+      console.warn("Everrealm server clinic recovery command failed.", error);
+      const code = String(error?.code || "");
+      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+      else showToast("伺服器暫時未能處理治療。", "danger");
+    } finally {
+      recoveryCommandPending = false;
+    }
+  }
+
   function interactHealer(npc) {
     const maxHp = playerStats().maxHp;
     const missingHp = Math.max(0, maxHp - player.hp);
@@ -3303,16 +3388,7 @@
         {
           label: "治療",
           buttonStyle: "primary",
-          action: () => {
-            const healTo = playerStats().maxHp;
-            player.hp = healTo;
-            markPersistenceDirty();
-            sound.heal();
-            showToast("HP 已完全恢復", "good");
-            addSystemMessage("system", "護士治療完成 · HP 已完全恢復", "good");
-            saveImportant(false);
-            updateHud(true);
-          },
+          action: () => { void healAtClinicCommand(); },
         },
         { label: "不用了", buttonStyle: "secondary", action: () => {} },
       ],
@@ -3421,14 +3497,47 @@
     updateNearestInteraction();
   }
 
-  function restAtShrine() {
-    player.hp = playerStats().maxHp;
-    checkpoint = { mapId: currentMapId, x: world.shrine.x + (currentMapId === "dungeon" ? 42 : 0), y: world.shrine.y };
-    sound.heal();
-    spawnBurst(world.shrine.x, world.shrine.y, "#ffc857", 22, 62);
-    showToast(currentMapId === "dungeon" ? "回音燈已點亮 · 死亡會喺呢度醒返" : "燈火暖返晒 · 進度已儲存", "good");
-    saveImportant(false);
-    updateHud();
+  async function restAtShrine() {
+    if (recoveryCommandPending) return;
+    if (!world?.shrine?.id || !ServerApi?.recoverPlayer) return showToast("伺服器燈龕指令尚未就緒。", "danger");
+    recoveryCommandPending = true;
+    try {
+      saveImportant(false);
+      const flush = await savePersistence?.flushCloud?.();
+      if (flush?.error) throw flush.error;
+
+      const result = await ServerApi.recoverPlayer("shrine", { shrineId: world.shrine.id });
+      if (!result?.ok && ["wrong-map", "unknown-shrine"].includes(result?.reason)) {
+        return showToast("呢個位置暫時無法點亮燈火。", "danger");
+      }
+      if (!result?.ok) return showToast("今次未能點亮燈火。", "danger");
+
+      const hp = Number(result.player?.hp);
+      const nextCheckpoint = result.checkpoint;
+      if (!Number.isFinite(hp) || !nextCheckpoint || !Number.isFinite(Number(nextCheckpoint.x)) || !Number.isFinite(Number(nextCheckpoint.y))) {
+        throw new Error("recoverPlayer returned an invalid shrine state.");
+      }
+      player.hp = Core.clamp(hp, 1, playerStats().maxHp);
+      checkpoint = {
+        mapId: String(nextCheckpoint.mapId || currentMapId),
+        x: Number(nextCheckpoint.x),
+        y: Number(nextCheckpoint.y),
+      };
+      markPersistenceDirty();
+      sound.heal();
+      spawnBurst(world.shrine.x, world.shrine.y, "#ffc857", 22, 62);
+      showToast(currentMapId === "dungeon" ? "回音燈已點亮 · 死亡會喺呢度醒返" : "燈火暖返晒 · 進度已儲存", "good");
+      saveImportant(false);
+      updateHud();
+    } catch (error) {
+      console.warn("Everrealm server shrine recovery command failed.", error);
+      const code = String(error?.code || "");
+      if (code.includes("unauthenticated")) showToast("登入狀態已失效，請重新登入。", "danger");
+      else if (code.includes("failed-precondition")) showToast("雲端角色資料尚未準備好，請稍後再試。", "danger");
+      else showToast("伺服器暫時未能處理燈龕。", "danger");
+    } finally {
+      recoveryCommandPending = false;
+    }
   }
 
   function startDialogue(config) {
