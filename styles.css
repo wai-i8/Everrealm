@@ -6963,7 +6963,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 @media (max-height: 680px) {
   .class-select-panel {
     display: grid;
-    grid-template-rows: auto auto auto auto minmax(0,1fr) auto;
+    grid-template-rows: auto auto minmax(0,1fr) auto;
     align-content: stretch;
     justify-content: stretch;
     justify-items: center;
@@ -6994,7 +6994,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 @media (max-width: 520px) {
   .class-select-panel {
     display: grid;
-    grid-template-rows: auto auto auto auto minmax(0,1fr) auto;
+    grid-template-rows: auto auto minmax(0,1fr) auto;
     align-content: stretch;
     justify-content: stretch;
     justify-items: center;
