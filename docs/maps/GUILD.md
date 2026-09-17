@@ -1,4 +1,4 @@
-# 公會 · Guild
+# 冒險者公會 · Guild
 
 - `map_id: guild`
 - 類型：主城 flattened interior；主題：暖色公會大廳。

@@ -55,7 +55,7 @@
         entrance: { outward: "south", approachPoint: entry, threshold: { shape: "rect", x: exitRegion.bbox.x, y: exitRegion.bbox.y, w: exitRegion.bbox.width, h: exitRegion.bbox.height }, approachDistance: 0, entryFacing: "up", returnFacing: "down", marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 } },
       },
       map: {
-        id: MAP_IDS.INN, name: "霧燈旅店", shortName: "旅店", kind: "interior", type: "interior", theme: "inn", ambient: "inn-warm",
+        id: MAP_IDS.INN, name: "帝都旅館", shortName: "帝都旅館", kind: "interior", type: "interior", theme: "inn", ambient: "inn-warm",
         start: entry, spawnPoints: { entrance: entry, keeper: { x: npcFeet.x, y: npcFeet.y - 13 }, exit: exitPoint }, worldBuildingId: "tea-house",
         art: { flattened: true, background: "inn", backgroundScene: "inn", master: ART, authoring: AUTHORING, sourceDimensions: { width: data.source.width, height: data.source.height }, rendering: data.rendering },
       },

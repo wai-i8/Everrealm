@@ -1,4 +1,4 @@
-# 霧草療癒所 · Clinic
+# 帝都醫療院 · Clinic
 
 - `map_id: clinic`
 - 類型：主城 flattened interior；主題：草藥療癒所。

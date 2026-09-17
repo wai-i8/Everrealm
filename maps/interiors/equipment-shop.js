@@ -36,7 +36,7 @@
       { id: "shop-lamp-right", kind: "wallSconce", ...point(12, 4), radius: 8, solid: false, render: false, zone: "sales-counter" },
     ];
     const npcs = [{
-      id: "merchant-gin", name: "銀姐", displayName: "裝備店店員", role: "裝備店店員／裝備櫃台", kind: "npc",
+      id: "merchant-gin", name: "裝備工匠", displayName: "裝備工匠", role: "裝備工匠／裝備櫃台", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
       color: "#f2a96b", facing: "down", actor: "merchant", gender: "female", age: 36,
       appearance: "紅髮海盜女商人造型、酒紅船長外套、金飾腰封與高筒靴",
@@ -51,7 +51,7 @@
         entrance: { outward: "south", approachPoint: entry, threshold: { shape: "rect", x: exitRegion.bbox.x, y: exitRegion.bbox.y, w: exitRegion.bbox.width, h: exitRegion.bbox.height }, approachDistance: 0, entryFacing: "up", returnFacing: "down", marker: { kind: "bitmap", sprite: "interact", size: 34, anchorX: .5, anchorY: .5 } },
       },
       map: {
-        id: MAP_IDS.SHOP, name: "裝備店", shortName: "裝備店", kind: "interior", type: "interior", theme: "forge-shop", ambient: "soft-forge",
+        id: MAP_IDS.SHOP, name: "帝都裝備坊", shortName: "帝都裝備坊", kind: "interior", type: "interior", theme: "forge-shop", ambient: "soft-forge",
         start: entry, spawnPoints: { entrance: entry, merchant: { x: npcFeet.x, y: npcFeet.y - 13 }, exit: exitPoint }, shopId: "silver-flame-equipment", worldBuildingId: "forge",
         art: { flattened: true, background: "weapon", backgroundScene: "weapon", master: ART, authoring: AUTHORING, sourceDimensions: { width: data.source.width, height: data.source.height }, rendering: data.rendering },
       },

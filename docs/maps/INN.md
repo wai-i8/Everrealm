@@ -1,4 +1,4 @@
-# 霧燈旅店 · Inn
+# 帝都旅館 · Inn
 
 - `map_id: inn`
 - 類型：主城 flattened interior；主題：旅店／休息空間。

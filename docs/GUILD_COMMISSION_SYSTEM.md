@@ -60,7 +60,7 @@
 
 同一時間只可進行一份委託；目標完成後仍須返公會回報；五份固定委託都可重複接受。Guild 目前冇額外 help content，因此右上角不顯示 `[i]`；規則亦唔以永久 intro strip 佔位。
 
-接受、放棄及回報只能在 `guild` 進行；2★ objective 只能在山地 `mountain-wish-pool` 完成；討伐 objective 則由戰鬥擊殺事件更新。放棄確認使用現有 shared modal/window skin，不使用 browser alert。
+接受、放棄及回報只能在 `guild` 進行；2★ objective 只能在山地 `mountain-wish-pool` 完成；討伐 objective 則由戰鬥擊殺事件更新。放棄確認使用現有 shared modal/window skin，不使用 browser alert。接受／放棄／回報使用 optimistic UI：玩家操作後立即反映本地預測結果，固定委託報酬可即時預覽；同一時間只允許一個 Guild mutation request，伺服器成功後才寫入正式「進度」log，reject／network error 則回滾本地預測狀態並由「系統」log 顯示錯誤。伺服器仍然是委託狀態與獎勵的唯一 canonical authority。
 
 ## 系統 ownership
 

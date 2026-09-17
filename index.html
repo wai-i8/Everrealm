@@ -18,7 +18,7 @@
         // standalone build, so leave the local file build on favicon.ico.
         if (!/^https?:$/.test(window.location.protocol)) return;
         const links = [
-          ["manifest", "", "", "everrealm.webmanifest?v=20260910-02"],
+          ["manifest", "", "", "everrealm.webmanifest?v=20260917-01"],
           ["apple-touch-icon", "", "180x180", "assets/pwa/everrealm-icon-180-v2.png?v=20260910-02"],
           ["icon", "image/png", "32x32", "assets/pwa/everrealm-icon-32-v2.png?v=20260910-02"],
           ["icon", "image/png", "16x16", "assets/pwa/everrealm-icon-16-v2.png?v=20260910-02"],
@@ -547,7 +547,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-08")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-11")}"><\/script>`);
       })();
     </script>
 
@@ -583,7 +583,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-06", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-08", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

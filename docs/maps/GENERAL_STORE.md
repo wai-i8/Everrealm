@@ -1,4 +1,4 @@
-# 道具店 · General Store
+# 帝都道具店 · General Store
 
 - `map_id: general-store`
 - 類型：主城 flattened interior；主題：市集雜貨店。

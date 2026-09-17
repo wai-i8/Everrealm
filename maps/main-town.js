@@ -22,11 +22,11 @@
   // old scene: every rectangle comes from a named colour component in the
   // supplied authoring JPG.
   const BUILDINGS = Object.freeze([
-    Object.freeze({ id: "keeper-house", role: "guild", triggerName: "Guild", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", label: "✦ 公會", mapLabel: "公會", name: "公會", entryFacing: "up", returnFacing: "down" }),
-    Object.freeze({ id: "forge", role: "equipment-shop", triggerName: "Weapon Shop", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", label: "⚒ 裝備店", mapLabel: "裝備店", name: "裝備店", entryFacing: "up", returnFacing: "down" }),
-    Object.freeze({ id: "tea-house", role: "inn", triggerName: "Inn", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", label: "▰ 霧燈旅店", mapLabel: "旅店", name: "霧燈旅店", entryFacing: "up", returnFacing: "down" }),
-    Object.freeze({ id: "clinic", role: "clinic", triggerName: "Hospital / Clinic", portalId: "world-to-clinic", targetMap: MAP_IDS.CLINIC, targetSpawn: "entrance", returnSpawn: "clinicFront", label: "✚ 霧草療癒所", mapLabel: "療癒所", name: "霧草療癒所", entryFacing: "up", returnFacing: "down" }),
-    Object.freeze({ id: "general-store", role: "general-store", triggerName: "Item / General Store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", label: "◇ 道具店", mapLabel: "道具店", name: "道具店", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "keeper-house", role: "guild", triggerName: "Guild", portalId: "world-to-guild", targetMap: MAP_IDS.GUILD, targetSpawn: "entrance", returnSpawn: "guildFront", label: "✦ 冒險者公會", mapLabel: "冒險者公會", name: "冒險者公會", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "forge", role: "equipment-shop", triggerName: "Weapon Shop", portalId: "world-to-shop", targetMap: MAP_IDS.SHOP, targetSpawn: "entrance", returnSpawn: "shopFront", label: "⚒ 帝都裝備坊", mapLabel: "帝都裝備坊", name: "帝都裝備坊", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "tea-house", role: "inn", triggerName: "Inn", portalId: "world-to-inn", targetMap: MAP_IDS.INN, targetSpawn: "entrance", returnSpawn: "innFront", label: "▰ 帝都旅館", mapLabel: "帝都旅館", name: "帝都旅館", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "clinic", role: "clinic", triggerName: "Hospital / Clinic", portalId: "world-to-clinic", targetMap: MAP_IDS.CLINIC, targetSpawn: "entrance", returnSpawn: "clinicFront", label: "✚ 帝都醫療院", mapLabel: "帝都醫療院", name: "帝都醫療院", entryFacing: "up", returnFacing: "down" }),
+    Object.freeze({ id: "general-store", role: "general-store", triggerName: "Item / General Store", portalId: "world-to-general-store", targetMap: MAP_IDS.GENERAL_STORE, targetSpawn: "entrance", returnSpawn: "generalStoreFront", label: "◇ 帝都道具店", mapLabel: "帝都道具店", name: "帝都道具店", entryFacing: "up", returnFacing: "down" }),
   ]);
 
   function clone(value) {

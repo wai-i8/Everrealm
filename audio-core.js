@@ -9,8 +9,8 @@
     mainTown: Object.freeze({ key: "mainTown", src: "assets/audio/bgm/maintown-v2-02-loop.mp3", label: "主城" }),
     mountainField: Object.freeze({ key: "mountainField", src: "assets/audio/bgm/mountainousareas-v1-02-loop.mp3", label: "山地" }),
     building: Object.freeze({ key: "building", src: "assets/audio/bgm/building.mp3", label: "室內時光" }),
-    guild: Object.freeze({ key: "guild", src: "assets/audio/bgm/guild-v1-01-loop.mp3", label: "公會" }),
-    hospital: Object.freeze({ key: "hospital", src: "assets/audio/bgm/hospital-v1-01-loop.mp3", label: "醫院" }),
+    guild: Object.freeze({ key: "guild", src: "assets/audio/bgm/guild-v1-01-loop.mp3", label: "冒險者公會" }),
+    hospital: Object.freeze({ key: "hospital", src: "assets/audio/bgm/hospital-v1-01-loop.mp3", label: "帝都醫療院" }),
   });
   const BGM_ZONE_BY_MAP = Object.freeze({
     world: "mainTown",

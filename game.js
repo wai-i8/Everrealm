@@ -277,6 +277,7 @@
   let healingPotionCommandPending = false;
   let weakPotionCommandPending = false;
   let optimisticUiMutationPending = false;
+  let guildQuestMutationPending = false;
   let playerResetWrite = Promise.resolve({ saved: true, idle: true });
   let recoveryCommandPending = false;
   let mapTransitionPending = false;
@@ -1997,6 +1998,22 @@
     return window.matchMedia("(hover: none), (pointer: coarse)").matches;
   }
 
+  function mobileChatInputActive() {
+    return Boolean(usesMobileExploreControls() && worldChatInput && document.activeElement === worldChatInput);
+  }
+
+  function stopMobileChatMovement() {
+    if (!mobileChatInputActive()) return false;
+    clearExploreMovePath();
+    pendingClickInteractionId = null;
+    pendingClickInteractionPoint = null;
+    clearExplorePointerGesture();
+    activeExploreTouches.clear();
+    explorePinchGesture = null;
+    suppressExploreTouchTap = false;
+    return true;
+  }
+
   function targetZoom() {
     // Camera zoom is shared by every map and input device. Map dimensions only
     // constrain camera position; small interiors must never be auto-enlarged
@@ -2540,7 +2557,7 @@
     player.knockback.x *= drag;
     player.knockback.y *= drag;
 
-    const movementBlockedByUi = mapTransitionPending || blockingGameplayOverlayOpen();
+    const movementBlockedByUi = mapTransitionPending || blockingGameplayOverlayOpen() || mobileChatInputActive();
     if (movementBlockedByUi && (exploreMoveTarget || exploreMovePath.length)) {
       clearExploreMovePath();
       pendingClickInteractionId = null;
@@ -2879,6 +2896,37 @@
 
   function endOptimisticUiMutation() {
     optimisticUiMutationPending = false;
+  }
+
+  function beginGuildQuestMutation() {
+    if (guildQuestMutationPending) return false;
+    guildQuestMutationPending = true;
+    return true;
+  }
+
+  function endGuildQuestMutation() {
+    guildQuestMutationPending = false;
+  }
+
+  function captureGuildQuestOptimisticState() {
+    return {
+      guildCommissionState: Guild.normalizeState(guildCommissionState),
+      coins: player.coins,
+    };
+  }
+
+  function renderGuildQuestOptimisticState() {
+    markPersistenceDirty();
+    updateHud(true);
+    updateMenuBadges();
+    if (facilityWindows.size) renderFacility();
+  }
+
+  function restoreGuildQuestOptimisticState(snapshot) {
+    if (!snapshot) return;
+    guildCommissionState = Guild.normalizeState(snapshot.guildCommissionState);
+    player.coins = Core.clamp(Math.floor(Number(snapshot.coins) || 0), 0, 99999);
+    renderGuildQuestOptimisticState();
   }
 
   persistence = SaveSystem.create({
@@ -3652,10 +3700,10 @@
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: ["齋磨同一把舊刀始終有限。我同裝備店店員搬晒新貨入工房：短刀夠快、重刃破甲，護甲仲會改你行幾多格。"],
+      lines: ["齋磨同一把舊刀始終有限。我同帝都裝備坊嘅裝備工匠搬晒新貨入工房：短刀夠快、重刃破甲，護甲仲會改你行幾多格。"],
       choices: [
         {
-          label: "入裝備店",
+          label: "入帝都裝備坊",
           action: () => transitionMap("shop", expansionMaps.shop.start),
         },
         { label: "等我準備吓先", action: () => {} },
@@ -3683,7 +3731,7 @@
       const result = await ServerApi.recoverPlayer("clinic");
       if (!result?.ok) {
         restoreOptimisticUiState(optimisticSnapshot);
-        if (result?.reason === "wrong-map") return showToast("你而家唔喺療癒所。", "danger");
+        if (result?.reason === "wrong-map") return showToast("你而家唔喺帝都醫療院。", "danger");
         return showToast("今次未能完成治療。", "danger");
       }
 
@@ -4107,13 +4155,14 @@
     const ready = isActive && guildCommissionState.status === "ready_to_report";
     const objective = guildCommissionObjectiveText(commission);
     const progress = isActive ? guildCommissionProgressText(commission, guildCommissionState) : (commission.type === "hunt" ? `0 / ${commission.objective.count}` : "尚未完成");
+    const questActionState = guildQuestMutationPending ? ' disabled aria-busy="true"' : "";
     const action = isActive
       ? ready
-        ? `<button class="facility-action-button" type="button" data-guild-detail-action="claim" data-contract-id="${guildCommissionState.cycle}:${commission.id}">回報並領取</button>`
-        : `<button class="facility-action-button is-quiet" type="button" data-guild-detail-action="abandon" data-contract-id="${guildCommissionState.cycle}:${commission.id}">放棄委託</button>`
+        ? `<button class="facility-action-button" type="button" data-guild-detail-action="claim" data-contract-id="${guildCommissionState.cycle}:${commission.id}"${questActionState}>回報並領取</button>`
+        : `<button class="facility-action-button is-quiet" type="button" data-guild-detail-action="abandon" data-contract-id="${guildCommissionState.cycle}:${commission.id}"${questActionState}>放棄委託</button>`
       : active
         ? `<button class="facility-action-button" type="button" disabled>已有進行中委託</button>`
-        : `<button class="facility-action-button" type="button" data-guild-detail-action="accept" data-offer-id="${commission.id}">接受委託</button>`;
+        : `<button class="facility-action-button" type="button" data-guild-detail-action="accept" data-offer-id="${commission.id}"${questActionState}>接受委託</button>`;
     guildCommissionDetailContent.innerHTML = `<p class="modal-kicker">${Skills.formatSkillBookRank(commission.star)} 公會委託</p><h2 id="guildCommissionDetailTitle">${commission.title}</h2><p class="guild-detail-description">${commission.description}</p><dl class="guild-detail-grid"><div><dt>目標</dt><dd>${objective}</dd></div><div><dt>建議等級</dt><dd>Lv.${commission.recommendedLevel}</dd></div><div><dt>進度</dt><dd>${progress}</dd></div><div><dt>報酬</dt><dd>${guildRewardText(commission)}</dd></div></dl><div class="guild-detail-actions">${action}</div>`;
     pendingCommissionDetailId = commission.id;
     guildCommissionDetailPanel.hidden = false;
@@ -5492,18 +5541,38 @@
   async function acceptGuildOffer(offerId) {
     if (currentMapId !== "guild") return showToast("要親身返公會先接到委託。", "danger");
     if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+
+    const optimisticSnapshot = captureGuildQuestOptimisticState();
+    const predicted = Guild.accept(guildCommissionState, offerId);
+    if (!predicted?.ok) {
+      endGuildQuestMutation();
+      if (predicted?.reason === "already-active") return showToast("同一時間只可以接一份委託。", "danger");
+      return showToast("搵唔到呢份委託。", "danger");
+    }
+
+    guildCommissionState = predicted.state;
+    renderGuildQuestOptimisticState();
+    sound.crystal();
+    showToast(`已接委託：${predicted.commission.title}`, "good");
+    closeGuildCommissionDetail();
+    closeGuildFacility();
+
     try {
-      await flushForServerCommand();
       const result = await ServerApi.quest("accept", { commissionId: offerId });
-      if (!result?.ok && result?.reason === "already-active") return showToast("同一時間只可以接一份委託。", "danger");
-      if (!result?.ok) return showToast("搵唔到呢份委託。", "danger");
+      if (!result?.ok) {
+        restoreGuildQuestOptimisticState(optimisticSnapshot);
+        if (result?.reason === "already-active") return showToast("同一時間只可以接一份委託。", "danger");
+        return showToast("搵唔到呢份委託。", "danger");
+      }
       applyAuthoritativeState(result.state);
-      sound.crystal();
-      showToast(`已接委託：${result.commission.title}`, "good");
       addSystemMessage("quest", `已接委託：${result.commission.title}`);
-      closeGuildCommissionDetail();
-      closeGuildFacility();
-    } catch (error) { serverCommandError(error, "伺服器暫時未能接取委託。"); }
+    } catch (error) {
+      restoreGuildQuestOptimisticState(optimisticSnapshot);
+      serverCommandError(error, "伺服器暫時未能接取委託。");
+    } finally {
+      endGuildQuestMutation();
+    }
   }
 
   async function claimGuildContract(contractId) {
@@ -5512,23 +5581,48 @@
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (contractId && expectedId && contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+
+    const predicted = Guild.report(guildCommissionState);
+    if (!predicted?.ok) {
+      endGuildQuestMutation();
+      if (predicted?.reason === "not-ready") return showToast("委託仲未完成。", "danger");
+      return showToast("呢份委託已經回報過喇。", "danger");
+    }
+
+    const optimisticSnapshot = captureGuildQuestOptimisticState();
+    const previewCoins = Math.max(0, Math.floor(Number(predicted.reward?.coins) || 0));
+    const previewText = `委託回報完成 · ${Skills.formatSkillBookRank(predicted.reward.skill_envelope_star)} 技能書信封 × 1 + ${previewCoins.toLocaleString("zh-HK")} 金幣`;
+    guildCommissionState = predicted.state;
+    player.coins = Core.clamp(player.coins + previewCoins, 0, 99999);
+    renderGuildQuestOptimisticState();
+    sound.level();
+    showToast(previewText, "good");
+    closeGuildCommissionDetail();
+    renderFacility();
+
     try {
-      await flushForServerCommand();
       const result = await ServerApi.quest("report", {});
-      if (!result?.ok && result?.reason === "not-ready") return showToast("委託仲未完成。", "danger");
-      if (!result?.ok) return showToast("呢份委託已經回報過喇。", "danger");
+      if (!result?.ok) {
+        restoreGuildQuestOptimisticState(optimisticSnapshot);
+        if (result?.reason === "not-ready") return showToast("委託仲未完成。", "danger");
+        return showToast("呢份委託已經回報過喇。", "danger");
+      }
       applyAuthoritativeState(result.state);
       const rewardCoins = Math.max(0, Math.floor(Number(result.reward?.coins) || 0));
-      sound.level();
       const rewardText = `委託回報完成 · ${Skills.formatSkillBookRank(result.reward.skill_envelope_star)} 技能書信封 × 1 + ${rewardCoins.toLocaleString("zh-HK")} 金幣`;
-      showToast(rewardText, "good");
       addSystemMessage("reward", rewardText);
-      closeGuildCommissionDetail();
       renderFacility();
-    } catch (error) { serverCommandError(error, "伺服器暫時未能回報委託。"); }
+    } catch (error) {
+      restoreGuildQuestOptimisticState(optimisticSnapshot);
+      serverCommandError(error, "伺服器暫時未能回報委託。");
+    } finally {
+      endGuildQuestMutation();
+    }
   }
 
   function openAbandonCommission(contractId) {
+    if (guildQuestMutationPending) return;
     const active = activeGuildCommission();
     const expectedId = active ? `${guildCommissionState.cycle}:${active.id}` : null;
     if (!active || !expectedId || contractId !== expectedId) return showToast("委託資料已更新，請重新查看公會委託。", "danger");
@@ -5553,20 +5647,38 @@
       return showToast("委託資料已更新，請重新查看公會委託。", "danger");
     }
     if (!ServerApi?.quest) return showToast("伺服器任務指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+
+    const predicted = Guild.abandon(guildCommissionState);
+    if (!predicted?.ok) {
+      endGuildQuestMutation();
+      closeAbandonCommission(false);
+      return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
+    }
+
+    const optimisticSnapshot = captureGuildQuestOptimisticState();
+    guildCommissionState = predicted.state;
+    closeAbandonCommission(false);
+    renderGuildQuestOptimisticState();
+    showToast(`已放棄委託：${predicted.commission.title} · 進度已清除`, "good");
+    closeGuildCommissionDetail();
+    renderFacility();
+
     try {
-      await flushForServerCommand();
       const result = await ServerApi.quest("abandon", {});
       if (!result?.ok) {
-        closeAbandonCommission(false);
+        restoreGuildQuestOptimisticState(optimisticSnapshot);
         return showToast("呢份委託而家冇可放棄嘅進度。", "danger");
       }
       applyAuthoritativeState(result.state);
-      closeAbandonCommission(false);
-      showToast(`已放棄委託：${result.commission.title} · 進度已清除`, "good");
       addSystemMessage("quest", `已放棄委託：${result.commission.title}`);
-      closeGuildCommissionDetail();
       renderFacility();
-    } catch (error) { serverCommandError(error, "伺服器暫時未能放棄委託。"); }
+    } catch (error) {
+      restoreGuildQuestOptimisticState(optimisticSnapshot);
+      serverCommandError(error, "伺服器暫時未能放棄委託。");
+    } finally {
+      endGuildQuestMutation();
+    }
   }
 
   async function openGuildEnvelope(star) {
@@ -5593,7 +5705,7 @@
     if (!requestedItem) return showToast("搵唔到呢件裝備。", "danger");
     if (!equipmentMatchesClass(requestedItem)) return showToast("呢件裝備唔適合目前職業。", "danger");
     if (!ServerApi?.economy) return showToast("伺服器裝備指令尚未就緒。", "danger");
-    if (buyFirst && currentMapId !== "shop") return showToast("購買裝備要親身去裝備店。", "danger");
+    if (buyFirst && currentMapId !== "shop") return showToast("購買裝備要親身去帝都裝備坊。", "danger");
 
     let predictedPrice = 0;
     let equipmentPrediction = null;
@@ -8640,11 +8752,11 @@
   }
 
   function zoneForPosition(position) {
-    if (currentMapId === "guild") return "公會";
-    if (currentMapId === "shop") return "裝備店";
-    if (currentMapId === "clinic") return "霧草療癒所";
-    if (currentMapId === "general-store") return "道具店";
-    if (currentMapId === "inn") return "霧燈旅店";
+    if (currentMapId === "guild") return "冒險者公會";
+    if (currentMapId === "shop") return "帝都裝備坊";
+    if (currentMapId === "clinic") return "帝都醫療院";
+    if (currentMapId === "general-store") return "帝都道具店";
+    if (currentMapId === "inn") return "帝都旅館";
     if (world?.biome === "mountain") return world?.name || "欣梅爾山地";
     return "米克雷帝國";
   }
@@ -10003,6 +10115,12 @@
   }
 
   function handleCanvasPointer(event) {
+    if (mobileChatInputActive()) {
+      event.preventDefault();
+      stopMobileChatMovement();
+      worldChatInput?.blur?.();
+      return;
+    }
     if (mode === "battle") {
       clearBattleEnemySelection();
       const battleTouch = event.pointerType === "touch" && usesMobileExploreControls();
@@ -12185,6 +12303,13 @@
     } finally {
       worldChatInput?.focus?.({ preventScroll: true });
     }
+  });
+  worldChatInput?.addEventListener("focus", () => {
+    // On touch devices the software keyboard can cover a large part of the
+    // playfield. Cancel any in-flight click-to-move route as soon as chat starts
+    // so the hero never keeps walking behind the keyboard. Desktop is unchanged.
+    if (!usesMobileExploreControls()) return;
+    stopMobileChatMovement();
   });
   worldChatInput?.addEventListener("keydown", (event) => {
     event.stopPropagation();
