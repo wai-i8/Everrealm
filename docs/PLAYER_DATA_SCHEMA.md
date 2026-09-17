@@ -49,3 +49,14 @@ Fixed catalogs under `data/` remain version-controlled Game Data and are referen
 ## Account character name
 
 新帳戶註冊必須由玩家輸入角色名稱（trim 後最多 24 字）。註冊成功時先同步到 Firebase Auth `displayName` 作 fresh-account identity；首次建立正式旅程時，該名稱必須寫入 canonical `players/{uid}.player.name`。其後 gameplay UI、battle、HUD、Status 同雲端 save 一律以 `player.name` 為角色名 source of truth，唔再由 hard-coded default 覆蓋已存在名稱。
+
+## Phase 3 Step 9B — authoritative map transitions
+
+`expansion.positionAuthority` is now enforced for map changes when a trusted
+same-map anchor exists. `mapCommand("transition")` checks that anchor against
+the authored exit/door region for the requested adjacent map. Client `player.x`
+/`player.y` cannot be used to bypass this check. On success the server chooses
+the canonical arrival coordinates, writes them to `player.x/y`, switches
+`currentMapId`, and re-anchors `positionAuthority` on the destination map.
+Legacy saves without an authority anchor may transition once and are then
+bootstrapped into the protected path.

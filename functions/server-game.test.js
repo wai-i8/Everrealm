@@ -72,14 +72,83 @@ test("guild commission accept/report path is server-validated by map and state",
 
 test("map transitions only allow authored adjacent maps", () => {
   const save = baseSave({ expansion: { currentMapId: "world" } });
-  const valid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" });
+  const valid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" }, { nowMs: 123456 });
   assert.equal(valid.ok, true);
   assert.equal(valid.state.expansion.currentMapId, "field");
-  const invalid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "mountain-south" });
+  const invalid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "mountain-south" }, { nowMs: 123456 });
   assert.equal(invalid.ok, false);
   assert.equal(invalid.reason, "invalid-transition");
 });
 
+test("Step 9B accepts a transition when the trusted anchor is at the authored exit", () => {
+  const save = baseSave({
+    player: { x: 6200, y: 2100 },
+    expansion: {
+      currentMapId: "world",
+      positionAuthority: { version: 1, mapId: "world", x: 6200, y: 2100, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" }, { nowMs: 123456 });
+  assert.equal(result.ok, true);
+  assert.equal(result.positionValidated, true);
+  assert.deepEqual(result.arrival, { x: 721, y: 2650 });
+  assert.equal(result.state.player.x, 721);
+  assert.equal(result.state.player.y, 2650);
+  assert.equal(result.state.expansion.positionAuthority.mapId, "field");
+  assert.equal(result.state.expansion.positionAuthority.x, 721);
+  assert.equal(result.state.expansion.positionAuthority.y, 2650);
+  assert.equal(result.state.expansion.positionAuthority.validatedAtMs, 123456);
+});
+
+test("Step 9B rejects a valid map link when the trusted anchor is nowhere near its exit", () => {
+  const save = baseSave({
+    player: { x: 6200, y: 2100 },
+    expansion: {
+      currentMapId: "world",
+      positionAuthority: { version: 1, mapId: "world", x: 3663, y: 1746, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" }, { nowMs: 123456 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "invalid-transition-position");
+  assert.equal(result.from, "world");
+  assert.equal(result.to, "field");
+});
+
+test("Step 9B uses the trusted anchor rather than spoofable player x/y", () => {
+  const save = baseSave({
+    player: { x: 6200, y: 2100 },
+    expansion: {
+      currentMapId: "world",
+      positionAuthority: { version: 1, mapId: "world", x: 1000, y: 1000, validatedAtMs: 120000, anomalyCount: 1, lastAnomalyAtMs: 119000 },
+    },
+  });
+  const result = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" }, { nowMs: 123456 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "invalid-transition-position");
+});
+
+
+
+test("Step 9B town respawn resets the canonical map and trusted position anchor", () => {
+  const save = baseSave({
+    player: { x: 4500, y: 1489, hp: 0 },
+    expansion: {
+      currentMapId: "mountain-south",
+      positionAuthority: { version: 1, mapId: "mountain-south", x: 4500, y: 1489, validatedAtMs: 120000, anomalyCount: 2, lastAnomalyAtMs: 119000 },
+    },
+  });
+  const respawn = ServerGame.respawnTownStatePatch(save, { nowMs: 123456 });
+  assert.equal(respawn.mapId, "world");
+  assert.deepEqual({ x: respawn.x, y: respawn.y }, { x: 3663, y: 1746 });
+  assert.equal(respawn.positionAuthority.version, 1);
+  assert.equal(respawn.positionAuthority.mapId, "world");
+  assert.equal(respawn.positionAuthority.x, 3663);
+  assert.equal(respawn.positionAuthority.y, 1746);
+  assert.equal(respawn.positionAuthority.validatedAtMs, 123456);
+  assert.equal(respawn.positionAuthority.anomalyCount, 2);
+  assert.equal(respawn.positionAuthority.lastAnomalyAtMs, 119000);
+});
 
 test("battle start is idempotent for the same encounter and exposes orphan battle id for recovery", () => {
   let save = baseSave({ expansion: { currentMapId: "field" } });

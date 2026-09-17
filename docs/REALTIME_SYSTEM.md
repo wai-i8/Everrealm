@@ -106,3 +106,12 @@ The public API is `getTime()`, `getDay()`, `getHour()` and `getMinute()`. `isNig
 Authenticated clients may read same-map player collections and presence records. A client may write only its own UID's presence and player record. RTDB rules validate the required fields and constrain `state` to `exploring` or `battle`. Firestore allows authenticated reads of `world/config` and denies client writes.
 
 Phase 3 Step 9A deliberately leaves this realtime path untouched: local movement still publishes through the existing throttled RTDB record, and remote interpolation remains presentation-only. Separately, routine Firestore saves derive a server-owned `expansion.positionAuthority` checkpoint. That checkpoint is not sourced from RTDB and does not add a Function call to each movement update.
+
+## Phase 3 Step 9B — map-transition enforcement
+
+Realtime movement and remote interpolation are unchanged. Before a normal map
+transition the client still flushes its latest position through the ordinary
+player save command. The map callable then validates the server-owned trusted
+anchor against the authored source exit and selects the destination spawn on
+the server. This keeps the existing low-latency RTDB movement path while
+preventing arbitrary map hops or forged post-transition spawn coordinates.

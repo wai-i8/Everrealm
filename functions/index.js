@@ -179,14 +179,31 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
       return result;
     }
 
-    const result = reviveResult(save, { returnToTown: action === "respawn_town" });
+    const returnToTown = action === "respawn_town";
+    const result = reviveResult(save, { returnToTown });
     if (!result.ok) return result;
-    transaction.update(playerRef, {
+
+    const updates = {
       "player.hp": result.player.hp,
       "player.level": result.player.level,
       "player.xp": result.player.xp,
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (returnToTown) {
+      // Step 9B: respawning in town is itself an authoritative map change.
+      // Keep the canonical map, coordinates and trusted anchor in sync so the
+      // next legitimate doorway/exit transition is not rejected as stale.
+      const respawn = ServerGame.respawnTownStatePatch(save, { nowMs: Date.now() });
+      updates["player.x"] = respawn.x;
+      updates["player.y"] = respawn.y;
+      updates["expansion.currentMapId"] = respawn.mapId;
+      updates["expansion.positionAuthority"] = respawn.positionAuthority;
+      transaction.update(playerRef, updates);
+      return { ...result, respawn: { mapId: respawn.mapId, x: respawn.x, y: respawn.y } };
+    }
+
+    transaction.update(playerRef, updates);
     return result;
   });
 });
@@ -196,7 +213,7 @@ async function runAuthoritativeCommand(request, command) {
   const uid = authenticatedUid(request);
   assertCommandVersion(request);
   return withPlayerTransaction(uid, ({ transaction, playerRef, save }) => {
-    const result = command(save, request.data || {});
+    const result = command(save, request.data || {}, { nowMs: Date.now() });
     if (!result?.ok || !result.state) return result;
     const payload = result.state;
     transaction.update(playerRef, {

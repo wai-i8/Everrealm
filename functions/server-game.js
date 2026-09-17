@@ -26,6 +26,58 @@ const MAP_LINKS = Object.freeze({
   inn: new Set(["world"]),
 });
 
+// Phase 3 Step 9B: map changes remain one callable per transition, but the
+// server now checks that the Step 9A trusted position is actually near the
+// authored exit/door. Arrival coordinates are server-owned too, so a modified
+// client cannot choose an arbitrary spawn point after a valid transition.
+const MAP_TRANSITION_POSITION_MARGIN = 180;
+const POSITION_AUTHORITY_VERSION = 1;
+const WORLD_RESPAWN = Object.freeze({ mapId: "world", x: 3663, y: 1746 });
+
+function transitionRule(sourceRect, arrival) {
+  return Object.freeze({
+    sourceRect: Object.freeze({ ...sourceRect }),
+    arrival: Object.freeze({ ...arrival }),
+  });
+}
+
+const MAP_TRANSITION_RULES = Object.freeze({
+  world: Object.freeze({
+    guild: transitionRule({ x: 3514, y: 1472, w: 291, h: 184 }, { x: 1666, y: 1576 }),
+    shop: transitionRule({ x: 1943, y: 1759, w: 261, h: 160 }, { x: 628, y: 998 }),
+    inn: transitionRule({ x: 5126, y: 2920, w: 273, h: 150 }, { x: 634, y: 1076 }),
+    clinic: transitionRule({ x: 5149, y: 1756, w: 267, h: 164 }, { x: 627, y: 1050 }),
+    "general-store": transitionRule({ x: 1907, y: 2920, w: 282, h: 154 }, { x: 618, y: 1062 }),
+    field: transitionRule({ x: 6167, y: 1963, w: 230, h: 260 }, { x: 721, y: 2650 }),
+  }),
+  field: Object.freeze({
+    world: transitionRule({ x: 567, y: 2545, w: 99, h: 215 }, { x: 6067, y: 2092 }),
+    dungeon: transitionRule({ x: 3320, y: 148, w: 314, h: 207 }, { x: 4716, y: 4383 }),
+  }),
+  dungeon: Object.freeze({
+    field: transitionRule({ x: 4506, y: 4523, w: 435, h: 493 }, { x: 3477, y: 454 }),
+    "mountain-south": transitionRule({ x: 0, y: 872, w: 384, h: 348 }, { x: 4500, y: 1489 }),
+  }),
+  "mountain-south": Object.freeze({
+    dungeon: transitionRule({ x: 4628, y: 1318, w: 236, h: 317 }, { x: 524, y: 1036 }),
+  }),
+  guild: Object.freeze({
+    world: transitionRule({ x: 1423, y: 1588, w: 492, h: 122 }, { x: 3663, y: 1746 }),
+  }),
+  shop: Object.freeze({
+    world: transitionRule({ x: 556, y: 1010, w: 144, h: 53 }, { x: 2071, y: 2009 }),
+  }),
+  clinic: Object.freeze({
+    world: transitionRule({ x: 501, y: 1070, w: 260, h: 99 }, { x: 5281, y: 2010 }),
+  }),
+  "general-store": Object.freeze({
+    world: transitionRule({ x: 542, y: 1074, w: 155, h: 42 }, { x: 2049, y: 3164 }),
+  }),
+  inn: Object.freeze({
+    world: transitionRule({ x: 535, y: 1088, w: 199, h: 101 }, { x: 5262, y: 3160 }),
+  }),
+});
+
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)); }
 function whole(value, fallback = 0) {
   const number = Number(value);
@@ -51,6 +103,8 @@ function saveCopy(save) {
 }
 function playerSnapshot(state) {
   return {
+    x: Number(state.player.x) || 0,
+    y: Number(state.player.y) || 0,
     hp: whole(state.player.hp, 0),
     level: clamp(whole(state.player.level, 1), 1, Expansion.LEVEL_CAP),
     xp: Math.max(0, whole(state.player.xp, 0)),
@@ -75,6 +129,7 @@ function statePayload(state) {
       dungeonClears: Math.max(0, whole(state.expansion.dungeonClears, 0)),
       defeatedDungeonBosses: [...(state.expansion.defeatedDungeonBosses || [])],
       checkpoint: clone(state.expansion.checkpoint || null),
+      positionAuthority: clone(state.expansion.positionAuthority || null),
       serverBattle: clone(state.expansion.serverBattle || null),
     },
     openedChests: [...(state.openedChests || [])],
@@ -86,6 +141,60 @@ function resultWithState(state, result = {}) {
 function wrongMap(state, allowed) {
   return !allowed.includes(String(state.expansion.currentMapId || ""));
 }
+function pointNearRect(x, y, rect, margin = MAP_TRANSITION_POSITION_MARGIN) {
+  if (!rect) return false;
+  const px = Number(x);
+  const py = Number(y);
+  if (!Number.isFinite(px) || !Number.isFinite(py)) return false;
+  const left = Number(rect.x) - margin;
+  const top = Number(rect.y) - margin;
+  const right = Number(rect.x) + Number(rect.w) + margin;
+  const bottom = Number(rect.y) + Number(rect.h) + margin;
+  return px >= left && px <= right && py >= top && py <= bottom;
+}
+
+function trustedPositionForMap(state, mapId) {
+  const authority = state?.expansion?.positionAuthority;
+  if (!authority || typeof authority !== "object") return null;
+  if (Number(authority.version) !== POSITION_AUTHORITY_VERSION) return null;
+  if (String(authority.mapId || "") !== String(mapId || "")) return null;
+  const x = Number(authority.x);
+  const y = Number(authority.y);
+  const validatedAtMs = Number(authority.validatedAtMs);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(validatedAtMs) || validatedAtMs <= 0) return null;
+  return { x, y, validatedAtMs };
+}
+
+function reanchorAfterTransition(state, mapId, arrival, nowMs, previousAuthority = null) {
+  const previous = previousAuthority && typeof previousAuthority === "object" ? previousAuthority : {};
+  const x = Number(arrival?.x);
+  const y = Number(arrival?.y);
+  state.player.x = Number.isFinite(x) ? x : Number(state.player.x) || 0;
+  state.player.y = Number.isFinite(y) ? y : Number(state.player.y) || 0;
+  state.expansion.positionAuthority = {
+    version: POSITION_AUTHORITY_VERSION,
+    mapId: String(mapId || "world"),
+    x: state.player.x,
+    y: state.player.y,
+    validatedAtMs: Math.max(1, whole(nowMs, Date.now())) ,
+    anomalyCount: Math.max(0, whole(previous.anomalyCount, 0)),
+    lastAnomalyAtMs: Math.max(0, whole(previous.lastAnomalyAtMs, 0)),
+  };
+}
+
+function respawnTownStatePatch(save, options = {}) {
+  const state = saveCopy(save);
+  const previousAuthority = state.expansion.positionAuthority;
+  state.expansion.currentMapId = WORLD_RESPAWN.mapId;
+  reanchorAfterTransition(state, WORLD_RESPAWN.mapId, WORLD_RESPAWN, options.nowMs, previousAuthority);
+  return {
+    mapId: WORLD_RESPAWN.mapId,
+    x: state.player.x,
+    y: state.player.y,
+    positionAuthority: clone(state.expansion.positionAuthority),
+  };
+}
+
 function equipmentSellPrice(item) {
   const cost = Math.max(0, whole(item?.cost, 0));
   return cost > 0 ? Math.max(1, Math.floor(cost * SHOP_SELL_RATE)) : 0;
@@ -568,18 +677,47 @@ function battleCommand(save, input = {}) {
   return { ok: false, reason: "unsupported-action", action };
 }
 
-function mapCommand(save, input = {}) {
+function mapCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   if (action !== "transition") return { ok: false, reason: "unsupported-action" };
   const from = String(state.expansion.currentMapId || "world");
   const to = String(input.targetMapId || "").trim();
   if (!MAP_LINKS[from]?.has(to)) return { ok: false, reason: "invalid-transition", from, to };
+
+  const rule = MAP_TRANSITION_RULES[from]?.[to] || null;
+  if (!rule) return { ok: false, reason: "transition-rule-missing", from, to };
+
+  const trusted = trustedPositionForMap(state, from);
+  // The normal client flushes immediately before mapCommand, so established
+  // Step 9A saves should always have a trusted same-map anchor here. We keep a
+  // migration fallback for genuinely old saves, but once an authority exists
+  // it cannot be bypassed by client-supplied x/y.
+  if (trusted && !pointNearRect(trusted.x, trusted.y, rule.sourceRect)) {
+    return {
+      ok: false,
+      reason: "invalid-transition-position",
+      from,
+      to,
+      trustedPosition: { x: trusted.x, y: trusted.y },
+    };
+  }
+
+  const previousAuthority = state.expansion.positionAuthority;
   state.expansion.currentMapId = to;
-  return resultWithState(state, { action, from, to });
+  reanchorAfterTransition(state, to, rule.arrival, options.nowMs, previousAuthority);
+  return resultWithState(state, {
+    action,
+    from,
+    to,
+    arrival: { x: state.player.x, y: state.player.y },
+    positionValidated: Boolean(trusted),
+  });
 }
 
 module.exports = Object.freeze({
+  WORLD_RESPAWN,
+  respawnTownStatePatch,
   economyCommand,
   questCommand,
   battleCommand,
