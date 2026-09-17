@@ -215,4 +215,5 @@
 
 - The six left exploration launcher windows are overlays, not pauses: Status, Inventory, read-only Deck, Skill Tree, Missions and System may stay open while the hero moves.
 - World-service interaction windows and modal UI are movement locks. Guild service, shops, city-gate editable Deck configuration, NPC dialogue and confirmation/detail modals stop exploration movement until dismissed.
+- Low-risk reversible server-authoritative actions use optimistic presentation: equipment equip/unequip, Deck skill configuration, potion use and shop buy/sell update the local UI immediately, then reconcile against the authoritative server response. A rejected or failed command rolls the local presentation back; authoritative rewards, quest completion and map transitions are not pre-committed this way.
 - Bottom System/Battle history is click-through HUD text with a left-side invisible scroll gesture strip and no visible scrollbar. NPC dialogue has higher layer priority than this HUD.

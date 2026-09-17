@@ -7749,3 +7749,134 @@ html body [aria-disabled="true"] {
     line-height: 1.2;
   }
 }
+
+/* Battle entry transition: masks the short authoritative battle-start round trip
+   with an intentional encounter beat instead of leaving the player on a frozen frame. */
+.battle-entry-transition {
+  position: absolute;
+  inset: 0;
+  z-index: 72;
+  overflow: hidden;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 211, 96, .18), rgba(7, 12, 26, .72) 38%, rgba(3, 7, 16, .94) 82%),
+    rgba(3, 7, 16, .86);
+  animation: battle-entry-fade-in .11s ease-out both;
+}
+
+.battle-entry-transition[hidden] {
+  display: none !important;
+}
+
+.battle-entry-transition::before,
+.battle-entry-transition::after {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  background: linear-gradient(112deg, transparent 43%, rgba(255, 218, 112, .28) 48%, rgba(255, 244, 201, .7) 50%, rgba(255, 196, 55, .28) 52%, transparent 57%);
+  transform: translateX(-72%);
+  animation: battle-entry-sweep .34s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.battle-entry-transition::after {
+  transform: translateX(72%) scaleX(-1);
+  animation-name: battle-entry-sweep-reverse;
+}
+
+.battle-entry-flash {
+  position: absolute;
+  width: min(54vw, 620px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 221, 126, .68);
+  box-shadow: 0 0 0 12px rgba(255, 199, 71, .08), 0 0 72px rgba(255, 190, 54, .24);
+  animation: battle-entry-ring .34s ease-out both;
+}
+
+.battle-entry-slash {
+  position: absolute;
+  width: min(68vw, 760px);
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 223, 130, .98) 18%, #fff7d4 50%, rgba(255, 194, 59, .98) 82%, transparent);
+  box-shadow: 0 0 22px rgba(255, 194, 59, .62);
+  opacity: 0;
+}
+
+.battle-entry-slash-a {
+  transform: rotate(24deg) scaleX(.45);
+  animation: battle-entry-slash-a .26s .03s ease-out both;
+}
+
+.battle-entry-slash-b {
+  transform: rotate(-24deg) scaleX(.45);
+  animation: battle-entry-slash-b .26s .08s ease-out both;
+}
+
+.battle-entry-copy {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 16px 28px;
+  text-align: center;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, .92), 0 0 18px rgba(0, 0, 0, .72);
+  animation: battle-entry-copy .2s .08s ease-out both;
+}
+
+.battle-entry-copy span {
+  font-size: clamp(10px, 1.2vw, 15px);
+  letter-spacing: .36em;
+  color: #67e7dd;
+  font-weight: 800;
+}
+
+.battle-entry-copy strong {
+  font-size: clamp(22px, 3.4vw, 44px);
+  letter-spacing: .08em;
+  color: #fff0bf;
+  font-weight: 900;
+}
+
+@keyframes battle-entry-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes battle-entry-sweep {
+  from { transform: translateX(-72%); opacity: 0; }
+  42% { opacity: 1; }
+  to { transform: translateX(72%); opacity: 0; }
+}
+
+@keyframes battle-entry-sweep-reverse {
+  from { transform: translateX(72%) scaleX(-1); opacity: 0; }
+  42% { opacity: 1; }
+  to { transform: translateX(-72%) scaleX(-1); opacity: 0; }
+}
+
+@keyframes battle-entry-ring {
+  from { transform: scale(.38); opacity: 0; }
+  45% { opacity: 1; }
+  to { transform: scale(1.16); opacity: 0; }
+}
+
+@keyframes battle-entry-slash-a {
+  from { opacity: 0; transform: rotate(24deg) scaleX(.18); }
+  38% { opacity: 1; }
+  to { opacity: .12; transform: rotate(24deg) scaleX(1); }
+}
+
+@keyframes battle-entry-slash-b {
+  from { opacity: 0; transform: rotate(-24deg) scaleX(.18); }
+  38% { opacity: 1; }
+  to { opacity: .12; transform: rotate(-24deg) scaleX(1); }
+}
+
+@keyframes battle-entry-copy {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1); }
+}

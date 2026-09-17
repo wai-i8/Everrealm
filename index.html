@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260917-02"],
+          ["everrealmStyles", "styles.css?v=20260917-03"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -179,21 +179,19 @@
           <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
         </div>
 
+        <div id="battleEntryTransition" class="battle-entry-transition" aria-hidden="true" hidden>
+          <div class="battle-entry-flash" aria-hidden="true"></div>
+          <div class="battle-entry-slash battle-entry-slash-a" aria-hidden="true"></div>
+          <div class="battle-entry-slash battle-entry-slash-b" aria-hidden="true"></div>
+          <div class="battle-entry-copy" aria-hidden="true">
+            <span>ENCOUNTER</span>
+            <strong id="battleEntryName">遭遇戰</strong>
+          </div>
+        </div>
+
         <section id="battleHud" class="battle-hud" data-battle-ui data-battle-phase="command" aria-label="戰棋戰鬥介面" hidden>
           <div class="battle-corner battle-corner-left" aria-hidden="true"></div>
           <div class="battle-corner battle-corner-right" aria-hidden="true"></div>
-
-          <section id="battleEncounterIntro" class="battle-encounter-intro" data-battle-panel="encounter-intro" aria-labelledby="battleEncounterTitle" hidden>
-            <div class="encounter-stamp" aria-hidden="true"><span>!</span></div>
-            <div>
-              <p>TACTICAL ENCOUNTER</p>
-              <h2 id="battleEncounterTitle">霧中有動靜！</h2>
-              <span id="battleEncounterSubtitle">先同步走位，再同步出招。</span>
-            </div>
-            <button id="battleStartButton" class="battle-start-button" type="button" data-battle-action="start">
-              <span>迎戰</span><small>ENTER</small>
-            </button>
-          </section>
 
           <header id="battleTurnHeader" class="battle-turn-header" data-battle-panel="turn-status">
             <span id="battleRoundLabel" class="battle-round-label">ROUND 1</span>
@@ -536,7 +534,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-02")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-05")}"><\/script>`);
       })();
     </script>
 
@@ -572,7 +570,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-02", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-04", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
