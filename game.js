@@ -37,7 +37,10 @@
   const FacilityActionRouter = window.EverrealmFacilityActionRouter;
   const BattleVictory = window.EverrealmBattleVictory;
   const PlayerStateActions = window.EverrealmPlayerStateActions;
-  const ServerApi = window.EverrealmServerApi?.create?.({ firebase: Firebase });
+  const ServerApi = window.EverrealmServerApi?.create?.({
+    firebase: Firebase,
+    positionProvider: () => ({ mapId: currentMapId, x: player.x, y: player.y }),
+  });
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const Chat = window.EverrealmChat;

@@ -150,6 +150,131 @@ test("Step 9B town respawn resets the canonical map and trusted position anchor"
   assert.equal(respawn.positionAuthority.lastAnomalyAtMs, 119000);
 });
 
+
+
+test("Step 9C accepts a shop command only after a plausible move to the merchant", () => {
+  const save = baseSave({
+    player: { x: 618, y: 1062 },
+    expansion: {
+      currentMapId: "general-store",
+      positionAuthority: { version: 1, mapId: "general-store", x: 618, y: 1062, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.economyCommand(save, {
+    action: "buy-store-item",
+    itemId: "healing_potion",
+    position: { mapId: "general-store", x: 622, y: 500 },
+  }, { nowMs: 123000 });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.expansion.positionAuthority.x, 622);
+  assert.equal(result.state.expansion.positionAuthority.y, 500);
+  assert.equal(result.state.player.potions, 3);
+});
+
+test("Step 9C rejects remote shop use even when the claimed point itself is movement-plausible", () => {
+  const save = baseSave({
+    player: { x: 618, y: 1062 },
+    expansion: {
+      currentMapId: "general-store",
+      positionAuthority: { version: 1, mapId: "general-store", x: 618, y: 1062, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.economyCommand(save, {
+    action: "buy-store-item",
+    itemId: "healing_potion",
+    position: { mapId: "general-store", x: 618, y: 1062 },
+  }, { nowMs: 121000 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "interaction-too-far");
+});
+
+test("Step 9C rejects an impossible same-map teleport before gameplay proximity is checked", () => {
+  const save = baseSave({
+    player: { x: 618, y: 1062 },
+    expansion: {
+      currentMapId: "general-store",
+      positionAuthority: { version: 1, mapId: "general-store", x: 618, y: 1062, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.economyCommand(save, {
+    action: "buy-store-item",
+    itemId: "healing_potion",
+    position: { mapId: "general-store", x: 5000, y: 5000 },
+  }, { nowMs: 120100 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "invalid-position");
+});
+
+test("Step 9C guild mutations require the player to be near the commission desk or board", () => {
+  const commissionId = Guild.DEFAULT_COMMISSIONS[0].id;
+  const save = baseSave({
+    player: { x: 1666, y: 1576 },
+    expansion: {
+      currentMapId: "guild",
+      positionAuthority: { version: 1, mapId: "guild", x: 1666, y: 1576, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const accepted = ServerGame.questCommand(save, {
+    action: "accept",
+    commissionId,
+    position: { mapId: "guild", x: 1666, y: 700 },
+  }, { nowMs: 123000 });
+  assert.equal(accepted.ok, true);
+
+  const tooFar = ServerGame.questCommand(save, {
+    action: "accept",
+    commissionId,
+    position: { mapId: "guild", x: 1666, y: 1576 },
+  }, { nowMs: 123000 });
+  assert.equal(tooFar.ok, false);
+  assert.equal(tooFar.reason, "interaction-too-far");
+});
+
+test("Step 9C validates authored wish-pool and clinic service proximity", () => {
+  const fieldSave = baseSave({
+    player: { x: 721, y: 2650 },
+    expansion: {
+      currentMapId: "field",
+      positionAuthority: { version: 1, mapId: "field", x: 721, y: 2650, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const wish = ServerGame.validateGameplayInteraction(fieldSave, {
+    position: { mapId: "field", x: 1770, y: 950 },
+  }, "mountain-wish-pool", { nowMs: 133000 });
+  assert.equal(wish.ok, true);
+
+  const clinicSave = baseSave({
+    player: { x: 627, y: 1050 },
+    expansion: {
+      currentMapId: "clinic",
+      positionAuthority: { version: 1, mapId: "clinic", x: 627, y: 1050, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const clinic = ServerGame.validateGameplayInteraction(clinicSave, {
+    position: { mapId: "clinic", x: 628, y: 760 },
+  }, "clinic-heal", { nowMs: 121000 });
+  assert.equal(clinic.ok, true);
+});
+
+test("Step 9C battle start rejects an impossible exploration position claim", () => {
+  const save = baseSave({
+    player: { x: 721, y: 2650 },
+    expansion: {
+      currentMapId: "field",
+      positionAuthority: { version: 1, mapId: "field", x: 721, y: 2650, validatedAtMs: 120000, anomalyCount: 0, lastAnomalyAtMs: 0 },
+    },
+  });
+  const result = ServerGame.battleCommand(save, {
+    action: "start",
+    monsterType: "chick",
+    level: 1,
+    encounterId: "step9c-teleport",
+    position: { mapId: "field", x: 6000, y: 6000 },
+  }, { nowMs: 120100 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "invalid-position");
+});
+
 test("battle start is idempotent for the same encounter and exposes orphan battle id for recovery", () => {
   let save = baseSave({ expansion: { currentMapId: "field" } });
   const first = ServerGame.battleCommand(save, { action: "start", monsterType: "chick", level: 1, encounterId: "encounter-a" });

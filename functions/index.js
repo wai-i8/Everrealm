@@ -157,26 +157,48 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
 
   return withPlayerTransaction(uid, ({ transaction, playerRef, save }) => {
     if (action === "clinic") {
-      const result = clinicHealResult(save);
+      const positionCheck = ServerGame.validateGameplayInteraction(
+        save,
+        request.data || {},
+        "clinic-heal",
+        { nowMs: Date.now() },
+      );
+      if (!positionCheck.ok) return positionCheck;
+      const validatedSave = positionCheck.state;
+      const result = clinicHealResult(validatedSave);
       if (!result.ok) return result;
       transaction.update(playerRef, {
         "player.hp": result.player.hp,
+        "player.x": validatedSave.player.x,
+        "player.y": validatedSave.player.y,
+        "expansion.positionAuthority": validatedSave.expansion.positionAuthority,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return result;
+      return { ...result, positionValidated: positionCheck.positionValidated };
     }
 
     if (action === "shrine") {
-      const result = shrineRestResult(save, shrineId);
+      const positionCheck = ServerGame.validateGameplayInteraction(
+        save,
+        request.data || {},
+        "echo-lantern-shrine",
+        { nowMs: Date.now() },
+      );
+      if (!positionCheck.ok) return positionCheck;
+      const validatedSave = positionCheck.state;
+      const result = shrineRestResult(validatedSave, shrineId);
       if (!result.ok) return result;
       transaction.update(playerRef, {
         "player.hp": result.player.hp,
+        "player.x": validatedSave.player.x,
+        "player.y": validatedSave.player.y,
+        "expansion.positionAuthority": validatedSave.expansion.positionAuthority,
         "expansion.checkpoint.mapId": result.checkpoint.mapId,
         "expansion.checkpoint.x": result.checkpoint.x,
         "expansion.checkpoint.y": result.checkpoint.y,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return result;
+      return { ...result, positionValidated: positionCheck.positionValidated };
     }
 
     const returnToTown = action === "respawn_town";

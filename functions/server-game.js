@@ -7,6 +7,7 @@ const Tactics = require("./shared/tactics-core.js");
 const ItemData = require("./shared/data/items.js");
 const MonsterBlueprints = require("./shared/map/monster-blueprints.js");
 const { classMaxHp } = require("./game-rules.js");
+const PlayerState = require("./player-state.js");
 
 const SHOP_SELL_RATE = 1 / 3;
 const MAX_COINS = 99999;
@@ -33,6 +34,44 @@ const MAP_LINKS = Object.freeze({
 const MAP_TRANSITION_POSITION_MARGIN = 180;
 const POSITION_AUTHORITY_VERSION = 1;
 const WORLD_RESPAWN = Object.freeze({ mapId: "world", x: 3663, y: 1746 });
+
+// Phase 3 Step 9C: important gameplay commands carry the player's current
+// exploration position. The server never trusts that point directly: it first
+// checks that the claim is physically reachable from the Step 9A trusted
+// anchor, advances the anchor only when that movement is plausible, and then
+// applies a small authored proximity gate for the requested service/action.
+// RTDB movement/interpolation remains untouched.
+const GAMEPLAY_INTERACTION_RULES = Object.freeze({
+  guild: Object.freeze({
+    mapId: "guild",
+    targets: Object.freeze([
+      // Public commission receptionist (guildmaster-yin).
+      Object.freeze({ x: 1666, y: 676, radius: 220 }),
+      // West-side commission board.
+      Object.freeze({ x: 180, y: 220, radius: 110 }),
+    ]),
+  }),
+  "equipment-shop": Object.freeze({
+    mapId: "shop",
+    targets: Object.freeze([Object.freeze({ x: 621, y: 444, radius: 210 })]),
+  }),
+  "general-store": Object.freeze({
+    mapId: "general-store",
+    targets: Object.freeze([Object.freeze({ x: 622, y: 381, radius: 220 })]),
+  }),
+  "clinic-heal": Object.freeze({
+    mapId: "clinic",
+    targets: Object.freeze([Object.freeze({ x: 628, y: 708, radius: 220 })]),
+  }),
+  "mountain-wish-pool": Object.freeze({
+    mapId: "field",
+    targets: Object.freeze([Object.freeze({ x: 1770, y: 938, radius: 190 })]),
+  }),
+  "echo-lantern-shrine": Object.freeze({
+    mapId: "dungeon",
+    targets: Object.freeze([Object.freeze({ x: 4680, y: 4680, radius: 100 })]),
+  }),
+});
 
 function transitionRule(sourceRect, arrival) {
   return Object.freeze({
@@ -165,6 +204,111 @@ function trustedPositionForMap(state, mapId) {
   return { x, y, validatedAtMs };
 }
 
+function claimedCommandPosition(input = {}) {
+  const position = input?.position;
+  if (!position || typeof position !== "object") return null;
+  const x = Number(position.x);
+  const y = Number(position.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return {
+    mapId: String(position.mapId || "").trim(),
+    x,
+    y,
+  };
+}
+
+function samePoint(a, b, tolerance = 0.01) {
+  return Math.abs(Number(a?.x) - Number(b?.x)) <= tolerance
+    && Math.abs(Number(a?.y) - Number(b?.y)) <= tolerance;
+}
+
+function validateCommandPositionState(state, input = {}, options = {}) {
+  const mapId = String(state?.expansion?.currentMapId || "world");
+  const trusted = trustedPositionForMap(state, mapId);
+  const claimed = claimedCommandPosition(input);
+
+  // Compatibility path for a cached pre-9C client. It may use an already
+  // trusted anchor, but cannot advance or invent a position without a claim.
+  if (!claimed) {
+    return trusted
+      ? { ok: true, position: { x: trusted.x, y: trusted.y }, positionValidated: true, usedTrustedFallback: true }
+      : { ok: true, position: { x: Number(state.player?.x) || 0, y: Number(state.player?.y) || 0 }, positionValidated: false, usedTrustedFallback: true };
+  }
+
+  if (claimed.mapId && claimed.mapId !== mapId) {
+    return { ok: false, reason: "position-map-mismatch", mapId, claimedMapId: claimed.mapId };
+  }
+
+  // Old saves without a same-map authority get one compatibility bootstrap.
+  // Established Step 9A saves must pass the same speed/time test as an ordinary
+  // playerStateCommand save before a gameplay command can advance the anchor.
+  if (!trusted) {
+    const nowMs = Math.max(1, whole(options.nowMs, Date.now()));
+    state.player.x = claimed.x;
+    state.player.y = claimed.y;
+    state.expansion.positionAuthority = {
+      version: POSITION_AUTHORITY_VERSION,
+      mapId,
+      x: claimed.x,
+      y: claimed.y,
+      validatedAtMs: nowMs,
+      anomalyCount: Math.max(0, whole(state.expansion.positionAuthority?.anomalyCount, 0)),
+      lastAnomalyAtMs: Math.max(0, whole(state.expansion.positionAuthority?.lastAnomalyAtMs, 0)),
+    };
+    return { ok: true, position: { x: claimed.x, y: claimed.y }, positionValidated: false, bootstrapped: true };
+  }
+
+  const nextAuthority = PlayerState.nextPositionAuthority(state, claimed.x, claimed.y, options.nowMs);
+  if (!samePoint(nextAuthority, claimed) || String(nextAuthority.mapId || "") !== mapId) {
+    return {
+      ok: false,
+      reason: "invalid-position",
+      mapId,
+      trustedPosition: { x: trusted.x, y: trusted.y },
+      claimedPosition: { x: claimed.x, y: claimed.y },
+    };
+  }
+
+  state.player.x = claimed.x;
+  state.player.y = claimed.y;
+  state.expansion.positionAuthority = nextAuthority;
+  return { ok: true, position: { x: claimed.x, y: claimed.y }, positionValidated: true };
+}
+
+function validateGameplayInteractionState(state, input = {}, interactionId, options = {}) {
+  const positionResult = validateCommandPositionState(state, input, options);
+  if (!positionResult.ok) return positionResult;
+  if (!interactionId) return positionResult;
+
+  const rule = GAMEPLAY_INTERACTION_RULES[interactionId];
+  if (!rule) return { ok: false, reason: "unknown-interaction", interactionId };
+  // One-time compatibility for genuinely old saves that have neither a Step
+  // 9A anchor nor a 9C position claim. Established saves never take this path.
+  if (!positionResult.positionValidated && positionResult.usedTrustedFallback) {
+    return { ...positionResult, interactionId, proximityValidated: false };
+  }
+  const mapId = String(state.expansion.currentMapId || "world");
+  if (mapId !== rule.mapId) return { ok: false, reason: "wrong-map", interactionId };
+
+  const position = positionResult.position;
+  const nearby = rule.targets.some((target) => Math.hypot(position.x - target.x, position.y - target.y) <= target.radius);
+  if (!nearby) {
+    return {
+      ok: false,
+      reason: "interaction-too-far",
+      interactionId,
+      trustedPosition: { x: position.x, y: position.y },
+    };
+  }
+  return { ...positionResult, interactionId };
+}
+
+function validateGameplayInteraction(save, input = {}, interactionId, options = {}) {
+  const state = saveCopy(save);
+  const result = validateGameplayInteractionState(state, input, interactionId, options);
+  return result.ok ? { ...result, state } : result;
+}
+
 function reanchorAfterTransition(state, mapId, arrival, nowMs, previousAuthority = null) {
   const previous = previousAuthority && typeof previousAuthority === "object" ? previousAuthority : {};
   const x = Number(arrival?.x);
@@ -216,14 +360,17 @@ function setInventoryQuantity(state, itemId, quantity) {
   else delete state.expansion.inventory[itemId];
 }
 
-function economyCommand(save, input = {}) {
+function economyCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   const itemId = String(input.itemId || "").trim();
   const mapId = String(state.expansion.currentMapId || "");
+  const requireInteraction = (interactionId) => validateGameplayInteractionState(state, input, interactionId, options);
 
   if (action === "buy-store-item") {
     if (mapId !== "general-store") return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction("general-store");
+    if (!proximity.ok) return proximity;
     const item = GENERAL_STORE_GOODS[itemId];
     if (!item) return { ok: false, reason: "not-for-sale" };
     const coins = clamp(whole(state.player.coins, 0), 0, MAX_COINS);
@@ -243,6 +390,8 @@ function economyCommand(save, input = {}) {
 
   if (action === "sell-store-item") {
     if (!['shop', 'general-store'].includes(mapId)) return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction(mapId === "shop" ? "equipment-shop" : "general-store");
+    if (!proximity.ok) return proximity;
     const price = generalStoreSellPrice(itemId);
     if (price <= 0) return { ok: false, reason: "not-sellable" };
     if (itemId === "healing_potion") {
@@ -260,6 +409,8 @@ function economyCommand(save, input = {}) {
 
   if (action === "buy-equipment") {
     if (mapId !== "shop") return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction("equipment-shop");
+    if (!proximity.ok) return proximity;
     const item = Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, itemId);
     if (!item || item.purchasable === false) return { ok: false, reason: "not-for-sale" };
     const classId = String(state.expansion.classId || "fighter");
@@ -275,6 +426,8 @@ function economyCommand(save, input = {}) {
 
   if (action === "sell-equipment") {
     if (!['shop', 'general-store'].includes(mapId)) return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction(mapId === "shop" ? "equipment-shop" : "general-store");
+    if (!proximity.ok) return proximity;
     const item = Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, itemId);
     if (!item) return { ok: false, reason: "missing" };
     const owned = state.expansion.ownedEquipment;
@@ -448,14 +601,17 @@ function economyCommand(save, input = {}) {
   return { ok: false, reason: "unsupported-action", action };
 }
 
-function questCommand(save, input = {}) {
+function questCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   const mapId = String(state.expansion.currentMapId || "");
   const current = Guild.normalizeState(state.expansion.guildCommission);
+  const requireInteraction = (interactionId) => validateGameplayInteractionState(state, input, interactionId, options);
 
   if (action === "accept") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction("guild");
+    if (!proximity.ok) return proximity;
     const result = Guild.accept(current, String(input.commissionId || ""));
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -463,6 +619,8 @@ function questCommand(save, input = {}) {
   }
   if (action === "report") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction("guild");
+    if (!proximity.ok) return proximity;
     const result = Guild.report(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -472,6 +630,8 @@ function questCommand(save, input = {}) {
   }
   if (action === "abandon") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const proximity = requireInteraction("guild");
+    if (!proximity.ok) return proximity;
     const result = Guild.abandon(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -479,7 +639,11 @@ function questCommand(save, input = {}) {
   }
   if (action === "interaction") {
     const interactionId = String(input.interactionId || "").trim();
-    if (interactionId === "mountain-wish-pool" && mapId !== "field") return { ok: false, reason: "wrong-map" };
+    if (interactionId === "mountain-wish-pool") {
+      if (mapId !== "field") return { ok: false, reason: "wrong-map" };
+      const proximity = requireInteraction("mountain-wish-pool");
+      if (!proximity.ok) return proximity;
+    }
     const result = Guild.recordInteraction(current, interactionId);
     if (!result.changed) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -506,7 +670,7 @@ function recordServerKill(state, monsterType, instanceId) {
   return progress;
 }
 
-function battleCommand(save, input = {}) {
+function battleCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
   const existing = state.expansion.serverBattle && typeof state.expansion.serverBattle === "object" ? state.expansion.serverBattle : null;
@@ -530,6 +694,8 @@ function battleCommand(save, input = {}) {
     if (Array.isArray(blueprint.habitat?.maps) && blueprint.habitat.maps.length && !blueprint.habitat.maps.includes(mapId)) {
       return { ok: false, reason: "wrong-map" };
     }
+    const positionCheck = validateCommandPositionState(state, input, options);
+    if (!positionCheck.ok) return positionCheck;
     const level = clamp(whole(input.level, blueprint.baseLevel || 1), 1, 45);
     const stats = MonsterBlueprints.monsterStatsAtLevel(monsterType, level);
     const count = clamp(whole(blueprint.encounterCount, 1), 1, 3);
@@ -717,7 +883,9 @@ function mapCommand(save, input = {}, options = {}) {
 
 module.exports = Object.freeze({
   WORLD_RESPAWN,
+  GAMEPLAY_INTERACTION_RULES,
   respawnTownStatePatch,
+  validateGameplayInteraction,
   economyCommand,
   questCommand,
   battleCommand,

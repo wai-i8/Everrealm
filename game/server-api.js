@@ -9,6 +9,25 @@
 
   function create(options = {}) {
     const firebase = options.firebase || defaultFirebase;
+    const positionProvider = typeof options.positionProvider === "function" ? options.positionProvider : null;
+
+    function commandPosition() {
+      if (!positionProvider) return null;
+      try {
+        const position = positionProvider();
+        const x = Number(position?.x);
+        const y = Number(position?.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        return { mapId: String(position?.mapId || "").trim(), x, y };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function withCommandPosition(payload = {}) {
+      const position = commandPosition();
+      return position ? { ...payload, position } : payload;
+    }
 
     async function callable(name, payload = {}) {
       if (!firebase || typeof firebase.functions !== "function") {
@@ -32,29 +51,29 @@
     async function recoverPlayer(action, options = {}) {
       const command = String(action || "").trim();
       if (!command) return { ok: false, reason: "invalid-action" };
-      return callable("recoverPlayer", {
+      return callable("recoverPlayer", withCommandPosition({
         version: COMMAND_VERSION,
         action: command,
         shrineId: String(options.shrineId || "").trim() || undefined,
-      });
+      }));
     }
 
     async function economy(action, payload = {}) {
       const command = String(action || "").trim();
       if (!command) return { ok: false, reason: "invalid-action" };
-      return callable("economyCommand", { version: COMMAND_VERSION, action: command, ...payload });
+      return callable("economyCommand", withCommandPosition({ version: COMMAND_VERSION, action: command, ...payload }));
     }
 
     async function quest(action, payload = {}) {
       const command = String(action || "").trim();
       if (!command) return { ok: false, reason: "invalid-action" };
-      return callable("questCommand", { version: COMMAND_VERSION, action: command, ...payload });
+      return callable("questCommand", withCommandPosition({ version: COMMAND_VERSION, action: command, ...payload }));
     }
 
     async function battle(action, payload = {}) {
       const command = String(action || "").trim();
       if (!command) return { ok: false, reason: "invalid-action" };
-      return callable("battleCommand", { version: COMMAND_VERSION, action: command, ...payload });
+      return callable("battleCommand", withCommandPosition({ version: COMMAND_VERSION, action: command, ...payload }));
     }
 
     async function map(action, payload = {}) {

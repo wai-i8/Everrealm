@@ -115,3 +115,14 @@ player save command. The map callable then validates the server-owned trusted
 anchor against the authored source exit and selects the destination spawn on
 the server. This keeps the existing low-latency RTDB movement path while
 preventing arbitrary map hops or forged post-transition spawn coordinates.
+
+## Phase 3 Step 9C — protected gameplay commands
+
+RTDB still owns low-latency presence and remote movement presentation. For
+protected world interactions, the client includes its current map/x/y in the
+existing gameplay callable; this is not an extra movement RPC. The Function
+validates that claim against the Firestore `positionAuthority` speed/time anchor
+before allowing the command to advance the anchor. Authored services then add a
+small proximity gate (guild desk/board, shops, clinic, wish pool and shrine), and
+battle start rejects an impossible same-map position claim. Normal movement,
+500 ms remote interpolation and RTDB publish cadence are unchanged.

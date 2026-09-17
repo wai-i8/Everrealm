@@ -60,3 +60,23 @@ the canonical arrival coordinates, writes them to `player.x/y`, switches
 `currentMapId`, and re-anchors `positionAuthority` on the destination map.
 Legacy saves without an authority anchor may transition once and are then
 bootstrapped into the protected path.
+
+## Phase 3 Step 9C — gameplay proximity authority
+
+Important world-facing server commands now carry the player's current exploration
+position as a claim, but the claim is never trusted directly. The server first
+checks that the point is reachable from the Step 9A `positionAuthority` anchor
+under the same speed/time budget used by routine saves. Only a plausible claim
+may advance the trusted anchor. Shop purchases/sales, guild accept/report/abandon,
+the authored mountain wish-pool interaction, clinic healing and shrine rest then
+also require that validated point to be near their authored service location.
+Battle start validates the same-map movement claim before creating the server
+battle session. Inventory-only actions such as equip/unequip or opening an owned
+reward remain independent of world proximity.
+
+This does not make movement per-step server authoritative: RTDB movement stays
+realtime and unchanged. It prevents a modified client from gaining protected
+progression by pairing an impossible/remote position with an otherwise valid
+Callable Function request. Old documents with no Step 9A anchor retain a one-time
+compatibility bootstrap; established saves cannot bypass proximity with raw
+`player.x/y` fields.
