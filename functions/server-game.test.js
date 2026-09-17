@@ -67,6 +67,13 @@ test("guild commission accept/report path is server-validated by map and state",
   assert.equal(accepted.state.expansion.guildCommission.status, "active");
 });
 
+test("authoritative state payload preserves the server revision", () => {
+  const save = baseSave({ stateRevision: 27, expansion: { currentMapId: "guild" } });
+  const result = ServerGame.questCommand(save, { action: "accept", commissionId: Guild.DEFAULT_COMMISSIONS[0].id });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.stateRevision, 27);
+});
+
 test("map transitions only allow authored adjacent maps", () => {
   const save = baseSave({ expansion: { currentMapId: "world" } });
   const valid = ServerGame.mapCommand(save, { action: "transition", targetMapId: "field" }, { nowMs: 123456 });
@@ -216,7 +223,7 @@ test("Step 9C rejects an impossible same-map teleport before gameplay proximity 
   assert.equal(result.reason, "invalid-position");
 });
 
-test("Step 9C guild mutations require the player to be near the commission desk or board", () => {
+test("guild commission mutations are authoritative by guild map and quest state, not fragile room proximity", () => {
   const commissionId = Guild.DEFAULT_COMMISSIONS[0].id;
   const save = baseSave({
     player: { x: 1666, y: 1576 },
@@ -228,17 +235,13 @@ test("Step 9C guild mutations require the player to be near the commission desk 
   const accepted = ServerGame.questCommand(save, {
     action: "accept",
     commissionId,
-    position: { mapId: "guild", x: 1666, y: 700 },
+    position: { mapId: "guild", x: 5000, y: 5000 },
   }, { nowMs: 123000 });
   assert.equal(accepted.ok, true);
 
-  const tooFar = ServerGame.questCommand(save, {
-    action: "accept",
-    commissionId,
-    position: { mapId: "guild", x: 1666, y: 1576 },
-  }, { nowMs: 123000 });
-  assert.equal(tooFar.ok, false);
-  assert.equal(tooFar.reason, "interaction-too-far");
+  const wrongMap = ServerGame.questCommand(baseSave(), { action: "accept", commissionId });
+  assert.equal(wrongMap.ok, false);
+  assert.equal(wrongMap.reason, "wrong-map");
 });
 
 test("Step 9C validates authored wish-pool and clinic service proximity", () => {
@@ -350,4 +353,30 @@ test("skill manual mutation is executed through the server economy command", () 
   assert.equal(result.ok, true);
   assert.ok(result.state.expansion.skills.unlockedSkillIds.includes(skill.id));
   assert.equal(result.state.expansion.skills.manualCounts[skill.id] || 0, 0);
+});
+
+test("2-star wish commission accepts anywhere inside the authoritative guild map", () => {
+  const save = baseSave({
+    player: { x: 1666, y: 1576 },
+    expansion: {
+      currentMapId: "guild",
+      positionAuthority: {
+        version: 1,
+        mapId: "guild",
+        x: 1666,
+        y: 1576,
+        validatedAtMs: 99000,
+        anomalyCount: 0,
+        lastAnomalyAtMs: 0,
+      },
+    },
+  });
+  const result = ServerGame.questCommand(save, {
+    action: "accept",
+    commissionId: "guild_wish_pool_2star",
+    position: { mapId: "guild", x: 180, y: 220 },
+  }, { nowMs: 100000 });
+  assert.equal(result.ok, true);
+  assert.equal(result.commission.id, "guild_wish_pool_2star");
+  assert.equal(result.state.expansion.guildCommission.status, "active");
 });

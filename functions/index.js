@@ -78,26 +78,27 @@ exports.playerStateCommand = onCall({ region: REGION, maxInstances: 20 }, async 
 
     if (action === "create") {
       if (existing) return { ok: true, created: false, data: existing };
-      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
+      const next = { ...PlayerState.canonicalInitialSave(payload, { nowMs }), stateRevision: 0 };
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, data: next };
     }
 
     if (action === "migrate") {
       if (existing) return { ok: true, created: false, data: existing };
-      const next = PlayerState.sanitizeLegacySave(payload, { nowMs });
+      const next = { ...PlayerState.sanitizeLegacySave(payload, { nowMs }), stateRevision: 0 };
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, migrated: true, data: next };
     }
 
     if (action === "reset") {
-      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
+      const nextRevision = Math.max(0, Math.floor(Number(existing?.stateRevision) || 0)) + 1;
+      const next = { ...PlayerState.canonicalInitialSave(payload, { nowMs }), stateRevision: nextRevision };
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: !existing, reset: true, data: next };
     }
 
     if (!existing) {
-      const next = PlayerState.canonicalInitialSave(payload, { nowMs });
+      const next = { ...PlayerState.canonicalInitialSave(payload, { nowMs }), stateRevision: 0 };
       transaction.set(playerRef, { ...next, updatedAt: FieldValue.serverTimestamp() });
       return { ok: true, created: true, data: next };
     }
@@ -216,14 +217,22 @@ async function runAuthoritativeCommand(request, command) {
   const uid = authenticatedUid(request);
   assertCommandVersion(request);
   return withPlayerTransaction(uid, ({ transaction, playerRef, save }) => {
-    const result = command(save, request.data || {}, { nowMs: Date.now() });
+    // Firestore retries this transaction on concurrent document writes. By
+    // incrementing the revision inside the transaction, the number represents
+    // server commit order rather than client request order. Clients can safely
+    // ignore an older response that happens to arrive late.
+    const nextRevision = Math.max(0, Math.floor(Number(save.stateRevision) || 0)) + 1;
+    const commandSave = { ...save, stateRevision: nextRevision };
+    const result = command(commandSave, request.data || {}, { nowMs: Date.now() });
     if (!result?.ok || !result.state) return result;
-    const payload = result.state;
+    const payload = { ...result.state, stateRevision: nextRevision };
+    result.state = payload;
     const expansion = { ...(save.expansion || {}), ...(payload.expansion || {}) };
     delete expansion.checkpoint;
     delete expansion.dungeonClears;
     delete expansion.defeatedDungeonBosses;
     transaction.update(playerRef, {
+      stateRevision: nextRevision,
       player: { ...(save.player || {}), ...(payload.player || {}) },
       expansion,
       openedChests: Array.isArray(payload.openedChests) ? payload.openedChests : (save.openedChests || []),

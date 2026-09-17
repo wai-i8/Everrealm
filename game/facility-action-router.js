@@ -56,7 +56,6 @@
       case "skill-detail":
       case "equip-skill":
       case "unequip-skill":
-      case "master-skill":
         command.skillId = button.dataset.skillId;
         break;
       default:

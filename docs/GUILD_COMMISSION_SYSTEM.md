@@ -38,7 +38,7 @@
 
 委託只負責發放 `skill_envelope_star: N`，不直接指定技能，也不在 Guild 模組複製 Fighter 星級對照表。玩家在物品欄開啟信封時，`skill-core.js` 會讀取 canonical Fighter skill runtime data 的 acquisition eligibility，查詢同星級 pool，以穩定 seed／serial 作隨機抽取，再透過現有技能書狀態 API 加入對應 `skill_id` 的技能書。7★ 同樣必須可以正常抽取 Fighter 7★ 技能書。
 
-取得技能書與學習技能是兩件事。現有 Fighter 前置條件、職業限制、已學技能的重複書／精通碎片處理仍由 Fighter Skill System 負責；委託系統不繞過這些規則。
+取得技能書與學習技能是兩件事。Fighter 前置條件與職業限制仍由 Skill System 負責；已學會技能的重複技能書會保留在物品欄，不會自動轉換成其他資源。委託系統不繞過這些規則。
 
 ## 保存契約
 

@@ -34,8 +34,6 @@
     2: { min: 10, max: 45 },
     3: { min: 20, max: 100 },
   });
-  const DUPLICATE_SHARDS = deepFreeze({ 1: 2, 2: 5, 3: 10 });
-  const MASTERY_UNLOCK_COST = deepFreeze({ 1: 12, 2: 28, 3: 55 });
   const AREA_SHAPES = Object.freeze(["single", "self", "line", "cone", "cross", "radius", "relative_cells", "line_to_target", "impact_area"]);
   const DEFAULT_STARTER_SKILLS = Object.freeze([...(classData?.starterSkills?.("fighter") || ["kentotsu"])]);
   // Fighter data keeps a small id alias map for saves created during the
@@ -841,18 +839,6 @@
     return result;
   }
 
-  function normalizeCountMap(source) {
-    const result = {};
-    if (!source || typeof source !== "object") return result;
-    for (const [rawId, rawCount] of Object.entries(source)) {
-      const id = String(rawId || "").trim();
-      if (!getSkill(id)) continue;
-      const count = wholeNumber(rawCount);
-      if (count > 0) result[id] = count;
-    }
-    return result;
-  }
-
   function normalizeBookCounts(source) {
     const result = Object.fromEntries(BOOK_STARS.map((star) => [star, 0]));
     if (!source || typeof source !== "object") return result;
@@ -977,8 +963,6 @@
       deckUpgradeMilestones,
       deckSlots,
       equippedSkillIds: deckIds(deckSlots),
-      masteryShards: wholeNumber(source.masteryShards, 0, 0, 999999),
-      duplicateCounts: normalizeCountMap(source.duplicateCounts),
       books: normalizeBookCounts(source.books || source.skillBooks),
       manualCounts: normalizeManualCounts(source.manualCounts || source.skillManuals || source.manuals || source.manualItems),
       drawSerial: wholeNumber(source.drawSerial, 0, 0, 999999999),
@@ -996,7 +980,6 @@
       equippedSkillIds: [...state.equippedSkillIds],
       deckSlots: [...state.deckSlots],
       deckUpgradeMilestones: [...state.deckUpgradeMilestones],
-      duplicateCounts: { ...state.duplicateCounts },
       books: { ...state.books },
       manualCounts: { ...state.manualCounts },
     };
@@ -1276,11 +1259,8 @@
       star,
       skill,
       skillId: skill.id,
-      duplicate: false,
-      isDuplicate: false,
       alreadyLearned,
       manualCreated: true,
-      shardsAwarded: 0,
       state: next,
     };
   }
@@ -1329,7 +1309,6 @@
     for (const skillId of skillIds) {
       next.manualCounts[skillId] = Math.max(wholeNumber(next.manualCounts[skillId]), manualQuantity);
     }
-    next.masteryShards = 999999;
     next.deckCapacity = MAX_EQUIPPED_SKILLS;
     next.deckUpgradeMilestones = Object.keys(DECK_CAPACITY_MILESTONES);
     next.deckSlots = classSkills
@@ -1374,7 +1353,7 @@
     if (learnability.status === "learned") {
       // An already learned manual stays in the bag.  Do not silently convert
       // or consume it; the UI simply reports 「已學習」.
-      return { ok: false, reason: "already-learned", state, skill, duplicate: true, isDuplicate: true, shardsAwarded: 0, missingPrerequisites: [] };
+      return { ok: false, reason: "already-learned", state, skill, missingPrerequisites: [] };
     }
     if (learnability.status !== "canLearn") {
       return { ok: false, reason: learnability.reason, state, skill, missingPrerequisites: learnability.missingPrerequisites };
@@ -1383,25 +1362,7 @@
     next.manualCounts[skill.id] -= 1;
     if (next.manualCounts[skill.id] <= 0) delete next.manualCounts[skill.id];
     next.unlockedSkillIds.push(skill.id);
-    return { ok: true, reason: null, skill, duplicate: false, isDuplicate: false, shardsAwarded: 0, state: next };
-  }
-
-  function unlockSkillWithShards(rawState, skillId) {
-    const state = normalizeSkillState(rawState);
-    const skill = getSkill(String(skillId || ""));
-    if (!skill || !SKILLS_BY_ID.has(canonicalSkillId(skill.id))) return { ok: false, reason: "not-found", state };
-    if (stateHasSkill(state.unlockedSkillIds, skill.id)) return { ok: false, reason: "already-unlocked", state };
-    const learnability = skillLearnability(state, skill.id);
-    if (learnability.status !== "canLearn") return { ok: false, reason: learnability.reason, missingPrerequisites: learnability.missingPrerequisites, state };
-    // Mastery shards predate the 1–14 source book ranks. Preserve the three
-    // existing shard-cost bands while allowing Fighter presentation ranks above 3.
-    const masteryBand = Math.min(3, Math.max(1, Math.ceil((Number(skill.star) || 1) / 5)));
-    const cost = MASTERY_UNLOCK_COST[masteryBand];
-    if (state.masteryShards < cost) return { ok: false, reason: "shards", cost, state };
-    const next = cloneState(state);
-    next.masteryShards -= cost;
-    next.unlockedSkillIds.push(skill.id);
-    return { ok: true, reason: null, cost, skill, state: next };
+    return { ok: true, reason: null, skill, state: next };
   }
 
   function validateSkillCatalog(catalog = SKILL_CATALOG) {
@@ -1485,8 +1446,6 @@
     BOOK_STARS,
     MAX_SKILL_BOOK_RANK,
     AP_BANDS,
-    DUPLICATE_SHARDS,
-    MASTERY_UNLOCK_COST,
     AREA_SHAPES,
     DEFAULT_STARTER_SKILLS,
     SKILL_CATALOG,
@@ -1526,7 +1485,6 @@
     createGodModeSkillState,
     openOwnedSkillBook,
     learnSkillFromManual,
-    unlockSkillWithShards,
     validateSkillCatalog,
   };
 });

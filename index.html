@@ -517,7 +517,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260917-legacy-cleanup-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260917-guild-racefix-01")}"><\/script>`);
       })();
     </script>
 
@@ -553,7 +553,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-08", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260917-10", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

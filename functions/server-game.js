@@ -157,6 +157,7 @@ function playerSnapshot(state) {
 }
 function statePayload(state) {
   return {
+    stateRevision: Math.max(0, whole(state.stateRevision, 0)),
     player: playerSnapshot(state),
     expansion: {
       currentMapId: normalizeMapId(state.expansion.currentMapId),
@@ -588,15 +589,6 @@ function economyCommand(save, input = {}, options = {}) {
     return resultWithState(state, { action, skillId });
   }
 
-  if (action === "master-skill") {
-    if (state.expansion.serverBattle?.status === "active") return { ok: false, reason: "battle-active" };
-    const skillId = String(input.skillId || "").trim();
-    const result = Skills.unlockSkillWithShards(state.expansion.skills, skillId);
-    if (!result.ok) return { ok: false, reason: result.reason, cost: result.cost || 0 };
-    state.expansion.skills = result.state;
-    return resultWithState(state, { action, skill: { id: result.skill.id, name: result.skill.name }, cost: result.cost });
-  }
-
   if (["trade", "craft", "loot"].includes(action)) {
     return { ok: false, reason: "feature-not-live", action };
   }
@@ -612,8 +604,10 @@ function questCommand(save, input = {}, options = {}) {
 
   if (action === "accept") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const proximity = requireInteraction("guild");
-    if (!proximity.ok) return proximity;
+    // Accept/report/abandon are guild services rather than world-position
+    // interactions. The authoritative map gate is sufficient here; keeping
+    // a proximity gate caused legitimate board/receptionist actions to be
+    // rejected when the trusted movement anchor lagged behind the client.
     const result = Guild.accept(current, String(input.commissionId || ""));
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -621,8 +615,6 @@ function questCommand(save, input = {}, options = {}) {
   }
   if (action === "report") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const proximity = requireInteraction("guild");
-    if (!proximity.ok) return proximity;
     const result = Guild.report(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
@@ -632,8 +624,6 @@ function questCommand(save, input = {}, options = {}) {
   }
   if (action === "abandon") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const proximity = requireInteraction("guild");
-    if (!proximity.ok) return proximity;
     const result = Guild.abandon(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
