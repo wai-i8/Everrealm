@@ -16,6 +16,8 @@
   const houseSpriteSettings = MapTransitions.houseSpriteSettings;
   const Tactics = window.EverrealmTactics;
   const Skills = window.EverrealmSkills;
+  const Panels = window.EverrealmPanels;
+  const MainQuest = window.EverrealmMainQuest;
   const MonsterAI = window.EverrealmMonsterAI;
   const Bgm = window.EverrealmBgm;
   const FighterEffects = window.EverrealmFighterEffects;
@@ -310,6 +312,11 @@
   let inventory = {};
   let monsterKills = {};
   let skillState = Skills.createSkillState();
+  let panelState = Panels.createInitialState(skillState);
+  skillState = Panels.syncSkillState(panelState, skillState);
+  let mainQuestState = MainQuest.emptyState();
+  let selectedLoadoutPanelId = panelState.equippedPanelId;
+  let pendingPanelEquipId = null;
   let playerClassId = Skills.DEFAULT_CLASS_ID || "fighter";
   let playerGender = "male";
   let pendingPlayerGender = "male";
@@ -1351,6 +1358,11 @@
     inventory = {};
     monsterKills = {};
     skillState = Skills.createSkillState({ classId: playerClassId });
+    panelState = Panels.createInitialState(skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
+    mainQuestState = MainQuest.emptyState();
+    selectedLoadoutPanelId = panelState.equippedPanelId;
+    pendingPanelEquipId = null;
     facilityTab = "bag";
     facilityContext = "portable";
     selectedInventoryItemId = null;
@@ -1368,6 +1380,11 @@
   function loadExpansionProgress(raw) {
     const data = raw && typeof raw === "object" ? raw : {};
     skillState = Skills.normalizeSkillState(data.skills, { classId: data.classId || data.skills?.classId });
+    panelState = Panels.normalizeState(data.panels, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
+    mainQuestState = MainQuest.normalizeState(data.mainQuest);
+    selectedLoadoutPanelId = panelState.equippedPanelId;
+    pendingPanelEquipId = null;
     playerClassId = skillState.classId;
     const starterGear = Expansion.starterEquipmentForClass(playerClassId);
     const starterWeapon = starterGear.weapon;
@@ -1431,6 +1448,8 @@
         weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder },
         monsterKills: { ...monsterKills },
         skills: Skills.normalizeSkillState(skillState),
+        panels: Panels.normalizeState(panelState, skillState),
+        mainQuest: MainQuest.normalizeState(mainQuestState),
       },
     };
   }
@@ -1447,10 +1466,10 @@
     return result;
   }
 
-  function syncDeckCapacityMilestones({ silent = true } = {}) {
-    const results = [];
-    if (guildMarks >= 10) results.push(grantDeckCapacityMilestone("guild:rank-2", { silent }));
-    return results;
+  function syncDeckCapacityMilestones() {
+    // Skill capacity now belongs to the equipped panel. Guild rank no longer
+    // mutates a shared deck size; each owned panel keeps its own slots.
+    return [];
   }
 
   function maintainGodModeState() {
@@ -3086,7 +3105,7 @@
     return JSON.stringify({
       player: { gender: normalizeGender(player.gender), x: player.x, y: player.y, hp: player.hp, level: player.level, xp: player.xp, coins: player.coins, potions: player.potions, weaponLevel: player.weaponLevel, upgrades: player.upgrades },
       openedChests: [...openedChests].sort(),
-      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder }, monsterKills, skills: skillState },
+      expansion: { currentMapId, playerClassId, ownedEquipment: [...ownedEquipment].sort(), equipped, guildCommission: guildCommissionState, guildMarks, guildRenown, inventory, weakPotion: { stepsRemaining: weakPotionStepsRemaining, distanceRemainder: weakPotionDistanceRemainder }, monsterKills, skills: skillState, panels: panelState, mainQuest: mainQuestState },
     });
   }
 
@@ -3134,6 +3153,11 @@
     if (Number.isFinite(Number(expansion.guildMarks))) guildMarks = Math.max(0, Math.floor(Number(expansion.guildMarks)));
     if (Number.isFinite(Number(expansion.guildRenown))) guildRenown = Math.max(0, Math.floor(Number(expansion.guildRenown)));
     if (expansion.skills && typeof expansion.skills === "object") skillState = Skills.normalizeSkillState(expansion.skills, { classId: playerClassId });
+    if (expansion.panels && typeof expansion.panels === "object") panelState = Panels.normalizeState(expansion.panels, skillState);
+    else panelState = Panels.normalizeState(panelState, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
+    if (expansion.mainQuest && typeof expansion.mainQuest === "object") mainQuestState = MainQuest.normalizeState(expansion.mainQuest);
+    if (!panelState.panels?.[selectedLoadoutPanelId]) selectedLoadoutPanelId = panelState.equippedPanelId;
     if (expansion.weakPotion && typeof expansion.weakPotion === "object") {
       weakPotionStepsRemaining = Math.max(0, Math.floor(Number(expansion.weakPotion.stepsRemaining) || 0));
       weakPotionDistanceRemainder = Math.max(0, Number(expansion.weakPotion.distanceRemainder) || 0);
@@ -3146,12 +3170,10 @@
     }
     if (options.markDirty !== false) markPersistenceDirty();
     updateHud(true);
-    if (guildStateIncluded) {
-      updateMenuBadges();
-      if (facilityWindows.size) renderFacility();
-      if (guildCommissionDetailPanel?.hidden === false && pendingCommissionDetailId) {
-        renderGuildCommissionDetail(pendingCommissionDetailId);
-      }
+    updateMenuBadges();
+    if (facilityWindows.size) renderFacility();
+    if (guildStateIncluded && guildCommissionDetailPanel?.hidden === false && pendingCommissionDetailId) {
+      renderGuildCommissionDetail(pendingCommissionDetailId);
     }
     return true;
   }
@@ -3171,6 +3193,10 @@
       ownedEquipment: [...ownedEquipment],
       equipped: { ...equipped },
       skillState: Skills.normalizeSkillState(skillState, { classId: playerClassId }),
+      panelState: Panels.normalizeState(panelState, skillState),
+      mainQuestState: MainQuest.normalizeState(mainQuestState),
+      selectedLoadoutPanelId,
+      pendingPanelEquipId,
       guildCommissionState: Guild.normalizeState(guildCommissionState),
       weakPotionStepsRemaining,
       weakPotionDistanceRemainder,
@@ -3192,6 +3218,11 @@
     ownedEquipment = [...snapshot.ownedEquipment];
     equipped = { ...snapshot.equipped };
     skillState = Skills.normalizeSkillState(snapshot.skillState, { classId: playerClassId });
+    panelState = Panels.normalizeState(snapshot.panelState, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
+    mainQuestState = MainQuest.normalizeState(snapshot.mainQuestState);
+    selectedLoadoutPanelId = snapshot.selectedLoadoutPanelId || panelState.equippedPanelId;
+    pendingPanelEquipId = snapshot.pendingPanelEquipId || null;
     if (snapshot.guildCommissionState) guildCommissionState = Guild.normalizeState(snapshot.guildCommissionState);
     weakPotionStepsRemaining = snapshot.weakPotionStepsRemaining;
     weakPotionDistanceRemainder = snapshot.weakPotionDistanceRemainder;
@@ -4302,18 +4333,174 @@
     });
   }
 
-  async function interactGuildSocialNpc(npc) {
-    const isEris = npc.id === "guild-eris";
-    if (isEris) {
+  function mainQuestIntroLines(quest) {
+    if (!quest) return ["暫時冇新嘢要你做。"];
+    if (quest.id === "main-1") return [
+      "想喺公會企穩陣腳，淨係識打架仲未夠。先由唔同類型嘅委託做起，等我睇下你點應付。",
+      "完成一星、二星同三星委託各一次，再返嚟搵我。",
+    ];
+    if (quest.id === "main-2") return [
+      "做過幾輪委託，下一步就睇你係咪真係明白戰場規則。",
+      "我會問你五條問題。答錯唔緊要，諗清楚再答。",
+    ];
+    return [
+      "你而家已經唔係淨係跟住人行嘅新人。下一步，我想你親自取得會長洛琪希嘅認同。",
+      "由而家開始重新做出一次足以令佢畀你特別獎勵嘅表現，再返嚟搵我。",
+    ];
+  }
+
+  async function startMainQuestFromEris(npc, questId) {
+    if (!ServerApi?.quest) return showToast("伺服器主線指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+    try {
+      const result = await runGuildQuestServerCommand("main-start", { questId });
+      if (!result?.ok) return showToast(result?.reason === "level" ? "等級仲未足夠。" : "暫時未能開始主線。", "danger");
+      applyAuthoritativeState(result.state);
+      const quest = result.quest || MainQuest.activeQuest(mainQuestState);
+      addSystemMessage("quest", `主線開始：${quest?.title || "新任務"}`);
+      sound.crystal();
+      startDialogue({ speaker: npc.name, color: npc.color, lines: mainQuestIntroLines(quest) });
+    } catch (error) {
+      serverCommandError(error, "伺服器暫時未能開始主線。");
+    } finally {
+      endGuildQuestMutation();
+    }
+  }
+
+  function showMainQuestQuiz(npc) {
+    const question = MainQuest.currentQuizQuestion(mainQuestState);
+    if (!question) return interactMainQuestNpc(npc);
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: [`第 ${MainQuest.normalizeState(mainQuestState).progress.quizIndex + 1} 題。${question.prompt}`],
+      choiceLayout: "compact",
+      choices: question.choices.map((label, answerIndex) => ({
+        label,
+        buttonStyle: "secondary",
+        action: () => answerMainQuestQuiz(npc, question.id, answerIndex),
+      })),
+    });
+  }
+
+  async function answerMainQuestQuiz(npc, questionId, answerIndex) {
+    if (!ServerApi?.quest) return showToast("伺服器主線指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+    try {
+      const result = await runGuildQuestServerCommand("main-answer", { questionId, answerIndex });
+      if (!result?.ok) return showToast("題目狀態已更新，請再同艾利斯傾偈。", "danger");
+      applyAuthoritativeState(result.state);
+      if (!result.correct) {
+        return startDialogue({
+          speaker: npc.name,
+          color: npc.color,
+          lines: ["唔啱。", result.explanation || "再諗清楚戰場規則。"],
+          choices: [{ label: "再答一次", buttonStyle: "primary", action: () => showMainQuestQuiz(npc) }],
+        });
+      }
+      if (result.completedObjective) {
+        sound.level();
+        return startDialogue({ speaker: npc.name, color: npc.color, lines: ["好，基本功你算係掌握到。獎勵你自己揀一本啱用嘅技能書。"], choices: [{ label: "選擇獎勵", buttonStyle: "primary", action: () => showMainQuestRewardChoices(npc) }] });
+      }
       return startDialogue({
         speaker: npc.name,
         color: npc.color,
-        lines: [
-          "坐低先，冒險唔係鬥邊個行得最快。睇清楚同伴、地形，同埋自己想去邊度。",
-          "如果你打算接委託，記住返嚟同接待員報告；如果只係想聽故事，火爐今晚都未熄。",
+        lines: ["答啱。下一題。"],
+        choices: [{ label: "繼續", buttonStyle: "primary", action: () => showMainQuestQuiz(npc) }],
+      });
+    } catch (error) {
+      serverCommandError(error, "伺服器暫時未能提交答案。");
+    } finally {
+      endGuildQuestMutation();
+    }
+  }
+
+  function showMainQuestRewardChoices(npc) {
+    const quest = MainQuest.activeQuest(mainQuestState);
+    const pool = MainQuest.rewardSkillPool(mainQuestState, skillState);
+    if (!quest || !pool.length) return startDialogue({ speaker: npc.name, color: npc.color, lines: ["獎勵名單暫時整理唔到，遲少少再搵我。"] });
+    startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: [`主線${quest.number}完成。揀一本 ${Skills.formatSkillBookRank(quest.reward.manualStar)} 技能書；呢本係公會發畀你本人，唔可以交易。`],
+      choiceLayout: "compact",
+      choices: pool.map((skill) => ({
+        label: skill.name,
+        buttonStyle: "secondary",
+        action: () => claimMainQuestReward(npc, skill.id),
+      })),
+    });
+  }
+
+  async function claimMainQuestReward(npc, skillId) {
+    if (!ServerApi?.quest) return showToast("伺服器主線指令尚未就緒。", "danger");
+    if (!beginGuildQuestMutation()) return;
+    try {
+      const result = await runGuildQuestServerCommand("main-claim", { skillId });
+      if (!result?.ok) return showToast("獎勵暫時未能領取，請再試一次。", "danger");
+      applyAuthoritativeState(result.state);
+      const quest = result.quest;
+      const skillName = result.reward?.skill?.name || Skills.getSkill(skillId)?.name || "技能書";
+      const panelName = result.reward?.panel?.name || quest?.reward?.panelName || "新面板";
+      selectedLoadoutPanelId = panelState.equippedPanelId;
+      sound.level();
+      showToast(`主線完成 · ${skillName}（綁定）＋${panelName}`, "good");
+      addSystemMessage("quest", `主線完成：${quest?.title || "主線任務"}`);
+      addSystemMessage("reward", `獲得技能書：${skillName}（綁定）・獲得「${panelName}」`);
+      startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: ["做得唔錯。呢本技能書同新面板都係你嘅。技能書已經放入物品欄；面板可以去城門配置。"],
+      });
+    } catch (error) {
+      serverCommandError(error, "伺服器暫時未能領取主線獎勵。");
+    } finally {
+      endGuildQuestMutation();
+    }
+  }
+
+  function interactMainQuestNpc(npc) {
+    const view = MainQuest.view(mainQuestState, player.level);
+    const quest = view.quest;
+    if (view.state === "available" && quest) {
+      return startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: [`有新嘢畀你做。——「${quest.title}」`, ...mainQuestIntroLines(quest).slice(0, 1)],
+        choiceLayout: "compact",
+        choices: [
+          { label: "接受主線", buttonStyle: "primary", action: () => startMainQuestFromEris(npc, quest.id) },
+          { label: "遲啲先", buttonStyle: "secondary", action: () => {} },
         ],
       });
     }
+    if (view.state === "locked" && quest) {
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: [`你而家先專心磨練下。等去到 Lv.${quest.requiredLevel}，我再有嘢畀你做。`] });
+    }
+    if (view.state === "complete") {
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["暫時要教你嘅就到呢度。繼續行遠啲，之後自然仲有新考驗。"] });
+    }
+    if (!quest) return startDialogue({ speaker: npc.name, color: npc.color, lines: ["暫時冇新嘢要你做。"] });
+    if (view.ready) {
+      return startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: ["要求你已經做晒。今次獎勵由你自己揀。"],
+        choices: [{ label: "選擇獎勵", buttonStyle: "primary", action: () => showMainQuestRewardChoices(npc) }],
+      });
+    }
+    if (quest.objectiveType === "quiz") return showMainQuestQuiz(npc);
+    if (quest.id === "main-1") {
+      const p = MainQuest.normalizeState(mainQuestState).progress.commissionStars;
+      const missing = [1, 2, 3].filter((star) => !p[star]);
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: [`仲差啲火候。未完成嘅委託級別：${missing.map((star) => `${star}★`).join("、")}。做完再返嚟搵我。`] });
+    }
+    return startDialogue({ speaker: npc.name, color: npc.color, lines: ["今次唔係我畀答案你。去做出一輪足以令會長洛琪希親自畀你特別獎勵嘅表現，再返嚟。"] });
+  }
+
+  async function interactGuildSocialNpc(npc) {
+    const isEris = npc.id === "guild-eris";
+    if (isEris) return interactMainQuestNpc(npc);
 
     const progress = Guild.normalizeState(guildCommissionState).fourStarProgress;
     const rewardReady = Guild.FOUR_STAR_PROGRESS_STARS.every((star) => progress[star]);
@@ -4572,18 +4759,27 @@
 
   function getMissionFacilityViewData() {
     const active = activeGuildCommission();
-    if (!active) return { active: false };
-    const progressMax = active.type === "hunt" ? active.objective.count : 1;
-    const progressValue = guildCommissionProgressValue(active);
+    const commission = active ? (() => {
+      const progressMax = active.type === "hunt" ? active.objective.count : 1;
+      const progressValue = guildCommissionProgressValue(active);
+      return {
+        active: true,
+        ready: guildCommissionState.status === "ready_to_report",
+        title: active.title,
+        objectiveText: guildCommissionObjectiveText(active),
+        progressText: guildCommissionProgressText(active),
+        progressMax,
+        progressValue,
+        progressPercent: Math.min(100, progressValue / Math.max(1, progressMax) * 100),
+      };
+    })() : { active: false };
+    const mainView = MainQuest.view(mainQuestState, player.level);
     return {
-      active: true,
-      ready: guildCommissionState.status === "ready_to_report",
-      title: active.title,
-      objectiveText: guildCommissionObjectiveText(active),
-      progressText: guildCommissionProgressText(active),
-      progressMax,
-      progressValue,
-      progressPercent: Math.min(100, progressValue / Math.max(1, progressMax) * 100),
+      main: {
+        ...mainView,
+        title: mainView.quest?.title || (mainView.state === "complete" ? "目前主線已完成" : "下一段主線"),
+      },
+      commission,
     };
   }
   const renderMissionFacility = () => FacilityBasicViews.renderMissionFacility({
@@ -4644,14 +4840,20 @@
     const state = Skills.normalizeSkillState(skillState);
     return Guild.ENVELOPE_STARS.reduce((total, star) => total + (guildCommissionState.envelopes[star] || 0), 0)
       + Skills.BOOK_STARS.reduce((total, star) => total + (state.books[star] || 0), 0)
-      + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0);
+      + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0)
+      + Object.values(state.boundManualCounts || {}).reduce((total, count) => total + count, 0);
   }
 
   function updateMenuBadges() {
     const inventoryLabel = "打開物品欄（I）";
     if (inventoryButton.getAttribute("aria-label") !== inventoryLabel) inventoryButton.setAttribute("aria-label", inventoryLabel);
 
-    const missionReady = Boolean(activeGuildCommission() && guildCommissionState.status === "ready_to_report");
+    const mainView = MainQuest.view(mainQuestState, player.level);
+    const missionReady = Boolean(
+      (activeGuildCommission() && guildCommissionState.status === "ready_to_report")
+      || mainView.ready
+      || mainView.state === "available"
+    );
     if (missionMenuBadge && missionMenuBadge.hidden === missionReady) missionMenuBadge.hidden = !missionReady;
 
     let skillReady = false;
@@ -4772,6 +4974,30 @@
         disabled: learnability.status !== "canLearn",
         manualSkillId: skill.id,
         destroyable: true,
+      });
+    }
+    for (const [skillId, count] of Object.entries(skillState.boundManualCounts || {})) {
+      if (!count) continue;
+      const skill = Skills.getSkill(skillId);
+      if (!skill) continue;
+      const classLocked = skill.classId !== playerClassId;
+      const learnability = classLocked ? { status: "conditionLocked" } : Skills.skillLearnability(skillState, skill.id);
+      items.push({
+        id: `bound_manual_${skill.id}`,
+        iconItemId: `skill_book_${skill.classId === "fighter" ? (skill.guildBookStars?.[0] || skill.star || 1) : (skill.star || 1)}`,
+        name: `技能書：${skill.name}（綁定）`,
+        rankLabel: skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star),
+        category: `${skill.classId === "fighter" ? fighterGuildBookRankText(skill) : skillStars(skill.star)} 技能書 · 綁定`,
+        categoryKey: "skillbook",
+        quantity: count,
+        description: skill.description,
+        detail: `${skillRangeText(skill)} · 速度 ${skill.speedGrade} · 不可交易`,
+        action: "use-bound-manual",
+        actionLabel: learnability.status === "learned" ? "已學習" : learnability.status === "canLearn" ? "學習" : "無法學習",
+        disabled: learnability.status !== "canLearn",
+        manualSkillId: skill.id,
+        destroyable: false,
+        bound: true,
       });
     }
     for (const [id, amount] of Object.entries(inventory)
@@ -5323,7 +5549,7 @@
     pendingSkillDetailId = skill.id;
     skillDetailReturnTarget = returnTarget instanceof HTMLElement ? returnTarget : null;
     const learnability = Skills.skillLearnability(skillState, skill.id);
-    const manualCount = skillState.manualCounts?.[skill.id] || 0;
+    const manualCount = (skillState.manualCounts?.[skill.id] || 0) + (skillState.boundManualCounts?.[skill.id] || 0);
     const active = skillState.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === Skills.canonicalSkillId(skill.id));
     const missingNames = (learnability.missingPrerequisites || []).map((id) => Skills.getSkill(id)?.name || id);
     const stateLabel = skillTreeStateLabel(learnability.status, active, manualCount);
@@ -5367,14 +5593,21 @@
   function learnFromSkillDetail() {
     if (!pendingSkillDetailId) return;
     const skillId = pendingSkillDetailId;
+    const bound = !(skillState.manualCounts?.[skillId] > 0) && (skillState.boundManualCounts?.[skillId] > 0);
     closeSkillDetail(false);
-    learnSkillManualImmediately(skillId);
+    learnSkillManualImmediately(skillId, { bound });
   }
 
   function renderDeckFacilityForState(state) {
     if (!state?.content) return;
+    panelState = Panels.normalizeState(panelState, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
+    if (!panelState.panels[selectedLoadoutPanelId]) selectedLoadoutPanelId = panelState.equippedPanelId;
     const canEdit = state.context === "deck" && currentMapId === "world";
-    const deckSlots = skillState.deckSlots.map((skillId) => skillId ? Skills.getSkill(skillId) : null);
+    const panels = Panels.listOwned(panelState, skillState).map((panel) => ({
+      ...panel,
+      slots: panel.slots.map((skillId) => skillId ? Skills.getSkill(skillId) : null),
+    }));
     const learnedSkills = canEdit
       ? Skills.getSkillsByClass(playerClassId).filter((skill) => skillState.unlockedSkillIds.some((id) => Skills.canonicalSkillId(id) === skill.id) && !skill.tags.includes("passive"))
       : [];
@@ -5382,7 +5615,10 @@
       content: state.content,
       setFacilityFooter: (message) => UiDom.setFacilityFooter(state.footer, message),
       canEdit,
-      deckSlots,
+      panels,
+      selectedPanelId: selectedLoadoutPanelId,
+      equippedPanelId: panelState.equippedPanelId,
+      pendingEquipPanelId: pendingPanelEquipId,
       learnedSkills,
       skillBadgeMarkup,
     });
@@ -5390,15 +5626,77 @@
 
   function renderDeckFacility() {
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    panelState = Panels.normalizeState(panelState, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
     renderDeckFacilityForState(activeFacilityWindow);
   }
 
   function refreshOpenDeckWindows() {
     if (!facilityWindows.size) return;
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    panelState = Panels.normalizeState(panelState, skillState);
+    skillState = Panels.syncSkillState(panelState, skillState);
     for (const state of facilityWindows.values()) {
       if (state.tab !== "deck" || state === activeFacilityWindow) continue;
       renderDeckFacilityForState(state);
+    }
+  }
+
+  function selectLoadoutPanel(panelId) {
+    panelState = Panels.normalizeState(panelState, skillState);
+    if (!panelState.panels?.[panelId]) return false;
+    selectedLoadoutPanelId = panelId;
+    pendingPanelEquipId = null;
+    renderDeckFacility();
+    refreshOpenDeckWindows();
+    return true;
+  }
+
+  function requestEquipLoadoutPanel(panelId) {
+    if (!(facilityContext === "deck" && currentMapId === "world")) return showToast("只可以喺舊港城門更換面板。", "danger");
+    if (!panelState.panels?.[panelId] || panelId === panelState.equippedPanelId) return false;
+    selectedLoadoutPanelId = panelId;
+    pendingPanelEquipId = panelId;
+    renderDeckFacility();
+    return true;
+  }
+
+  function cancelEquipLoadoutPanel() {
+    pendingPanelEquipId = null;
+    renderDeckFacility();
+  }
+
+  async function confirmEquipLoadoutPanel(panelId) {
+    if (!(facilityContext === "deck" && currentMapId === "world")) return showToast("只可以喺舊港城門更換面板。", "danger"), false;
+    if (pendingPanelEquipId !== panelId) return false;
+    if (!ServerApi?.economy) return showToast("伺服器面板指令尚未就緒。", "danger"), false;
+    const prediction = Panels.equipPanel(panelState, panelId, skillState);
+    if (!prediction.ok) return showToast("未能更換呢塊面板。", "danger"), false;
+    if (!beginOptimisticUiMutation()) return false;
+    const optimisticSnapshot = captureOptimisticUiState();
+    panelState = prediction.state;
+    skillState = prediction.skills;
+    pendingPanelEquipId = null;
+    selectedLoadoutPanelId = panelId;
+    renderOptimisticUiState();
+    try {
+      await flushForServerCommand();
+      const result = await ServerApi.economy("equip-panel", { panelId });
+      if (!result?.ok) {
+        restoreOptimisticUiState(optimisticSnapshot);
+        return showToast(result?.reason === "interaction-too-far" ? "要行近城門面板先可以更換。" : "未能更換呢塊面板。", "danger"), false;
+      }
+      applyAuthoritativeState(result.state);
+      sound.crystal();
+      showToast(`已換成「${panelState.panels?.[panelId]?.name || "戰技面板"}」`, "good");
+      saveImportant(false);
+      return true;
+    } catch (error) {
+      restoreOptimisticUiState(optimisticSnapshot);
+      serverCommandError(error, "暫時未能更換面板。");
+      return false;
+    } finally {
+      endOptimisticUiMutation();
     }
   }
 
@@ -5455,27 +5753,27 @@
     facilityContent.focus({ preventScroll: true });
   }
 
-  async function learnSkillManualImmediately(skillId) {
+  async function learnSkillManualImmediately(skillId, { bound = false } = {}) {
     if (!skillId) return false;
     if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger"), false;
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
     const learnability = Skills.skillLearnability(skillState, skillId);
     if (learnability.status === "learned") return showToast("已學習", "good"), false;
     if (learnability.status !== "canLearn") return showToast("無法學習", "danger"), false;
-    const predicted = Skills.learnSkillFromManual(skillState, skillId);
+    const predicted = Skills.learnSkillFromManual(skillState, skillId, { bound });
     if (!predicted?.ok) return showToast(predicted?.reason === "already-learned" ? "已學習" : "無法學習", predicted?.reason === "already-learned" ? "good" : "danger"), false;
     if (!beginOptimisticUiMutation()) return false;
 
     const optimisticSnapshot = captureOptimisticUiState();
     const skillName = predicted.skill?.name || Skills.getSkill(skillId)?.name || skillId;
-    skillState = predicted.state;
+    skillState = Panels.syncSkillState(panelState, predicted.state);
     pendingManualSkillId = null;
     skillBookConfirmPanel.hidden = true;
     renderOptimisticUiState();
     sound.crystal();
 
     try {
-      const result = await ServerApi.economy("learn-skill-manual", { skillId });
+      const result = await ServerApi.economy("learn-skill-manual", { skillId, bound });
       if (!result?.ok) {
         restoreOptimisticUiState(optimisticSnapshot);
         showToast(result?.reason === "already-learned" ? "已學習" : "伺服器未能確認學習，技能書已復原。", result?.reason === "already-learned" ? "good" : "danger");
@@ -5495,10 +5793,12 @@
     }
   }
 
-  function useSkillManualFromBag(skillId) {
+  function useSkillManualFromBag(skillId, bound = false) {
     const skill = Skills.getSkill(skillId);
     if (!skill) return;
     skillState = Skills.normalizeSkillState(skillState, { classId: playerClassId });
+    const count = bound ? skillState.boundManualCounts?.[skill.id] : skillState.manualCounts?.[skill.id];
+    if (!(count > 0)) return showToast("物品欄搵唔到呢本技能書。", "danger");
     const learnability = Skills.skillLearnability(skillState, skill.id);
     if (learnability.status === "learned") {
       showToast("已學習", "good");
@@ -5508,7 +5808,7 @@
       showToast("無法學習", "danger");
       return;
     }
-    learnSkillManualImmediately(skill.id);
+    learnSkillManualImmediately(skill.id, { bound });
   }
 
   function confirmSkillManualLearning() {
@@ -5526,22 +5826,31 @@
     }
     if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger");
 
-    const prediction = equip ? Skills.equipSkill(skillState, skillId) : Skills.unequipSkill(skillState, skillId);
+    panelState = Panels.normalizeState(panelState, skillState);
+    const panelId = options.force ? panelState.equippedPanelId : selectedLoadoutPanelId;
+    const prediction = equip
+      ? Panels.configureSkill(panelState, skillState, panelId, skillId)
+      : Panels.removeSkill(panelState, skillState, panelId, skillId);
     if (!prediction.ok) {
-      return showToast(prediction.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+      const capacity = panelState.panels?.[panelId]?.slotCount || skillState.deckCapacity;
+      return showToast(prediction.reason === "full" ? `呢塊面板只有 ${capacity} 格。` : "未能更改技能配置。", "danger");
     }
     if (!beginOptimisticUiMutation()) return;
 
     const optimisticSnapshot = captureOptimisticUiState();
-    skillState = prediction.state;
+    panelState = prediction.state;
+    skillState = prediction.skills;
     renderOptimisticUiState();
 
     try {
       await flushForServerCommand();
-      const result = await ServerApi.economy(equip ? "equip-skill" : "unequip-skill", { skillId });
+      const result = options.force
+        ? await ServerApi.economy(equip ? "equip-skill" : "unequip-skill", { skillId })
+        : await ServerApi.economy(equip ? "equip-panel-skill" : "unequip-panel-skill", { panelId, skillId });
       if (!result?.ok) {
         restoreOptimisticUiState(optimisticSnapshot);
-        return showToast(result?.reason === "full" ? `目前面板只有 ${optimisticSnapshot.skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+        const capacity = optimisticSnapshot.panelState?.panels?.[panelId]?.slotCount || optimisticSnapshot.skillState.deckCapacity;
+        return showToast(result?.reason === "full" ? `呢塊面板只有 ${capacity} 格。` : "未能更改技能配置。", "danger");
       }
       applyAuthoritativeState(result.state);
       showToast(`${equip ? "已配置" : "已移除"}：${Skills.getSkill(skillId)?.name || skillId}`, "good");
@@ -5559,23 +5868,28 @@
     if (!(facilityContext === "deck" && currentMapId === "world")) return false;
     if (!ServerApi?.economy) return showToast("伺服器技能指令尚未就緒。", "danger"), false;
 
-    const prediction = Skills.equipSkill(skillState, skillId, slotIndex);
+    panelState = Panels.normalizeState(panelState, skillState);
+    const panelId = selectedLoadoutPanelId;
+    const prediction = Panels.configureSkill(panelState, skillState, panelId, skillId, slotIndex);
     if (!prediction.ok) {
-      showToast(prediction.reason === "full" ? `目前面板只有 ${skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+      const capacity = panelState.panels?.[panelId]?.slotCount || skillState.deckCapacity;
+      showToast(prediction.reason === "full" ? `呢塊面板只有 ${capacity} 格。` : "未能更改技能配置。", "danger");
       return false;
     }
     if (!beginOptimisticUiMutation()) return false;
 
     const optimisticSnapshot = captureOptimisticUiState();
-    skillState = prediction.state;
+    panelState = prediction.state;
+    skillState = prediction.skills;
     renderOptimisticUiState();
 
     try {
       await flushForServerCommand();
-      const result = await ServerApi.economy("equip-skill", { skillId, slot: slotIndex });
+      const result = await ServerApi.economy("equip-panel-skill", { panelId, skillId, slot: slotIndex });
       if (!result?.ok) {
         restoreOptimisticUiState(optimisticSnapshot);
-        showToast(result?.reason === "full" ? `目前面板只有 ${optimisticSnapshot.skillState.deckCapacity} 格。` : "未能更改技能配置。", "danger");
+        const capacity = optimisticSnapshot.panelState?.panels?.[panelId]?.slotCount || optimisticSnapshot.skillState.deckCapacity;
+        showToast(result?.reason === "full" ? `呢塊面板只有 ${capacity} 格。` : "未能更改技能配置。", "danger");
         return false;
       }
       applyAuthoritativeState(result.state);
@@ -5943,6 +6257,7 @@
       pendingInventoryDestroyItemId = null;
     }
     if (state.tab === "shop") selectedShopItemId = null;
+    if (state.tab === "deck") pendingPanelEquipId = null;
     if (state.context === "guild" || state.tab === "guild") closeGuildCommissionDetail();
     if (state === activeFacilityWindow) {
       cancelDeckDrag();
@@ -13052,8 +13367,13 @@
     "buy-store-item": ({ itemId }) => buyGeneralStoreItem(itemId),
     "open-book": ({ star }) => openGuildSkillBook(star),
     "open-envelope": ({ star }) => openGuildEnvelope(star),
-    "use-manual": ({ skillId }) => useSkillManualFromBag(skillId),
+    "use-manual": ({ skillId }) => useSkillManualFromBag(skillId, false),
+    "use-bound-manual": ({ skillId }) => useSkillManualFromBag(skillId, true),
     "skill-detail": ({ skillId, button }) => openSkillDetail(skillId, button),
+    "select-panel": ({ panelId }) => selectLoadoutPanel(panelId),
+    "equip-panel": ({ panelId }) => requestEquipLoadoutPanel(panelId),
+    "confirm-equip-panel": ({ panelId }) => confirmEquipLoadoutPanel(panelId),
+    "cancel-equip-panel": () => cancelEquipLoadoutPanel(),
     "equip-skill": ({ skillId }) => changeSkillLoadout(skillId, true),
     "unequip-skill": ({ skillId }) => changeSkillLoadout(skillId, false),
   });

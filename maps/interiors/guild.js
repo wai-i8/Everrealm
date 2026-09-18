@@ -40,10 +40,10 @@
     ];
     const boards = [{ id: "guild-request-board", kind: "questBoard", name: "公會委託", x: 4 * TILE + TILE / 2, y: 5 * TILE + TILE / 2, radius: 22, prompt: "查看重複委託", boardId: "repeatable-bounties", zone: "notice-commission", render: false }];
     const npcs = [{
-      id: "guild-eris", name: "Eris", displayName: "資深冒險者 艾莉絲", role: "資深冒險者", kind: "npc",
+      id: "guild-eris", name: "Eris", displayName: "資深冒險者 艾利斯", role: "資深冒險者", kind: "npc",
       x: erisRegion.anchor.x, y: erisRegion.anchor.y - 13, radius: 12,
       navigationRegion: "npc", navigationRegionIndex: 0,
-      nameLabel: { prefix: "資深冒險者", name: "艾莉絲" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
+      nameLabel: { prefix: "資深冒險者", name: "艾利斯" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
       interactionHitRadius: 128, color: "#efbd59", facing: "down", zone: "waiting-lounge",
       chatter: "火爐邊嘅位留畀願意聽故事嘅冒險者。", render: false,
     }, {

@@ -37,7 +37,55 @@
   }
 
   function renderMissionFacility({ content, setFacilityFooter, view }) {
-    if (!view.active) {
+    const main = view?.main || null;
+    const commission = view?.commission || (view?.active != null ? view : null);
+
+    const mainMarkup = (() => {
+      if (!main) return "";
+      const state = main.state || "locked";
+      const statusLabel = state === "active"
+        ? (main.ready ? "已完成" : "進行中")
+        : state === "available" ? "可開始"
+          : state === "complete" ? "已完成" : "未開放";
+      const title = main.title || "主線任務";
+      const note = main.ready
+        ? "返公會搵資深冒險者艾利斯領取獎勵"
+        : state === "available" ? "返公會搵資深冒險者艾利斯"
+          : "";
+      return `
+        <section class="mission-section mission-main-section" aria-label="主線任務">
+          <div class="mission-section-label"><span>MAIN STORY</span><strong>主線任務</strong></div>
+          <div class="mission-summary mission-main-summary is-${state} ${main.ready ? "is-ready" : ""}">
+            <div class="mission-summary-heading">
+              <strong>${title}</strong>
+              <span>${statusLabel}</span>
+            </div>
+            ${main.objectiveText ? `<div class="mission-summary-line"><small>目標</small><strong>${main.objectiveText}</strong></div>` : ""}
+            ${main.progressText ? `<div class="mission-summary-line"><small>進度</small><strong>${main.progressText}</strong></div>` : ""}
+            ${note ? `<p class="mission-report-note">${note}</p>` : ""}
+          </div>
+        </section>`;
+    })();
+
+    const commissionMarkup = commission?.active ? `
+      <section class="mission-section mission-commission-section" aria-label="公會委託">
+        <div class="mission-section-label"><span>GUILD COMMISSION</span><strong>公會委託</strong></div>
+        <div class="mission-summary ${commission.ready ? "is-ready" : ""}">
+          <div class="mission-summary-heading">
+            <strong>${commission.title}</strong>
+            <span>${commission.ready ? "已完成" : "進行中"}</span>
+          </div>
+          <div class="mission-summary-line"><small>目標</small><strong>${commission.objectiveText}</strong></div>
+          <div class="mission-summary-line"><small>進度</small><strong>${commission.progressText}</strong></div>
+          ${commission.ready ? '<p class="mission-report-note">請返回公會回報任務</p>' : ""}
+        </div>
+      </section>` : `
+      <section class="mission-section mission-commission-section" aria-label="公會委託">
+        <div class="mission-section-label"><span>GUILD COMMISSION</span><strong>公會委託</strong></div>
+        <div class="mission-view is-empty"><strong>目前沒有進行中的公會委託</strong></div>
+      </section>`;
+
+    if (!mainMarkup && !commission?.active) {
       content.innerHTML = `
         <section class="mission-view is-empty" aria-label="目前任務">
           <strong>目前沒有進行中的任務</strong>
@@ -45,18 +93,8 @@
       setFacilityFooter("");
       return;
     }
-    content.innerHTML = `
-      <section class="mission-view" aria-label="目前任務">
-        <div class="mission-summary ${view.ready ? "is-ready" : ""}">
-          <div class="mission-summary-heading">
-            <strong>${view.title}</strong>
-            <span>${view.ready ? "已完成" : "進行中"}</span>
-          </div>
-          <div class="mission-summary-line"><small>目標</small><strong>${view.objectiveText}</strong></div>
-          <div class="mission-summary-line"><small>進度</small><strong>${view.progressText}</strong></div>
-          ${view.ready ? '<p class="mission-report-note">請返回公會回報任務</p>' : ""}
-        </div>
-      </section>`;
+
+    content.innerHTML = `<div class="mission-hub">${mainMarkup}${commissionMarkup}</div>`;
     setFacilityFooter("");
   }
 

@@ -3,6 +3,8 @@
 const Expansion = require("./shared/expansion-core.js");
 const Guild = require("./shared/guild-commission-core.js");
 const Skills = require("./shared/skill-core.js");
+const Panels = require("./shared/panel-core.js");
+const MainQuest = require("./shared/main-quest-core.js");
 const ItemData = require("./shared/data/items.js");
 const { classMaxHp } = require("./game-rules.js");
 
@@ -145,6 +147,9 @@ function canonicalInitialSave(payload = {}, options = {}) {
   const y = finite(sourcePlayer.y, 0);
   const maxHp = classMaxHp(classId, 1);
   const nowMs = normalizedNowMs(options.nowMs);
+  const baseSkills = Skills.createSkillState({ classId });
+  const panels = Panels.createInitialState(baseSkills);
+  const skills = Panels.syncSkillState(panels, baseSkills);
 
   return {
     version: SAVE_VERSION,
@@ -184,7 +189,9 @@ function canonicalInitialSave(payload = {}, options = {}) {
       inventory: {},
       weakPotion: { stepsRemaining: 0, distanceRemainder: 0 },
       monsterKills: {},
-      skills: Skills.createSkillState({ classId }),
+      skills,
+      panels,
+      mainQuest: MainQuest.emptyState(),
       positionAuthority: freshPositionAuthority("world", x, y, nowMs),
     },
   };
@@ -262,6 +269,9 @@ function sanitizeLegacySave(payload = {}, options = {}) {
   const x = finite(sourcePlayer.x, 0);
   const y = finite(sourcePlayer.y, 0);
   const nowMs = normalizedNowMs(options.nowMs);
+  const baseSkills = Skills.normalizeSkillState(sourceExpansion.skills, { classId });
+  const panels = Panels.normalizeState(sourceExpansion.panels, baseSkills);
+  const skills = Panels.syncSkillState(panels, baseSkills);
 
 
   return {
@@ -305,7 +315,9 @@ function sanitizeLegacySave(payload = {}, options = {}) {
         distanceRemainder: finite(sourceExpansion.weakPotion?.distanceRemainder, 0, 0, MAX_WEAK_POTION_REMAINDER),
       },
       monsterKills,
-      skills: Skills.normalizeSkillState(sourceExpansion.skills, { classId }),
+      skills,
+      panels,
+      mainQuest: MainQuest.normalizeState(sourceExpansion.mainQuest),
       positionAuthority: freshPositionAuthority(normalizeMapId(sourceExpansion.currentMapId).slice(0, 64), x, y, nowMs),
     },
   };

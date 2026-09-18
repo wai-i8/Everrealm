@@ -3,6 +3,8 @@
 const Expansion = require("./shared/expansion-core.js");
 const Guild = require("./shared/guild-commission-core.js");
 const Skills = require("./shared/skill-core.js");
+const Panels = require("./shared/panel-core.js");
+const MainQuest = require("./shared/main-quest-core.js");
 const Tactics = require("./shared/tactics-core.js");
 const MonsterAI = require("./shared/monster-ai.js");
 const FighterEffects = require("./shared/fighter-effects.js");
@@ -117,6 +119,10 @@ const GAMEPLAY_INTERACTION_RULES = Object.freeze({
     mapId: "field",
     targets: Object.freeze([Object.freeze({ x: 1770, y: 938, radius: 190 })]),
   }),
+  "deck-board": Object.freeze({
+    mapId: "world",
+    targets: Object.freeze([Object.freeze({ x: 5807, y: 2033, radius: 360 })]),
+  }),
 });
 
 function transitionRule(sourceRect, arrival) {
@@ -189,6 +195,9 @@ function saveCopy(save) {
   next.expansion.equipped = next.expansion.equipped && typeof next.expansion.equipped === "object" ? next.expansion.equipped : {};
   next.expansion.guildCommission = Guild.normalizeState(next.expansion.guildCommission);
   next.expansion.skills = Skills.normalizeSkillState(next.expansion.skills, { classId: next.expansion.classId });
+  next.expansion.panels = Panels.normalizeState(next.expansion.panels, next.expansion.skills);
+  next.expansion.skills = Panels.syncSkillState(next.expansion.panels, next.expansion.skills);
+  next.expansion.mainQuest = MainQuest.normalizeState(next.expansion.mainQuest);
   next.expansion.weakPotion = next.expansion.weakPotion && typeof next.expansion.weakPotion === "object" ? { ...next.expansion.weakPotion } : { stepsRemaining: 0, distanceRemainder: 0 };
   next.expansion.monsterKills = next.expansion.monsterKills && typeof next.expansion.monsterKills === "object" ? { ...next.expansion.monsterKills } : {};
   next.openedChests = Array.isArray(next.openedChests) ? next.openedChests.map(String) : [];
@@ -219,6 +228,8 @@ function statePayload(state) {
       guildMarks: Math.max(0, whole(state.expansion.guildMarks, 0)),
       guildRenown: Math.max(0, whole(state.expansion.guildRenown, 0)),
       skills: clone(state.expansion.skills || {}),
+      panels: clone(state.expansion.panels || Panels.createInitialState(state.expansion.skills)),
+      mainQuest: clone(state.expansion.mainQuest || MainQuest.emptyState()),
       weakPotion: clone(state.expansion.weakPotion || { stepsRemaining: 0, distanceRemainder: 0 }),
       monsterKills: clone(state.expansion.monsterKills || {}),
       positionAuthority: clone(state.expansion.positionAuthority || null),
@@ -614,29 +625,70 @@ function economyCommand(save, input = {}, options = {}) {
   if (action === "learn-skill-manual") {
     if (state.expansion.serverBattle?.status === "active") return { ok: false, reason: "battle-active" };
     const skillId = String(input.skillId || "").trim();
-    const result = Skills.learnSkillFromManual(state.expansion.skills, skillId);
+    const bound = input.bound === true;
+    const result = Skills.learnSkillFromManual(state.expansion.skills, skillId, { bound });
     if (!result.ok) return { ok: false, reason: result.reason, missingPrerequisites: result.missingPrerequisites || [] };
-    state.expansion.skills = result.state;
-    return resultWithState(state, { action, skill: { id: result.skill.id, name: result.skill.name } });
+    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, result.state);
+    return resultWithState(state, { action, bound, skill: { id: result.skill.id, name: result.skill.name } });
+  }
+
+  if (action === "equip-panel") {
+    const proximity = requireInteraction("deck-board");
+    if (!proximity.ok) return proximity;
+    const panelId = String(input.panelId || "").trim();
+    const result = Panels.equipPanel(state.expansion.panels, panelId, state.expansion.skills);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.panels = result.state;
+    state.expansion.skills = result.skills;
+    return resultWithState(state, { action, panelId, panel: result.panel });
+  }
+
+  if (action === "equip-panel-skill") {
+    const proximity = requireInteraction("deck-board");
+    if (!proximity.ok) return proximity;
+    const panelId = String(input.panelId || "").trim();
+    const skillId = String(input.skillId || "").trim();
+    const slot = input.slot == null ? undefined : whole(input.slot, -1);
+    const result = Panels.configureSkill(state.expansion.panels, state.expansion.skills, panelId, skillId, slot);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.panels = result.state;
+    state.expansion.skills = result.skills;
+    return resultWithState(state, { action, panelId, skillId, slot: slot ?? null });
+  }
+
+  if (action === "unequip-panel-skill") {
+    const proximity = requireInteraction("deck-board");
+    if (!proximity.ok) return proximity;
+    const panelId = String(input.panelId || "").trim();
+    const skillId = String(input.skillId || "").trim();
+    const result = Panels.removeSkill(state.expansion.panels, state.expansion.skills, panelId, skillId);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.panels = result.state;
+    state.expansion.skills = result.skills;
+    return resultWithState(state, { action, panelId, skillId });
   }
 
   if (action === "equip-skill") {
     if (mapId !== "world") return { ok: false, reason: "wrong-map" };
     const skillId = String(input.skillId || "").trim();
     const slot = input.slot == null ? undefined : whole(input.slot, -1);
-    const result = Skills.equipSkill(state.expansion.skills, skillId, slot);
+    const activePanelId = state.expansion.panels.equippedPanelId;
+    const result = Panels.configureSkill(state.expansion.panels, state.expansion.skills, activePanelId, skillId, slot);
     if (!result.ok) return { ok: false, reason: result.reason };
-    state.expansion.skills = result.state;
-    return resultWithState(state, { action, skillId, slot: slot ?? null });
+    state.expansion.panels = result.state;
+    state.expansion.skills = result.skills;
+    return resultWithState(state, { action, panelId: activePanelId, skillId, slot: slot ?? null });
   }
 
   if (action === "unequip-skill") {
     if (mapId !== "world") return { ok: false, reason: "wrong-map" };
     const skillId = String(input.skillId || "").trim();
-    const result = Skills.unequipSkill(state.expansion.skills, skillId);
+    const activePanelId = state.expansion.panels.equippedPanelId;
+    const result = Panels.removeSkill(state.expansion.panels, state.expansion.skills, activePanelId, skillId);
     if (!result.ok) return { ok: false, reason: result.reason };
-    state.expansion.skills = result.state;
-    return resultWithState(state, { action, skillId });
+    state.expansion.panels = result.state;
+    state.expansion.skills = result.skills;
+    return resultWithState(state, { action, panelId: activePanelId, skillId });
   }
 
   if (["trade", "craft", "loot"].includes(action)) {
@@ -668,17 +720,66 @@ function questCommand(save, input = {}, options = {}) {
     const result = Guild.report(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
+    const mainProgress = MainQuest.recordCommissionReport(state.expansion.mainQuest, result.commission?.star);
+    state.expansion.mainQuest = mainProgress.state;
     const rewardCoins = Math.max(0, whole(result.reward?.coins, 0));
     state.player.coins = clamp(whole(state.player.coins, 0) + rewardCoins, 0, MAX_COINS);
-    return resultWithState(state, { action, commission: result.commission, reward: result.reward });
+    return resultWithState(state, { action, commission: result.commission, reward: result.reward, mainQuestProgressed: mainProgress.changed });
   }
   if (action === "claim-four-star") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
     const result = Guild.claimFourStarReward(current);
     if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.guildCommission = result.state;
-    return resultWithState(state, { action, reward: result.reward });
+    const recognition = MainQuest.recordGuildmasterRecognition(state.expansion.mainQuest);
+    state.expansion.mainQuest = recognition.state;
+    return resultWithState(state, { action, reward: result.reward, mainQuestProgressed: recognition.changed });
   }
+
+  if (action === "main-start") {
+    if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const questId = String(input.questId || "").trim();
+    const result = MainQuest.start(state.expansion.mainQuest, questId, state.player.level);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.mainQuest = result.state;
+    if (result.quest?.id === "main-3") {
+      state.expansion.guildCommission = Guild.normalizeState({
+        ...state.expansion.guildCommission,
+        fourStarProgress: Object.fromEntries(Guild.FOUR_STAR_PROGRESS_STARS.map((star) => [star, false])),
+      });
+    }
+    return resultWithState(state, { action, quest: result.quest });
+  }
+
+  if (action === "main-answer") {
+    if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.mainQuest = result.state;
+    return resultWithState(state, { action, correct: result.correct, explanation: result.explanation || "", completedObjective: result.completedObjective === true });
+  }
+
+  if (action === "main-claim") {
+    if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const claim = MainQuest.claim(state.expansion.mainQuest, state.expansion.skills, String(input.skillId || ""));
+    if (!claim.ok) return { ok: false, reason: claim.reason };
+    const manual = Skills.grantBoundSkillManuals(state.expansion.skills, claim.skill.id, 1);
+    if (!manual.ok) return { ok: false, reason: manual.reason };
+    const panel = Panels.grantPanel(state.expansion.panels, claim.reward.panelId, manual.state);
+    if (!panel.ok) return { ok: false, reason: panel.reason };
+    state.expansion.mainQuest = claim.state;
+    state.expansion.panels = panel.state;
+    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, manual.state);
+    return resultWithState(state, {
+      action,
+      quest: claim.quest,
+      reward: {
+        skill: { id: claim.skill.id, name: claim.skill.name, bound: true },
+        panel: panel.panel,
+      },
+    });
+  }
+
   if (action === "abandon") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
     const result = Guild.abandon(current);

@@ -15,6 +15,9 @@
     switch (type) {
       case "select-item":
       case "select-shop-item":
+      case "select-panel":
+      case "equip-panel":
+      case "confirm-equip-panel":
       case "buy":
       case "equip":
       case "unequip":
@@ -23,7 +26,8 @@
       case "destroy-item":
       case "confirm-destroy-item":
       case "buy-store-item":
-        command.itemId = button.dataset.itemId || null;
+        if (type === "select-panel" || type === "equip-panel" || type === "confirm-equip-panel") command.panelId = button.dataset.panelId || null;
+        else command.itemId = button.dataset.itemId || null;
         break;
       case "inventory-filter":
         command.category = INVENTORY_CATEGORIES.includes(button.dataset.inventoryCategory)
@@ -53,6 +57,7 @@
         command.star = Number(button.dataset.envelopeStar);
         break;
       case "use-manual":
+      case "use-bound-manual":
       case "skill-detail":
       case "equip-skill":
       case "unequip-skill":

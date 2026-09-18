@@ -965,6 +965,7 @@
       equippedSkillIds: deckIds(deckSlots),
       books: normalizeBookCounts(source.books || source.skillBooks),
       manualCounts: normalizeManualCounts(source.manualCounts || source.skillManuals || source.manuals || source.manualItems),
+      boundManualCounts: normalizeManualCounts(source.boundManualCounts || source.boundSkillManuals || source.boundManuals),
       drawSerial: wholeNumber(source.drawSerial, 0, 0, 999999999),
     };
   }
@@ -982,6 +983,7 @@
       deckUpgradeMilestones: [...state.deckUpgradeMilestones],
       books: { ...state.books },
       manualCounts: { ...state.manualCounts },
+      boundManualCounts: { ...state.boundManualCounts },
     };
   }
 
@@ -1287,6 +1289,17 @@
     return { ok: true, reason: null, skill, quantity: amount, state: next };
   }
 
+  function grantBoundSkillManuals(rawState, skillId, quantity = 1) {
+    const state = normalizeSkillState(rawState);
+    const skill = getSkill(String(skillId || ""));
+    const amount = wholeNumber(quantity);
+    if (!skill) return { ok: false, reason: "not-found", state, skill: null };
+    if (amount < 1) return { ok: false, reason: "invalid-quantity", state, skill };
+    const next = cloneState(state);
+    next.boundManualCounts[skill.id] = Math.min(9999, wholeNumber(next.boundManualCounts[skill.id]) + amount);
+    return { ok: true, reason: null, skill, quantity: amount, state: next };
+  }
+
   function grantAllSkillManuals(rawState, quantity = 1) {
     const state = normalizeSkillState(rawState);
     const amount = wholeNumber(quantity);
@@ -1346,8 +1359,10 @@
   function learnSkillFromManual(rawState, skillId, options = {}) {
     const state = normalizeSkillState(rawState);
     const skill = getSkill(String(skillId || ""));
+    const bound = options.bound === true;
+    const inventoryKey = bound ? "boundManualCounts" : "manualCounts";
     if (!skill) return { ok: false, reason: "not-found", state, skill: null };
-    if (wholeNumber(state.manualCounts[skill.id]) < 1) return { ok: false, reason: "no-manual", state, skill };
+    if (wholeNumber(state[inventoryKey][skill.id]) < 1) return { ok: false, reason: "no-manual", state, skill };
     if (skill.classId !== state.classId) return { ok: false, reason: "wrong-class", state, skill };
     const learnability = skillLearnability(state, skill.id, options);
     if (learnability.status === "learned") {
@@ -1359,8 +1374,8 @@
       return { ok: false, reason: learnability.reason, state, skill, missingPrerequisites: learnability.missingPrerequisites };
     }
     const next = cloneState(state);
-    next.manualCounts[skill.id] -= 1;
-    if (next.manualCounts[skill.id] <= 0) delete next.manualCounts[skill.id];
+    next[inventoryKey][skill.id] -= 1;
+    if (next[inventoryKey][skill.id] <= 0) delete next[inventoryKey][skill.id];
     next.unlockedSkillIds.push(skill.id);
     return { ok: true, reason: null, skill, state: next };
   }
@@ -1481,6 +1496,7 @@
     openSkillBook,
     grantSkillBooks,
     grantSkillManuals,
+    grantBoundSkillManuals,
     grantAllSkillManuals,
     createGodModeSkillState,
     openOwnedSkillBook,
