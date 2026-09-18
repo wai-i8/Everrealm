@@ -87,6 +87,12 @@
       return callable("socialCommand", { version: COMMAND_VERSION, action: command, ...payload });
     }
 
+    async function trade(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("tradeCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
@@ -97,6 +103,7 @@
       battle,
       map,
       social,
+      trade,
     });
   }
 

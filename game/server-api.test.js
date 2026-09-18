@@ -65,3 +65,33 @@ test("social commands use the dedicated callable without leaking exploration pos
     payload: { version: 1, action: "send-friend-request", targetUid: "friend-b" },
   }]);
 });
+
+
+test("trade commands use the dedicated callable without leaking exploration position", async () => {
+  const calls = [];
+  const firebase = {
+    async functions() {
+      return {
+        functions: {},
+        sdk: {
+          httpsCallable(_functions, name) {
+            return async (payload) => {
+              calls.push({ name, payload });
+              return { data: { ok: true } };
+            };
+          },
+        },
+      };
+    },
+  };
+  const api = ServerApi.create({
+    firebase,
+    positionProvider: () => ({ mapId: "world", x: 10, y: 20 }),
+  });
+
+  await api.trade("create", { targetUid: "player-b" });
+  assert.deepEqual(calls, [{
+    name: "tradeCommand",
+    payload: { version: 1, action: "create", targetUid: "player-b" },
+  }]);
+});

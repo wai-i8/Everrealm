@@ -82,6 +82,7 @@ world unless `npm run seed:world -- --force` is explicitly used.
 - `docs/PLAYER_DATA_SCHEMA.md`：玩家永久 state／save boundary，同日後 Firestore／RTDB 分工。
 - `docs/REALTIME_SYSTEM.md`：Phase 2 RTDB presence、same-map players、WorldTime epoch and security boundary。
 - `docs/SOCIAL_SYSTEM.md`：玩家點擊互動、好友申請／關係、世界／密語聊天及 Firebase security boundary。
+- `docs/TRADE_SYSTEM.md`：玩家交易邀請、物品／Gold offer、雙方鎖定＋確認及 server-authoritative exchange。
 - `firebase-config.js`、`firebase-client.js`、`cloud-save.js`、`save-persistence.js`：Firebase Auth、`players/{uid}` Firestore 存檔，以及本機 legacy／帳戶 ownership-safe migration。
 - `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `data/skills/fighter.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
@@ -103,6 +104,7 @@ world unless `npm run seed:world -- --force` is explicitly used.
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - Shared Everrealm bitmap-backed windows、popups、responsive layout 同 UI states：`docs/UI_SYSTEM.md`
 - 玩家點擊互動、好友申請／關係及一對一密語：`docs/SOCIAL_SYSTEM.md`
+- 玩家交易、鎖定／確認流程及 economy security：`docs/TRADE_SYSTEM.md`
 - 裝備 schema、格鬥士 STRUGARDEN 衝攻／衝防轉換、canonical slots、ATK／DEF／Accuracy／Evasion／Weight／Move modifiers：`docs/EQUIPMENT_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`

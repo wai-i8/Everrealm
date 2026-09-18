@@ -2,7 +2,7 @@
 
 ## Scope
 
-V1 social covers three things only: selecting another realtime player in exploration, a confirmed friend graph, and one-to-one whispers between friends. Trading, parties and shared combat are intentionally outside this version.
+V1 social covers selecting another realtime player in exploration, a confirmed friend graph, one-to-one whispers between friends, and the entry point for direct player trading. The trading economy and lock/confirm flow are specified separately in `docs/TRADE_SYSTEM.md`; parties and shared combat remain outside this version.
 
 ## Player selection
 
@@ -15,8 +15,9 @@ Selecting a player opens a compact interaction popup with:
 - 查看資料
 - 加好友 / 接受好友 / 好友狀態
 - 密語 (friends only)
+- 交易
 
-Trading and party commands are not shown until those systems exist.
+The `交易` action opens the server-authoritative trade flow described in `docs/TRADE_SYSTEM.md`. Party commands are not shown until that system exists.
 
 ## Friend graph
 
@@ -66,4 +67,5 @@ The lower-left chat UI has `世界` and `密語` filters. Choosing a friend make
 - Cloud Functions own every friend mutation and RTDB thread membership change.
 - RTDB owns transient/private chat messages and same-map remote-player presentation.
 - Remote-player presence, coordinates or names are never trusted for inventory, economy, battle or progression authority.
-- Trading, parties, following and shared battle are deferred systems and must not piggyback on friendship state.
+- Trading uses its own Firestore session/pointer model and server-authoritative callable; it does not piggyback on friendship state.
+- Parties, following and shared battle are deferred systems and must not piggyback on friendship or trade state.

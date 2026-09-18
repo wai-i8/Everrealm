@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-social-01"],
+          ["everrealmStyles", "styles.css?v=20260918-trade-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -197,6 +197,58 @@
             <button type="button" data-player-action="profile">查看資料</button>
             <button type="button" data-player-action="friend">加好友</button>
             <button type="button" data-player-action="whisper">密語</button>
+            <button type="button" data-player-action="trade">交易</button>
+          </div>
+        </section>
+
+        <section id="tradeInvitePanel" class="trade-invite-panel" role="dialog" aria-modal="true" aria-labelledby="tradeInviteTitle" hidden>
+          <div class="trade-invite-card">
+            <small>TRADE REQUEST</small>
+            <strong id="tradeInviteTitle">交易邀請</strong>
+            <p><span id="tradeInviteName">冒險者</span> 想同你進行交易。</p>
+            <div class="trade-invite-actions">
+              <button type="button" data-trade-invite-action="reject">拒絕</button>
+              <button type="button" data-trade-invite-action="accept">接受</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="tradePanel" class="trade-panel" role="dialog" aria-modal="true" aria-labelledby="tradePanelTitle" hidden>
+          <div class="trade-window">
+            <header class="trade-header">
+              <div>
+                <small>PLAYER TRADE</small>
+                <h2 id="tradePanelTitle">玩家交易</h2>
+                <p id="tradePeerLabel">與冒險者交易</p>
+              </div>
+              <button id="tradeCloseButton" type="button" aria-label="取消交易">×</button>
+            </header>
+            <div id="tradeStatusText" class="trade-status-text">等待對方接受交易邀請…</div>
+            <div class="trade-offer-grid">
+              <section class="trade-offer-card is-local">
+                <header><strong>你提供</strong><span id="tradeLocalBadge" class="trade-state-badge">編輯中</span></header>
+                <div id="tradeLocalItems" class="trade-offer-items"></div>
+                <label class="trade-coins-row"><span>金幣</span><input id="tradeCoinsInput" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" /><small id="tradeCoinsAvailable">持有 0</small></label>
+                <button id="tradeAddItemButton" class="trade-add-item-button" type="button">＋ 加入物品</button>
+              </section>
+              <section class="trade-offer-card is-remote">
+                <header><strong id="tradeRemoteOfferTitle">對方提供</strong><span id="tradeRemoteBadge" class="trade-state-badge">編輯中</span></header>
+                <div id="tradeRemoteItems" class="trade-offer-items"></div>
+                <div class="trade-remote-coins"><span>金幣</span><strong id="tradeRemoteCoins">0</strong></div>
+              </section>
+            </div>
+            <section id="tradeInventoryPicker" class="trade-inventory-picker" hidden>
+              <header><strong>選擇可交易物品</strong><button id="tradeInventoryCloseButton" type="button" aria-label="關閉物品選擇">×</button></header>
+              <p>綁定技能書、已裝備而且冇多餘副本嘅裝備唔會顯示。</p>
+              <div id="tradeInventoryList" class="trade-inventory-list"></div>
+            </section>
+            <footer class="trade-footer">
+              <button id="tradeCancelButton" class="trade-cancel-button" type="button">取消交易</button>
+              <div class="trade-footer-primary">
+                <button id="tradeLockButton" class="trade-lock-button" type="button">鎖定</button>
+                <button id="tradeConfirmButton" class="trade-confirm-button" type="button" disabled>確認交易</button>
+              </div>
+            </footer>
           </div>
         </section>
 
@@ -544,7 +596,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260918-main-quest-panels-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260918-trade-01")}"><\/script>`);
       })();
     </script>
 
@@ -580,7 +632,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-main-quest-panels-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-trade-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

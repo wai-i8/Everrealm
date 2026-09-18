@@ -16,6 +16,7 @@ const {
 } = require("./game-rules");
 const ServerGame = require("./server-game");
 const PlayerState = require("./player-state");
+const TradeSystem = require("./trade-system");
 
 initializeApp();
 
@@ -78,6 +79,84 @@ function outgoingFriendRequestRef(ownerUid, targetUid) {
   return db.doc(`players/${ownerUid}/friendRequestsSent/${targetUid}`);
 }
 
+
+
+const TRADE_SESSION_TTL_MS = 15 * 60 * 1000;
+
+function safeTradeId(value) {
+  return String(value || "").trim().slice(0, 160);
+}
+
+function tradeSessionRef(tradeId) {
+  return db.doc(`tradeSessions/${tradeId}`);
+}
+
+function tradePointerRef(uid) {
+  return db.doc(`players/${uid}/tradeState/current`);
+}
+
+function tradeInviteRef(uid, tradeId) {
+  return db.doc(`players/${uid}/tradeInvites/${tradeId}`);
+}
+
+function tradeSide(session, uid) {
+  if (session?.participants?.a?.uid === uid) return "a";
+  if (session?.participants?.b?.uid === uid) return "b";
+  return null;
+}
+
+function otherTradeSide(side) {
+  return side === "a" ? "b" : side === "b" ? "a" : null;
+}
+
+function tradePointerIsStale(snapshot, nowMs = Date.now()) {
+  if (!snapshot?.exists) return false;
+  const updatedAtMs = Number(snapshot.data()?.updatedAtMs) || 0;
+  return !updatedAtMs || nowMs - updatedAtMs > TRADE_SESSION_TTL_MS;
+}
+
+function playerCanTrade(save) {
+  if (!(Number(save?.player?.hp) > 0)) return false;
+  const activeBattle = save?.expansion?.serverBattle && typeof save.expansion.serverBattle === "object"
+    ? save.expansion.serverBattle
+    : null;
+  return activeBattle?.status !== "active";
+}
+
+function tradeSessionExpired(session, nowMs = Date.now()) {
+  const updatedAtMs = Number(session?.updatedAtMs || session?.createdAtMs) || 0;
+  return !updatedAtMs || nowMs - updatedAtMs > TRADE_SESSION_TTL_MS;
+}
+
+function tradePointerPayload(tradeId, status, peerUid, peerName, nowMs) {
+  return { tradeId, status, peerUid, peerName, updatedAtMs: nowMs };
+}
+
+function nextTradeOffer(session, side, patch = {}) {
+  const offers = session?.offers && typeof session.offers === "object" ? session.offers : {};
+  const own = offers[side] && typeof offers[side] === "object" ? offers[side] : TradeSystem.emptyOffer();
+  const otherSide = otherTradeSide(side);
+  const other = offers[otherSide] && typeof offers[otherSide] === "object" ? offers[otherSide] : TradeSystem.emptyOffer();
+  return {
+    ...offers,
+    [side]: { ...TradeSystem.emptyOffer(), ...own, ...patch },
+    [otherSide]: { ...TradeSystem.emptyOffer(), ...other },
+  };
+}
+
+function tradePlayerWrite(transaction, playerRef, originalSave, nextSave, nextRevision) {
+  const expansion = { ...(originalSave?.expansion || {}), ...(nextSave?.expansion || {}) };
+  delete expansion.checkpoint;
+  delete expansion.dungeonClears;
+  delete expansion.defeatedDungeonBosses;
+  transaction.update(playerRef, {
+    stateRevision: nextRevision,
+    player: { ...(originalSave?.player || {}), ...(nextSave?.player || {}) },
+    expansion,
+    openedChests: Array.isArray(nextSave?.openedChests) ? nextSave.openedChests : (originalSave?.openedChests || []),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
 
 function playerDataWithoutMetadata(data) {
   const source = data && typeof data === "object" ? data : {};
@@ -437,6 +516,245 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
       updatedAt: Date.now(),
     });
     return { ok: true, threadId };
+  }
+
+  return { ok: false, reason: "unsupported-action", action };
+});
+
+
+exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) => {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  const action = String(request.data?.action || "").trim();
+  const nowMs = Date.now();
+
+  if (action === "create") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const sessionRef = db.collection("tradeSessions").doc();
+    const tradeId = sessionRef.id;
+    const senderPlayerRef = db.doc(`players/${uid}`);
+    const targetPlayerRef = db.doc(`players/${targetUid}`);
+    const senderPointerRef = tradePointerRef(uid);
+    const targetPointerRef = tradePointerRef(targetUid);
+
+    return db.runTransaction(async (transaction) => {
+      const [senderPlayer, targetPlayer, senderPointer, targetPointer] = await Promise.all([
+        transaction.get(senderPlayerRef),
+        transaction.get(targetPlayerRef),
+        transaction.get(senderPointerRef),
+        transaction.get(targetPointerRef),
+      ]);
+      if (!senderPlayer.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
+      if (!targetPlayer.exists) return { ok: false, reason: "player-not-found" };
+      if (!playerCanTrade(senderPlayer.data())) return { ok: false, reason: "caller-unavailable" };
+      if (!playerCanTrade(targetPlayer.data())) return { ok: false, reason: "target-unavailable" };
+      if (senderPointer.exists && !tradePointerIsStale(senderPointer, nowMs)) return { ok: false, reason: "busy" };
+      if (targetPointer.exists && !tradePointerIsStale(targetPointer, nowMs)) return { ok: false, reason: "target-busy" };
+      if (senderPointer.exists) transaction.delete(senderPointerRef);
+      if (targetPointer.exists) transaction.delete(targetPointerRef);
+
+      const senderName = socialNameFromSave(senderPlayer.data());
+      const targetName = socialNameFromSave(targetPlayer.data());
+      const session = {
+        version: 1,
+        status: "pending",
+        initiatorUid: uid,
+        targetUid,
+        participants: {
+          a: { uid, name: senderName },
+          b: { uid: targetUid, name: targetName },
+        },
+        offers: {
+          a: TradeSystem.emptyOffer(),
+          b: TradeSystem.emptyOffer(),
+        },
+        createdAtMs: nowMs,
+        updatedAtMs: nowMs,
+      };
+      transaction.set(sessionRef, session);
+      transaction.set(senderPointerRef, tradePointerPayload(tradeId, "pending", targetUid, targetName, nowMs));
+      transaction.set(tradeInviteRef(targetUid, tradeId), { tradeId, fromUid: uid, fromName: senderName, createdAtMs: nowMs });
+      return { ok: true, pending: true, tradeId, peer: { uid: targetUid, name: targetName } };
+    });
+  }
+
+  if (action === "accept" || action === "reject") {
+    const tradeId = safeTradeId(request.data?.tradeId);
+    if (!tradeId) return { ok: false, reason: "invalid-trade" };
+    const sessionRef = tradeSessionRef(tradeId);
+    const targetPointerRef = tradePointerRef(uid);
+    return db.runTransaction(async (transaction) => {
+      const sessionSnapshot = await transaction.get(sessionRef);
+      if (!sessionSnapshot.exists) return { ok: false, reason: "trade-not-found" };
+      const session = sessionSnapshot.data();
+      if (session.targetUid !== uid || tradeSide(session, uid) !== "b") return { ok: false, reason: "not-participant" };
+      if (session.status !== "pending") return { ok: false, reason: "not-pending" };
+      const initiatorUid = safeSocialUid(session.initiatorUid);
+      const initiatorPointerRef = tradePointerRef(initiatorUid);
+      const [targetPointer, initiatorPointer, targetPlayer, initiatorPlayer] = await Promise.all([
+        transaction.get(targetPointerRef),
+        transaction.get(initiatorPointerRef),
+        transaction.get(db.doc(`players/${uid}`)),
+        transaction.get(db.doc(`players/${initiatorUid}`)),
+      ]);
+
+      if (action === "reject" || tradeSessionExpired(session, nowMs)) {
+        transaction.update(sessionRef, { status: action === "reject" ? "rejected" : "cancelled", updatedAtMs: nowMs });
+        transaction.delete(tradeInviteRef(uid, tradeId));
+        if (initiatorPointer.exists && initiatorPointer.data()?.tradeId === tradeId) transaction.delete(initiatorPointerRef);
+        return { ok: true, rejected: action === "reject", expired: action !== "reject", tradeId };
+      }
+
+      if (!targetPlayer.exists || !initiatorPlayer.exists) return { ok: false, reason: "player-not-found" };
+      if (!playerCanTrade(targetPlayer.data()) || !playerCanTrade(initiatorPlayer.data())) return { ok: false, reason: "player-unavailable" };
+      if (targetPointer.exists && !tradePointerIsStale(targetPointer, nowMs)) return { ok: false, reason: "busy" };
+      if (!initiatorPointer.exists || initiatorPointer.data()?.tradeId !== tradeId || tradePointerIsStale(initiatorPointer, nowMs)) {
+        return { ok: false, reason: "trade-closed" };
+      }
+      if (targetPointer.exists) transaction.delete(targetPointerRef);
+
+      const initiatorName = safeSocialName(session.participants?.a?.name);
+      const targetName = safeSocialName(session.participants?.b?.name);
+      transaction.update(sessionRef, { status: "active", updatedAtMs: nowMs });
+      transaction.set(targetPointerRef, tradePointerPayload(tradeId, "active", initiatorUid, initiatorName, nowMs));
+      transaction.set(initiatorPointerRef, tradePointerPayload(tradeId, "active", uid, targetName, nowMs));
+      transaction.delete(tradeInviteRef(uid, tradeId));
+      return { ok: true, accepted: true, tradeId };
+    });
+  }
+
+  if (action === "cancel") {
+    const tradeId = safeTradeId(request.data?.tradeId);
+    if (!tradeId) return { ok: false, reason: "invalid-trade" };
+    const sessionRef = tradeSessionRef(tradeId);
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(sessionRef);
+      if (!snapshot.exists) return { ok: false, reason: "trade-not-found" };
+      const session = snapshot.data();
+      const side = tradeSide(session, uid);
+      if (!side) return { ok: false, reason: "not-participant" };
+      if (["completed", "cancelled", "rejected"].includes(session.status)) return { ok: true, tradeId, alreadyClosed: true };
+      const aUid = safeSocialUid(session.participants?.a?.uid);
+      const bUid = safeSocialUid(session.participants?.b?.uid);
+      const [aPointer, bPointer] = await Promise.all([
+        transaction.get(tradePointerRef(aUid)),
+        transaction.get(tradePointerRef(bUid)),
+      ]);
+      transaction.update(sessionRef, { status: "cancelled", cancelledBy: uid, updatedAtMs: nowMs });
+      if (aPointer.exists && aPointer.data()?.tradeId === tradeId) transaction.delete(tradePointerRef(aUid));
+      if (bPointer.exists && bPointer.data()?.tradeId === tradeId) transaction.delete(tradePointerRef(bUid));
+      transaction.delete(tradeInviteRef(session.targetUid, tradeId));
+      return { ok: true, cancelled: true, tradeId };
+    });
+  }
+
+  if (["set-offer", "lock", "unlock"].includes(action)) {
+    const tradeId = safeTradeId(request.data?.tradeId);
+    if (!tradeId) return { ok: false, reason: "invalid-trade" };
+    const sessionRef = tradeSessionRef(tradeId);
+    const playerRef = db.doc(`players/${uid}`);
+    return db.runTransaction(async (transaction) => {
+      const [sessionSnapshot, playerSnapshot] = await Promise.all([
+        transaction.get(sessionRef),
+        transaction.get(playerRef),
+      ]);
+      if (!sessionSnapshot.exists) return { ok: false, reason: "trade-not-found" };
+      if (!playerSnapshot.exists) return { ok: false, reason: "player-not-found" };
+      const session = sessionSnapshot.data();
+      const side = tradeSide(session, uid);
+      if (!side) return { ok: false, reason: "not-participant" };
+      if (session.status !== "active" || tradeSessionExpired(session, nowMs)) return { ok: false, reason: "trade-closed" };
+      const otherSide = otherTradeSide(side);
+      const offers = nextTradeOffer(session, side);
+      const own = offers[side];
+      const other = offers[otherSide];
+
+      if (action === "set-offer") {
+        if (own.locked || own.confirmed) return { ok: false, reason: "locked" };
+        const validation = TradeSystem.validateOffer(playerSnapshot.data(), request.data?.offer || {});
+        if (!validation.ok) return { ok: false, reason: validation.reason, entry: validation.entry || null };
+        offers[side] = { ...validation.offer, locked: false, confirmed: false };
+        offers[otherSide] = { ...other, confirmed: false };
+      } else if (action === "lock") {
+        if (own.locked) return { ok: true, locked: true, duplicate: true, tradeId };
+        const validation = TradeSystem.validateOffer(playerSnapshot.data(), own);
+        if (!validation.ok) return { ok: false, reason: validation.reason, entry: validation.entry || null };
+        offers[side] = { ...validation.offer, locked: true, confirmed: false };
+        offers[otherSide] = { ...other, confirmed: false };
+      } else {
+        if (own.confirmed) return { ok: false, reason: "already-confirmed" };
+        offers[side] = { ...own, locked: false, confirmed: false };
+        offers[otherSide] = { ...other, confirmed: false };
+      }
+
+      transaction.update(sessionRef, { offers, updatedAtMs: nowMs });
+      transaction.set(tradePointerRef(uid), tradePointerPayload(
+        tradeId,
+        "active",
+        safeSocialUid(session.participants?.[otherSide]?.uid),
+        safeSocialName(session.participants?.[otherSide]?.name),
+        nowMs,
+      ));
+      return { ok: true, tradeId, offers };
+    });
+  }
+
+  if (action === "confirm") {
+    const tradeId = safeTradeId(request.data?.tradeId);
+    if (!tradeId) return { ok: false, reason: "invalid-trade" };
+    const sessionRef = tradeSessionRef(tradeId);
+    return db.runTransaction(async (transaction) => {
+      const sessionSnapshot = await transaction.get(sessionRef);
+      if (!sessionSnapshot.exists) return { ok: false, reason: "trade-not-found" };
+      const session = sessionSnapshot.data();
+      const side = tradeSide(session, uid);
+      if (!side) return { ok: false, reason: "not-participant" };
+      if (session.status !== "active" || tradeSessionExpired(session, nowMs)) return { ok: false, reason: "trade-closed" };
+      const otherSide = otherTradeSide(side);
+      const offers = nextTradeOffer(session, side);
+      const own = offers[side];
+      const other = offers[otherSide];
+      if (!own.locked || !other.locked) return { ok: false, reason: "not-locked" };
+      if (own.confirmed) return { ok: true, confirmed: true, duplicate: true, tradeId };
+
+      offers[side] = { ...own, confirmed: true };
+      if (!other.confirmed) {
+        transaction.update(sessionRef, { offers, updatedAtMs: nowMs });
+        return { ok: true, confirmed: true, completed: false, tradeId };
+      }
+
+      const aUid = safeSocialUid(session.participants?.a?.uid);
+      const bUid = safeSocialUid(session.participants?.b?.uid);
+      const aPlayerRef = db.doc(`players/${aUid}`);
+      const bPlayerRef = db.doc(`players/${bUid}`);
+      const aPointerRef = tradePointerRef(aUid);
+      const bPointerRef = tradePointerRef(bUid);
+      const [aPlayer, bPlayer, aPointer, bPointer] = await Promise.all([
+        transaction.get(aPlayerRef),
+        transaction.get(bPlayerRef),
+        transaction.get(aPointerRef),
+        transaction.get(bPointerRef),
+      ]);
+      if (!aPlayer.exists || !bPlayer.exists) return { ok: false, reason: "player-not-found" };
+      if (!playerCanTrade(aPlayer.data()) || !playerCanTrade(bPlayer.data())) return { ok: false, reason: "player-unavailable" };
+
+      const exchange = TradeSystem.prepareExchange(aPlayer.data(), offers.a, bPlayer.data(), offers.b);
+      if (!exchange.ok) return { ok: false, reason: exchange.reason, side: exchange.side || null, entry: exchange.entry || null };
+
+      const aRevision = Math.max(0, Math.floor(Number(aPlayer.data()?.stateRevision) || 0)) + 1;
+      const bRevision = Math.max(0, Math.floor(Number(bPlayer.data()?.stateRevision) || 0)) + 1;
+      exchange.nextA.stateRevision = aRevision;
+      exchange.nextB.stateRevision = bRevision;
+      tradePlayerWrite(transaction, aPlayerRef, aPlayer.data(), exchange.nextA, aRevision);
+      tradePlayerWrite(transaction, bPlayerRef, bPlayer.data(), exchange.nextB, bRevision);
+      transaction.update(sessionRef, { status: "completed", offers, completedAtMs: nowMs, updatedAtMs: nowMs });
+      if (aPointer.exists && aPointer.data()?.tradeId === tradeId) transaction.delete(aPointerRef);
+      if (bPointer.exists && bPointer.data()?.tradeId === tradeId) transaction.delete(bPointerRef);
+
+      const callerState = uid === aUid ? exchange.nextA : exchange.nextB;
+      return { ok: true, confirmed: true, completed: true, tradeId, state: ServerGame.statePayload(callerState) };
+    });
   }
 
   return { ok: false, reason: "unsupported-action", action };

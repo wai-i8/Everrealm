@@ -51,8 +51,10 @@
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const Chat = window.EverrealmChat;
   const Social = window.EverrealmSocial;
+  const Trade = window.EverrealmTrade;
   let worldChat = null;
   let social = null;
+  let trade = null;
   const {
     normalizeCharacterName,
     statText,
@@ -202,6 +204,28 @@
   const remotePlayerMenuMeta = document.getElementById("remotePlayerMenuMeta");
   const remotePlayerMenuClose = document.getElementById("remotePlayerMenuClose");
   const remotePlayerProfileDetail = document.getElementById("remotePlayerProfileDetail");
+  const tradeInvitePanel = document.getElementById("tradeInvitePanel");
+  const tradeInviteName = document.getElementById("tradeInviteName");
+  const tradePanel = document.getElementById("tradePanel");
+  const tradePanelTitle = document.getElementById("tradePanelTitle");
+  const tradePeerLabel = document.getElementById("tradePeerLabel");
+  const tradeCloseButton = document.getElementById("tradeCloseButton");
+  const tradeStatusText = document.getElementById("tradeStatusText");
+  const tradeLocalBadge = document.getElementById("tradeLocalBadge");
+  const tradeRemoteBadge = document.getElementById("tradeRemoteBadge");
+  const tradeRemoteOfferTitle = document.getElementById("tradeRemoteOfferTitle");
+  const tradeLocalItems = document.getElementById("tradeLocalItems");
+  const tradeRemoteItems = document.getElementById("tradeRemoteItems");
+  const tradeCoinsInput = document.getElementById("tradeCoinsInput");
+  const tradeCoinsAvailable = document.getElementById("tradeCoinsAvailable");
+  const tradeRemoteCoins = document.getElementById("tradeRemoteCoins");
+  const tradeAddItemButton = document.getElementById("tradeAddItemButton");
+  const tradeInventoryPicker = document.getElementById("tradeInventoryPicker");
+  const tradeInventoryCloseButton = document.getElementById("tradeInventoryCloseButton");
+  const tradeInventoryList = document.getElementById("tradeInventoryList");
+  const tradeCancelButton = document.getElementById("tradeCancelButton");
+  const tradeLockButton = document.getElementById("tradeLockButton");
+  const tradeConfirmButton = document.getElementById("tradeConfirmButton");
   const guildCommissionDetailPanel = document.getElementById("guildCommissionDetailPanel");
   const guildCommissionDetailContent = document.getElementById("guildCommissionDetailContent");
   const guildCommissionDetailCloseButton = document.getElementById("guildCommissionDetailCloseButton");
@@ -375,6 +399,10 @@
   let systemLogScrollGesture = null;
   let systemLogCollapsed = false;
   let socialState = Object.freeze({ active: false, uid: "", friends: [], incoming: [], outgoing: [] });
+  let tradeState = Object.freeze({ active: false, uid: "", session: null, invites: [] });
+  let activeTradeInvite = null;
+  let tradeCommandPending = false;
+  let lastCompletedTradeId = "";
   let activeWhisperUid = "";
   let chatComposeMode = "world";
   let selectedRemotePlayer = null;
@@ -732,6 +760,7 @@
   let realtimeStartPromise = null;
   let chatStartPromise = null;
   let socialStartPromise = null;
+  let tradeStartPromise = null;
   let realtimeSessionToken = 0;
 
   function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
@@ -806,6 +835,18 @@
         return false;
       });
     }
+    if (trade) {
+      tradeStartPromise = trade.start({ uid, name: playerDisplayName() }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) trade.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm trade unavailable.", error);
+        return false;
+      });
+    }
   }
 
   function stopRealtimeSession() {
@@ -813,9 +854,11 @@
     realtimeStartPromise = null;
     chatStartPromise = null;
     socialStartPromise = null;
+    tradeStartPromise = null;
     if (multiplayer?.isActive?.()) void multiplayer.stop();
     worldChat?.stop?.();
     social?.stop?.();
+    trade?.stop?.();
   }
 
   function syncRealtimeState(state) {
@@ -9992,6 +10035,286 @@
   }) || null;
 
 
+  trade = Trade?.create?.({
+    firebase: Firebase,
+    serverApi: ServerApi,
+    onState: (nextState) => {
+      const previousSession = tradeState?.session;
+      tradeState = nextState;
+      const session = nextState.session;
+      if (activeTradeInvite && !(nextState.invites || []).some((entry) => entry.tradeId === activeTradeInvite.tradeId)) {
+        activeTradeInvite = null;
+      }
+      renderTradeUi();
+      syncRemotePlayerMenu();
+      if (session?.status === "completed" && session.id !== lastCompletedTradeId) {
+        lastCompletedTradeId = session.id;
+        void refreshTradeAuthoritativeState();
+        addSystemMessage("system", `與 ${session.peer.name} 嘅交易完成`);
+        showToast("交易完成。", "good");
+        window.setTimeout(() => {
+          if (tradeState.session?.id === session.id && tradeState.session?.status === "completed") renderTradeUi();
+        }, 900);
+      } else if (previousSession?.status === "active" && session && ["cancelled", "rejected"].includes(session.status)) {
+        showToast(session.status === "rejected" ? "對方拒絕咗交易。" : "交易已取消。", "warning");
+      }
+    },
+    onInvite: (invite) => {
+      if (mode !== "playing" || tradeState.session) return;
+      activeTradeInvite = invite;
+      renderTradeUi();
+      showToast(`${invite.fromName} 想同你交易。`, "");
+    },
+    onError: (error) => console.warn("Everrealm trade failed.", error),
+  }) || null;
+
+  async function refreshTradeAuthoritativeState() {
+    const uid = authenticatedUid();
+    if (!uid || !CloudSave?.load) return false;
+    try {
+      const loaded = await CloudSave.load(uid);
+      if (!loaded?.exists || !loaded.data) return false;
+      return applyAuthoritativeState(loaded.data, { markDirty: false });
+    } catch (error) {
+      console.warn("Everrealm trade state refresh failed.", error);
+      return false;
+    }
+  }
+
+  function tradeAssetKey(entry) {
+    return `${entry?.kind || ""}:${entry?.id || ""}`;
+  }
+
+  function tradeAssetLabel(entry) {
+    const kind = String(entry?.kind || "");
+    const id = String(entry?.id || "");
+    if (kind === "inventory") return inventoryItemName(id);
+    if (kind === "potion") return id === "healing_potion" ? "小型回復藥" : inventoryItemName(id);
+    if (kind === "equipment") return Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, id)?.name || id;
+    if (kind === "envelope") return `${Skills.formatSkillBookRank(Number(id) || 1)} 技能書信封`;
+    if (kind === "skill-book") return `${Skills.formatSkillBookRank(Number(id) || 1)} 技能書`;
+    if (kind === "manual") return `技能書：${Skills.getSkill(id)?.name || id}`;
+    return id || "物品";
+  }
+
+  function tradeAssetTypeLabel(entry) {
+    const labels = { inventory: "物品", potion: "消耗品", equipment: "裝備", envelope: "信封", "skill-book": "技能書", manual: "技能書" };
+    return labels[entry?.kind] || "物品";
+  }
+
+  function tradeCatalog() {
+    const items = [];
+    for (const [id, rawCount] of Object.entries(inventory || {})) {
+      const count = Math.max(0, Math.floor(Number(rawCount) || 0));
+      const item = ItemData?.getItem?.(id);
+      if (!count || !item || ["ui", "currency", "quest"].includes(item.kind) || item.tradable === false) continue;
+      items.push({ kind: "inventory", id, quantity: count, name: item.name || inventoryItemName(id) });
+    }
+    if (player.potions > 0) items.push({ kind: "potion", id: "healing_potion", quantity: player.potions, name: "小型回復藥" });
+
+    const equippedIds = new Set(Object.values(equipped || {}).filter(Boolean).map(String));
+    const equipmentCounts = new Map();
+    for (const id of ownedEquipment || []) equipmentCounts.set(String(id), (equipmentCounts.get(String(id)) || 0) + 1);
+    for (const [id, count] of equipmentCounts.entries()) {
+      const available = Math.max(0, count - (equippedIds.has(id) ? 1 : 0));
+      const item = Expansion.getEquipment(Expansion.DEFAULT_EQUIPMENT_CATALOG, id);
+      if (available > 0 && item && item.tradable !== false) items.push({ kind: "equipment", id, quantity: available, name: item.name || id });
+    }
+
+    for (const [star, rawCount] of Object.entries(guildCommissionState?.envelopes || {})) {
+      const count = Math.max(0, Math.floor(Number(rawCount) || 0));
+      if (count > 0) items.push({ kind: "envelope", id: String(star), quantity: count, name: `${Skills.formatSkillBookRank(Number(star))} 技能書信封` });
+    }
+    for (const [star, rawCount] of Object.entries(skillState?.books || {})) {
+      const count = Math.max(0, Math.floor(Number(rawCount) || 0));
+      if (count > 0) items.push({ kind: "skill-book", id: String(star), quantity: count, name: `${Skills.formatSkillBookRank(Number(star))} 技能書` });
+    }
+    for (const [skillId, rawCount] of Object.entries(skillState?.manualCounts || {})) {
+      const count = Math.max(0, Math.floor(Number(rawCount) || 0));
+      if (count > 0) items.push({ kind: "manual", id: skillId, quantity: count, name: `技能書：${Skills.getSkill(skillId)?.name || skillId}` });
+    }
+    return items.sort((left, right) => left.name.localeCompare(right.name, "zh-HK"));
+  }
+
+  function currentTradeOffers() {
+    const session = tradeState.session;
+    if (!session) return { own: null, peer: null };
+    return { own: session.offers?.[session.side] || null, peer: session.offers?.[session.otherSide] || null };
+  }
+
+  function tradeOfferHtml(offer, { editable = false } = {}) {
+    const entries = offer?.items || [];
+    if (!entries.length) return '<div class="trade-offer-empty">未放入任何物品</div>';
+    return entries.map((entry) => {
+      const key = escapeUiText(tradeAssetKey(entry));
+      const name = escapeUiText(tradeAssetLabel(entry));
+      const type = escapeUiText(tradeAssetTypeLabel(entry));
+      const controls = editable
+        ? `<div class="trade-offer-item-controls"><button type="button" data-trade-offer-action="decrease" data-trade-key="${key}" aria-label="減少">−</button><span>×${entry.quantity}</span><button type="button" data-trade-offer-action="increase" data-trade-key="${key}" aria-label="增加">＋</button></div>`
+        : `<div class="trade-offer-item-controls"><span>×${entry.quantity}</span></div>`;
+      return `<div class="trade-offer-item"><div class="trade-offer-item-main"><strong>${name}</strong><small>${type}</small></div>${controls}</div>`;
+    }).join("");
+  }
+
+  function tradeStateBadge(element, offer) {
+    if (!element) return;
+    element.classList.toggle("is-locked", Boolean(offer?.locked && !offer?.confirmed));
+    element.classList.toggle("is-confirmed", Boolean(offer?.confirmed));
+    element.textContent = offer?.confirmed ? "已確認" : offer?.locked ? "已鎖定" : "編輯中";
+  }
+
+  function renderTradeInventoryPicker() {
+    if (!tradeInventoryList) return;
+    const session = tradeState.session;
+    const { own } = currentTradeOffers();
+    if (!session || session.status !== "active" || own?.locked) {
+      tradeInventoryPicker.hidden = true;
+      return;
+    }
+    const offered = new Map((own.items || []).map((entry) => [tradeAssetKey(entry), entry.quantity]));
+    const catalog = tradeCatalog();
+    tradeInventoryList.innerHTML = catalog.length ? catalog.map((entry) => {
+      const key = escapeUiText(tradeAssetKey(entry));
+      const remaining = Math.max(0, entry.quantity - (offered.get(tradeAssetKey(entry)) || 0));
+      return `<div class="trade-inventory-entry"><div><strong>${escapeUiText(entry.name)}</strong><small>${escapeUiText(tradeAssetTypeLabel(entry))}・可用 ${remaining}</small></div><button type="button" data-trade-add-kind="${escapeUiText(entry.kind)}" data-trade-add-id="${escapeUiText(entry.id)}" ${remaining <= 0 ? "disabled" : ""}>加入</button></div>`;
+    }).join("") : '<div class="trade-offer-empty">暫時冇可交易物品</div>';
+  }
+
+  function renderTradeUi() {
+    const session = tradeState.session;
+    const hasLiveSession = Boolean(session && ["pending", "active"].includes(session.status));
+    if (tradeInvitePanel) {
+      const inviteStillValid = activeTradeInvite && (tradeState.invites || []).some((entry) => entry.tradeId === activeTradeInvite.tradeId);
+      tradeInvitePanel.hidden = !inviteStillValid || hasLiveSession;
+      if (inviteStillValid && tradeInviteName) tradeInviteName.textContent = activeTradeInvite.fromName || "冒險者";
+    }
+    if (!tradePanel) return;
+    if (!hasLiveSession) {
+      tradePanel.hidden = true;
+      if (tradeInventoryPicker) tradeInventoryPicker.hidden = true;
+      return;
+    }
+    tradePanel.hidden = false;
+    const { own, peer } = currentTradeOffers();
+    const peerName = session.peer?.name || "冒險者";
+    if (tradePanelTitle) tradePanelTitle.textContent = session.status === "pending" ? "交易邀請已送出" : "玩家交易";
+    if (tradePeerLabel) tradePeerLabel.textContent = `與 ${peerName} 交易`;
+    if (tradeRemoteOfferTitle) tradeRemoteOfferTitle.textContent = `${peerName} 提供`;
+    tradeStateBadge(tradeLocalBadge, own);
+    tradeStateBadge(tradeRemoteBadge, peer);
+    if (tradeLocalItems) tradeLocalItems.innerHTML = tradeOfferHtml(own, { editable: session.status === "active" && !own?.locked && !tradeCommandPending });
+    if (tradeRemoteItems) tradeRemoteItems.innerHTML = tradeOfferHtml(peer);
+    if (tradeRemoteCoins) tradeRemoteCoins.textContent = (peer?.coins || 0).toLocaleString("zh-HK");
+    if (tradeCoinsInput) {
+      if (document.activeElement !== tradeCoinsInput) tradeCoinsInput.value = String(own?.coins || 0);
+      tradeCoinsInput.disabled = session.status !== "active" || own?.locked || tradeCommandPending;
+    }
+    if (tradeCoinsAvailable) tradeCoinsAvailable.textContent = `持有 ${Math.max(0, Math.floor(Number(player.coins) || 0)).toLocaleString("zh-HK")}`;
+    if (tradeAddItemButton) tradeAddItemButton.disabled = session.status !== "active" || own?.locked || tradeCommandPending;
+
+    const bothLocked = Boolean(own?.locked && peer?.locked);
+    if (tradeStatusText) {
+      if (session.status === "pending") tradeStatusText.textContent = `等待 ${peerName} 接受交易邀請…`;
+      else if (own?.confirmed) tradeStatusText.textContent = `你已確認交易，等待 ${peerName} 最後確認…`;
+      else if (peer?.confirmed) tradeStatusText.textContent = `${peerName} 已確認。請核對內容後按「確認交易」。`;
+      else if (bothLocked) tradeStatusText.textContent = "雙方已鎖定。內容已凍結，請再次確認交易。";
+      else if (own?.locked) tradeStatusText.textContent = `你已鎖定內容，等待 ${peerName} 鎖定。`;
+      else if (peer?.locked) tradeStatusText.textContent = `${peerName} 已鎖定；核對自己嘅內容後按「鎖定」。`;
+      else tradeStatusText.textContent = "放好物品／金幣後先鎖定；雙方鎖定後，每人再確認一次先會成交。";
+    }
+    if (tradeLockButton) {
+      tradeLockButton.textContent = own?.locked ? "取消鎖定" : "鎖定";
+      tradeLockButton.disabled = session.status !== "active" || own?.confirmed || tradeCommandPending;
+    }
+    if (tradeConfirmButton) {
+      tradeConfirmButton.textContent = own?.confirmed ? "已確認" : "確認交易";
+      tradeConfirmButton.disabled = session.status !== "active" || !bothLocked || own?.confirmed || tradeCommandPending;
+    }
+    if (tradeCancelButton) tradeCancelButton.disabled = tradeCommandPending;
+    if (tradeInventoryPicker && (own?.locked || session.status !== "active")) tradeInventoryPicker.hidden = true;
+    if (tradeInventoryPicker?.hidden === false) renderTradeInventoryPicker();
+  }
+
+  function tradeFailureMessage(reason) {
+    const messages = {
+      "invalid-target": "無法同呢位玩家交易。",
+      "player-not-found": "暫時搵唔到呢位玩家。",
+      "busy": "你而家已經有另一個交易進行中。",
+      "target-busy": "對方而家正進行其他交易。",
+      "caller-unavailable": "你而家嘅狀態唔可以交易。",
+      "target-unavailable": "對方而家嘅狀態唔可以交易。",
+      "player-unavailable": "其中一方而家無法交易。",
+      "trade-closed": "呢次交易已經失效。",
+      "trade-not-found": "搵唔到呢次交易。",
+      "not-pending": "呢個交易邀請已經失效。",
+      "locked": "你已經鎖定咗交易內容。",
+      "already-confirmed": "你已經確認咗呢次交易。",
+      "not-locked": "要雙方都鎖定先可以確認交易。",
+      "coins": "你提供嘅金幣已經超過持有數量。",
+      "missing-item": "有交易物品已經唔喺你身上。",
+      "quantity": "有交易物品數量不足。",
+      "recipient-full": "對方物品容量不足，未能完成交易。",
+      "coin-cap": "交易後其中一方金幣會超過上限。",
+    };
+    return messages[reason] || "交易暫時未能完成。";
+  }
+
+  async function runTradeCommand(action) {
+    if (tradeCommandPending) return { ok: false, reason: "busy" };
+    tradeCommandPending = true;
+    renderTradeUi();
+    try {
+      const result = await action();
+      if (!result?.ok) showToast(tradeFailureMessage(result?.reason), "warning");
+      if (result?.state) applyAuthoritativeState(result.state, { markDirty: false });
+      return result;
+    } catch (error) {
+      console.warn("Everrealm trade command failed.", error);
+      showToast("交易暫時未能完成。", "danger");
+      return { ok: false, reason: "command-failed", error };
+    } finally {
+      tradeCommandPending = false;
+      renderTradeUi();
+    }
+  }
+
+  async function updateTradeOffer(nextOffer) {
+    const session = tradeState.session;
+    if (!session || session.status !== "active") return false;
+    const result = await runTradeCommand(() => trade?.setOffer?.(nextOffer, session.id));
+    return Boolean(result?.ok);
+  }
+
+  async function adjustTradeOffer(kind, id, delta) {
+    const { own } = currentTradeOffers();
+    if (!own || own.locked) return false;
+    const items = (own.items || []).map((entry) => ({ ...entry }));
+    const key = `${kind}:${id}`;
+    const index = items.findIndex((entry) => tradeAssetKey(entry) === key);
+    const catalogEntry = tradeCatalog().find((entry) => tradeAssetKey(entry) === key);
+    const max = catalogEntry?.quantity || 0;
+    if (index < 0 && delta > 0 && max > 0) items.push({ kind, id, quantity: 1 });
+    else if (index >= 0) {
+      const next = Core.clamp((items[index].quantity || 0) + delta, 0, max);
+      if (next <= 0) items.splice(index, 1);
+      else items[index].quantity = next;
+    }
+    return updateTradeOffer({ coins: own.coins || 0, items });
+  }
+
+  async function requestTradeWithRemote(remote) {
+    if (!remote?.uid || !trade?.isActive?.()) return showToast("交易系統暫時未連線。", "warning");
+    if (remote.state === "battle") return showToast("對方而家戰鬥中，暫時唔可以交易。", "warning");
+    if (tradeState.session && ["pending", "active"].includes(tradeState.session.status)) return showToast("你已經有一個交易進行中。", "warning");
+    const result = await runTradeCommand(() => trade.createTrade(remote.uid));
+    if (result?.ok) {
+      closeRemotePlayerMenu();
+      showToast(`已向 ${remote.name || "對方"} 發送交易邀請。`, "");
+    }
+    return result;
+  }
+
+
   function socialFriend(uid) {
     const key = String(uid || "").trim();
     return socialState.friends?.find?.((entry) => entry.uid === key) || null;
@@ -10138,6 +10461,7 @@
     if (remotePlayerMenuMeta) remotePlayerMenuMeta.textContent = `${remoteClassLabel(remote.classId)}・${remote.state === "battle" ? "戰鬥中" : "探索中"}`;
     const friendButton = remotePlayerMenu.querySelector('[data-player-action="friend"]');
     const whisperButton = remotePlayerMenu.querySelector('[data-player-action="whisper"]');
+    const tradeButton = remotePlayerMenu.querySelector('[data-player-action="trade"]');
     const friend = socialFriend(remote.uid);
     const incoming = socialIncoming(remote.uid);
     const outgoing = socialOutgoing(remote.uid);
@@ -10148,6 +10472,11 @@
       if (incoming) friendButton.disabled = false;
     }
     if (whisperButton) whisperButton.disabled = !friend;
+    if (tradeButton) {
+      const busy = Boolean(tradeState.session && ["pending", "active"].includes(tradeState.session.status));
+      tradeButton.disabled = busy || remote.state === "battle" || !trade?.isActive?.();
+      tradeButton.textContent = busy ? "交易中" : "交易";
+    }
     if (remotePlayerProfileDetail && !remotePlayerProfileDetail.hidden) {
       remotePlayerProfileDetail.textContent = `${remoteClassLabel(remote.classId)}｜${remote.state === "battle" ? "目前戰鬥中" : "目前喺同一區域探索"}`;
     }
@@ -13889,6 +14218,7 @@
       return;
     }
     if (action === "whisper") return setWhisperTarget(remote.uid);
+    if (action === "trade") return requestTradeWithRemote(remote);
     if (action === "friend") {
       button.disabled = true;
       const incoming = socialIncoming(remote.uid);
@@ -13899,6 +14229,94 @@
       button.disabled = false;
       syncRemotePlayerMenu();
     }
+  });
+
+
+  tradeInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  tradeInvitePanel?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-trade-invite-action]");
+    if (!button || button.disabled || !activeTradeInvite) return;
+    const invite = activeTradeInvite;
+    button.disabled = true;
+    const accept = button.dataset.tradeInviteAction === "accept";
+    const result = await runTradeCommand(() => trade?.respondInvite?.(invite.tradeId, accept));
+    if (result?.ok) {
+      activeTradeInvite = null;
+      if (!accept) showToast("已拒絕交易邀請。", "");
+    }
+    renderTradeUi();
+  });
+
+  tradePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  tradePanel?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const offerButton = event.target.closest("[data-trade-offer-action]");
+    if (offerButton && !offerButton.disabled) {
+      const key = String(offerButton.dataset.tradeKey || "");
+      const split = key.indexOf(":");
+      if (split > 0) {
+        const kind = key.slice(0, split);
+        const id = key.slice(split + 1);
+        const delta = offerButton.dataset.tradeOfferAction === "increase" ? 1 : -1;
+        await adjustTradeOffer(kind, id, delta);
+      }
+      return;
+    }
+    const addButton = event.target.closest("[data-trade-add-kind]");
+    if (addButton && !addButton.disabled) {
+      await adjustTradeOffer(addButton.dataset.tradeAddKind, addButton.dataset.tradeAddId, 1);
+      renderTradeInventoryPicker();
+    }
+  });
+
+  tradeAddItemButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (tradeAddItemButton.disabled || !tradeInventoryPicker) return;
+    tradeInventoryPicker.hidden = !tradeInventoryPicker.hidden;
+    if (!tradeInventoryPicker.hidden) renderTradeInventoryPicker();
+  });
+  tradeInventoryCloseButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (tradeInventoryPicker) tradeInventoryPicker.hidden = true;
+  });
+  tradeCoinsInput?.addEventListener("change", async () => {
+    const { own } = currentTradeOffers();
+    if (!own || own.locked) return;
+    const coins = Core.clamp(Math.floor(Number(tradeCoinsInput.value) || 0), 0, Math.max(0, Math.floor(Number(player.coins) || 0)));
+    tradeCoinsInput.value = String(coins);
+    await updateTradeOffer({ coins, items: own.items || [] });
+  });
+  tradeCoinsInput?.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") tradeCoinsInput.blur();
+  });
+  tradeLockButton?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const session = tradeState.session;
+    const { own } = currentTradeOffers();
+    if (!session || session.status !== "active" || own?.confirmed) return;
+    await runTradeCommand(() => own?.locked ? trade?.unlock?.(session.id) : trade?.lock?.(session.id));
+  });
+  tradeConfirmButton?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const session = tradeState.session;
+    const { own, peer } = currentTradeOffers();
+    if (!session || !own?.locked || !peer?.locked || own?.confirmed) return;
+    await runTradeCommand(() => trade?.confirm?.(session.id));
+  });
+  const cancelCurrentTrade = async () => {
+    const session = tradeState.session;
+    if (!session || !["pending", "active"].includes(session.status)) return;
+    await runTradeCommand(() => trade?.cancelTrade?.(session.id));
+  };
+  tradeCancelButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void cancelCurrentTrade();
+  });
+  tradeCloseButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void cancelCurrentTrade();
   });
 
   document.addEventListener("pointerdown", (event) => {
@@ -14069,6 +14487,7 @@
     void multiplayer?.stop?.();
     worldChat?.stop?.();
     social?.stop?.();
+    trade?.stop?.();
   });
   window.addEventListener("resize", resize, { passive: true });
   window.addEventListener("resize", syncMobileHudAutoHideMode, { passive: true });
@@ -14082,6 +14501,7 @@
   renderSystemLog();
   renderSocialFriends();
   syncChatComposer();
+  renderTradeUi();
   syncAccountStatus();
   syncSystemSoundControl();
   startTitleBgm();

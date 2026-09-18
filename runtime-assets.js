@@ -64,9 +64,10 @@
     "save-system.js?v=20260917-latency-cleanup-02",
     "firebase-config.js?v=20260917-latency-cleanup-02",
     "firebase-client.js?v=20260917-latency-cleanup-02",
-    "game/server-api.js?v=20260918-social-01",
+    "game/server-api.js?v=20260918-trade-01",
     "chat.js?v=20260917-latency-cleanup-02",
     "social.js?v=20260918-social-01",
+    "trade.js?v=20260918-trade-01",
     "cloud-save.js?v=20260917-latency-cleanup-02",
     "save-persistence.js?v=20260917-latency-cleanup-02",
     "world-time.js?v=20260917-latency-cleanup-02",
@@ -88,7 +89,7 @@
     "game/facility-action-router.js?v=20260918-main-quest-panels-01",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260918-social-01",
+    "game.js?v=20260918-trade-01",
   ]);
 
   return Object.freeze({ scripts });

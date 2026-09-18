@@ -51,6 +51,9 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 - Player selection, friend requests / graph and one-to-one whisper chat:
   `docs/SOCIAL_SYSTEM.md`
 
+- Direct player trading, two-stage lock/confirm exchange and economy security boundary:
+  `docs/TRADE_SYSTEM.md`
+
 - Art assets / NPC visual design / battlefield art / Standard Mobile Unit 28-frame locomotion sprites / atlases / transparency / cropping / anchors / visual QA:
   `ART_PIPELINE.md`
 
