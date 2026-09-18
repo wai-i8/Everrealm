@@ -1,7 +1,9 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getDatabase } = require("firebase-admin/database");
 const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const {
@@ -18,6 +20,7 @@ const PlayerState = require("./player-state");
 initializeApp();
 
 const db = getFirestore();
+const realtimeDb = getDatabase();
 const REGION = "europe-west2";
 const COMMAND_VERSION = 1;
 const LEGACY_MIGRATION_ACCOUNT_CUTOFF_MS = Date.parse("2026-09-17T12:00:00.000Z");
@@ -44,6 +47,35 @@ async function withPlayerTransaction(uid, callback) {
     }
     return callback({ transaction, playerRef, save: snapshot.data() });
   });
+}
+
+function safeSocialUid(value) {
+  return String(value || "").trim();
+}
+
+function safeSocialName(value) {
+  return String(value || "冒險者").trim().slice(0, 24) || "冒險者";
+}
+
+function socialNameFromSave(save) {
+  return safeSocialName(save?.player?.name);
+}
+
+function socialThreadId(uidA, uidB) {
+  const pair = [safeSocialUid(uidA), safeSocialUid(uidB)].sort().join(":");
+  return crypto.createHash("sha256").update(pair).digest("hex").slice(0, 32);
+}
+
+function friendRef(ownerUid, friendUid) {
+  return db.doc(`players/${ownerUid}/friends/${friendUid}`);
+}
+
+function incomingFriendRequestRef(ownerUid, requesterUid) {
+  return db.doc(`players/${ownerUid}/friendRequests/${requesterUid}`);
+}
+
+function outgoingFriendRequestRef(ownerUid, targetUid) {
+  return db.doc(`players/${ownerUid}/friendRequestsSent/${targetUid}`);
 }
 
 
@@ -254,6 +286,160 @@ exports.recoverPlayer = onCall({ region: REGION, maxInstances: 10 }, async (requ
       ...(respawn ? { respawn: { mapId: respawn.mapId, x: respawn.x, y: respawn.y } } : {}),
     };
   });
+});
+
+
+exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) => {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  const action = String(request.data?.action || "").trim();
+
+  if (action === "send-friend-request") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const senderPlayerRef = db.doc(`players/${uid}`);
+    const targetPlayerRef = db.doc(`players/${targetUid}`);
+    const senderFriendRef = friendRef(uid, targetUid);
+    const targetIncomingRef = incomingFriendRequestRef(targetUid, uid);
+    const senderOutgoingRef = outgoingFriendRequestRef(uid, targetUid);
+    const senderIncomingRef = incomingFriendRequestRef(uid, targetUid);
+
+    return db.runTransaction(async (transaction) => {
+      const [senderPlayer, targetPlayer, existingFriend, existingOutgoing, reverseIncoming] = await Promise.all([
+        transaction.get(senderPlayerRef),
+        transaction.get(targetPlayerRef),
+        transaction.get(senderFriendRef),
+        transaction.get(senderOutgoingRef),
+        transaction.get(senderIncomingRef),
+      ]);
+      if (!senderPlayer.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
+      if (!targetPlayer.exists) return { ok: false, reason: "player-not-found" };
+      if (existingFriend.exists) return { ok: false, reason: "already-friends" };
+      if (reverseIncoming.exists) return { ok: false, reason: "incoming-request-exists" };
+      if (existingOutgoing.exists) return { ok: true, pending: true, duplicate: true };
+
+      const senderName = socialNameFromSave(senderPlayer.data());
+      const targetName = socialNameFromSave(targetPlayer.data());
+      transaction.set(targetIncomingRef, { uid, name: senderName, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(senderOutgoingRef, { uid: targetUid, name: targetName, createdAt: FieldValue.serverTimestamp() });
+      return { ok: true, pending: true, targetUid, targetName };
+    });
+  }
+
+  if (action === "accept-friend-request") {
+    const requesterUid = safeSocialUid(request.data?.requesterUid);
+    if (!requesterUid || requesterUid === uid) return { ok: false, reason: "invalid-target" };
+    const requestRef = incomingFriendRequestRef(uid, requesterUid);
+    const requesterSentRef = outgoingFriendRequestRef(requesterUid, uid);
+    const reverseRequestRef = incomingFriendRequestRef(requesterUid, uid);
+    const reverseSentRef = outgoingFriendRequestRef(uid, requesterUid);
+    const callerPlayerRef = db.doc(`players/${uid}`);
+    const requesterPlayerRef = db.doc(`players/${requesterUid}`);
+    const threadId = socialThreadId(uid, requesterUid);
+
+    const result = await db.runTransaction(async (transaction) => {
+      const [requestSnapshot, callerPlayer, requesterPlayer] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(callerPlayerRef),
+        transaction.get(requesterPlayerRef),
+      ]);
+      if (!requestSnapshot.exists) return { ok: false, reason: "request-not-found" };
+      if (!callerPlayer.exists || !requesterPlayer.exists) return { ok: false, reason: "player-not-found" };
+
+      const callerName = socialNameFromSave(callerPlayer.data());
+      const requesterName = socialNameFromSave(requesterPlayer.data());
+      const since = FieldValue.serverTimestamp();
+      transaction.set(friendRef(uid, requesterUid), { uid: requesterUid, name: requesterName, threadId, since });
+      transaction.set(friendRef(requesterUid, uid), { uid, name: callerName, threadId, since });
+      transaction.delete(requestRef);
+      transaction.delete(requesterSentRef);
+      transaction.delete(reverseRequestRef);
+      transaction.delete(reverseSentRef);
+      return { ok: true, accepted: true, friend: { uid: requesterUid, name: requesterName, threadId }, callerName, requesterName };
+    });
+
+    if (result?.ok && result.accepted) {
+      await realtimeDb.ref(`chat/whispers/${threadId}`).update({
+        members: { [uid]: true, [requesterUid]: true },
+        names: { [uid]: result.callerName, [requesterUid]: result.requesterName },
+        updatedAt: Date.now(),
+      });
+      delete result.callerName;
+      delete result.requesterName;
+    }
+    return result;
+  }
+
+  if (action === "reject-friend-request") {
+    const requesterUid = safeSocialUid(request.data?.requesterUid);
+    if (!requesterUid || requesterUid === uid) return { ok: false, reason: "invalid-target" };
+    const requestRef = incomingFriendRequestRef(uid, requesterUid);
+    const requestSnapshot = await requestRef.get();
+    if (!requestSnapshot.exists) return { ok: false, reason: "request-not-found" };
+    const batch = db.batch();
+    batch.delete(requestRef);
+    batch.delete(outgoingFriendRequestRef(requesterUid, uid));
+    await batch.commit();
+    return { ok: true, rejected: true, requesterUid };
+  }
+
+  if (action === "cancel-friend-request") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const sentRef = outgoingFriendRequestRef(uid, targetUid);
+    const sentSnapshot = await sentRef.get();
+    if (!sentSnapshot.exists) return { ok: false, reason: "request-not-found" };
+    const batch = db.batch();
+    batch.delete(sentRef);
+    batch.delete(incomingFriendRequestRef(targetUid, uid));
+    await batch.commit();
+    return { ok: true, cancelled: true, targetUid };
+  }
+
+  if (action === "remove-friend") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const ownerFriendRef = friendRef(uid, targetUid);
+    const friendship = await ownerFriendRef.get();
+    if (!friendship.exists) return { ok: false, reason: "not-friends" };
+    const threadId = String(friendship.data()?.threadId || socialThreadId(uid, targetUid));
+
+    // Revoke the realtime private channel before removing the permanent friend
+    // records. If the second step has to be retried, the safe failure mode is
+    // that friends temporarily cannot whisper rather than ex-friends retaining
+    // access to the old thread.
+    await realtimeDb.ref(`chat/whispers/${threadId}`).remove();
+    const batch = db.batch();
+    batch.delete(ownerFriendRef);
+    batch.delete(friendRef(targetUid, uid));
+    batch.delete(incomingFriendRequestRef(uid, targetUid));
+    batch.delete(incomingFriendRequestRef(targetUid, uid));
+    batch.delete(outgoingFriendRequestRef(uid, targetUid));
+    batch.delete(outgoingFriendRequestRef(targetUid, uid));
+    await batch.commit();
+    return { ok: true, removed: true, targetUid };
+  }
+
+  if (action === "ensure-whisper") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const [ownerFriend, targetFriend, ownerPlayer, targetPlayer] = await Promise.all([
+      friendRef(uid, targetUid).get(),
+      friendRef(targetUid, uid).get(),
+      db.doc(`players/${uid}`).get(),
+      db.doc(`players/${targetUid}`).get(),
+    ]);
+    if (!ownerFriend.exists || !targetFriend.exists) return { ok: false, reason: "not-friends" };
+    const threadId = String(ownerFriend.data()?.threadId || socialThreadId(uid, targetUid));
+    await realtimeDb.ref(`chat/whispers/${threadId}`).update({
+      members: { [uid]: true, [targetUid]: true },
+      names: { [uid]: socialNameFromSave(ownerPlayer.data()), [targetUid]: socialNameFromSave(targetPlayer.data()) },
+      updatedAt: Date.now(),
+    });
+    return { ok: true, threadId };
+  }
+
+  return { ok: false, reason: "unsupported-action", action };
 });
 
 

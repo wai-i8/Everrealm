@@ -10,7 +10,7 @@ https://everrealm-f5a7d-default-rtdb.firebaseio.com/
 
 Realtime Database is transient only. Firestore remains the permanent save store for inventory, equipment, coins, EXP, quests, progression and all existing `players/{uid}` data. The one-active-device/session policy remains owned by Firestore and is unchanged.
 
-Phase 2 does not synchronize combat, tactical cells, damage, skills, enemy state, turns, battle results, parties, trading, economy or Cloud Functions. A lightweight authenticated world-chat feed is layered on RTDB after the movement/presence foundation and remains non-authoritative gameplay data.
+Phase 2 does not synchronize combat, tactical cells, damage, skills, enemy state, turns, battle results, parties, trading or economy. A lightweight authenticated world-chat feed is layered on RTDB after the movement/presence foundation and remains non-authoritative gameplay data. The later friend graph and one-to-one whisper layer reuse the same realtime foundation but are specified separately in `docs/SOCIAL_SYSTEM.md`; friendship mutations themselves are server-authoritative Cloud Functions.
 
 ## Presence records
 

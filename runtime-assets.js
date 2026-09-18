@@ -64,8 +64,9 @@
     "save-system.js?v=20260917-latency-cleanup-02",
     "firebase-config.js?v=20260917-latency-cleanup-02",
     "firebase-client.js?v=20260917-latency-cleanup-02",
-    "game/server-api.js?v=20260917-latency-cleanup-02",
+    "game/server-api.js?v=20260918-social-01",
     "chat.js?v=20260917-latency-cleanup-02",
+    "social.js?v=20260918-social-01",
     "cloud-save.js?v=20260917-latency-cleanup-02",
     "save-persistence.js?v=20260917-latency-cleanup-02",
     "world-time.js?v=20260917-latency-cleanup-02",
@@ -77,7 +78,7 @@
     "game/battle-sfx.js?v=20260917-latency-cleanup-02",
     "game/ui-dom-helpers.js?v=20260917-latency-cleanup-02",
     "game/ui-presentation-helpers.js?v=20260917-latency-cleanup-02",
-    "game/system-feedback.js?v=20260918-defeat-position-01",
+    "game/system-feedback.js?v=20260918-social-01",
     "game/dialogue-ui.js?v=20260917-latency-cleanup-02",
     "game/facility-basic-views.js?v=20260918-main-quest-panels-01",
     "game/facility-catalog-views.js?v=20260917-latency-cleanup-02",
@@ -87,7 +88,7 @@
     "game/facility-action-router.js?v=20260918-main-quest-panels-01",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260918-main-quest-panels-01",
+    "game.js?v=20260918-social-01",
   ]);
 
   return Object.freeze({ scripts });

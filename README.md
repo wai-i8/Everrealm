@@ -43,16 +43,14 @@ window.__RPG_DEBUG__.snapshot().skills
 `godMode()` 會為當前職業解鎖全部技能、放入每招一本具名技能書、擴充 DECK 至 6 格、補滿 HP、戰鬥無敵及免扣 AP。`godMode(false)` 只會關閉無敵／免 AP；已解鎖技能和技能書會留在當前 debug session，重新開始一局即可重置。呢個入口只喺 `smoke`／`autoplay` URL 啟用，唔屬於正式玩家功能。
 
 Firebase Auth handles email/password accounts and Firestore stores each player's
-sanitized permanent save at `players/{uid}`; `firestore.rules` restricts that
-document to its authenticated owner. Phase 2 additionally uses the existing
-Firebase project's Realtime Database only for transient presence, same-map
-player coordinates/facing/state, and server-time offset. It does not move save
-data to RTDB and does not add Hosting, Cloud Functions or Admin credentials.
-After reviewing the rules, a maintainer may deploy the current Firebase rules
-with:
+sanitized permanent save at `players/{uid}`. Protected gameplay and social-graph
+mutations are server-authoritative Cloud Functions. Realtime Database owns
+transient presence, same-map player presentation, world chat, friend-only
+whispers and server-time offset; permanent save data stays in Firestore. After
+reviewing changes, deploy the matching Functions and security rules together:
 
 ```powershell
-firebase deploy --only firestore:rules,database --project everrealm-f5a7d
+firebase deploy --only functions,firestore:rules,database --project everrealm-f5a7d
 ```
 
 The developer-only WorldTime seed uses the Firebase Admin SDK with Application
@@ -83,6 +81,7 @@ world unless `npm run seed:world -- --force` is explicitly used.
 - `docs/DATA_ARCHITECTURE.md`：固定 Game Data ownership、stable ID／legacy migration 同 Firebase boundary。
 - `docs/PLAYER_DATA_SCHEMA.md`：玩家永久 state／save boundary，同日後 Firestore／RTDB 分工。
 - `docs/REALTIME_SYSTEM.md`：Phase 2 RTDB presence、same-map players、WorldTime epoch and security boundary。
+- `docs/SOCIAL_SYSTEM.md`：玩家點擊互動、好友申請／關係、世界／密語聊天及 Firebase security boundary。
 - `firebase-config.js`、`firebase-client.js`、`cloud-save.js`、`save-persistence.js`：Firebase Auth、`players/{uid}` Firestore 存檔，以及本機 legacy／帳戶 ownership-safe migration。
 - `docs/FIGHTER_SKILL_TREE.md`：現行 Everrealm 格鬥士完整技能規格；runtime data contract 由 `data/skills/fighter.js` 實作。
 - `map/`：共用 map constants、generation helpers、registry、door-anchor resolver 同 transition linker。
@@ -103,6 +102,7 @@ world unless `npm run seed:world -- --force` is explicitly used.
 - Guild 委託目錄、討伐／送信流程、技能書信封與保存契約：`docs/GUILD_COMMISSION_SYSTEM.md`
 - 採集、生產、Recipe、生產精靈及品質：`docs/PRODUCTION_SYSTEM.md`
 - Shared Everrealm bitmap-backed windows、popups、responsive layout 同 UI states：`docs/UI_SYSTEM.md`
+- 玩家點擊互動、好友申請／關係及一對一密語：`docs/SOCIAL_SYSTEM.md`
 - 裝備 schema、格鬥士 STRUGARDEN 衝攻／衝防轉換、canonical slots、ATK／DEF／Accuracy／Evasion／Weight／Move modifiers：`docs/EQUIPMENT_SYSTEM.md`
 - 所有美術相關規格，包括 NPC、戰場、Standard Mobile Unit `4×7 / 28-frame` locomotion Sprite、Atlas、透明底、裁切、Anchor、repack、動畫及視覺驗收：`ART_PIPELINE.md`
 - 現行 Everrealm 格鬥士技能樹、完整 65 招資料、explicit prerequisite graph、exact range／高低差／傷害／hit／path 規則：`docs/FIGHTER_SKILL_TREE.md`

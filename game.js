@@ -50,7 +50,9 @@
   const worldTime = window.EverrealmWorldTime?.create?.({ firebase: Firebase });
   const multiplayer = window.EverrealmMultiplayer?.create?.({ firebase: Firebase, locomotion: Locomotion });
   const Chat = window.EverrealmChat;
+  const Social = window.EverrealmSocial;
   let worldChat = null;
+  let social = null;
   const {
     normalizeCharacterName,
     statText,
@@ -189,6 +191,17 @@
   const systemLogScrollZone = document.getElementById("systemLogScrollZone");
   const worldChatForm = document.getElementById("worldChatForm");
   const worldChatInput = document.getElementById("worldChatInput");
+  const chatComposeChannel = document.getElementById("chatComposeChannel");
+  const socialFriendsButton = document.getElementById("socialFriendsButton");
+  const socialFriendsBadge = document.getElementById("socialFriendsBadge");
+  const socialFriendsPopover = document.getElementById("socialFriendsPopover");
+  const socialFriendsCloseButton = document.getElementById("socialFriendsCloseButton");
+  const socialFriendsContent = document.getElementById("socialFriendsContent");
+  const remotePlayerMenu = document.getElementById("remotePlayerMenu");
+  const remotePlayerMenuName = document.getElementById("remotePlayerMenuName");
+  const remotePlayerMenuMeta = document.getElementById("remotePlayerMenuMeta");
+  const remotePlayerMenuClose = document.getElementById("remotePlayerMenuClose");
+  const remotePlayerProfileDetail = document.getElementById("remotePlayerProfileDetail");
   const guildCommissionDetailPanel = document.getElementById("guildCommissionDetailPanel");
   const guildCommissionDetailContent = document.getElementById("guildCommissionDetailContent");
   const guildCommissionDetailCloseButton = document.getElementById("guildCommissionDetailCloseButton");
@@ -361,6 +374,11 @@
   let systemLogDragGesture = null;
   let systemLogScrollGesture = null;
   let systemLogCollapsed = false;
+  let socialState = Object.freeze({ active: false, uid: "", friends: [], incoming: [], outgoing: [] });
+  let activeWhisperUid = "";
+  let chatComposeMode = "world";
+  let selectedRemotePlayer = null;
+  const remotePlayerHitRegions = new Map();
   try { systemLogCollapsed = localStorage.getItem(SYSTEM_LOG_COLLAPSED_KEY) === "1"; } catch (_) {}
   let remoteSessionKickMessage = "";
   let sessionKickInProgress = false;
@@ -713,6 +731,7 @@
   let worldClockText = "";
   let realtimeStartPromise = null;
   let chatStartPromise = null;
+  let socialStartPromise = null;
   let realtimeSessionToken = 0;
 
   function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
@@ -775,14 +794,28 @@
         return false;
       });
     }
+    if (social) {
+      socialStartPromise = social.start({ uid, name: playerDisplayName() }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) social.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm social unavailable.", error);
+        return false;
+      });
+    }
   }
 
   function stopRealtimeSession() {
     realtimeSessionToken += 1;
     realtimeStartPromise = null;
     chatStartPromise = null;
+    socialStartPromise = null;
     if (multiplayer?.isActive?.()) void multiplayer.stop();
     worldChat?.stop?.();
+    social?.stop?.();
   }
 
   function syncRealtimeState(state) {
@@ -2240,6 +2273,8 @@
   }) || null;
 
   function hideAllOverlays() {
+    closeRemotePlayerMenu();
+    setSocialFriendsOpen(false);
     setSystemSettingsOpen(false);
     authPanel.hidden = true;
     authPanel.dataset.authRequired = "false";
@@ -9886,12 +9921,12 @@
     hud.zone.textContent = name;
   }
 
-  const SYSTEM_LOG_LABELS = Object.freeze({ world: "世界", combat: "戰鬥", reward: "進度", quest: "進度", item: "進度", system: "系統" });
+  const SYSTEM_LOG_LABELS = Object.freeze({ world: "世界", whisper: "密語", combat: "戰鬥", reward: "進度", quest: "進度", item: "進度", system: "系統" });
 
   const systemFeedback = SystemFeedback.create({
     dom: { toastElement, ariaLive, systemLog, systemLogMessages, systemLogTabs, systemLogToggleButton },
     labels: SYSTEM_LOG_LABELS,
-    filterGroups: { world: ["world"], combat: ["combat"], progress: ["reward", "quest", "item"], system: ["system"] },
+    filterGroups: { world: ["world"], whisper: ["whisper"], combat: ["combat"], progress: ["reward", "quest", "item"], system: ["system"] },
     escapeUiText,
     storage: { setItem(key, value) { localStorage.setItem(key, value); } },
     storageKey: SYSTEM_LOG_COLLAPSED_KEY,
@@ -9910,6 +9945,7 @@
     renderSystemLog,
     addSystemMessage,
     addWorldMessage,
+    addWhisperMessage,
     syncSystemLogCollapsed,
     toggleSystemLogCollapsed,
   } = systemFeedback;
@@ -9922,6 +9958,226 @@
     onMessage: (message) => addWorldMessage(message.name, message.text),
     onError: (error) => console.warn("Everrealm world chat failed.", error),
   }) || null;
+
+  social = Social?.create?.({
+    firebase: Firebase,
+    serverApi: ServerApi,
+    historyLimit: 200,
+    maxMessageLength: 200,
+    sendCooldownMs: 650,
+    onState: (nextState) => {
+      socialState = nextState;
+      if (activeWhisperUid && !social?.hasFriend?.(activeWhisperUid)) {
+        activeWhisperUid = "";
+        if (chatComposeMode === "whisper") chatComposeMode = "world";
+      }
+      renderSocialFriends();
+      syncChatComposer();
+      syncRemotePlayerMenu();
+    },
+    onFriendRequest: (request) => {
+      addSystemMessage("system", `${request.name} 向你發送好友申請`);
+      showToast(`${request.name} 想加你做好友。`, "");
+    },
+    onWhisper: (message) => {
+      const author = message.direction === "outgoing" ? `→ ${message.peerName}` : message.peerName;
+      addWhisperMessage(author, message.text, message.direction);
+      if (message.direction === "incoming" && !activeWhisperUid) activeWhisperUid = message.peerUid;
+      if (message.direction === "incoming" && systemLogFilter !== "whisper") {
+        showToast(`${message.peerName} 傳來密語。`, "");
+      }
+      syncChatComposer();
+    },
+    onError: (error) => console.warn("Everrealm social failed.", error),
+  }) || null;
+
+
+  function socialFriend(uid) {
+    const key = String(uid || "").trim();
+    return socialState.friends?.find?.((entry) => entry.uid === key) || null;
+  }
+
+  function socialIncoming(uid) {
+    const key = String(uid || "").trim();
+    return socialState.incoming?.find?.((entry) => entry.uid === key) || null;
+  }
+
+  function socialOutgoing(uid) {
+    const key = String(uid || "").trim();
+    return socialState.outgoing?.find?.((entry) => entry.uid === key) || null;
+  }
+
+  function setSocialFriendsOpen(open) {
+    if (!socialFriendsPopover || !socialFriendsButton) return;
+    const next = Boolean(open);
+    socialFriendsPopover.hidden = !next;
+    socialFriendsButton.setAttribute("aria-expanded", String(next));
+    if (next) renderSocialFriends();
+  }
+
+  function socialRow(entry, kind) {
+    const uid = escapeUiText(entry.uid);
+    const name = escapeUiText(entry.name || "冒險者");
+    if (kind === "friend") {
+      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>好友</small></div><div class="social-friend-actions"><button type="button" data-social-action="whisper" data-uid="${uid}">密語</button><button type="button" data-social-action="remove" data-uid="${uid}">解除</button></div></div>`;
+    }
+    if (kind === "incoming") {
+      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>好友申請</small></div><div class="social-friend-actions"><button type="button" data-social-action="accept" data-uid="${uid}">接受</button><button type="button" data-social-action="reject" data-uid="${uid}">拒絕</button></div></div>`;
+    }
+    return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>等待對方接受</small></div><div class="social-friend-actions"><button type="button" data-social-action="cancel" data-uid="${uid}">取消</button></div></div>`;
+  }
+
+  function renderSocialFriends() {
+    if (!socialFriendsContent) return;
+    const incoming = socialState.incoming || [];
+    const friends = socialState.friends || [];
+    const outgoing = socialState.outgoing || [];
+    const sections = [];
+    if (incoming.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">好友申請</div>${incoming.map((entry) => socialRow(entry, "incoming")).join("")}</section>`);
+    if (friends.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">好友</div>${friends.map((entry) => socialRow(entry, "friend")).join("")}</section>`);
+    if (outgoing.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">已發送</div>${outgoing.map((entry) => socialRow(entry, "outgoing")).join("")}</section>`);
+    socialFriendsContent.innerHTML = sections.join("") || '<div class="social-friends-empty">暫時未有好友。<br>喺地圖撳其他玩家就可以發送申請。</div>';
+    if (socialFriendsBadge) {
+      socialFriendsBadge.textContent = String(incoming.length);
+      socialFriendsBadge.hidden = incoming.length === 0;
+    }
+  }
+
+  function setWhisperTarget(uid, { focus = true } = {}) {
+    const friend = socialFriend(uid);
+    if (!friend) {
+      showToast("要成為好友先可以傳送密語。", "warning");
+      return false;
+    }
+    activeWhisperUid = friend.uid;
+    chatComposeMode = "whisper";
+    systemLogFilter = "whisper";
+    renderSystemLog();
+    syncChatComposer();
+    setSocialFriendsOpen(false);
+    closeRemotePlayerMenu();
+    if (focus) worldChatInput?.focus?.({ preventScroll: true });
+    return true;
+  }
+
+  function setWorldChatTarget({ focus = false } = {}) {
+    chatComposeMode = "world";
+    syncChatComposer();
+    if (focus) worldChatInput?.focus?.({ preventScroll: true });
+  }
+
+  function syncChatComposer() {
+    if (!worldChatInput || !chatComposeChannel || !systemLog) return;
+    const friend = chatComposeMode === "whisper" ? socialFriend(activeWhisperUid) : null;
+    if (chatComposeMode === "whisper" && friend) {
+      chatComposeChannel.textContent = `密語・${friend.name}`;
+      worldChatInput.placeholder = "輸入密語…";
+      worldChatInput.setAttribute("aria-label", `密語給 ${friend.name}`);
+      systemLog.dataset.chatChannel = "whisper";
+      return;
+    }
+    chatComposeMode = "world";
+    chatComposeChannel.textContent = "世界";
+    worldChatInput.placeholder = "請輸入…";
+    worldChatInput.setAttribute("aria-label", "世界頻道訊息");
+    systemLog.dataset.chatChannel = "world";
+  }
+
+  function remoteClassLabel(classId) {
+    const id = ClassData?.normalizeClassId?.(classId) || String(classId || "fighter");
+    if (id === "elementalist") return "元素使";
+    if (id === "fighter") return "格鬥士";
+    return "冒險者";
+  }
+
+  function remotePlayerHitAt(screenX, screenY) {
+    let best = null;
+    let bestScore = Infinity;
+    for (const region of remotePlayerHitRegions.values()) {
+      const inName = screenX >= region.nameLeft && screenX <= region.nameRight
+        && screenY >= region.nameTop && screenY <= region.nameBottom;
+      const dx = (screenX - region.headX) / Math.max(1, region.rx);
+      const dy = (screenY - region.headY) / Math.max(1, region.ry);
+      const ellipseScore = dx * dx + dy * dy;
+      if (!inName && ellipseScore > 1) continue;
+      const score = inName ? Math.hypot(screenX - region.headX, screenY - region.headY) * .75 : ellipseScore * 100;
+      if (score < bestScore) {
+        bestScore = score;
+        best = region.remote;
+      }
+    }
+    return best;
+  }
+
+  function closeRemotePlayerMenu() {
+    selectedRemotePlayer = null;
+    if (remotePlayerMenu) remotePlayerMenu.hidden = true;
+    if (remotePlayerProfileDetail) remotePlayerProfileDetail.hidden = true;
+  }
+
+  function positionRemotePlayerMenu(clientX, clientY) {
+    if (!remotePlayerMenu || !stage) return;
+    const rect = stage.getBoundingClientRect();
+    const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
+    remotePlayerMenu.style.left = `${Core.clamp(localX + 12, 6, Math.max(6, rect.width - 258))}px`;
+    remotePlayerMenu.style.top = `${Core.clamp(localY - 34, 6, Math.max(6, rect.height - 170))}px`;
+    window.requestAnimationFrame(() => {
+      if (remotePlayerMenu.hidden) return;
+      const widthPx = remotePlayerMenu.offsetWidth || 240;
+      const heightPx = remotePlayerMenu.offsetHeight || 150;
+      remotePlayerMenu.style.left = `${Core.clamp(localX + 12, 6, Math.max(6, rect.width - widthPx - 6))}px`;
+      remotePlayerMenu.style.top = `${Core.clamp(localY - 34, 6, Math.max(6, rect.height - heightPx - 6))}px`;
+    });
+  }
+
+  function syncRemotePlayerMenu() {
+    if (!remotePlayerMenu || !selectedRemotePlayer) return;
+    const remote = selectedRemotePlayer;
+    if (remotePlayerMenuName) remotePlayerMenuName.textContent = remote.name || "冒險者";
+    if (remotePlayerMenuMeta) remotePlayerMenuMeta.textContent = `${remoteClassLabel(remote.classId)}・${remote.state === "battle" ? "戰鬥中" : "探索中"}`;
+    const friendButton = remotePlayerMenu.querySelector('[data-player-action="friend"]');
+    const whisperButton = remotePlayerMenu.querySelector('[data-player-action="whisper"]');
+    const friend = socialFriend(remote.uid);
+    const incoming = socialIncoming(remote.uid);
+    const outgoing = socialOutgoing(remote.uid);
+    if (friendButton) {
+      friendButton.disabled = Boolean(friend || outgoing);
+      friendButton.dataset.friendState = friend ? "friend" : incoming ? "incoming" : outgoing ? "outgoing" : "none";
+      friendButton.textContent = friend ? "好友 ✓" : incoming ? "接受好友" : outgoing ? "已送出" : "加好友";
+      if (incoming) friendButton.disabled = false;
+    }
+    if (whisperButton) whisperButton.disabled = !friend;
+    if (remotePlayerProfileDetail && !remotePlayerProfileDetail.hidden) {
+      remotePlayerProfileDetail.textContent = `${remoteClassLabel(remote.classId)}｜${remote.state === "battle" ? "目前戰鬥中" : "目前喺同一區域探索"}`;
+    }
+  }
+
+  function openRemotePlayerMenu(remote, clientX, clientY) {
+    if (!remote?.uid || !remotePlayerMenu) return;
+    selectedRemotePlayer = { ...remote };
+    remotePlayerMenu.hidden = false;
+    if (remotePlayerProfileDetail) remotePlayerProfileDetail.hidden = true;
+    syncRemotePlayerMenu();
+    positionRemotePlayerMenu(clientX, clientY);
+  }
+
+  function socialResultMessage(result, successText) {
+    if (result?.ok) {
+      if (successText) showToast(successText, "");
+      return true;
+    }
+    const messages = {
+      "already-friends": "你哋已經係好友。",
+      "incoming-request-exists": "對方已經向你發送好友申請。",
+      "player-not-found": "暫時搵唔到呢位玩家。",
+      "request-not-found": "呢個好友申請已經失效。",
+      "not-friends": "你哋而家唔係好友。",
+      "invalid-target": "無法對呢位玩家進行操作。",
+    };
+    showToast(messages[result?.reason] || "好友功能暫時未能完成操作。", "warning");
+    return false;
+  }
 
   function restoreSystemLogPosition() {
     if (!systemLog) return;
@@ -10008,6 +10264,7 @@
 
   // Rendering functions are kept together below so the simulation above remains testable.
   function render() {
+    remotePlayerHitRegions.clear();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     if (battle && (mode === "battle" || mode === "dead")) {
@@ -11082,7 +11339,7 @@
   }
 
   function retargetExploreHoldGesture(gesture, force = false) {
-    if (!gesture || mode !== "playing") return;
+    if (!gesture || mode !== "playing" || gesture.targetRemoteUid) return;
     const now = performance.now();
     if (!force && now - gesture.lastRetargetAt < EXPLORE_RETARGET_INTERVAL_MS) return;
     gesture.lastRetargetAt = now;
@@ -11132,11 +11389,12 @@
       return;
     }
     const target = screenToWorld(event.clientX, event.clientY);
-    const entity = clickedExploreEntity(target.screenX, target.screenY);
-    exploreHoverEntityId = entity?.id || null;
-    // Enemy targeting can gain its own cursor later. For now the hand is
-    // reserved for world interactions such as NPCs, chests and the skill panel.
-    canvas.dataset.exploreCursor = entity && !entity.type && entity.kind !== "portal" ? "interact" : "default";
+    const remote = remotePlayerHitAt(target.screenX, target.screenY);
+    const entity = remote ? null : clickedExploreEntity(target.screenX, target.screenY);
+    exploreHoverEntityId = remote ? `remote:${remote.uid}` : entity?.id || null;
+    // Other players deliberately use only their name/head/upper body as a
+    // target, leaving feet and surrounding ground available for movement.
+    canvas.dataset.exploreCursor = remote || (entity && !entity.type && entity.kind !== "portal") ? "interact" : "default";
   }
 
   function clearExploreHoverPointer() {
@@ -11307,9 +11565,21 @@
     // A new press exits latched mouse-follow before issuing its single target.
     clearExplorePointerGesture();
     const target = screenToWorld(event.clientX, event.clientY);
-    const entity = clickedExploreEntity(target.screenX, target.screenY);
+    const remote = remotePlayerHitAt(target.screenX, target.screenY);
+    const entity = remote ? null : clickedExploreEntity(target.screenX, target.screenY);
     event.preventDefault();
-    if (!mobileTouch) setExploreClickTarget(entity || target, entity);
+    if (!mobileTouch && remote) {
+      clearExploreMovePath();
+      pendingClickInteractionId = null;
+      setSocialFriendsOpen(false);
+      openRemotePlayerMenu(remote, event.clientX, event.clientY);
+      return;
+    }
+    if (!mobileTouch) {
+      closeRemotePlayerMenu();
+      setSocialFriendsOpen(false);
+      setExploreClickTarget(entity || target, entity);
+    }
     if (mode !== "playing") return;
     const gesture = {
       pointerId: event.pointerId,
@@ -11324,12 +11594,13 @@
       lastTargetKey: null,
       lastRetargetAt: -Infinity,
       targetEntity: entity,
+      targetRemoteUid: remote?.uid || "",
       followReleasedEntity: false,
     };
     explorePointerGesture = gesture;
     try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
     gesture.holdTimer = window.setTimeout(() => {
-      if (explorePointerGesture !== gesture || mode !== "playing" || explorePinchGesture) return;
+      if (explorePointerGesture !== gesture || mode !== "playing" || explorePinchGesture || gesture.targetRemoteUid) return;
       gesture.holdActive = true;
       retargetExploreHoldGesture(gesture, true);
     }, EXPLORE_HOLD_DELAY_MS);
@@ -11363,6 +11634,7 @@
     if (gesture.followReleasedEntity) return;
     gesture.clientX = event.clientX;
     gesture.clientY = event.clientY;
+    if (gesture.targetRemoteUid) return;
     if (!gesture.holdActive || mode !== "playing") return;
     event.preventDefault();
     retargetExploreHoldGesture(gesture);
@@ -11407,6 +11679,7 @@
     // committed here (rather than pointerdown) so pinch recognition wins.
     if (mobileTouch && !gesture.holdActive) {
       const { clientX, clientY, pointerId } = event;
+      const tappedRemoteUid = gesture.targetRemoteUid;
       event.preventDefault();
       clearExplorePointerGesture(pointerId);
       // Authored-map hit testing and route planning can be relatively heavy on
@@ -11414,6 +11687,18 @@
       // browser's pointerup dispatch itself stays responsive.
       window.requestAnimationFrame(() => {
         if (mode !== "playing" || blockingGameplayOverlayOpen()) return;
+        if (tappedRemoteUid) {
+          const remote = remotePlayerHitRegions.get(tappedRemoteUid)?.remote;
+          if (remote) {
+            clearExploreMovePath();
+            pendingClickInteractionId = null;
+            setSocialFriendsOpen(false);
+            openRemotePlayerMenu(remote, clientX, clientY);
+          }
+          return;
+        }
+        closeRemotePlayerMenu();
+        setSocialFriendsOpen(false);
         const target = screenToWorld(clientX, clientY);
         const entity = clickedExploreEntity(target.screenX, target.screenY);
         setExploreClickTarget(entity || target, entity);
@@ -12404,6 +12689,31 @@
     }
 
     drawNpcName(nameX, nameY, remote.name);
+
+    // Social hit testing is intentionally limited to the name/head/upper-body
+    // area. Position follows camera zoom, while the actual target size stays
+    // screen-sized so zooming out does not make mobile taps impossible and a
+    // crowded group of players still leaves the ground available for movement.
+    const touchSized = usesMobileExploreControls();
+    const artHeight = Number.isFinite(artBox?.height)
+      ? artBox.height
+      : Number.isFinite(artBox?.bottom) && Number.isFinite(artBox?.top)
+        ? artBox.bottom - artBox.top
+        : 92 * scale;
+    const headX = stableCenterX;
+    const headY = stableTopY + Core.clamp(artHeight * .28, 14, 34);
+    const rx = touchSized ? 34 : 24;
+    const ry = touchSized ? 38 : 29;
+    const nameHalfWidth = Core.clamp(String(remote.name || "冒險者").length * (touchSized ? 7.5 : 6.5) + 12, 30, 78);
+    const nameHalfHeight = touchSized ? 15 : 11;
+    remotePlayerHitRegions.set(remote.uid, {
+      remote: { ...remote },
+      headX, headY, rx, ry,
+      nameLeft: nameX - nameHalfWidth,
+      nameRight: nameX + nameHalfWidth,
+      nameTop: nameY - nameHalfHeight,
+      nameBottom: nameY + nameHalfHeight,
+    });
   }
 
   function drawPlayerExplorationMeters(point, artBox, scale) {
@@ -13433,7 +13743,18 @@
     const button = event.target.closest("[data-log-filter]");
     if (!button) return;
     const next = button.dataset.logFilter;
-    systemLogFilter = ["all", "world", "combat", "progress", "system"].includes(next) ? next : "all";
+    systemLogFilter = ["all", "world", "whisper", "combat", "progress", "system"].includes(next) ? next : "all";
+    if (systemLogFilter === "world") setWorldChatTarget();
+    if (systemLogFilter === "whisper") {
+      const preferred = socialFriend(activeWhisperUid) || socialState.friends?.[0] || null;
+      if (preferred) {
+        activeWhisperUid = preferred.uid;
+        chatComposeMode = "whisper";
+      } else {
+        setSocialFriendsOpen(true);
+      }
+      syncChatComposer();
+    }
     renderSystemLog();
   });
   worldChatForm?.addEventListener("submit", async (event) => {
@@ -13441,6 +13762,29 @@
     event.stopPropagation();
     const text = String(worldChatInput?.value || "").trim();
     if (!text) return;
+
+    if (chatComposeMode === "whisper") {
+      const friend = socialFriend(activeWhisperUid);
+      if (!friend || !social?.isActive?.()) {
+        showToast(friend ? "密語暫時未連線。" : "請先喺好友列表揀一位好友。", "warning");
+        return;
+      }
+      try {
+        const result = await social.sendWhisper(friend.uid, text);
+        if (result?.ok) worldChatInput.value = "";
+        else if (result?.reason === "cooldown") showToast("訊息傳送得太快，請等一等。", "warning");
+        else if (result?.reason === "too-long") showToast(`密語每句最多 ${result.maxLength || 200} 字。`, "warning");
+        else if (result?.reason === "not-friend") showToast("你哋而家唔係好友。", "warning");
+        else showToast("密語暫時未能傳送。", "warning");
+      } catch (error) {
+        console.warn("Everrealm whisper send failed.", error);
+        showToast("密語暫時未能傳送。", "warning");
+      } finally {
+        worldChatInput?.focus?.({ preventScroll: true });
+      }
+      return;
+    }
+
     if (!worldChat?.isActive?.()) {
       showToast("世界頻道尚未連線。", "danger");
       return;
@@ -13493,6 +13837,74 @@
   systemLogDragHandle?.addEventListener("pointermove", moveSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointerup", finishSystemLogDrag);
   systemLogDragHandle?.addEventListener("pointercancel", finishSystemLogDrag);
+
+  socialFriendsButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSocialFriendsOpen(socialFriendsPopover?.hidden !== false);
+  });
+  socialFriendsCloseButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSocialFriendsOpen(false);
+  });
+  socialFriendsPopover?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  socialFriendsPopover?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-social-action]");
+    if (!button || button.disabled) return;
+    const uid = String(button.dataset.uid || "");
+    const action = button.dataset.socialAction;
+    if (action === "whisper") return setWhisperTarget(uid);
+    button.disabled = true;
+    let result = null;
+    if (action === "accept") result = await social?.respondFriendRequest?.(uid, true);
+    else if (action === "reject") result = await social?.respondFriendRequest?.(uid, false);
+    else if (action === "cancel") result = await social?.cancelFriendRequest?.(uid);
+    else if (action === "remove") {
+      if (!window.confirm("解除呢位好友？")) {
+        button.disabled = false;
+        return;
+      }
+      result = await social?.removeFriend?.(uid);
+    }
+    if (result) socialResultMessage(result, action === "accept" ? "已成為好友。" : action === "remove" ? "已解除好友。" : "已更新好友狀態。");
+    button.disabled = false;
+  });
+
+  remotePlayerMenuClose?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeRemotePlayerMenu();
+  });
+  remotePlayerMenu?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  remotePlayerMenu?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-player-action]");
+    if (!button || button.disabled || !selectedRemotePlayer) return;
+    const remote = selectedRemotePlayer;
+    const action = button.dataset.playerAction;
+    if (action === "profile") {
+      if (remotePlayerProfileDetail) {
+        remotePlayerProfileDetail.hidden = !remotePlayerProfileDetail.hidden;
+        syncRemotePlayerMenu();
+      }
+      return;
+    }
+    if (action === "whisper") return setWhisperTarget(remote.uid);
+    if (action === "friend") {
+      button.disabled = true;
+      const incoming = socialIncoming(remote.uid);
+      const result = incoming
+        ? await social?.respondFriendRequest?.(remote.uid, true)
+        : await social?.sendFriendRequest?.(remote.uid);
+      socialResultMessage(result, incoming ? `你同 ${remote.name} 已成為好友。` : `已向 ${remote.name} 發送好友申請。`);
+      button.disabled = false;
+      syncRemotePlayerMenu();
+    }
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!remotePlayerMenu?.hidden && !remotePlayerMenu.contains(event.target) && event.target !== canvas) closeRemotePlayerMenu();
+    if (!socialFriendsPopover?.hidden && !socialFriendsPopover.contains(event.target) && !socialFriendsButton?.contains(event.target)) setSocialFriendsOpen(false);
+  });
 
   guildCommissionDetailCloseButton?.addEventListener("click", closeGuildCommissionDetail);
   guildCommissionDetailPanel?.addEventListener("click", (event) => {
@@ -13656,6 +14068,7 @@
     if (mode !== "title" && isGameplayAuthorized()) persistence?.flush();
     void multiplayer?.stop?.();
     worldChat?.stop?.();
+    social?.stop?.();
   });
   window.addEventListener("resize", resize, { passive: true });
   window.addEventListener("resize", syncMobileHudAutoHideMode, { passive: true });
@@ -13667,6 +14080,8 @@
   restoreSystemLogPosition();
   syncSystemLogCollapsed();
   renderSystemLog();
+  renderSocialFriends();
+  syncChatComposer();
   syncAccountStatus();
   syncSystemSoundControl();
   startTitleBgm();

@@ -48,6 +48,9 @@ Preserve existing behaviour unless the current task explicitly changes the desig
 - Phase 2 transient RTDB presence, same-map players, WorldTime epoch and security boundary:
   `docs/REALTIME_SYSTEM.md`
 
+- Player selection, friend requests / graph and one-to-one whisper chat:
+  `docs/SOCIAL_SYSTEM.md`
+
 - Art assets / NPC visual design / battlefield art / Standard Mobile Unit 28-frame locomotion sprites / atlases / transparency / cropping / anchors / visual QA:
   `ART_PIPELINE.md`
 

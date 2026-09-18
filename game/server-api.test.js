@@ -36,3 +36,32 @@ test("Step 9C server API attaches the current exploration position to protected 
     assert.deepEqual(call.payload.position, { mapId: "guild", x: 1666, y: 700 });
   }
 });
+
+test("social commands use the dedicated callable without leaking exploration position", async () => {
+  const calls = [];
+  const firebase = {
+    async functions() {
+      return {
+        functions: {},
+        sdk: {
+          httpsCallable(_functions, name) {
+            return async (payload) => {
+              calls.push({ name, payload });
+              return { data: { ok: true } };
+            };
+          },
+        },
+      };
+    },
+  };
+  const api = ServerApi.create({
+    firebase,
+    positionProvider: () => ({ mapId: "guild", x: 1, y: 2 }),
+  });
+
+  await api.social("send-friend-request", { targetUid: "friend-b" });
+  assert.deepEqual(calls, [{
+    name: "socialCommand",
+    payload: { version: 1, action: "send-friend-request", targetUid: "friend-b" },
+  }]);
+});

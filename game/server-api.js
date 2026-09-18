@@ -81,6 +81,12 @@
       return callable("mapCommand", { version: COMMAND_VERSION, action: command, ...payload });
     }
 
+    async function social(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("socialCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
@@ -90,6 +96,7 @@
       quest,
       battle,
       map,
+      social,
     });
   }
 

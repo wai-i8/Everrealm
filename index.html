@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-main-quest-panels-01"],
+          ["everrealmStyles", "styles.css?v=20260918-social-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -162,16 +162,23 @@
             <nav id="systemLogTabs" class="system-log-tabs" aria-label="資訊分類">
               <button type="button" data-log-filter="all" aria-pressed="true">全部</button>
               <button type="button" data-log-filter="world" aria-pressed="false">世界</button>
+              <button type="button" data-log-filter="whisper" aria-pressed="false">密語</button>
               <button type="button" data-log-filter="combat" aria-pressed="false">戰鬥</button>
               <button type="button" data-log-filter="progress" aria-pressed="false">進度</button>
               <button type="button" data-log-filter="system" aria-pressed="false">系統</button>
             </nav>
+            <button id="socialFriendsButton" class="system-log-friends-button" type="button" aria-label="好友" aria-expanded="false" title="好友">好友<span id="socialFriendsBadge" class="social-friends-badge" hidden>0</span></button>
             <button id="systemLogToggleButton" class="system-log-toggle" type="button" aria-label="縮細系統資訊欄" aria-expanded="true" title="縮細資訊欄">−</button>
             <button id="systemLogDragHandle" class="system-log-drag-handle" type="button" aria-label="拖動系統資訊欄" title="拖動資訊欄">✥</button>
           </div>
           <div id="systemLogMessages" class="system-log-messages" aria-live="polite" aria-relevant="additions text"></div>
+          <section id="socialFriendsPopover" class="social-friends-popover" aria-label="好友" hidden>
+            <header class="social-friends-header"><strong>好友</strong><button id="socialFriendsCloseButton" type="button" aria-label="關閉好友列表">×</button></header>
+            <div id="socialFriendsContent" class="social-friends-content"></div>
+          </section>
           <form id="worldChatForm" class="system-log-chat-form" autocomplete="off">
-            <input id="worldChatInput" class="system-log-chat-input" type="text" maxlength="200" placeholder="請輸入…" aria-label="世界頻道訊息" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true" />
+            <span id="chatComposeChannel" class="system-log-chat-channel">世界</span>
+            <input id="worldChatInput" class="system-log-chat-input" type="text" maxlength="200" placeholder="請輸入…" aria-label="聊天訊息" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true" />
           </form>
           <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="喺呢度用滑鼠滾輪或手指上下掃動翻閱訊息"></div>
         </section>
@@ -179,6 +186,19 @@
         <div id="interactionPrompt" class="interaction-prompt" hidden>
           <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
         </div>
+
+        <section id="remotePlayerMenu" class="remote-player-menu" aria-label="玩家互動" hidden>
+          <header class="remote-player-menu-header">
+            <div><strong id="remotePlayerMenuName">冒險者</strong><small id="remotePlayerMenuMeta">玩家</small></div>
+            <button id="remotePlayerMenuClose" type="button" aria-label="關閉玩家互動">×</button>
+          </header>
+          <div id="remotePlayerProfileDetail" class="remote-player-profile-detail" hidden></div>
+          <div class="remote-player-menu-actions">
+            <button type="button" data-player-action="profile">查看資料</button>
+            <button type="button" data-player-action="friend">加好友</button>
+            <button type="button" data-player-action="whisper">密語</button>
+          </div>
+        </section>
 
         <div id="mapTransitionOverlay" class="map-transition-overlay" aria-hidden="true" hidden>
           <div class="map-transition-shade" aria-hidden="true"></div>

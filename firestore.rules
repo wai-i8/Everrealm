@@ -10,6 +10,24 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Social graph data is readable only by its owning player. Mutations are
+    // server-authoritative through socialCommand so friendship changes remain
+    // symmetric and cannot be forged by a browser client.
+    match /players/{userId}/friends/{friendId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /players/{userId}/friendRequests/{requesterId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /players/{userId}/friendRequestsSent/{targetId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
     // Single-device session ownership remains a client-authenticated concern.
     match /sessions/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

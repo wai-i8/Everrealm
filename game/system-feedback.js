@@ -44,6 +44,10 @@
         if (entry.type === "world" && entry.author) {
           return `<div class="system-log-entry is-world"><span class="system-log-tag">[${labels.world || "世界"}]</span><span class="system-log-author">${escapeUiText(entry.author)}：</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`;
         }
+        if (entry.type === "whisper" && entry.author) {
+          const direction = entry.direction === "outgoing" ? "outgoing" : "incoming";
+          return `<div class="system-log-entry is-whisper is-${direction}"><span class="system-log-tag">[${labels.whisper || "密語"}]</span><span class="system-log-author">${escapeUiText(entry.author)}：</span><span class="system-log-text">${escapeUiText(entry.text)}</span></div>`;
+        }
         return `<div class="system-log-entry is-${entry.type} ${entry.tone ? `is-${entry.tone}` : ""}">${tag}<span class="system-log-text">${escapeUiText(entry.text)}</span></div>`;
       }).join("");
       dom.systemLogMessages.scrollTop = dom.systemLogMessages.scrollHeight;
@@ -70,7 +74,10 @@
       const now = Date.now();
       const safeTone = String(tone || "");
       const last = entries[entries.length - 1];
-      if (last && last.type === safeType && last.text === safeText && last.tone === safeTone && now - Number(last.at || 0) < 800) return;
+      // Combat entries are intentionally never deduplicated: multi-hit skills can
+      // produce identical per-hit messages within the normal strike interval, and
+      // every resolved hit must remain visible in the Battle Log.
+      if (safeType !== "combat" && last && last.type === safeType && last.text === safeText && last.tone === safeTone && now - Number(last.at || 0) < 800) return;
       entries.push({ id: state.nextSerial(), type: safeType, text: safeText, tone: safeTone, at: now });
       if (entries.length > 800) entries.splice(0, entries.length - 800);
       renderSystemLog();
@@ -82,6 +89,23 @@
       if (!safeText) return;
       const entries = state.getEntries();
       entries.push({ id: state.nextSerial(), type: "world", author: safeAuthor, text: safeText, tone: "" });
+      if (entries.length > 800) entries.splice(0, entries.length - 800);
+      renderSystemLog();
+    }
+
+    function addWhisperMessage(author, text, direction = "incoming") {
+      const safeAuthor = String(author || "好友").trim().slice(0, 30) || "好友";
+      const safeText = String(text || "").trim();
+      if (!safeText) return;
+      const entries = state.getEntries();
+      entries.push({
+        id: state.nextSerial(),
+        type: "whisper",
+        author: safeAuthor,
+        text: safeText,
+        direction: direction === "outgoing" ? "outgoing" : "incoming",
+        tone: "",
+      });
       if (entries.length > 800) entries.splice(0, entries.length - 800);
       renderSystemLog();
     }
@@ -115,6 +139,7 @@
       renderSystemLog,
       addSystemMessage,
       addWorldMessage,
+      addWhisperMessage,
       syncSystemLogCollapsed,
       toggleSystemLogCollapsed,
     });
