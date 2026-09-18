@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-title-logo-06"],
+          ["everrealmStyles", "styles.css?v=20260918-victory-art-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -254,9 +254,11 @@
 
           <section id="battleVictoryOverlay" class="battle-victory-overlay" role="dialog" aria-modal="true" aria-labelledby="battleVictoryTitle" hidden>
             <div class="battle-victory-window">
+              <img class="battle-victory-frame-art" src="assets/ui/victory/victory-frame-v1.png" alt="" aria-hidden="true">
               <header class="battle-victory-heading">
-                <p class="battle-victory-kicker">BATTLE COMPLETE</p>
-                <h2 id="battleVictoryTitle" class="battle-victory-title">VICTORY</h2>
+                <img class="battle-victory-title-art" src="assets/ui/victory/victory-title-v1.png" alt="" aria-hidden="true">
+                <p class="battle-victory-kicker sr-only">BATTLE COMPLETE</p>
+                <h2 id="battleVictoryTitle" class="battle-victory-title sr-only">VICTORY</h2>
               </header>
               <div class="battle-victory-body">
                 <div class="battle-victory-reward-grid">
@@ -278,6 +280,7 @@
               </div>
               <footer class="battle-victory-footer">
                 <button id="battleVictoryContinue" class="battle-victory-continue" type="button" data-victory-continue>
+                  <img class="battle-victory-continue-art" src="assets/ui/victory/victory-button-v1.png" alt="" aria-hidden="true">
                   <span data-victory-prompt>返回</span>
                 </button>
               </footer>
@@ -559,7 +562,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-title-logo-06", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-victory-art-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
