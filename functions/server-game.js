@@ -1652,4 +1652,15 @@ module.exports = Object.freeze({
   battleCommand,
   mapCommand,
   statePayload,
+  // Shared-party battle reuses the exact solo battle primitives instead of
+  // redefining movement/stat/monster rules in the callable layer.
+  serverBattlefieldFor,
+  serverBattleGrid,
+  serverBattleDeploymentCell,
+  serverHeroBattleStats,
+  serverEnemyUnit,
+  sanitizeServerMoveCommands,
+  canonicalBattleFacing,
+  deterministicBattleRng,
+  recordServerKill,
 });

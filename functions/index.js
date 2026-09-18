@@ -17,6 +17,8 @@ const {
 const ServerGame = require("./server-game");
 const PlayerState = require("./player-state");
 const TradeSystem = require("./trade-system");
+const PartySystem = require("./party-system");
+const PartyBattle = require("./party-battle-system");
 
 initializeApp();
 
@@ -79,6 +81,20 @@ function outgoingFriendRequestRef(ownerUid, targetUid) {
   return db.doc(`players/${ownerUid}/friendRequestsSent/${targetUid}`);
 }
 
+function partyRef(partyId) { return db.doc(`parties/${String(partyId || "").trim()}`); }
+function partyPointerRef(uid) { return db.doc(`players/${uid}/partyState/current`); }
+function partyInviteRef(uid, inviteId) { return db.doc(`players/${uid}/partyInvites/${String(inviteId || "").trim()}`); }
+function partyBattleRef(battleId) { return db.doc(`partyBattles/${String(battleId || "").trim()}`); }
+function partyId() { return `party-${crypto.randomBytes(10).toString("hex")}`; }
+function partyInviteId() { return `pinv-${crypto.randomBytes(10).toString("hex")}`; }
+function partyBattleId() { return `pb-${crypto.randomBytes(10).toString("hex")}`; }
+function partyTransitionId() { return `pt-${crypto.randomBytes(8).toString("hex")}`; }
+function partyPointerPayload(id, leaderUid, nowMs) { return { partyId: id, leaderUid, updatedAtMs: nowMs }; }
+function partyPlayerWrite(transaction, playerRef, originalSave, nextSave) {
+  const nextRevision = Math.max(0, Math.floor(Number(originalSave?.stateRevision) || 0)) + 1;
+  tradePlayerWrite(transaction, playerRef, originalSave, { ...nextSave, stateRevision: nextRevision }, nextRevision);
+  return nextRevision;
+}
 
 
 const TRADE_SESSION_TTL_MS = 15 * 60 * 1000;
@@ -759,6 +775,548 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
 
   return { ok: false, reason: "unsupported-action", action };
 });
+
+
+exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (request) => {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  const action = String(request.data?.action || "").trim();
+  const nowMs = Date.now();
+
+  if (action === "invite") {
+    const targetUid = PartySystem.safeUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const callerRef = db.doc(`players/${uid}`);
+    const targetRef = db.doc(`players/${targetUid}`);
+    const callerPointer = partyPointerRef(uid);
+    const targetPointer = partyPointerRef(targetUid);
+    return db.runTransaction(async (transaction) => {
+      const [callerSnap, targetSnap, callerPointerSnap, targetPointerSnap] = await Promise.all([
+        transaction.get(callerRef), transaction.get(targetRef), transaction.get(callerPointer), transaction.get(targetPointer),
+      ]);
+      if (!callerSnap.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
+      if (!targetSnap.exists) return { ok: false, reason: "player-not-found" };
+      if (!(Number(callerSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "caller-unavailable" };
+      if (!(Number(targetSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "target-unavailable" };
+      if (targetPointerSnap.exists) return { ok: false, reason: "target-in-party" };
+      let currentPartyId = "";
+      if (callerPointerSnap.exists) currentPartyId = PartySystem.safeUid(callerPointerSnap.data()?.partyId);
+      if (currentPartyId) {
+        const currentPartySnap = await transaction.get(partyRef(currentPartyId));
+        if (!currentPartySnap.exists) return { ok: false, reason: "party-not-found" };
+        const currentParty = currentPartySnap.data();
+        if (currentParty.leaderUid !== uid) return { ok: false, reason: "not-leader" };
+        if (!PartySystem.partyHasCapacity(currentParty)) return { ok: false, reason: "party-full" };
+        if (currentParty.state !== "idle" || currentParty.battleId || currentParty.transition) return { ok: false, reason: "party-busy" };
+      }
+      const inviteId = partyInviteId();
+      transaction.set(partyInviteRef(targetUid, inviteId), {
+        inviteId,
+        partyId: currentPartyId,
+        fromUid: uid,
+        fromName: socialNameFromSave(callerSnap.data()),
+        createdAtMs: nowMs,
+      });
+      return { ok: true, inviteId, targetUid, partyId: currentPartyId || null };
+    });
+  }
+
+  if (action === "accept" || action === "reject") {
+    const inviteId = String(request.data?.inviteId || "").trim();
+    if (!inviteId) return { ok: false, reason: "invalid-invite" };
+    const inviteRef = partyInviteRef(uid, inviteId);
+    if (action === "reject") {
+      const snap = await inviteRef.get();
+      if (!snap.exists) return { ok: false, reason: "invite-not-found" };
+      await inviteRef.delete();
+      return { ok: true, rejected: true, inviteId };
+    }
+    return db.runTransaction(async (transaction) => {
+      const inviteSnap = await transaction.get(inviteRef);
+      if (!inviteSnap.exists) return { ok: false, reason: "invite-not-found" };
+      const invite = inviteSnap.data() || {};
+      const inviterUid = PartySystem.safeUid(invite.fromUid);
+      if (!inviterUid || inviterUid === uid) return { ok: false, reason: "invalid-invite" };
+      const inviterRef = db.doc(`players/${inviterUid}`);
+      const accepterRef = db.doc(`players/${uid}`);
+      const inviterPointerRef = partyPointerRef(inviterUid);
+      const accepterPointerRef = partyPointerRef(uid);
+      const [inviterSnap, accepterSnap, inviterPointerSnap, accepterPointerSnap] = await Promise.all([
+        transaction.get(inviterRef), transaction.get(accepterRef), transaction.get(inviterPointerRef), transaction.get(accepterPointerRef),
+      ]);
+      if (!inviterSnap.exists || !accepterSnap.exists) return { ok: false, reason: "player-not-found" };
+      if (accepterPointerSnap.exists) return { ok: false, reason: "already-in-party" };
+      if (!(Number(accepterSnap.data()?.player?.hp) > 0) || !(Number(inviterSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "player-unavailable" };
+      let activePartyId = PartySystem.safeUid(inviterPointerSnap.data()?.partyId);
+      let activePartyRef = activePartyId ? partyRef(activePartyId) : null;
+      let activeParty = null;
+      if (activePartyRef) {
+        const activePartySnap = await transaction.get(activePartyRef);
+        if (!activePartySnap.exists) return { ok: false, reason: "party-not-found" };
+        activeParty = activePartySnap.data();
+        if (activeParty.leaderUid !== inviterUid) return { ok: false, reason: "inviter-not-leader" };
+        if (!PartySystem.partyHasCapacity(activeParty)) return { ok: false, reason: "party-full" };
+        if (activeParty.state !== "idle" || activeParty.battleId || activeParty.transition) return { ok: false, reason: "party-busy" };
+      } else {
+        activePartyId = partyId();
+        activePartyRef = partyRef(activePartyId);
+        const inviterMember = PartySystem.memberFromSave(inviterUid, inviterSnap.data());
+        activeParty = {
+          id: activePartyId,
+          version: 1,
+          leaderUid: inviterUid,
+          memberUids: [inviterUid],
+          members: { [inviterUid]: inviterMember },
+          state: "idle",
+          transition: null,
+          battleId: "",
+          createdAtMs: nowMs,
+          updatedAtMs: nowMs,
+        };
+      }
+      const accepterMember = PartySystem.memberFromSave(uid, accepterSnap.data());
+      const memberUids = [...new Set([...(activeParty.memberUids || []), uid])].slice(0, PartySystem.MAX_MEMBERS);
+      activeParty = {
+        ...activeParty,
+        id: activePartyId,
+        memberUids,
+        members: { ...(activeParty.members || {}), [uid]: accepterMember },
+        updatedAtMs: nowMs,
+      };
+      transaction.set(activePartyRef, activeParty);
+      transaction.set(inviterPointerRef, partyPointerPayload(activePartyId, activeParty.leaderUid, nowMs));
+      transaction.set(accepterPointerRef, partyPointerPayload(activePartyId, activeParty.leaderUid, nowMs));
+      transaction.delete(inviteRef);
+      return { ok: true, accepted: true, partyId: activePartyId, leaderUid: activeParty.leaderUid };
+    });
+  }
+
+  if (action === "leave" || action === "kick") {
+    const callerPointerRef = partyPointerRef(uid);
+    return db.runTransaction(async (transaction) => {
+      const callerPointerSnap = await transaction.get(callerPointerRef);
+      if (!callerPointerSnap.exists) return { ok: true, alreadyLeft: true };
+      const currentPartyId = PartySystem.safeUid(callerPointerSnap.data()?.partyId);
+      if (!currentPartyId) return { ok: false, reason: "party-not-found" };
+      const currentPartyRef = partyRef(currentPartyId);
+      const currentPartySnap = await transaction.get(currentPartyRef);
+      if (!currentPartySnap.exists) {
+        transaction.delete(callerPointerRef);
+        return { ok: true, alreadyLeft: true };
+      }
+      const currentParty = currentPartySnap.data();
+      if (currentParty.battleId || ["battle_loading", "in_battle"].includes(currentParty.state)) return { ok: false, reason: "battle-active" };
+      let targetUid = uid;
+      if (action === "kick") {
+        if (currentParty.leaderUid !== uid) return { ok: false, reason: "not-leader" };
+        targetUid = PartySystem.safeUid(request.data?.targetUid);
+        if (!targetUid || targetUid === uid || !(currentParty.memberUids || []).includes(targetUid)) return { ok: false, reason: "invalid-target" };
+      }
+      const nextParty = PartySystem.removeMember(currentParty, targetUid);
+      const targetPointerRef = partyPointerRef(targetUid);
+      const targetPointerSnap = targetUid === uid ? callerPointerSnap : await transaction.get(targetPointerRef);
+      const remainingUid = nextParty.memberUids.length <= 1 ? nextParty.memberUids[0] : "";
+      const remainingPointerRef = remainingUid ? partyPointerRef(remainingUid) : null;
+      const remainingPointerSnap = remainingPointerRef ? await transaction.get(remainingPointerRef) : null;
+      if (targetPointerSnap.exists && targetPointerSnap.data()?.partyId === currentPartyId) transaction.delete(targetPointerRef);
+      if (nextParty.memberUids.length <= 1) {
+        if (remainingPointerSnap?.exists && remainingPointerSnap.data()?.partyId === currentPartyId) transaction.delete(remainingPointerRef);
+        transaction.delete(currentPartyRef);
+      } else {
+        nextParty.state = "idle";
+        nextParty.transition = null;
+        nextParty.updatedAtMs = nowMs;
+        transaction.set(currentPartyRef, nextParty);
+        for (const memberUid of nextParty.memberUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(currentPartyId, nextParty.leaderUid, nowMs));
+      }
+      return { ok: true, partyId: currentPartyId, removedUid: targetUid, leaderUid: nextParty.leaderUid || null };
+    });
+  }
+
+  if (action === "transition-start") {
+    const targetMapId = String(request.data?.targetMapId || "").trim();
+    if (!targetMapId) return { ok: false, reason: "invalid-transition" };
+    return db.runTransaction(async (transaction) => {
+      const pointerSnap = await transaction.get(partyPointerRef(uid));
+      if (!pointerSnap.exists) return { ok: false, reason: "not-in-party" };
+      const currentPartyId = PartySystem.safeUid(pointerSnap.data()?.partyId);
+      const currentPartyRef = partyRef(currentPartyId);
+      const currentPartySnap = await transaction.get(currentPartyRef);
+      if (!currentPartySnap.exists) return { ok: false, reason: "party-not-found" };
+      const currentParty = currentPartySnap.data();
+      if (currentParty.leaderUid !== uid) return { ok: false, reason: "not-leader" };
+      if (currentParty.state !== "idle" || currentParty.battleId) return { ok: false, reason: "party-busy" };
+      const memberRefs = currentParty.memberUids.map((memberUid) => db.doc(`players/${memberUid}`));
+      const memberSnaps = await Promise.all(memberRefs.map((ref) => transaction.get(ref)));
+      if (memberSnaps.some((snap) => !snap.exists)) return { ok: false, reason: "player-not-found" };
+      const leaderIndex = currentParty.memberUids.indexOf(uid);
+      const leaderSave = memberSnaps[leaderIndex].data();
+      const transitionResult = ServerGame.mapCommand(leaderSave, { action: "transition", targetMapId }, { nowMs });
+      if (!transitionResult?.ok || !transitionResult.state) return transitionResult;
+      const fromMapId = String(leaderSave?.expansion?.currentMapId || "");
+      const arrival = {
+        x: Number(transitionResult.state.player.x) || 0,
+        y: Number(transitionResult.state.player.y) || 0,
+        facing: "",
+      };
+      for (let index = 0; index < memberSnaps.length; index += 1) {
+        const original = memberSnaps[index].data();
+        const shadow = JSON.parse(JSON.stringify(original));
+        shadow.player.x = leaderSave.player.x;
+        shadow.player.y = leaderSave.player.y;
+        shadow.expansion.currentMapId = fromMapId;
+        shadow.expansion.positionAuthority = JSON.parse(JSON.stringify(leaderSave.expansion?.positionAuthority || null));
+        const moved = ServerGame.mapCommand(shadow, { action: "transition", targetMapId }, { nowMs });
+        if (!moved?.ok || !moved.state) return moved;
+        partyPlayerWrite(transaction, memberRefs[index], original, moved.state);
+      }
+      const transitionId = partyTransitionId();
+      const nextParty = {
+        ...currentParty,
+        state: "transitioning",
+        transition: { id: transitionId, fromMapId, targetMapId, arrival, status: "loading", readyUids: [], startedAtMs: nowMs },
+        updatedAtMs: nowMs,
+      };
+      transaction.set(currentPartyRef, nextParty);
+      return { ok: true, partyId: currentPartyId, transition: nextParty.transition };
+    });
+  }
+
+  if (action === "transition-ready") {
+    const transitionId = String(request.data?.transitionId || "").trim();
+    return db.runTransaction(async (transaction) => {
+      const pointerSnap = await transaction.get(partyPointerRef(uid));
+      if (!pointerSnap.exists) return { ok: false, reason: "not-in-party" };
+      const currentPartyId = PartySystem.safeUid(pointerSnap.data()?.partyId);
+      const currentPartyRef = partyRef(currentPartyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      if (!partySnap.exists) return { ok: false, reason: "party-not-found" };
+      const party = partySnap.data();
+      if (!party.transition || party.transition.id !== transitionId) return { ok: false, reason: "transition-not-found" };
+      const readyUids = [...new Set([...(party.transition.readyUids || []), uid])];
+      const complete = PartySystem.allReady(party.memberUids, readyUids);
+      transaction.update(currentPartyRef, complete
+        ? { state: "idle", transition: null, updatedAtMs: nowMs }
+        : { "transition.readyUids": readyUids, updatedAtMs: nowMs });
+      return { ok: true, complete, readyUids };
+    });
+  }
+
+  if (action === "battle-start") {
+    return db.runTransaction(async (transaction) => {
+      const pointerSnap = await transaction.get(partyPointerRef(uid));
+      if (!pointerSnap.exists) return { ok: false, reason: "not-in-party" };
+      const currentPartyId = PartySystem.safeUid(pointerSnap.data()?.partyId);
+      const currentPartyRef = partyRef(currentPartyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      if (!partySnap.exists) return { ok: false, reason: "party-not-found" };
+      const party = partySnap.data();
+      if (party.leaderUid !== uid) return { ok: false, reason: "not-leader" };
+      if (party.state !== "idle" || party.battleId || party.transition) return { ok: false, reason: "party-busy" };
+      const memberRefs = party.memberUids.map((memberUid) => db.doc(`players/${memberUid}`));
+      const memberSnaps = await Promise.all(memberRefs.map((ref) => transaction.get(ref)));
+      if (memberSnaps.some((snap) => !snap.exists)) return { ok: false, reason: "player-not-found" };
+      const saves = Object.fromEntries(party.memberUids.map((memberUid, index) => [memberUid, memberSnaps[index].data()]));
+      const leaderSave = saves[uid];
+      const mapId = String(leaderSave?.expansion?.currentMapId || "");
+      if (party.memberUids.some((memberUid) => String(saves[memberUid]?.expansion?.currentMapId || "") !== mapId)) return { ok: false, reason: "party-map-mismatch" };
+      if (party.memberUids.some((memberUid) => !(Number(saves[memberUid]?.player?.hp) > 0))) return { ok: false, reason: "party-member-dead" };
+      if (party.memberUids.some((memberUid) => saves[memberUid]?.expansion?.serverBattle?.status === "active")) return { ok: false, reason: "party-member-busy" };
+      const canonical = ServerGame.battleCommand(leaderSave, {
+        action: "start",
+        monsterType: request.data?.monsterType,
+        level: request.data?.level,
+        encounterId: request.data?.encounterId,
+        position: request.data?.position,
+      }, { nowMs });
+      if (!canonical?.ok || !canonical.state?.expansion?.serverBattle) return canonical;
+      const battleId = partyBattleId();
+      const canonicalBattle = canonical.state.expansion.serverBattle;
+      const shared = PartyBattle.createBattle({ id: battleId, party, saves, canonicalBattle, nowMs });
+      transaction.set(partyBattleRef(battleId), shared);
+      transaction.update(currentPartyRef, { state: "battle_loading", battleId, transition: null, updatedAtMs: nowMs });
+      return { ok: true, partyId: currentPartyId, battleId, battle: shared };
+    });
+  }
+
+  if (["battle-ready", "battle-move", "battle-action", "battle-advance"].includes(action)) {
+    const battleId = String(request.data?.battleId || "").trim();
+    if (!battleId) return { ok: false, reason: "invalid-battle" };
+    return db.runTransaction(async (transaction) => {
+      const battleRef = partyBattleRef(battleId);
+      const battleSnap = await transaction.get(battleRef);
+      if (!battleSnap.exists) return { ok: false, reason: "battle-not-found" };
+      let battle = battleSnap.data();
+      if (!(battle.memberUids || []).includes(uid) || !battle.members?.[uid]) return { ok: false, reason: "not-participant" };
+      const currentPartyRef = partyRef(battle.partyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      const party = partySnap.exists ? partySnap.data() : null;
+      if (!party) return { ok: false, reason: "party-not-found" };
+
+      if (action === "battle-ready") {
+        if (battle.status !== "loading") return { ok: true, alreadyReady: true, battleId };
+        const readyUids = [...new Set([...(battle.readyUids || []), uid])];
+        battle = { ...battle, readyUids, updatedAtMs: nowMs };
+        const expected = (party.memberUids || []).filter((memberUid) => battle.memberUids.includes(memberUid));
+        if (PartySystem.allReady(expected, readyUids)) {
+          battle.status = "active";
+          PartyBattle.beginMovePhase(battle, nowMs);
+          transaction.update(currentPartyRef, { state: "in_battle", updatedAtMs: nowMs });
+        }
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, started: battle.status === "active" };
+      }
+
+      if (battle.status !== "active") return { ok: false, reason: "battle-closed" };
+      if (action !== "battle-advance" && whole(request.data?.round, -1) !== whole(battle.round, 1)) return { ok: false, reason: "round" };
+      const saveRefs = Object.fromEntries((battle.memberUids || []).map((memberUid) => [memberUid, db.doc(`players/${memberUid}`)]));
+      const saveSnaps = {};
+      for (const memberUid of battle.memberUids || []) saveSnaps[memberUid] = await transaction.get(saveRefs[memberUid]);
+      const saves = Object.fromEntries(Object.entries(saveSnaps).filter(([, snap]) => snap.exists).map(([memberUid, snap]) => [memberUid, snap.data()]));
+
+      let shouldResolve = false;
+      let resolving = battle.phase;
+      if (action === "battle-move") {
+        const validation = PartyBattle.validateMoveSubmission(battle, uid, saves[uid], request.data?.commands || [], request.data?.facing);
+        if (!validation.ok) return validation;
+        battle.movePlans = { ...(battle.movePlans || {}), [uid]: { commands: validation.commands, facing: validation.finalFacing, submittedAtMs: nowMs } };
+        shouldResolve = PartySystem.allActiveSubmitted(battle, "movePlans");
+      } else if (action === "battle-action") {
+        const validation = PartyBattle.validatePlayerAction(battle, uid, saves[uid], request.data?.battleAction || {});
+        if (!validation.ok) return validation;
+        battle.actions = { ...(battle.actions || {}), [uid]: { ...validation.action, submittedAtMs: nowMs } };
+        shouldResolve = PartySystem.allActiveSubmitted(battle, "actions");
+      } else {
+        if (nowMs < Number(battle.phaseEndsAtMs || 0)) return { ok: true, early: true, battleId, phase: battle.phase };
+        if (battle.phase === "planning_move") {
+          battle.movePlans = { ...(battle.movePlans || {}) };
+          for (const memberUid of PartySystem.activeBattleMemberUids(battle)) {
+            if (!battle.movePlans[memberUid]) battle.movePlans[memberUid] = { commands: [], facing: battle.members?.[memberUid]?.facing || "right", timedOut: true, submittedAtMs: nowMs };
+          }
+          shouldResolve = true;
+          resolving = "planning_move";
+        } else if (battle.phase === "planning_action") {
+          battle.actions = { ...(battle.actions || {}) };
+          for (const memberUid of PartySystem.activeBattleMemberUids(battle)) {
+            if (!battle.actions[memberUid]) battle.actions[memberUid] = { type: "wait", timedOut: true, submittedAtMs: nowMs };
+          }
+          shouldResolve = true;
+          resolving = "planning_action";
+        } else return { ok: false, reason: "phase" };
+      }
+
+      if (!shouldResolve) {
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, submitted: true, battleId, phase: battle.phase };
+      }
+
+      if (resolving === "planning_move") {
+        const result = PartyBattle.resolveMovement(battle, saves, nowMs);
+        if (!result.ok) return result;
+        battle = result.battle;
+        transaction.set(battleRef, battle);
+        return { ok: true, resolved: true, battleId, phase: battle.phase };
+      }
+
+      const result = PartyBattle.resolveActions(battle, saves, nowMs);
+      if (!result.ok) return result;
+      battle = result.battle;
+      let nextSaves = result.saves;
+      if (battle.status === "finished" && battle.result === "victory") {
+        const rewarded = PartyBattle.grantVictoryRewards(battle, nextSaves);
+        battle = rewarded.battle;
+        nextSaves = rewarded.saves;
+      }
+      for (const memberUid of Object.keys(nextSaves)) {
+        if (!saveSnaps[memberUid]?.exists) continue;
+        const original = saveSnaps[memberUid].data();
+        const nextSave = nextSaves[memberUid];
+        if (JSON.stringify(original.player) !== JSON.stringify(nextSave.player) || JSON.stringify(original.expansion) !== JSON.stringify(nextSave.expansion)) {
+          partyPlayerWrite(transaction, saveRefs[memberUid], original, nextSave);
+        }
+      }
+      if (battle.status === "finished") {
+        const survivingUids = (party.memberUids || []).filter((memberUid) => battle.members?.[memberUid]?.retreated !== true && battle.members?.[memberUid]?.disconnected !== true);
+        let leaderUid = party.leaderUid;
+        if (!survivingUids.includes(leaderUid) || Number(battle.members?.[leaderUid]?.hp) <= 0) {
+          leaderUid = survivingUids.find((memberUid) => Number(battle.members?.[memberUid]?.hp) > 0) || survivingUids[0] || "";
+        }
+        if (survivingUids.length <= 1) {
+          for (const memberUid of survivingUids) transaction.delete(partyPointerRef(memberUid));
+          transaction.delete(currentPartyRef);
+        } else {
+          transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+          for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
+        }
+      } else if (Number(battle.members?.[party.leaderUid]?.hp) <= 0) {
+        const nextLeader = PartySystem.activeBattleMemberUids(battle)[0] || party.leaderUid;
+        if (nextLeader !== party.leaderUid) {
+          transaction.update(currentPartyRef, { leaderUid: nextLeader, updatedAtMs: nowMs });
+          for (const memberUid of party.memberUids || []) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, nextLeader, nowMs));
+          battle.leaderUid = nextLeader;
+        }
+      }
+      transaction.set(battleRef, battle);
+      return { ok: true, resolved: true, finished: battle.status === "finished", result: battle.result || null, battleId, phase: battle.phase };
+    });
+  }
+
+  if (action === "battle-retreat") {
+    const battleId = String(request.data?.battleId || "").trim();
+    if (!battleId) return { ok: false, reason: "invalid-battle" };
+    return db.runTransaction(async (transaction) => {
+      const battleRef = partyBattleRef(battleId);
+      const battleSnap = await transaction.get(battleRef);
+      if (!battleSnap.exists) return { ok: false, reason: "battle-not-found" };
+      const battle = battleSnap.data();
+      if (battle.status !== "active" || !battle.members?.[uid] || battle.members[uid].retreated || battle.members[uid].disconnected) return { ok: false, reason: "battle-closed" };
+      const chance = PartyBattle.retreatChance(battle, uid);
+      const success = Math.random() < chance;
+      if (!success) return { ok: true, success: false, chance };
+      const currentPartyRef = partyRef(battle.partyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      const party = partySnap.exists ? partySnap.data() : null;
+      battle.members[uid] = { ...battle.members[uid], retreated: true, alive: false, offlineSinceMs: 0 };
+      appendPartyBattleRetreatEvent(battle, uid, false);
+      if (party) {
+        const nextParty = PartySystem.removeMember(party, uid);
+        transaction.delete(partyPointerRef(uid));
+        battle.leaderUid = nextParty.leaderUid || battle.leaderUid;
+        if (!PartySystem.activeBattleMemberUids(battle).length) {
+          const anyDeath = (battle.memberUids || []).some((memberUid) => battle.members?.[memberUid]?.disconnected || (battle.members?.[memberUid]?.retreated !== true && Number(battle.members?.[memberUid]?.hp) <= 0));
+          battle.status = "finished";
+          battle.phase = "finished";
+          battle.result = anyDeath ? "defeat" : "retreat";
+          battle.phaseEndsAtMs = 0;
+        }
+        if (battle.status === "finished" && nextParty.memberUids.length <= 1) {
+          for (const memberUid of nextParty.memberUids) transaction.delete(partyPointerRef(memberUid));
+          transaction.delete(currentPartyRef);
+        } else {
+          transaction.set(currentPartyRef, { ...nextParty, state: battle.status === "finished" ? "idle" : "in_battle", battleId: battle.status === "finished" ? "" : battleId, updatedAtMs: nowMs });
+          for (const memberUid of nextParty.memberUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(nextParty.id, nextParty.leaderUid, nowMs));
+        }
+      }
+      battle.updatedAtMs = nowMs;
+      transaction.set(battleRef, battle);
+      return { ok: true, success: true, chance, leftParty: true };
+    });
+  }
+
+  if (action === "member-offline" || action === "member-reconnected") {
+    const targetUid = PartySystem.safeUid(request.data?.targetUid);
+    if (!targetUid) return { ok: false, reason: "invalid-target" };
+    return db.runTransaction(async (transaction) => {
+      const [callerPointer, targetPointer] = await Promise.all([transaction.get(partyPointerRef(uid)), transaction.get(partyPointerRef(targetUid))]);
+      const callerPartyId = PartySystem.safeUid(callerPointer.data()?.partyId);
+      const targetPartyId = PartySystem.safeUid(targetPointer.data()?.partyId);
+      if (!callerPointer.exists || !targetPointer.exists || !callerPartyId || callerPartyId !== targetPartyId) return { ok: false, reason: "not-same-party" };
+      const currentPartyRef = partyRef(callerPartyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      if (!partySnap.exists) return { ok: false, reason: "party-not-found" };
+      const party = partySnap.data();
+      if (!(party.memberUids || []).includes(targetUid)) return { ok: false, reason: "not-same-party" };
+      const existingPartyOfflineSince = Number(party.members?.[targetUid]?.offlineSinceMs) || 0;
+      const offlineSinceMs = action === "member-offline" ? (existingPartyOfflineSince || nowMs) : 0;
+      const battleRef = party.battleId ? partyBattleRef(party.battleId) : null;
+      const battleSnap = battleRef ? await transaction.get(battleRef) : null;
+      transaction.update(currentPartyRef, { [`members.${targetUid}.offlineSinceMs`]: offlineSinceMs, updatedAtMs: nowMs });
+      if (battleRef && battleSnap?.exists && battleSnap.data()?.members?.[targetUid]) {
+        const battleData = battleSnap.data();
+        const existingBattleOfflineSince = Number(battleData.members?.[targetUid]?.offlineSinceMs) || 0;
+        transaction.update(battleRef, { [`members.${targetUid}.offlineSinceMs`]: action === "member-offline" ? (existingBattleOfflineSince || offlineSinceMs) : 0, updatedAtMs: nowMs });
+      }
+      return { ok: true, targetUid, offline: action === "member-offline" };
+    });
+  }
+
+  if (action === "disconnect-timeout") {
+    const targetUid = PartySystem.safeUid(request.data?.targetUid);
+    if (!targetUid) return { ok: false, reason: "invalid-target" };
+    const presence = await realtimeDb.ref(`presence/${targetUid}`).get();
+    if (presence.exists() && presence.val()?.online !== false) return { ok: true, skipped: true, reason: "still-online" };
+    return db.runTransaction(async (transaction) => {
+      const [callerPointer, targetPointer] = await Promise.all([transaction.get(partyPointerRef(uid)), transaction.get(partyPointerRef(targetUid))]);
+      if (!callerPointer.exists || !targetPointer.exists) return { ok: true, skipped: true, reason: "already-left" };
+      const currentPartyId = PartySystem.safeUid(callerPointer.data()?.partyId);
+      if (!currentPartyId || currentPartyId !== PartySystem.safeUid(targetPointer.data()?.partyId)) return { ok: false, reason: "not-same-party" };
+      const currentPartyRef = partyRef(currentPartyId);
+      const partySnap = await transaction.get(currentPartyRef);
+      if (!partySnap.exists) return { ok: true, skipped: true, reason: "party-gone" };
+      const party = partySnap.data();
+      const offlineSinceMs = Number(party.members?.[targetUid]?.offlineSinceMs) || 0;
+      if (!offlineSinceMs || nowMs - offlineSinceMs < PartySystem.DISCONNECT_GRACE_MS) return { ok: true, skipped: true, reason: "grace" };
+      const nextParty = PartySystem.removeMember(party, targetUid);
+      let penalty = null;
+      let battle = null;
+      const battleRef = party.battleId ? partyBattleRef(party.battleId) : null;
+      const battleSnap = battleRef ? await transaction.get(battleRef) : null;
+      let targetPlayerRef = null;
+      let targetPlayerSnap = null;
+      if (battleSnap?.exists) {
+        battle = battleSnap.data();
+        const battleOfflineSince = Number(battle.members?.[targetUid]?.offlineSinceMs) || offlineSinceMs;
+        if (nowMs - battleOfflineSince < PartySystem.DISCONNECT_GRACE_MS) return { ok: true, skipped: true, reason: "battle-grace" };
+        targetPlayerRef = db.doc(`players/${targetUid}`);
+        targetPlayerSnap = await transaction.get(targetPlayerRef);
+      }
+
+      // All reads are complete before the transaction starts mutating docs.
+      transaction.delete(partyPointerRef(targetUid));
+      if (battle && battleRef) {
+        if (targetPlayerSnap?.exists) {
+          penalty = PartySystem.applyForcedWildernessDeath(targetPlayerSnap.data());
+          if (penalty.ok) partyPlayerWrite(transaction, targetPlayerRef, targetPlayerSnap.data(), penalty.state);
+        }
+        if (battle.members?.[targetUid]) battle.members[targetUid] = { ...battle.members[targetUid], hp: 0, alive: false, retreated: true, disconnected: true, offlineSinceMs };
+        appendPartyBattleRetreatEvent(battle, targetUid, true);
+        battle.leaderUid = nextParty.leaderUid || battle.leaderUid;
+        const activeBattleUids = PartySystem.activeBattleMemberUids(battle);
+        if (!activeBattleUids.length) {
+          battle.status = "finished";
+          battle.phase = "finished";
+          battle.result = "defeat";
+          battle.phaseEndsAtMs = 0;
+        } else if (battle.status === "loading" && PartySystem.allReady(activeBattleUids, battle.readyUids || [])) {
+          battle.status = "active";
+          PartyBattle.beginMovePhase(battle, nowMs);
+        }
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+      }
+      const remaining = nextParty.memberUids;
+      if ((!party.battleId || battle?.status === "finished") && remaining.length <= 1) {
+        for (const memberUid of remaining) transaction.delete(partyPointerRef(memberUid));
+        transaction.delete(currentPartyRef);
+      } else {
+        let transition = nextParty.transition;
+        let state = nextParty.state;
+        if (transition && PartySystem.allReady(remaining, transition.readyUids || [])) { transition = null; state = "idle"; }
+        const nextState = battle?.status === "finished" ? "idle"
+          : battle?.status === "active" ? "in_battle"
+          : state;
+        transaction.set(currentPartyRef, { ...nextParty, transition, state: nextState, battleId: battle?.status === "finished" ? "" : (nextParty.battleId || ""), updatedAtMs: nowMs });
+        for (const memberUid of remaining) transaction.set(partyPointerRef(memberUid), partyPointerPayload(currentPartyId, nextParty.leaderUid, nowMs));
+      }
+      return { ok: true, removed: true, targetUid, penalty: penalty?.ok ? { penalty: penalty.penalty, deducted: penalty.deducted, levelsLost: penalty.levelsLost } : null };
+    });
+  }
+
+  return { ok: false, reason: "unsupported-action", action };
+});
+
+function appendPartyBattleRetreatEvent(battle, uid, disconnected) {
+  const member = battle?.members?.[uid];
+  battle.eventSerial = Math.max(0, Math.floor(Number(battle.eventSerial) || 0)) + 1;
+  battle.events = [...(Array.isArray(battle.events) ? battle.events : []), {
+    serial: battle.eventSerial,
+    type: disconnected ? "disconnect" : "retreat",
+    actorUid: uid,
+    actorName: member?.name || "冒險者",
+    text: disconnected ? `${member?.name || "冒險者"} 斷線超時，已撤退離隊` : `${member?.name || "冒險者"} 成功撤退並離開隊伍`,
+  }].slice(-40);
+}
 
 
 async function runAuthoritativeCommand(request, command) {

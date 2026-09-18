@@ -49,6 +49,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
+
+    // Party membership and shared battle state are server-authoritative. The
+    // client can observe only its own invite/pointer and party/battle documents
+    // that explicitly list the authenticated player as a member.
+    match /players/{userId}/partyInvites/{inviteId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /players/{userId}/partyState/{stateId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /parties/{partyId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
+      allow write: if false;
+    }
+
+    match /partyBattles/{battleId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
+      allow write: if false;
+    }
+
     // Single-device session ownership remains a client-authenticated concern.
     match /sessions/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

@@ -93,6 +93,13 @@
       return callable("tradeCommand", { version: COMMAND_VERSION, action: command, ...payload });
     }
 
+    async function party(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      const positioned = ["battle-start"].includes(command) ? withCommandPosition(payload) : payload;
+      return callable("partyCommand", { version: COMMAND_VERSION, action: command, ...positioned });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
@@ -104,6 +111,7 @@
       map,
       social,
       trade,
+      party,
     });
   }
 

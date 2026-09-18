@@ -52,9 +52,11 @@
   const Chat = window.EverrealmChat;
   const Social = window.EverrealmSocial;
   const Trade = window.EverrealmTrade;
+  const Party = window.EverrealmParty;
   let worldChat = null;
   let social = null;
   let trade = null;
+  let partyClient = null;
   const {
     normalizeCharacterName,
     statText,
@@ -199,12 +201,22 @@
   const socialFriendsPopover = document.getElementById("socialFriendsPopover");
   const socialFriendsCloseButton = document.getElementById("socialFriendsCloseButton");
   const socialFriendsContent = document.getElementById("socialFriendsContent");
+  const friendInvitePanel = document.getElementById("friendInvitePanel");
+  const friendInviteName = document.getElementById("friendInviteName");
+  const partyButton = document.getElementById("partyButton");
+  const partyBadge = document.getElementById("partyBadge");
+  const partyPopover = document.getElementById("partyPopover");
+  const partyCloseButton = document.getElementById("partyCloseButton");
+  const partyContent = document.getElementById("partyContent");
+  const partyInvitePanel = document.getElementById("partyInvitePanel");
+  const partyInviteName = document.getElementById("partyInviteName");
   const remotePlayerMenu = document.getElementById("remotePlayerMenu");
   const remotePlayerMenuName = document.getElementById("remotePlayerMenuName");
   const remotePlayerMenuMeta = document.getElementById("remotePlayerMenuMeta");
   const remotePlayerMenuClose = document.getElementById("remotePlayerMenuClose");
   const remotePlayerProfileDetail = document.getElementById("remotePlayerProfileDetail");
   const tradeInvitePanel = document.getElementById("tradeInvitePanel");
+  const battlePhaseTimer = document.getElementById("battlePhaseTimer");
   const tradeInviteName = document.getElementById("tradeInviteName");
   const tradePanel = document.getElementById("tradePanel");
   const tradePanelTitle = document.getElementById("tradePanelTitle");
@@ -400,7 +412,21 @@
   let systemLogCollapsed = false;
   let socialState = Object.freeze({ active: false, uid: "", friends: [], incoming: [], outgoing: [] });
   let tradeState = Object.freeze({ active: false, uid: "", session: null, invites: [] });
+  let partyState = Object.freeze({ active: false, uid: "", party: null, battle: null, invites: [] });
+  let activeFriendInvite = null;
   let activeTradeInvite = null;
+  let activePartyInvite = null;
+  let lastPartyTransitionId = "";
+  let partyTransitionApplying = false;
+  let lastPartyBattleEventSerial = 0;
+  let partyAdvanceKey = "";
+  let partyBattleReadyId = "";
+  let partyBattleFinishedId = "";
+  let partyBattleExitedId = "";
+  let partyBattleStartPending = false;
+  let partyTransitionReadyId = "";
+  let partyFollowRetargetAt = 0;
+  let partyFollowTargetUid = "";
   let tradeCommandPending = false;
   let lastCompletedTradeId = "";
   let activeWhisperUid = "";
@@ -761,6 +787,7 @@
   let chatStartPromise = null;
   let socialStartPromise = null;
   let tradeStartPromise = null;
+  let partyStartPromise = null;
   let realtimeSessionToken = 0;
 
   function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
@@ -847,6 +874,18 @@
         return false;
       });
     }
+    if (partyClient) {
+      partyStartPromise = partyClient.start({ uid, name: playerDisplayName() }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) partyClient.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm party unavailable.", error);
+        return false;
+      });
+    }
   }
 
   function stopRealtimeSession() {
@@ -855,10 +894,12 @@
     chatStartPromise = null;
     socialStartPromise = null;
     tradeStartPromise = null;
+    partyStartPromise = null;
     if (multiplayer?.isActive?.()) void multiplayer.stop();
     worldChat?.stop?.();
     social?.stop?.();
     trade?.stop?.();
+    partyClient?.stop?.();
   }
 
   function syncRealtimeState(state) {
@@ -1362,6 +1403,7 @@
   }
 
   function updateRandomEncounters(travelDistance) {
+    if (isPartyFollower()) return false;
     if (!(travelDistance > 0) || mode !== "playing" || battle) return false;
     if (!randomEncounterRuntime.enabled || !randomEncounterRuntime.ready || randomEncounterRuntime.failed) return false;
     if (randomEncounterRuntime.mapId !== currentMapId) return false;
@@ -2952,7 +2994,10 @@
       clearExploreMovePath();
       pendingClickInteractionId = null;
     }
-    if (!movementBlockedByUi) updateSelectedPortalNavigation();
+    if (!movementBlockedByUi) {
+      if (isPartyFollower()) updatePartyFollowerPath();
+      else updateSelectedPortalNavigation();
+    }
     let direction = movementBlockedByUi ? { x: 0, y: 0 } : movementInput();
     let speed = stats.speed;
     if (player.attackTimer > .05) {
@@ -3713,6 +3758,7 @@
       const dist = Math.hypot(offset.x, offset.y);
       const toward = Core.normalize(offset);
       if (encounterGrace <= 0 && enemy.encounterCooldown <= 0 && dist <= player.radius + enemy.radius + 10) {
+        if (isPartyFollower()) continue;
         startBattle(enemy);
         break;
       }
@@ -4083,12 +4129,41 @@
   }
 
   function usePortal(portal) {
+    const membership = currentPartyMembership();
+    if (membership) {
+      if (!isPartyLeader()) return false;
+      void startPartyMapTransition(portal);
+      return true;
+    }
     const arrival = MapTransitions.resolveArrival(maps, portal) || { position: null, facing: null };
     const targetPosition = arrival.position;
     transitionMap(portal.targetMap, targetPosition, arrival.facing);
+    return true;
+  }
+
+  async function startPartyMapTransition(portal) {
+    if (!portal?.targetMap || partyTransitionApplying || mapTransitionPending || !partyClient?.isActive?.()) return false;
+    partyTransitionApplying = true;
+    mapTransitionPending = true;
+    showMapTransitionOverlay(maps[portal.targetMap]?.name || "全隊轉場中");
+    clearExploreMovePath();
+    player.moving = false;
+    try {
+      await flushForServerCommand();
+      const result = await runPartyCommand(() => partyClient.startTransition(portal.targetMap));
+      if (!result?.ok) {
+        mapTransitionPending = false;
+        await hideMapTransitionOverlay();
+        return false;
+      }
+      return true;
+    } finally {
+      partyTransitionApplying = false;
+    }
   }
 
   function updateAutomaticPortal() {
+    if (isPartyFollower()) return false;
     if (mode !== "playing" || mapTransitionPending) return false;
     const portal = world.portals.find((candidate) => {
       if (candidate.navigationRegion && typeof world.navigation?.isFeetInRegion === "function") {
@@ -4167,8 +4242,10 @@
     }
 
     const serverVerified = options.serverVerified === true;
+    const keepOverlay = options.keepOverlay === true;
+    const skipSave = options.skipSave === true;
     if (!serverVerified && mapTransitionPending) return false;
-    if (serverVerified) mapTransitionPending = false;
+    if (serverVerified && !keepOverlay) mapTransitionPending = false;
 
     const transitionSerial = ++mapTransitionSerial;
     const sourceMapId = currentMapId;
@@ -4250,7 +4327,7 @@
       showToast(target.name, "good");
       updateHud(true);
       syncRealtimeMap();
-      saveImportant(false);
+      if (!skipSave) saveImportant(false);
       transitionSucceeded = true;
 
       // Keep the cover up for at least one rendered frame after the map swap so
@@ -4258,14 +4335,14 @@
       if (MAP_TRANSITION_SETTLE_MS > 0) {
         await new Promise((resolve) => window.setTimeout(resolve, MAP_TRANSITION_SETTLE_MS));
       }
-      await hideMapTransitionOverlay();
+      if (!keepOverlay) await hideMapTransitionOverlay();
       canvas.focus({ preventScroll: true });
       return true;
     } finally {
       if (!transitionSucceeded && mapTransitionOverlay && !mapTransitionOverlay.hidden && transitionSerial === mapTransitionSerial) {
         await hideMapTransitionOverlay();
       }
-      if (transitionSerial === mapTransitionSerial) mapTransitionPending = false;
+      if (transitionSerial === mapTransitionSerial) mapTransitionPending = Boolean(keepOverlay && transitionSucceeded);
     }
   }
 
@@ -6950,7 +7027,386 @@
     if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
   }
 
+  function partyBattleSource(snapshot) {
+    if (!snapshot) return null;
+    const encounterId = String(snapshot.encounterId || "");
+    const live = enemies.find((enemy) => String(enemy.instanceId || enemy.id || "") === encounterId)
+      || enemies.find((enemy) => String(enemy.type || "") === String(snapshot.monsterType || ""));
+    if (live) return live;
+    return battleSourceFromServerSnapshot(snapshot);
+  }
+
+  async function startPartyBattleEncounter(source) {
+    if (partyBattleStartPending || !partyClient?.isActive?.() || !isPartyLeader()) return false;
+    partyBattleStartPending = true;
+    showBattleEntryTransition(source);
+    try {
+      await flushForServerCommand();
+      const result = await runPartyCommand(() => partyClient.startBattle({
+        monsterType: source.type,
+        level: source.level,
+        encounterId: source.instanceId || source.id || "",
+      }));
+      if (!result?.ok) {
+        hideBattleEntryTransition();
+        return false;
+      }
+      return true;
+    } finally {
+      partyBattleStartPending = false;
+    }
+  }
+
+  function partyBattleUnitFromMember(memberUid, member, isLocal = false) {
+    const stats = isLocal ? playerStats() : {};
+    return {
+      id: `party:${memberUid}`,
+      uid: memberUid,
+      side: "ally",
+      team: "ally",
+      type: "player",
+      name: member?.name || (isLocal ? playerDisplayName() : "冒險者"),
+      classId: member?.classId || (isLocal ? playerClassId : "fighter"),
+      gender: member?.gender || (isLocal ? player.gender : "male"),
+      level: Math.max(1, Number(member?.level) || (isLocal ? player.level : 1)),
+      cell: copyBattleCell(member?.cell || { x: 1, y: 3 }),
+      hp: Math.max(0, Number(member?.hp) || 0),
+      maxHp: Math.max(1, Number(member?.maxHp) || stats.maxHp || 1),
+      attack: Number(stats.attack) || 0,
+      defence: Number(stats.defence) || 0,
+      accuracy: Number(stats.accuracy) || 100,
+      evasion: Number(stats.evasion) || 0,
+      weight: Number(stats.weight) || 0,
+      actionSpeedBonus: Number(stats.actionSpeedBonus) || 0,
+      initiative: Number(stats.initiative) || 0,
+      baseMoveRange: isLocal ? battleMoveCapacityForPlayer(stats) : 0,
+      moveRange: isLocal ? battleMoveCapacityForPlayer(stats) : 0,
+      facingReserve: BATTLE_FINAL_FACING_RESERVE,
+      attackRange: 1,
+      alive: member?.alive !== false && Number(member?.hp) > 0 && member?.retreated !== true && member?.disconnected !== true,
+      retreated: member?.retreated === true,
+      disconnected: member?.disconnected === true,
+      facing: ["up", "right", "down", "left"].includes(member?.facing) ? member.facing : "right",
+      ap: Math.max(0, Math.floor(Number(member?.ap) || 0)),
+      statusEffects: { ...(member?.statusEffects || {}) },
+      hitFlash: 0,
+      stopFlash: 0,
+    };
+  }
+
+  function partyBattleOwnMember(snapshot = battle?.partySnapshot) {
+    const uid = authenticatedUid();
+    return uid && snapshot?.members ? snapshot.members[uid] || null : null;
+  }
+
+  function partyBattleSubmissionLocked(kind = "") {
+    if (!battle?.isPartyBattle) return false;
+    if (kind === "move") return Boolean(battle.partyMoveSubmitted);
+    if (kind === "action") return Boolean(battle.partyActionSubmitted);
+    return Boolean(battle.partyMoveSubmitted || battle.partyActionSubmitted);
+  }
+
+  async function submitPartyBattleMove(finalFacing = null) {
+    if (!battle?.isPartyBattle || battle.phase !== "planning_move" || !battle.partyBattleId) return false;
+    if (battle.partyMoveSubmitted) return false;
+    let commands = [...(battle.heroMoveCommands || [])];
+    let schedule = battleMoveSchedule(commands);
+    if (finalFacing != null && ["up", "down", "left", "right"].includes(finalFacing)
+      && finalFacing !== (schedule.finalTravelFacing || battle.hero.facing)) {
+      const candidate = [...commands, { type: "face", facing: finalFacing }];
+      const candidateSchedule = battleMoveSchedule(candidate);
+      if (candidateSchedule.totalCost <= battle.hero.moveRange + 1e-9) {
+        commands = candidate;
+        schedule = candidateSchedule;
+      }
+    }
+    battle.heroMoveCommands = commands;
+    battle.heroMoveDraft = schedule.path.map(copyBattleCell);
+    battle.awaitingFacing = false;
+    battle.partyMoveSubmitted = true;
+    battle.messageDanger = false;
+    battle.message = "移動已提交，等待隊友…";
+    updateBattleUi();
+    const battleId = battle.partyBattleId;
+    const round = battle.round;
+    const result = await runPartyCommand(() => partyClient?.submitMove?.(battleId, round, commands, schedule.finalTravelFacing || battle.hero.facing));
+    if (!battle?.isPartyBattle || battle.partyBattleId !== battleId || battle.round !== round) return Boolean(result?.ok);
+    if (!result?.ok) {
+      battle.partyMoveSubmitted = false;
+      battle.awaitingFacing = true;
+      battle.message = "移動提交失敗，可以再試一次。";
+      battle.messageDanger = true;
+      updateBattleUi();
+      return false;
+    }
+    return true;
+  }
+
+  async function submitPartyBattleAction(action) {
+    if (!battle?.isPartyBattle || battle.phase !== "planning_action" || !battle.partyBattleId) return false;
+    if (battle.partyActionSubmitted) return false;
+    const payload = action && typeof action === "object" ? action : { type: "wait" };
+    battle.partyActionSubmitted = true;
+    battle.selectedAction = null;
+    battle.messageDanger = false;
+    battle.message = "行動已提交，等待隊友…";
+    updateBattleUi();
+    const battleId = battle.partyBattleId;
+    const round = battle.round;
+    const result = await runPartyCommand(() => partyClient?.submitAction?.(battleId, round, payload));
+    if (!battle?.isPartyBattle || battle.partyBattleId !== battleId || battle.round !== round) return Boolean(result?.ok);
+    if (!result?.ok) {
+      battle.partyActionSubmitted = false;
+      battle.message = "行動提交失敗，可以再試一次。";
+      battle.messageDanger = true;
+      updateBattleUi();
+      return false;
+    }
+    return true;
+  }
+
+  async function requestPartyBattleAdvance() {
+    if (!battle?.isPartyBattle || !battle.partyBattleId || !["planning_move", "planning_action"].includes(battle.phase)) return false;
+    const key = `${battle.partyBattleId}:${battle.round}:${battle.phase}`;
+    if (partyAdvanceKey === key) return false;
+    partyAdvanceKey = key;
+    const result = await runPartyCommand(() => partyClient?.advanceBattle?.(battle.partyBattleId));
+    const stillSamePhase = Boolean(battle?.isPartyBattle && `${battle.partyBattleId}:${battle.round}:${battle.phase}` === key);
+    if ((!result?.ok || result?.early) && stillSamePhase) {
+      partyAdvanceKey = "";
+      if (result?.early) window.setTimeout(() => {
+        if (battle?.isPartyBattle && `${battle.partyBattleId}:${battle.round}:${battle.phase}` === key) void requestPartyBattleAdvance();
+      }, 220);
+    }
+    return Boolean(result?.ok && !result?.early);
+  }
+
+  async function retreatPartyBattle() {
+    if (!battle?.isPartyBattle || !battle.partyBattleId || !["planning_move", "planning_action"].includes(battle.phase)) return false;
+    const result = await runPartyCommand(() => partyClient?.retreat?.(battle.partyBattleId));
+    if (!result?.ok) return false;
+    const chance = Core.clamp(Number(result.chance) || 0, 0, 1);
+    if (!result.success) {
+      const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
+      setBattleMessage(`${retreatMessage}，戰鬥繼續。`, true);
+      showToast(retreatMessage, "danger");
+      return false;
+    }
+    setBattleMessage("撤退成功，正在離開隊伍…", false);
+    showToast("撤退成功。", "good");
+    return true;
+  }
+
+  function updatePartyBattleTimer() {
+    if (!battlePhaseTimer) return;
+    const active = Boolean(battle?.isPartyBattle && ["planning_move", "planning_action"].includes(battle.phase) && battle.partyPhaseEndsAtMs > 0);
+    battlePhaseTimer.hidden = !active;
+    if (!active) {
+      battlePhaseTimer.classList.remove("is-urgent");
+      return;
+    }
+    const remainingMs = Math.max(0, battle.partyPhaseEndsAtMs - Date.now());
+    const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+    battlePhaseTimer.textContent = String(seconds);
+    battlePhaseTimer.classList.toggle("is-urgent", seconds <= 5);
+    if (remainingMs <= 0) void requestPartyBattleAdvance();
+  }
+
+  function hydratePartyBattleSnapshot(targetBattle, snapshot, { render = true } = {}) {
+    if (!targetBattle?.isPartyBattle || !snapshot?.id) return false;
+    const uid = authenticatedUid();
+    const localMember = snapshot.members?.[uid];
+    if (!localMember) return false;
+    const previousPhase = targetBattle.partySnapshot?.phase;
+    const previousRound = targetBattle.partySnapshot?.round;
+    targetBattle.partySnapshot = snapshot;
+    targetBattle.partyBattleId = snapshot.id;
+    targetBattle.round = Math.max(1, Number(snapshot.round) || 1);
+    const local = partyBattleUnitFromMember(uid, localMember, true);
+    Object.assign(targetBattle.hero, local, {
+      baseMoveRange: targetBattle.hero.baseMoveRange,
+      moveRange: Math.max(0, targetBattle.hero.baseMoveRange - (FighterEffects?.movementPenalty?.(local, targetBattle.round) || 0)),
+    });
+    player.hp = targetBattle.hero.hp;
+    targetBattle.ap = local.ap;
+    targetBattle.partyAllies = (snapshot.memberUids || [])
+      .filter((memberUid) => memberUid !== uid)
+      .map((memberUid) => partyBattleUnitFromMember(memberUid, snapshot.members?.[memberUid], false));
+    for (let index = 0; index < targetBattle.enemies.length; index += 1) {
+      const canonical = snapshot.enemies?.[index];
+      const enemy = targetBattle.enemies[index];
+      if (!canonical || !enemy) continue;
+      enemy.id = canonical.id || enemy.id;
+      enemy.type = canonical.type || enemy.type;
+      enemy.name = canonical.name || enemy.name;
+      enemy.level = Math.max(1, Number(canonical.level) || enemy.level || snapshot.level || 1);
+      enemy.maxHp = Math.max(1, Number(canonical.maxHp) || enemy.maxHp || 1);
+      enemy.hp = Core.clamp(Number(canonical.hp) || 0, 0, enemy.maxHp);
+      enemy.alive = canonical.alive !== false && enemy.hp > 0;
+      if (canonical.cell) enemy.cell = copyBattleCell(canonical.cell);
+      if (["up", "right", "down", "left"].includes(canonical.facing)) enemy.facing = canonical.facing;
+      enemy.ap = Math.max(0, Number(canonical.ap) || 0);
+      enemy.statusEffects = { ...(canonical.statusEffects || {}) };
+      enemy.hitFlash = enemy.hitFlash || 0;
+      enemy.stopFlash = enemy.stopFlash || 0;
+    }
+    targetBattle.phase = snapshot.status === "loading" ? "intro"
+      : snapshot.status === "finished" ? targetBattle.phase
+      : snapshot.phase;
+    targetBattle.partyMoveSubmitted = Boolean(snapshot.movePlans?.[uid]);
+    targetBattle.partyActionSubmitted = Boolean(snapshot.actions?.[uid]);
+    targetBattle.partyPhaseEndsAtMs = Math.max(0, Number(snapshot.phaseEndsAtMs) || 0);
+    if (snapshot.phase !== previousPhase || snapshot.round !== previousRound) {
+      partyAdvanceKey = "";
+      targetBattle.selectedAction = snapshot.phase === "planning_move" ? "move" : null;
+      targetBattle.heroMoveDraft = [copyBattleCell(targetBattle.hero.cell)];
+      targetBattle.heroMoveCommands = [];
+      targetBattle.heroMovePlan = null;
+      targetBattle.cursor = copyBattleCell(targetBattle.hero.cell);
+      targetBattle.awaitingFacing = true;
+      targetBattle.messageDanger = false;
+      targetBattle.message = snapshot.phase === "planning_move"
+        ? "全隊移動階段：30 秒內決定位置。"
+        : snapshot.phase === "planning_action"
+          ? "全隊行動階段：30 秒內選擇技能。"
+          : "等待隊友同步…";
+    }
+    if (local.alive === false && snapshot.status === "active") {
+      targetBattle.messageDanger = false;
+      targetBattle.message = "你已倒下，等待隊友完成戰鬥。";
+      targetBattle.selectedAction = null;
+      targetBattle.awaitingFacing = false;
+    }
+    if (render) {
+      updateHud(true);
+      updateBattleUi();
+    }
+    return true;
+  }
+
+  function presentPartyBattleEvents(snapshot) {
+    if (!battle?.isPartyBattle || !snapshot) return;
+    const events = Array.isArray(snapshot.events) ? snapshot.events : [];
+    for (const event of events) {
+      const serial = Number(event.serial) || 0;
+      if (serial <= lastPartyBattleEventSerial) continue;
+      lastPartyBattleEventSerial = Math.max(lastPartyBattleEventSerial, serial);
+      if (event.text) addSystemMessage("combat", event.text);
+      const target = battleUnits().find((unit) => unit.uid === event.targetUid || unit.id === event.targetId);
+      if (target && event.type === "damage") {
+        target.hitFlash = .3;
+        battle.effects.push({ cell: { ...target.cell }, text: `-${Math.max(0, Number(event.amount) || 0)}`, color: "#ff8b8b", life: .9, maxLife: .9, kind: "damage", offsetY: .16 });
+        sound.hit();
+      } else if (target && event.type === "heal") {
+        battle.effects.push({ cell: { ...target.cell }, text: `+${Math.max(0, Number(event.amount) || 0)}`, color: "#7fffc1", life: .9, maxLife: .9, kind: "heal", offsetY: .16 });
+      }
+    }
+  }
+
+  async function finishPartyBattle(snapshot) {
+    if (!battle?.isPartyBattle || !snapshot?.id || partyBattleFinishedId === snapshot.id) return;
+    partyBattleFinishedId = snapshot.id;
+    hydratePartyBattleSnapshot(battle, snapshot, { render: false });
+    presentPartyBattleEvents(snapshot);
+    const uid = authenticatedUid();
+    const member = snapshot.members?.[uid];
+    if (snapshot.result === "victory" && member?.alive && !member.retreated && !member.disconnected) {
+      await refreshTradeAuthoritativeState();
+      const result = snapshot.rewards?.[uid] || {};
+      battle.phase = "victory";
+      battle.victoryResult = {
+        earnedXp: Math.max(0, Number(result.earnedXp) || 0),
+        coins: Math.max(0, Number(result.coins) || 0),
+        drops: [],
+        beforeLevel: Math.max(1, Number(result.beforeLevel) || player.level),
+        beforeXp: Math.max(0, Number(result.beforeXp) || 0),
+        afterLevel: Math.max(1, Number(result.afterLevel) || player.level),
+        afterXp: Math.max(0, Number(result.afterXp) || player.xp),
+      };
+      addSystemMessage("combat", "隊伍戰鬥獲勝！", "good");
+      if (battle.victoryResult.earnedXp) addSystemMessage("reward", `獲得 ${battle.victoryResult.earnedXp} EXP`);
+      if (battle.victoryResult.coins) addSystemMessage("reward", `獲得 ${battle.victoryResult.coins} 金幣`);
+      startVictoryBgm();
+      updateBattleUi();
+      ensureBattleVictoryPresenter().show(battle.victoryResult);
+      battleVictoryContinue?.focus({ preventScroll: true });
+      return;
+    }
+    if (member?.retreated && !member.disconnected) {
+      addSystemMessage("combat", "撤退成功，已離開隊伍。", "good");
+      closeBattleHud();
+      restoreExplorationUiAfterBattle();
+      encounterGrace = 1.4;
+      return;
+    }
+    if (!member || member.disconnected) {
+      closeBattleHud();
+      await refreshTradeAuthoritativeState();
+      restoreExplorationUiAfterBattle();
+      showToast("斷線超時，已按野外死亡處理並離開隊伍。", "danger");
+      return;
+    }
+    if (Number(member.hp) <= 0 || member.alive === false) {
+      battle.phase = "defeat";
+      battle.message = "你倒下了……";
+      battle.messageDanger = true;
+      updateBattleUi();
+      player.hp = 0;
+      playerDeath();
+      return;
+    }
+    closeBattleHud();
+    restoreExplorationUiAfterBattle();
+  }
+
+  function syncPartyBattleSnapshot(snapshot) {
+    if (!snapshot?.id) return;
+    if (snapshot.id === partyBattleExitedId && snapshot.status !== "finished") return;
+    if (snapshot.status === "finished" && snapshot.id === partyBattleExitedId) partyBattleExitedId = "";
+    const source = partyBattleSource(snapshot);
+    if (!battle) {
+      if (!source || !["loading", "active"].includes(snapshot.status)) return;
+      startBattle(source, true, { partyBattleSnapshot: snapshot });
+      return;
+    }
+    if (!battle.isPartyBattle || battle.partyBattleId !== snapshot.id) return;
+    hydratePartyBattleSnapshot(battle, snapshot, { render: false });
+    presentPartyBattleEvents(snapshot);
+    const ownMember = partyBattleOwnMember(snapshot);
+    if (snapshot.status === "active" && ownMember?.retreated && !ownMember?.disconnected) {
+      partyBattleExitedId = snapshot.id;
+      addSystemMessage("combat", "撤退成功，已離開隊伍。", "good");
+      closeBattleHud();
+      restoreExplorationUiAfterBattle();
+      encounterGrace = 1.4;
+      canvas.focus({ preventScroll: true });
+      return;
+    }
+    if (snapshot.status === "loading") {
+      if (partyBattleReadyId !== snapshot.id) {
+        partyBattleReadyId = snapshot.id;
+        void runPartyCommand(() => partyClient?.battleReady?.(snapshot.id)).then((result) => {
+          if (!result?.ok && partyBattleReadyId === snapshot.id) partyBattleReadyId = "";
+        });
+      }
+      updateBattleUi();
+      return;
+    }
+    if (snapshot.status === "active") {
+      battleHud.hidden = false;
+      hideBattleEntryTransition();
+      stopEncounterTransitionSfx();
+      startBattleBgm();
+      updateBattleUi();
+      return;
+    }
+    if (snapshot.status === "finished") void finishPartyBattle(snapshot);
+  }
+
   function startBattle(source, instant = false, options = {}) {
+    const partyBattleSnapshot = options?.partyBattleSnapshot && typeof options.partyBattleSnapshot === "object"
+      ? options.partyBattleSnapshot
+      : null;
     const resumeSnapshot = options?.serverSnapshot && typeof options.serverSnapshot === "object"
       ? options.serverSnapshot
       : null;
@@ -6960,6 +7416,11 @@
     const localVisualOnly = options?.localVisualOnly === true;
     const resumingServerBattle = Boolean(resumeSnapshot?.id && resumeSnapshot?.status === "active");
     if (!source?.alive || mode !== "playing" || battle || source.encounterCooldown > 0) return false;
+    if (!partyBattleSnapshot && currentPartyMembership()) {
+      if (!isPartyLeader()) return false;
+      void startPartyBattleEncounter(source);
+      return true;
+    }
     // HP=0 is a real persisted death state, not a missing value. A normal new
     // encounter must never hydrate it back to max HP. The only exception is a
     // persisted active server battle being reconstructed after reload; that
@@ -7049,6 +7510,13 @@
       serverSyncPending: false,
       predictedRoundPending: false,
       entryTransitionStartedAt,
+      isPartyBattle: Boolean(partyBattleSnapshot),
+      partyBattleId: partyBattleSnapshot?.id || "",
+      partySnapshot: null,
+      partyAllies: [],
+      partyMoveSubmitted: false,
+      partyActionSubmitted: false,
+      partyPhaseEndsAtMs: 0,
     };
     mode = "battle";
     stage.dataset.gameState = mode;
@@ -7060,7 +7528,25 @@
     bgm.setEnabled(false);
     announce(resumingServerBattle ? `重新連接${source.name}戰鬥。` : `遇上${source.name}。進入格仔回合戰。`);
     maintainGodModeState();
-    if (resumingServerBattle) restorePersistedBattleSession(battle, resumeSnapshot, { localSnapshot: localResumeSnapshot });
+    if (partyBattleSnapshot) {
+      battle.hero.id = `party:${authenticatedUid()}`;
+      lastPartyBattleEventSerial = Math.max(0, Number(partyBattleSnapshot.eventSerial) || 0) - (partyBattleSnapshot.events?.length || 0);
+      hydratePartyBattleSnapshot(battle, partyBattleSnapshot, { render: false });
+      if (partyBattleSnapshot.status === "active") {
+        battleHud.hidden = false;
+        hideBattleEntryTransition();
+        stopEncounterTransitionSfx();
+        startBattleBgm();
+      }
+      if (partyBattleReadyId !== partyBattleSnapshot.id) {
+        partyBattleReadyId = partyBattleSnapshot.id;
+        void runPartyCommand(() => partyClient?.battleReady?.(partyBattleSnapshot.id)).then((result) => {
+          if (!result?.ok && partyBattleReadyId === partyBattleSnapshot.id) partyBattleReadyId = "";
+        });
+      }
+      presentPartyBattleEvents(partyBattleSnapshot);
+      updateBattleUi();
+    } else if (resumingServerBattle) restorePersistedBattleSession(battle, resumeSnapshot, { localSnapshot: localResumeSnapshot });
     else if (localResumeSnapshot) {
       applyLocalBattleSnapshot(battle, localResumeSnapshot, { visualOnly: localVisualOnly });
       battle.serverReady = !localVisualOnly && Boolean(localResumeSnapshot.battleId);
@@ -7438,7 +7924,7 @@
   }
 
   function battleUnits() {
-    return battle ? [battle.hero, ...battle.enemies] : [];
+    return battle ? [battle.hero, ...(battle.partyAllies || []), ...battle.enemies] : [];
   }
 
   function battleRandom() {
@@ -7771,6 +8257,11 @@
 
   function confirmPlannedMovement(finalFacing = null) {
     if (!battle || battle.phase !== "planning_move") return false;
+    if (battle.isPartyBattle) {
+      if (battle.partyMoveSubmitted) return false;
+      void submitPartyBattleMove(finalFacing);
+      return true;
+    }
     let commands = [...(battle.heroMoveCommands || [])];
     let schedule = battleMoveSchedule(commands);
     if (finalFacing != null && ["up", "down", "left", "right"].includes(finalFacing)
@@ -8086,10 +8577,13 @@
   function battleTargetUnitAt(cell, preferredTeam = null) {
     if (!battle) return null;
     const enemy = livingBattleEnemies().find((unit) => sameBattleCell(unit.cell, cell)) || null;
+    const allies = [battle.hero, ...(battle.partyAllies || [])].filter((unit) => unit.alive && unit.hp > 0);
     const hero = sameBattleCell(battle.hero.cell, cell) ? battle.hero : null;
+    const ally = allies.find((unit) => sameBattleCell(unit.cell, cell)) || null;
     if (preferredTeam === "enemy") return enemy;
-    if (preferredTeam === "ally" || preferredTeam === "self") return hero;
-    return enemy || hero;
+    if (preferredTeam === "self") return hero;
+    if (preferredTeam === "ally") return ally;
+    return enemy || ally || hero;
   }
 
   function skillArcAllowsCell(skill, cell) {
@@ -8170,6 +8664,10 @@
   function selectBattleAction(action) {
     if (!battle || mode !== "battle") return;
     if (!["planning_move", "planning_action"].includes(battle.phase)) return;
+    if (battle.isPartyBattle && battle.hero?.alive === false) return setBattleMessage("你已倒下，等待隊友完成戰鬥。", false);
+    if (battle.isPartyBattle && ((battle.phase === "planning_move" && battle.partyMoveSubmitted) || (battle.phase === "planning_action" && battle.partyActionSubmitted))) {
+      return setBattleMessage("已提交今階段操作，等待隊友。", false);
+    }
     if (action === "basic-attack" || action === "slash") {
       const starter = equippedBattleSkills()[0] || Skills.getSkill(Skills.CLASS_STARTER_SKILLS[playerClassId]?.[0]);
       action = starter ? `skill:${starter.id}` : "";
@@ -8220,6 +8718,8 @@
 
   function confirmBattleCell(cell) {
     if (!battle || mode !== "battle" || !["planning_move", "planning_action"].includes(battle.phase) || !Tactics.isInside(battle.grid, cell)) return false;
+    if (battle.isPartyBattle && battle.hero?.alive === false) return false;
+    if (battle.isPartyBattle && ((battle.phase === "planning_move" && battle.partyMoveSubmitted) || (battle.phase === "planning_action" && battle.partyActionSubmitted))) return false;
     battle.cursor = { x: cell.x, y: cell.y };
     if (battle.phase === "planning_move" && battle.selectedAction === "move") {
       return appendBattleMoveWaypoint(cell);
@@ -8386,8 +8886,13 @@
   function resolvePlayerBattleSkill(skill, targetCell, targetUnit = null, pattern = null) {
     if (!battle || battle.phase !== "planning_action") return;
     if (!skill || (!godModeActive && battle.ap < skill.apCost)) return setBattleMessage("AP 唔夠。", true);
-    if (!godModeActive) battle.ap -= skill.apCost;
     const centre = targetCell || battle.hero.cell;
+    if (battle.isPartyBattle) {
+      if (battle.partyActionSubmitted) return;
+      void submitPartyBattleAction({ type: "skill", skillId: skill.id, targetCell: copyBattleCell(centre) });
+      return;
+    }
+    if (!godModeActive) battle.ap -= skill.apCost;
     const attackPath = Tactics.usesAttackPath(skill.deliveryMode)
       ? Tactics.facingOrthogonalPriority(battle.hero.cell, centre, battle.hero.facing)
       : [];
@@ -8494,11 +8999,24 @@
     if (!battle || battle.phase !== "planning_action") return;
     if (player.potions <= 0) return setBattleMessage("小型回復藥用晒喇。", true);
     if (battle.hero.hp >= battle.hero.maxHp) return setBattleMessage("而家滿血，留返支藥先。", true);
+    if (battle.isPartyBattle) {
+      if (battle.partyActionSubmitted) return;
+      void submitPartyBattleAction({ type: "potion" });
+      return;
+    }
     beginActionResolution({ type: "potion", label: "小型回復藥" });
   }
 
   function beginActionResolution(heroAction) {
     if (!battle || mode !== "battle" || battle.phase !== "planning_action") return;
+    if (battle.isPartyBattle) {
+      if (battle.partyActionSubmitted) return;
+      const action = heroAction?.type === "skill"
+        ? { type: "skill", skillId: heroAction.skillId, targetCell: heroAction.targetCell ? copyBattleCell(heroAction.targetCell) : copyBattleCell(battle.hero.cell) }
+        : heroAction?.type === "potion" ? { type: "potion" } : { type: "wait" };
+      void submitPartyBattleAction(action);
+      return;
+    }
     if (battle.serverSyncPending) {
       setBattleMessage("戰況同步中；可以先揀招，伺服器確認後即刻出手。", false);
       return;
@@ -9457,6 +9975,10 @@
 
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
+    if (battle.isPartyBattle) {
+      void retreatPartyBattle();
+      return;
+    }
     const chance = RETREAT_CHANCE_OVERRIDE ?? ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (battleRandom() >= chance) {
       const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
@@ -9495,6 +10017,8 @@
     battleToken += 1;
     battleHud.hidden = true;
     battleFacingPicker.hidden = true;
+    if (battlePhaseTimer) { battlePhaseTimer.hidden = true; battlePhaseTimer.classList.remove("is-urgent"); }
+    partyAdvanceKey = "";
     delete stage.dataset.battlePhase;
     keys.clear();
     battle = null;
@@ -9516,7 +10040,8 @@
     battle.effects = battle.effects.filter((effect) => effect.life > 0);
     if (battle.phase === "resolving_move") updateMovementResolution(dt);
     else if (battle.phase === "resolving_action") updateActionResolution(dt);
-    if (autoplay && ["planning_move", "planning_action"].includes(battle.phase)) {
+    if (battle.isPartyBattle) updatePartyBattleTimer();
+    if (autoplay && !battle.isPartyBattle && ["planning_move", "planning_action"].includes(battle.phase)) {
       battle.autoTimer -= dt;
       if (battle.autoTimer <= 0) autoPlayBattleTurn();
     }
@@ -9579,7 +10104,17 @@
     buttons.classList.toggle("is-move-phase", planningMove);
     buttons.classList.toggle("is-action-phase", planningAction);
     buttons.classList.toggle("is-target-phase", false);
+    if (battle.isPartyBattle && battle.hero?.alive === false) {
+      buttons.innerHTML = `<span class="battle-actions-loading party-battle-waiting">你已倒下・等待隊友</span>`;
+      battleUi.potionCount = null;
+      return;
+    }
     if (planningMove) {
+      if (battle.isPartyBattle && battle.partyMoveSubmitted) {
+        buttons.innerHTML = `<span class="battle-actions-loading party-battle-waiting">移動已鎖定・等待隊友</span>`;
+        battleUi.potionCount = null;
+        return;
+      }
       const remaining = Math.max(0, battle.hero.moveRange - battleMoveCost());
       buttons.innerHTML = `
         ${battleMoveRemainingMarkup(remaining)}
@@ -9600,6 +10135,11 @@
     if (!planningAction) {
       const loadingLabel = battle.phase === "intro" ? "正在同步戰鬥…" : battle.phase === "resolving_move" ? "移動中" : "行動中";
       buttons.innerHTML = `<span class="battle-actions-loading">${loadingLabel}</span>`;
+      battleUi.potionCount = null;
+      return;
+    }
+    if (battle.isPartyBattle && battle.partyActionSubmitted) {
+      buttons.innerHTML = `<span class="battle-actions-loading party-battle-waiting">行動已鎖定・等待隊友</span>`;
       battleUi.potionCount = null;
       return;
     }
@@ -9641,6 +10181,7 @@
     };
     battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "戰鬥";
     battleUi.phase.textContent = phaseCopy[battle.phase]?.[1] || "";
+    updatePartyBattleTimer();
         battleUi.unitLevel.textContent = `LV. ${battle.hero.level}`;
     battleUi.unitName.textContent = battle.hero.name || playerDisplayName();
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
@@ -10014,11 +10555,16 @@
         activeWhisperUid = "";
         if (chatComposeMode === "whisper") chatComposeMode = "world";
       }
+      if (activeFriendInvite && !(nextState.incoming || []).some((entry) => entry.uid === activeFriendInvite.uid)) activeFriendInvite = null;
+      if (!activeFriendInvite && mode === "playing") activeFriendInvite = (nextState.incoming || [])[0] || null;
       renderSocialFriends();
+      renderSocialInviteUi();
       syncChatComposer();
       syncRemotePlayerMenu();
     },
     onFriendRequest: (request) => {
+      activeFriendInvite = request;
+      renderSocialInviteUi();
       addSystemMessage("system", `${request.name} 向你發送好友申請`);
       showToast(`${request.name} 想加你做好友。`, "");
     },
@@ -10045,6 +10591,10 @@
       if (activeTradeInvite && !(nextState.invites || []).some((entry) => entry.tradeId === activeTradeInvite.tradeId)) {
         activeTradeInvite = null;
       }
+      // Invites may arrive while a map/battle/loading overlay temporarily puts
+      // the client outside `playing`.  Keep them queued and surface the oldest
+      // valid one as soon as the receiver is available again.
+      if (!activeTradeInvite && mode === "playing" && !nextState.session) activeTradeInvite = (nextState.invites || [])[0] || null;
       renderTradeUi();
       syncRemotePlayerMenu();
       if (session?.status === "completed" && session.id !== lastCompletedTradeId) {
@@ -10060,12 +10610,40 @@
       }
     },
     onInvite: (invite) => {
-      if (mode !== "playing" || tradeState.session) return;
+      // Queue receiver-side invitations even while a short loading/transition
+      // state is active. renderTradeUi() decides when the modal is safe to show.
+      if (tradeState.session) return;
       activeTradeInvite = invite;
       renderTradeUi();
+      addSystemMessage("system", `${invite.fromName} 邀請你進行交易`);
       showToast(`${invite.fromName} 想同你交易。`, "");
     },
     onError: (error) => console.warn("Everrealm trade failed.", error),
+  }) || null;
+
+  partyClient = Party?.create?.({
+    firebase: Firebase,
+    serverApi: ServerApi,
+    onState: (nextState) => {
+      const previousParty = partyState.party;
+      partyState = nextState;
+      if (activePartyInvite && !(nextState.invites || []).some((entry) => entry.inviteId === activePartyInvite.inviteId)) activePartyInvite = null;
+      if (!activePartyInvite && mode === "playing") activePartyInvite = (nextState.invites || [])[0] || null;
+      renderPartyUi();
+      renderPartyInviteUi();
+      syncRemotePlayerMenu();
+      handlePartyStateTransition(previousParty, nextState.party);
+    },
+    onInvite: (invite) => {
+      activePartyInvite = invite;
+      renderPartyInviteUi();
+      addSystemMessage("system", `${invite.fromName} 邀請你加入隊伍`);
+      showToast(`${invite.fromName} 邀請你加入隊伍。`, "");
+    },
+    onBattle: (snapshot) => {
+      syncPartyBattleSnapshot(snapshot);
+    },
+    onError: (error) => console.warn("Everrealm party failed.", error),
   }) || null;
 
   async function refreshTradeAuthoritativeState() {
@@ -10183,9 +10761,12 @@
   function renderTradeUi() {
     const session = tradeState.session;
     const hasLiveSession = Boolean(session && ["pending", "active"].includes(session.status));
+    const pendingInvites = tradeState.invites || [];
+    const activeValid = activeTradeInvite && pendingInvites.some((entry) => entry.tradeId === activeTradeInvite.tradeId);
+    if (!activeValid) activeTradeInvite = !hasLiveSession ? (pendingInvites[0] || null) : null;
     if (tradeInvitePanel) {
-      const inviteStillValid = activeTradeInvite && (tradeState.invites || []).some((entry) => entry.tradeId === activeTradeInvite.tradeId);
-      tradeInvitePanel.hidden = !inviteStillValid || hasLiveSession;
+      const inviteStillValid = activeTradeInvite && pendingInvites.some((entry) => entry.tradeId === activeTradeInvite.tradeId);
+      tradeInvitePanel.hidden = !inviteStillValid || hasLiveSession || mode !== "playing";
       if (inviteStillValid && tradeInviteName) tradeInviteName.textContent = activeTradeInvite.fromName || "冒險者";
     }
     if (!tradePanel) return;
@@ -10366,6 +10947,259 @@
     }
   }
 
+  function renderSocialInviteUi() {
+    if (!friendInvitePanel) return;
+    const incoming = socialState.incoming || [];
+    const valid = activeFriendInvite && incoming.some((entry) => entry.uid === activeFriendInvite.uid);
+    if (!valid) activeFriendInvite = incoming[0] || null;
+    friendInvitePanel.hidden = !activeFriendInvite || mode !== "playing";
+    if (activeFriendInvite && friendInviteName) friendInviteName.textContent = activeFriendInvite.name || "冒險者";
+  }
+
+  function positionSidebarSocialPopover(popover, button) {
+    if (!popover || !button || !stage || popover.hidden) return;
+    const stageRect = stage.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const gap = 8;
+    window.requestAnimationFrame(() => {
+      if (popover.hidden) return;
+      const widthPx = popover.offsetWidth || 300;
+      const heightPx = popover.offsetHeight || 260;
+      const left = Core.clamp(buttonRect.right - stageRect.left + gap, 6, Math.max(6, stageRect.width - widthPx - 6));
+      const preferredTop = buttonRect.top - stageRect.top + buttonRect.height * .5 - heightPx * .5;
+      const top = Core.clamp(preferredTop, 6, Math.max(6, stageRect.height - heightPx - 6));
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+    });
+  }
+
+  function setPartyOpen(open) {
+    if (!partyPopover || !partyButton) return;
+    const next = Boolean(open);
+    partyPopover.hidden = !next;
+    partyButton.setAttribute("aria-expanded", String(next));
+    if (next) {
+      setSocialFriendsOpen(false);
+      renderPartyUi();
+      positionSidebarSocialPopover(partyPopover, partyButton);
+    }
+  }
+
+  function partyMemberMeta(memberUid) {
+    const current = partyState.party;
+    const member = current?.members?.[memberUid];
+    if (!member) return "冒險者";
+    const labels = [];
+    if (memberUid === current.leaderUid) labels.push("隊長");
+    labels.push(`LV.${member.level || 1}`);
+    if (Number(member.offlineSinceMs) > 0) labels.push("重連中");
+    return labels.join("・");
+  }
+
+  function renderPartyUi() {
+    if (partyBadge) {
+      const count = (partyState.invites || []).length;
+      partyBadge.textContent = String(count);
+      partyBadge.hidden = count === 0;
+    }
+    if (!partyContent) return;
+    const current = partyState.party;
+    if (!current) {
+      const pending = partyState.invites || [];
+      const invites = pending.length
+        ? `<section class="social-friends-section"><div class="social-friends-section-title">組隊邀請</div>${pending.map((entry) => `<div class="social-friend-row"><div class="social-friend-main"><strong>${escapeUiText(entry.fromName || "冒險者")}</strong><small>邀請你加入隊伍</small></div><div class="social-friend-actions"><button type="button" data-party-action="accept" data-invite-id="${escapeUiText(entry.inviteId)}">接受</button><button type="button" data-party-action="reject" data-invite-id="${escapeUiText(entry.inviteId)}">拒絕</button></div></div>`).join("")}</section>`
+        : "";
+      partyContent.innerHTML = invites || '<div class="social-friends-empty">暫時未有隊伍。<br>喺地圖撳其他玩家可以邀請組隊。</div>';
+      return;
+    }
+    const ownUid = authenticatedUid();
+    const isLeader = current.leaderUid === ownUid;
+    const rows = current.memberUids.map((memberUid) => {
+      const member = current.members?.[memberUid] || { name: "冒險者", level: 1 };
+      const canKick = isLeader && memberUid !== ownUid && current.state === "idle";
+      return `<div class="party-member-row"><div class="party-member-main"><strong>${escapeUiText(member.name || "冒險者")}${memberUid === ownUid ? "（你）" : ""}</strong><small>${escapeUiText(partyMemberMeta(memberUid))}</small></div><div class="party-member-actions">${canKick ? `<button type="button" data-party-action="kick" data-uid="${escapeUiText(memberUid)}">踢出</button>` : ""}</div></div>`;
+    }).join("");
+    const stateLabel = current.state === "transitioning" ? "全隊轉場中" : current.state === "battle_loading" ? "等待全隊進入戰場" : current.state === "in_battle" ? "共同戰鬥中" : "跟隨隊長中";
+    partyContent.innerHTML = `<div class="party-summary"><strong>${isLeader ? "你係隊長" : `隊長：${escapeUiText(current.members?.[current.leaderUid]?.name || "冒險者")}`}</strong><span>${escapeUiText(stateLabel)}・${current.memberUids.length}/${Party?.MAX_MEMBERS || 3} 人</span></div>${rows}<div class="party-empty-actions"><button class="party-leave-button" type="button" data-party-action="leave" ${["battle_loading","in_battle"].includes(current.state) ? "disabled" : ""}>離開隊伍</button></div>`;
+  }
+
+  function renderPartyInviteUi() {
+    if (!partyInvitePanel) return;
+    const pending = partyState.invites || [];
+    const valid = activePartyInvite && pending.some((entry) => entry.inviteId === activePartyInvite.inviteId);
+    if (!valid) activePartyInvite = pending[0] || null;
+    partyInvitePanel.hidden = !activePartyInvite || mode !== "playing" || Boolean(partyState.party);
+    if (activePartyInvite && partyInviteName) partyInviteName.textContent = activePartyInvite.fromName || "冒險者";
+  }
+
+  function partyFailureMessage(reason) {
+    const messages = {
+      "invalid-target": "無法邀請呢位玩家組隊。",
+      "player-not-found": "暫時搵唔到呢位玩家。",
+      "target-in-party": "對方已經喺另一隊伍。",
+      "already-in-party": "你已經喺隊伍入面。",
+      "not-leader": "只有隊長可以邀請或踢出隊員。",
+      "party-full": "隊伍已經滿員。",
+      "party-busy": "隊伍而家正轉場或者戰鬥中。",
+      "party-member-dead": "有隊員已倒下，未能進入共同戰鬥。",
+      "party-map-mismatch": "隊伍成員未同步到同一張地圖。",
+      "battle-active": "共同戰鬥期間唔可以直接離隊。",
+      "invite-not-found": "呢個組隊邀請已經失效。",
+    };
+    return messages[reason] || "組隊操作暫時未能完成。";
+  }
+
+  async function runPartyCommand(action) {
+    try {
+      const result = await action();
+      if (!result?.ok) showToast(partyFailureMessage(result?.reason), "warning");
+      return result;
+    } catch (error) {
+      console.warn("Everrealm party command failed.", error);
+      showToast("組隊操作暫時未能完成。", "danger");
+      return { ok: false, reason: "command-failed", error };
+    }
+  }
+
+  async function requestPartyWithRemote(remote) {
+    if (!remote?.uid || !partyClient?.isActive?.()) return showToast("組隊系統暫時未連線。", "warning");
+    if (remote.state === "battle") return showToast("對方而家戰鬥中。", "warning");
+    if (partyState.party && !partyClient.isLeader?.()) return showToast("只有隊長可以邀請隊員。", "warning");
+    const result = await runPartyCommand(() => partyClient.invite(remote.uid));
+    if (result?.ok) {
+      closeRemotePlayerMenu();
+      showToast(`已向 ${remote.name || "對方"} 發送組隊邀請。`, "");
+    }
+    return result;
+  }
+
+  function currentPartyMembership() {
+    const current = partyState.party;
+    const uid = authenticatedUid();
+    return current?.id && uid && current.memberUids?.includes(uid) ? { party: current, uid } : null;
+  }
+
+  function isPartyLeader() {
+    const membership = currentPartyMembership();
+    return Boolean(membership && membership.party.leaderUid === membership.uid);
+  }
+
+  function isPartyFollower() {
+    const membership = currentPartyMembership();
+    return Boolean(membership && membership.party.leaderUid !== membership.uid);
+  }
+
+  function partyRemotePlayer(memberUid) {
+    const targetUid = String(memberUid || "");
+    if (!targetUid || !multiplayer?.getRenderPlayers) return null;
+    return multiplayer.getRenderPlayers(currentMapId).find((entry) => String(entry.uid) === targetUid) || null;
+  }
+
+  function partyFollowAnchor() {
+    const membership = currentPartyMembership();
+    if (!membership || membership.party.state !== "idle" || membership.party.transition || membership.party.battleId) return null;
+    const index = membership.party.memberUids.indexOf(membership.uid);
+    if (index <= 0) return null;
+    // Follow the previous member in party order. This naturally forms a short
+    // line instead of stacking every member on the leader's exact pixel.
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const remote = partyRemotePlayer(membership.party.memberUids[cursor]);
+      if (!remote) continue;
+      const vectors = {
+        up: { x: 0, y: 1 },
+        down: { x: 0, y: -1 },
+        left: { x: 1, y: 0 },
+        right: { x: -1, y: 0 },
+      };
+      const behind = vectors[remote.facing] || vectors.down;
+      const spacing = Math.max(34, player.radius * 3.1);
+      return {
+        uid: remote.uid,
+        x: Core.clamp(remote.x + behind.x * spacing, player.radius, world.pixelWidth - player.radius),
+        y: Core.clamp(remote.y + behind.y * spacing, player.radius, world.pixelHeight - player.radius),
+      };
+    }
+    return null;
+  }
+
+  function updatePartyFollowerPath() {
+    if (!isPartyFollower()) {
+      partyFollowTargetUid = "";
+      return;
+    }
+    const anchor = partyFollowAnchor();
+    if (!anchor) {
+      clearExploreMovePath();
+      partyFollowTargetUid = "";
+      return;
+    }
+    const distance = Core.distance(player, anchor);
+    if (distance <= Math.max(18, player.radius * 1.25)) {
+      clearExploreMovePath();
+      partyFollowTargetUid = anchor.uid;
+      return;
+    }
+    const now = performance.now();
+    const targetChanged = partyFollowTargetUid !== anchor.uid;
+    if (!targetChanged && exploreMoveTarget && now - partyFollowRetargetAt < 320) return;
+    partyFollowRetargetAt = now;
+    partyFollowTargetUid = anchor.uid;
+    planExploreMove(anchor);
+  }
+
+  async function applyPartyTransition(transition) {
+    if (!transition?.id || partyTransitionReadyId === transition.id) return;
+    partyTransitionReadyId = transition.id;
+    const target = maps[transition.targetMapId];
+    if (!target) {
+      partyTransitionReadyId = "";
+      return;
+    }
+    mapTransitionPending = true;
+    showMapTransitionOverlay(target.name || "全隊轉場中");
+    let moved = true;
+    if (currentMapId !== transition.targetMapId) {
+      moved = await transitionMap(transition.targetMapId, transition.arrival, transition.arrival?.facing, {
+        serverVerified: true,
+        keepOverlay: true,
+        skipSave: true,
+      });
+    }
+    if (!moved) {
+      partyTransitionReadyId = "";
+      mapTransitionPending = false;
+      await hideMapTransitionOverlay();
+      return;
+    }
+    const readyResult = await runPartyCommand(() => partyClient?.transitionReady?.(transition.id));
+    if (!readyResult?.ok) {
+      partyTransitionReadyId = "";
+      window.setTimeout(() => {
+        if (partyState.party?.transition?.id === transition.id && currentMapId === transition.targetMapId) void applyPartyTransition(transition);
+      }, 500);
+    }
+  }
+
+  function handlePartyStateTransition(previousParty, nextParty) {
+    const transition = nextParty?.transition || null;
+    if (transition?.id) {
+      if (lastPartyTransitionId !== transition.id) {
+        lastPartyTransitionId = transition.id;
+        void applyPartyTransition(transition);
+      } else if (currentMapId === transition.targetMapId && partyTransitionReadyId !== transition.id) {
+        void applyPartyTransition(transition);
+      }
+      return;
+    }
+    if (previousParty?.transition?.id || (lastPartyTransitionId && mapTransitionPending)) {
+      partyTransitionReadyId = "";
+      lastPartyTransitionId = "";
+      mapTransitionPending = false;
+      void hideMapTransitionOverlay();
+      canvas.focus({ preventScroll: true });
+    }
+  }
+
   function setWhisperTarget(uid, { focus = true } = {}) {
     const friend = socialFriend(uid);
     if (!friend) {
@@ -10462,6 +11296,7 @@
     const friendButton = remotePlayerMenu.querySelector('[data-player-action="friend"]');
     const whisperButton = remotePlayerMenu.querySelector('[data-player-action="whisper"]');
     const tradeButton = remotePlayerMenu.querySelector('[data-player-action="trade"]');
+    const partyActionButton = remotePlayerMenu.querySelector('[data-player-action="party"]');
     const friend = socialFriend(remote.uid);
     const incoming = socialIncoming(remote.uid);
     const outgoing = socialOutgoing(remote.uid);
@@ -10476,6 +11311,13 @@
       const busy = Boolean(tradeState.session && ["pending", "active"].includes(tradeState.session.status));
       tradeButton.disabled = busy || remote.state === "battle" || !trade?.isActive?.();
       tradeButton.textContent = busy ? "交易中" : "交易";
+    }
+    if (partyActionButton) {
+      const currentParty = partyState.party;
+      const sameParty = Boolean(currentParty?.memberUids?.includes?.(remote.uid));
+      const canInvite = !currentParty || (currentParty.leaderUid === authenticatedUid() && currentParty.state === "idle" && !currentParty.transition && !currentParty.battleId);
+      partyActionButton.disabled = sameParty || remote.state === "battle" || !partyClient?.isActive?.() || !canInvite;
+      partyActionButton.textContent = sameParty ? "隊伍成員 ✓" : currentParty && currentParty.leaderUid !== authenticatedUid() ? "隊長先可邀請" : "邀請組隊";
     }
     if (remotePlayerProfileDetail && !remotePlayerProfileDetail.hidden) {
       remotePlayerProfileDetail.textContent = `${remoteClassLabel(remote.classId)}｜${remote.state === "battle" ? "目前戰鬥中" : "目前喺同一區域探索"}`;
@@ -11431,8 +12273,8 @@
         y: baseline,
         scale: heroScale,
         actor: "player",
-        classId: playerClassId,
-        gender: player.gender,
+        classId: unit.classId || playerClassId,
+        gender: unit.gender || player.gender,
         facing: attackFacing,
         battleDiagonal: layout.projected,
         state: visualState,
@@ -11622,6 +12464,16 @@
       clearExploreMovePath();
       interact();
       return;
+    }
+    // Party followers do not own world navigation. They may still interact
+    // with something already in reach, but every movement path is derived
+    // from the leader / preceding party member.
+    if (isPartyFollower()) {
+      clearExploreMovePath();
+      pendingClickInteractionId = null;
+      pendingClickInteractionPoint = null;
+      explorePortalIntentId = null;
+      return false;
     }
     let destination = { x: target.x, y: target.y };
     if (entity?.kind === "portal" && MapTransitions.transitionTypeFor(entity) === TRANSITION_TYPES.PHYSICAL_DOOR) {
@@ -13019,10 +13871,10 @@
 
     drawNpcName(nameX, nameY, remote.name);
 
-    // Social hit testing is intentionally limited to the name/head/upper-body
-    // area. Position follows camera zoom, while the actual target size stays
-    // screen-sized so zooming out does not make mobile taps impossible and a
-    // crowded group of players still leaves the ground available for movement.
+    // Social hit testing stays on the name/head/upper-body area.  The centre
+    // follows the rendered sprite and the target grows with camera zoom, so a
+    // zoomed-in character is easier (not harder) to tap.  Lower bounds keep
+    // far-zoom mobile taps practical; upper bounds preserve walkable ground.
     const touchSized = usesMobileExploreControls();
     const artHeight = Number.isFinite(artBox?.height)
       ? artBox.height
@@ -13030,9 +13882,10 @@
         ? artBox.bottom - artBox.top
         : 92 * scale;
     const headX = stableCenterX;
-    const headY = stableTopY + Core.clamp(artHeight * .28, 14, 34);
-    const rx = touchSized ? 34 : 24;
-    const ry = touchSized ? 38 : 29;
+    const headY = stableTopY + Core.clamp(artHeight * .28, 14, 44);
+    const zoomRatio = Core.clamp((scale - EXPLORE_ZOOM_MIN) / Math.max(.001, EXPLORE_ZOOM_MAX - EXPLORE_ZOOM_MIN), 0, 1);
+    const rx = touchSized ? Core.lerp(34, 68, zoomRatio) : Core.lerp(24, 52, zoomRatio);
+    const ry = touchSized ? Core.lerp(38, 82, zoomRatio) : Core.lerp(29, 68, zoomRatio);
     const nameHalfWidth = Core.clamp(String(remote.name || "冒險者").length * (touchSized ? 7.5 : 6.5) + 12, 30, 78);
     const nameHalfHeight = touchSized ? 15 : 11;
     remotePlayerHitRegions.set(remote.uid, {
@@ -14199,6 +15052,70 @@
     button.disabled = false;
   });
 
+  friendInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  friendInvitePanel?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-friend-invite-action]");
+    if (!button || button.disabled || !activeFriendInvite) return;
+    const invite = activeFriendInvite;
+    button.disabled = true;
+    const accept = button.dataset.friendInviteAction === "accept";
+    const result = await social?.respondFriendRequest?.(invite.uid, accept);
+    if (result?.ok !== false) {
+      activeFriendInvite = null;
+      showToast(accept ? `你同 ${invite.name || "對方"} 已成為好友。` : "已拒絕好友申請。", accept ? "good" : "");
+    } else {
+      socialResultMessage(result, "好友申請暫時未能處理。");
+    }
+    button.disabled = false;
+    renderSocialInviteUi();
+  });
+
+  partyButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setPartyOpen(partyPopover?.hidden !== false);
+  });
+  partyCloseButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setPartyOpen(false);
+  });
+  partyPopover?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  partyPopover?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-party-action]");
+    if (!button || button.disabled) return;
+    const action = button.dataset.partyAction;
+    button.disabled = true;
+    let result = null;
+    if (action === "accept" || action === "reject") {
+      result = await runPartyCommand(() => partyClient?.respondInvite?.(button.dataset.inviteId, action === "accept"));
+      if (result?.ok && action === "accept") showToast("已加入隊伍。", "good");
+    } else if (action === "kick") {
+      result = await runPartyCommand(() => partyClient?.kick?.(button.dataset.uid));
+    } else if (action === "leave") {
+      if (!window.confirm("離開目前隊伍？")) { button.disabled = false; return; }
+      result = await runPartyCommand(() => partyClient?.leave?.());
+    }
+    button.disabled = false;
+    renderPartyUi();
+  });
+  partyInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  partyInvitePanel?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-party-invite-action]");
+    if (!button || button.disabled || !activePartyInvite) return;
+    const invite = activePartyInvite;
+    button.disabled = true;
+    const accept = button.dataset.partyInviteAction === "accept";
+    const result = await runPartyCommand(() => partyClient?.respondInvite?.(invite.inviteId, accept));
+    if (result?.ok) {
+      activePartyInvite = null;
+      showToast(accept ? "已加入隊伍。" : "已拒絕組隊邀請。", accept ? "good" : "");
+    }
+    button.disabled = false;
+    renderPartyInviteUi();
+  });
+
   remotePlayerMenuClose?.addEventListener("click", (event) => {
     event.stopPropagation();
     closeRemotePlayerMenu();
@@ -14219,6 +15136,7 @@
     }
     if (action === "whisper") return setWhisperTarget(remote.uid);
     if (action === "trade") return requestTradeWithRemote(remote);
+    if (action === "party") return requestPartyWithRemote(remote);
     if (action === "friend") {
       button.disabled = true;
       const incoming = socialIncoming(remote.uid);
@@ -14322,6 +15240,7 @@
   document.addEventListener("pointerdown", (event) => {
     if (!remotePlayerMenu?.hidden && !remotePlayerMenu.contains(event.target) && event.target !== canvas) closeRemotePlayerMenu();
     if (!socialFriendsPopover?.hidden && !socialFriendsPopover.contains(event.target) && !socialFriendsButton?.contains(event.target)) setSocialFriendsOpen(false);
+    if (!partyPopover?.hidden && !partyPopover.contains(event.target) && !partyButton?.contains(event.target)) setPartyOpen(false);
   });
 
   guildCommissionDetailCloseButton?.addEventListener("click", closeGuildCommissionDetail);
