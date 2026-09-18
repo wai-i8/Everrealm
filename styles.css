@@ -8384,9 +8384,9 @@ html body [aria-disabled="true"] {
 
 /* --- 2026-09-18 title logo refresh --- */
 .title-logo {
-  width: min(80vw, 40rem);
+  width: min(160vw, 80rem);
   max-width: 100%;
-  max-height: min(28vh, 17rem);
+  max-height: min(56vh, 34rem);
   height: auto;
   object-fit: contain;
   display: block;
@@ -8401,8 +8401,8 @@ html body [aria-disabled="true"] {
 }
 @media (max-width: 640px) {
   .title-logo {
-    width: min(88vw, 23rem);
-    max-height: min(18vh, 8.8rem);
+    width: min(176vw, 46rem);
+    max-height: min(36vh, 17.6rem);
     margin-bottom: .62rem;
   }
 }
