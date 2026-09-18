@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-party-01"],
+          ["everrealmStyles", "styles.css?v=20260918-invite-ui-02"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -214,6 +214,18 @@
             <button type="button" data-player-action="whisper">密語</button>
             <button type="button" data-player-action="trade">交易</button>
             <button type="button" data-player-action="party">邀請組隊</button>
+          </div>
+        </section>
+
+        <section id="outgoingInvitePanel" class="outgoing-invite-panel" role="status" aria-live="polite" hidden>
+          <div class="trade-invite-card outgoing-invite-card">
+            <small>WAITING FOR REPLY</small>
+            <strong id="outgoingInviteTitle">等待回覆</strong>
+            <p>已向 <span id="outgoingInviteName">冒險者</span> 發出 <span id="outgoingInviteType">邀請</span>。</p>
+            <div class="outgoing-invite-status">等待對方回覆…</div>
+            <div class="trade-invite-actions outgoing-invite-actions">
+              <button id="outgoingInviteCancelButton" type="button">取消邀請</button>
+            </div>
           </div>
         </section>
 
@@ -637,7 +649,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260918-party-01")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260918-invite-ui-02")}"><\/script>`);
       })();
     </script>
 
@@ -673,7 +685,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-party-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-invite-ui-02", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

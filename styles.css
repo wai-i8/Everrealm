@@ -9395,3 +9395,38 @@ html body [aria-disabled="true"] {
   .party-member-actions button,.party-leave-button { min-height:2rem; padding-inline:.5rem; }
   .battle-phase-timer { height:1.2rem; font-size:.58rem; }
 }
+
+/* === 2026-09-18 unified outgoing invite waiting card === */
+.outgoing-invite-panel {
+  position:absolute;
+  z-index:124;
+  top:.8rem;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(23rem,calc(100% - 1rem));
+  display:flex;
+  justify-content:center;
+  pointer-events:none;
+}
+.outgoing-invite-panel[hidden] { display:none !important; }
+.outgoing-invite-card {
+  width:100%;
+  padding:.78rem .9rem;
+  pointer-events:auto;
+  box-shadow:0 12px 32px rgba(0,0,0,.46),inset 0 0 0 1px rgba(255,255,255,.035);
+}
+.outgoing-invite-card p { margin:.42rem 0 .38rem; }
+.outgoing-invite-status {
+  margin-bottom:.62rem;
+  color:#9fafc5;
+  font:750 .62rem/1.35 system-ui,sans-serif;
+}
+.outgoing-invite-actions { grid-template-columns:1fr; }
+.outgoing-invite-actions button {
+  border-color:rgba(143,160,185,.35);
+  background:rgba(58,68,86,.56);
+}
+@media (max-width:760px) {
+  .outgoing-invite-panel { top:.45rem; width:min(20rem,calc(100% - .7rem)); }
+  .outgoing-invite-card { padding:.68rem .75rem; }
+}

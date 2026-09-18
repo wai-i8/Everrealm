@@ -81,6 +81,33 @@ function outgoingFriendRequestRef(ownerUid, targetUid) {
   return db.doc(`players/${ownerUid}/friendRequestsSent/${targetUid}`);
 }
 
+function whisperPeerRef(ownerUid, peerUid) {
+  return db.doc(`players/${ownerUid}/whisperPeers/${peerUid}`);
+}
+
+function outgoingInviteRef(ownerUid) {
+  return db.doc(`players/${ownerUid}/outgoingInvite/current`);
+}
+
+function outgoingInvitePayload(type, targetUid, targetName, referenceId, nowMs) {
+  return {
+    type: String(type || "").trim(),
+    targetUid: safeSocialUid(targetUid),
+    targetName: safeSocialName(targetName),
+    referenceId: String(referenceId || "").trim(),
+    createdAtMs: Number(nowMs) || Date.now(),
+  };
+}
+
+function outgoingInviteMatches(snapshot, type, targetUid, referenceId = "") {
+  if (!snapshot?.exists) return false;
+  const data = snapshot.data() || {};
+  if (String(data.type || "") !== String(type || "")) return false;
+  if (safeSocialUid(data.targetUid) !== safeSocialUid(targetUid)) return false;
+  const wantedReference = String(referenceId || "").trim();
+  return !wantedReference || String(data.referenceId || "").trim() === wantedReference;
+}
+
 function partyRef(partyId) { return db.doc(`parties/${String(partyId || "").trim()}`); }
 function partyPointerRef(uid) { return db.doc(`players/${uid}/partyState/current`); }
 function partyInviteRef(uid, inviteId) { return db.doc(`players/${uid}/partyInvites/${String(inviteId || "").trim()}`); }
@@ -398,25 +425,33 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
     const targetIncomingRef = incomingFriendRequestRef(targetUid, uid);
     const senderOutgoingRef = outgoingFriendRequestRef(uid, targetUid);
     const senderIncomingRef = incomingFriendRequestRef(uid, targetUid);
+    const inviteLockRef = outgoingInviteRef(uid);
 
     return db.runTransaction(async (transaction) => {
-      const [senderPlayer, targetPlayer, existingFriend, existingOutgoing, reverseIncoming] = await Promise.all([
+      const [senderPlayer, targetPlayer, existingFriend, existingOutgoing, reverseIncoming, inviteLock] = await Promise.all([
         transaction.get(senderPlayerRef),
         transaction.get(targetPlayerRef),
         transaction.get(senderFriendRef),
         transaction.get(senderOutgoingRef),
         transaction.get(senderIncomingRef),
+        transaction.get(inviteLockRef),
       ]);
       if (!senderPlayer.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
       if (!targetPlayer.exists) return { ok: false, reason: "player-not-found" };
       if (existingFriend.exists) return { ok: false, reason: "already-friends" };
       if (reverseIncoming.exists) return { ok: false, reason: "incoming-request-exists" };
-      if (existingOutgoing.exists) return { ok: true, pending: true, duplicate: true };
+      if (inviteLock.exists) {
+        if (outgoingInviteMatches(inviteLock, "friend", targetUid, targetUid) && existingOutgoing.exists) {
+          return { ok: true, pending: true, duplicate: true, targetUid, targetName: socialNameFromSave(targetPlayer.data()) };
+        }
+        return { ok: false, reason: "outgoing-invite-pending" };
+      }
 
       const senderName = socialNameFromSave(senderPlayer.data());
       const targetName = socialNameFromSave(targetPlayer.data());
       transaction.set(targetIncomingRef, { uid, name: senderName, createdAt: FieldValue.serverTimestamp() });
       transaction.set(senderOutgoingRef, { uid: targetUid, name: targetName, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(inviteLockRef, outgoingInvitePayload("friend", targetUid, targetName, targetUid, Date.now()));
       return { ok: true, pending: true, targetUid, targetName };
     });
   }
@@ -433,10 +468,12 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
     const threadId = socialThreadId(uid, requesterUid);
 
     const result = await db.runTransaction(async (transaction) => {
-      const [requestSnapshot, callerPlayer, requesterPlayer] = await Promise.all([
+      const requesterInviteLockRef = outgoingInviteRef(requesterUid);
+      const [requestSnapshot, callerPlayer, requesterPlayer, requesterInviteLock] = await Promise.all([
         transaction.get(requestRef),
         transaction.get(callerPlayerRef),
         transaction.get(requesterPlayerRef),
+        transaction.get(requesterInviteLockRef),
       ]);
       if (!requestSnapshot.exists) return { ok: false, reason: "request-not-found" };
       if (!callerPlayer.exists || !requesterPlayer.exists) return { ok: false, reason: "player-not-found" };
@@ -450,6 +487,7 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
       transaction.delete(requesterSentRef);
       transaction.delete(reverseRequestRef);
       transaction.delete(reverseSentRef);
+      if (outgoingInviteMatches(requesterInviteLock, "friend", uid, uid)) transaction.delete(requesterInviteLockRef);
       return { ok: true, accepted: true, friend: { uid: requesterUid, name: requesterName, threadId }, callerName, requesterName };
     });
 
@@ -469,26 +507,65 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
     const requesterUid = safeSocialUid(request.data?.requesterUid);
     if (!requesterUid || requesterUid === uid) return { ok: false, reason: "invalid-target" };
     const requestRef = incomingFriendRequestRef(uid, requesterUid);
-    const requestSnapshot = await requestRef.get();
-    if (!requestSnapshot.exists) return { ok: false, reason: "request-not-found" };
-    const batch = db.batch();
-    batch.delete(requestRef);
-    batch.delete(outgoingFriendRequestRef(requesterUid, uid));
-    await batch.commit();
-    return { ok: true, rejected: true, requesterUid };
+    const requesterInviteLockRef = outgoingInviteRef(requesterUid);
+    return db.runTransaction(async (transaction) => {
+      const [requestSnapshot, requesterInviteLock] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(requesterInviteLockRef),
+      ]);
+      if (!requestSnapshot.exists) return { ok: false, reason: "request-not-found" };
+      transaction.delete(requestRef);
+      transaction.delete(outgoingFriendRequestRef(requesterUid, uid));
+      if (outgoingInviteMatches(requesterInviteLock, "friend", uid, uid)) transaction.delete(requesterInviteLockRef);
+      return { ok: true, rejected: true, requesterUid };
+    });
   }
 
   if (action === "cancel-friend-request") {
     const targetUid = safeSocialUid(request.data?.targetUid);
     if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
     const sentRef = outgoingFriendRequestRef(uid, targetUid);
-    const sentSnapshot = await sentRef.get();
-    if (!sentSnapshot.exists) return { ok: false, reason: "request-not-found" };
-    const batch = db.batch();
-    batch.delete(sentRef);
-    batch.delete(incomingFriendRequestRef(targetUid, uid));
-    await batch.commit();
-    return { ok: true, cancelled: true, targetUid };
+    const inviteLockRef = outgoingInviteRef(uid);
+    return db.runTransaction(async (transaction) => {
+      const [sentSnapshot, inviteLock] = await Promise.all([transaction.get(sentRef), transaction.get(inviteLockRef)]);
+      if (!sentSnapshot.exists) return { ok: false, reason: "request-not-found" };
+      transaction.delete(sentRef);
+      transaction.delete(incomingFriendRequestRef(targetUid, uid));
+      if (outgoingInviteMatches(inviteLock, "friend", targetUid, targetUid)) transaction.delete(inviteLockRef);
+      return { ok: true, cancelled: true, targetUid };
+    });
+  }
+
+  if (action === "cancel-outgoing-invite") {
+    const lockRef = outgoingInviteRef(uid);
+    return db.runTransaction(async (transaction) => {
+      const lockSnapshot = await transaction.get(lockRef);
+      if (!lockSnapshot.exists) return { ok: true, alreadyClosed: true };
+      const pending = lockSnapshot.data() || {};
+      const type = String(pending.type || "").trim();
+      const targetUid = safeSocialUid(pending.targetUid);
+      const referenceId = String(pending.referenceId || "").trim();
+      if (type === "trade" && referenceId) {
+        const sessionRef = tradeSessionRef(referenceId);
+        const legacyPointerRef = tradePointerRef(uid);
+        const [sessionSnapshot, legacyPointer] = await Promise.all([
+          transaction.get(sessionRef),
+          transaction.get(legacyPointerRef),
+        ]);
+        if (sessionSnapshot.exists && sessionSnapshot.data()?.status === "pending") {
+          transaction.update(sessionRef, { status: "cancelled", cancelledBy: uid, updatedAtMs: Date.now() });
+        }
+        if (targetUid) transaction.delete(tradeInviteRef(targetUid, referenceId));
+        if (legacyPointer.exists && legacyPointer.data()?.tradeId === referenceId) transaction.delete(legacyPointerRef);
+      } else if (type === "party" && targetUid && referenceId) {
+        transaction.delete(partyInviteRef(targetUid, referenceId));
+      } else if (type === "friend" && targetUid) {
+        transaction.delete(outgoingFriendRequestRef(uid, targetUid));
+        transaction.delete(incomingFriendRequestRef(targetUid, uid));
+      }
+      transaction.delete(lockRef);
+      return { ok: true, cancelled: true, type, targetUid, referenceId };
+    });
   }
 
   if (action === "remove-friend") {
@@ -497,13 +574,6 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
     const ownerFriendRef = friendRef(uid, targetUid);
     const friendship = await ownerFriendRef.get();
     if (!friendship.exists) return { ok: false, reason: "not-friends" };
-    const threadId = String(friendship.data()?.threadId || socialThreadId(uid, targetUid));
-
-    // Revoke the realtime private channel before removing the permanent friend
-    // records. If the second step has to be retried, the safe failure mode is
-    // that friends temporarily cannot whisper rather than ex-friends retaining
-    // access to the old thread.
-    await realtimeDb.ref(`chat/whispers/${threadId}`).remove();
     const batch = db.batch();
     batch.delete(ownerFriendRef);
     batch.delete(friendRef(targetUid, uid));
@@ -518,20 +588,25 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
   if (action === "ensure-whisper") {
     const targetUid = safeSocialUid(request.data?.targetUid);
     if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
-    const [ownerFriend, targetFriend, ownerPlayer, targetPlayer] = await Promise.all([
-      friendRef(uid, targetUid).get(),
-      friendRef(targetUid, uid).get(),
+    const [ownerPlayer, targetPlayer] = await Promise.all([
       db.doc(`players/${uid}`).get(),
       db.doc(`players/${targetUid}`).get(),
     ]);
-    if (!ownerFriend.exists || !targetFriend.exists) return { ok: false, reason: "not-friends" };
-    const threadId = String(ownerFriend.data()?.threadId || socialThreadId(uid, targetUid));
+    if (!ownerPlayer.exists || !targetPlayer.exists) return { ok: false, reason: "player-not-found" };
+    const ownerName = socialNameFromSave(ownerPlayer.data());
+    const targetName = socialNameFromSave(targetPlayer.data());
+    const threadId = socialThreadId(uid, targetUid);
+    const nowMs = Date.now();
+    const batch = db.batch();
+    batch.set(whisperPeerRef(uid, targetUid), { uid: targetUid, name: targetName, threadId, updatedAtMs: nowMs }, { merge: true });
+    batch.set(whisperPeerRef(targetUid, uid), { uid, name: ownerName, threadId, updatedAtMs: nowMs }, { merge: true });
+    await batch.commit();
     await realtimeDb.ref(`chat/whispers/${threadId}`).update({
       members: { [uid]: true, [targetUid]: true },
-      names: { [uid]: socialNameFromSave(ownerPlayer.data()), [targetUid]: socialNameFromSave(targetPlayer.data()) },
-      updatedAt: Date.now(),
+      names: { [uid]: ownerName, [targetUid]: targetName },
+      updatedAt: nowMs,
     });
-    return { ok: true, threadId };
+    return { ok: true, threadId, targetName };
   }
 
   return { ok: false, reason: "unsupported-action", action };
@@ -553,18 +628,21 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
     const targetPlayerRef = db.doc(`players/${targetUid}`);
     const senderPointerRef = tradePointerRef(uid);
     const targetPointerRef = tradePointerRef(targetUid);
+    const inviteLockRef = outgoingInviteRef(uid);
 
     return db.runTransaction(async (transaction) => {
-      const [senderPlayer, targetPlayer, senderPointer, targetPointer] = await Promise.all([
+      const [senderPlayer, targetPlayer, senderPointer, targetPointer, inviteLock] = await Promise.all([
         transaction.get(senderPlayerRef),
         transaction.get(targetPlayerRef),
         transaction.get(senderPointerRef),
         transaction.get(targetPointerRef),
+        transaction.get(inviteLockRef),
       ]);
       if (!senderPlayer.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
       if (!targetPlayer.exists) return { ok: false, reason: "player-not-found" };
       if (!playerCanTrade(senderPlayer.data())) return { ok: false, reason: "caller-unavailable" };
       if (!playerCanTrade(targetPlayer.data())) return { ok: false, reason: "target-unavailable" };
+      if (inviteLock.exists) return { ok: false, reason: "outgoing-invite-pending" };
       if (senderPointer.exists && !tradePointerIsStale(senderPointer, nowMs)) return { ok: false, reason: "busy" };
       if (targetPointer.exists && !tradePointerIsStale(targetPointer, nowMs)) return { ok: false, reason: "target-busy" };
       if (senderPointer.exists) transaction.delete(senderPointerRef);
@@ -589,8 +667,8 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
         updatedAtMs: nowMs,
       };
       transaction.set(sessionRef, session);
-      transaction.set(senderPointerRef, tradePointerPayload(tradeId, "pending", targetUid, targetName, nowMs));
       transaction.set(tradeInviteRef(targetUid, tradeId), { tradeId, fromUid: uid, fromName: senderName, createdAtMs: nowMs });
+      transaction.set(inviteLockRef, outgoingInvitePayload("trade", targetUid, targetName, tradeId, nowMs));
       return { ok: true, pending: true, tradeId, peer: { uid: targetUid, name: targetName } };
     });
   }
@@ -608,27 +686,32 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
       if (session.status !== "pending") return { ok: false, reason: "not-pending" };
       const initiatorUid = safeSocialUid(session.initiatorUid);
       const initiatorPointerRef = tradePointerRef(initiatorUid);
-      const [targetPointer, initiatorPointer, targetPlayer, initiatorPlayer] = await Promise.all([
+      const initiatorInviteLockRef = outgoingInviteRef(initiatorUid);
+      const [targetPointer, initiatorPointer, targetPlayer, initiatorPlayer, initiatorInviteLock] = await Promise.all([
         transaction.get(targetPointerRef),
         transaction.get(initiatorPointerRef),
         transaction.get(db.doc(`players/${uid}`)),
         transaction.get(db.doc(`players/${initiatorUid}`)),
+        transaction.get(initiatorInviteLockRef),
       ]);
 
       if (action === "reject" || tradeSessionExpired(session, nowMs)) {
         transaction.update(sessionRef, { status: action === "reject" ? "rejected" : "cancelled", updatedAtMs: nowMs });
         transaction.delete(tradeInviteRef(uid, tradeId));
         if (initiatorPointer.exists && initiatorPointer.data()?.tradeId === tradeId) transaction.delete(initiatorPointerRef);
+        if (outgoingInviteMatches(initiatorInviteLock, "trade", uid, tradeId)) transaction.delete(initiatorInviteLockRef);
         return { ok: true, rejected: action === "reject", expired: action !== "reject", tradeId };
       }
 
       if (!targetPlayer.exists || !initiatorPlayer.exists) return { ok: false, reason: "player-not-found" };
       if (!playerCanTrade(targetPlayer.data()) || !playerCanTrade(initiatorPlayer.data())) return { ok: false, reason: "player-unavailable" };
       if (targetPointer.exists && !tradePointerIsStale(targetPointer, nowMs)) return { ok: false, reason: "busy" };
-      if (!initiatorPointer.exists || initiatorPointer.data()?.tradeId !== tradeId || tradePointerIsStale(initiatorPointer, nowMs)) {
+      if (initiatorPointer.exists && !tradePointerIsStale(initiatorPointer, nowMs) && initiatorPointer.data()?.tradeId !== tradeId) {
         return { ok: false, reason: "trade-closed" };
       }
+      if (!outgoingInviteMatches(initiatorInviteLock, "trade", uid, tradeId)) return { ok: false, reason: "trade-closed" };
       if (targetPointer.exists) transaction.delete(targetPointerRef);
+      if (initiatorPointer.exists && initiatorPointer.data()?.tradeId !== tradeId) transaction.delete(initiatorPointerRef);
 
       const initiatorName = safeSocialName(session.participants?.a?.name);
       const targetName = safeSocialName(session.participants?.b?.name);
@@ -636,6 +719,7 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
       transaction.set(targetPointerRef, tradePointerPayload(tradeId, "active", initiatorUid, initiatorName, nowMs));
       transaction.set(initiatorPointerRef, tradePointerPayload(tradeId, "active", uid, targetName, nowMs));
       transaction.delete(tradeInviteRef(uid, tradeId));
+      transaction.delete(initiatorInviteLockRef);
       return { ok: true, accepted: true, tradeId };
     });
   }
@@ -653,13 +737,16 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
       if (["completed", "cancelled", "rejected"].includes(session.status)) return { ok: true, tradeId, alreadyClosed: true };
       const aUid = safeSocialUid(session.participants?.a?.uid);
       const bUid = safeSocialUid(session.participants?.b?.uid);
-      const [aPointer, bPointer] = await Promise.all([
+      const initiatorInviteLockRef = outgoingInviteRef(aUid);
+      const [aPointer, bPointer, initiatorInviteLock] = await Promise.all([
         transaction.get(tradePointerRef(aUid)),
         transaction.get(tradePointerRef(bUid)),
+        transaction.get(initiatorInviteLockRef),
       ]);
       transaction.update(sessionRef, { status: "cancelled", cancelledBy: uid, updatedAtMs: nowMs });
       if (aPointer.exists && aPointer.data()?.tradeId === tradeId) transaction.delete(tradePointerRef(aUid));
       if (bPointer.exists && bPointer.data()?.tradeId === tradeId) transaction.delete(tradePointerRef(bUid));
+      if (outgoingInviteMatches(initiatorInviteLock, "trade", bUid, tradeId)) transaction.delete(initiatorInviteLockRef);
       transaction.delete(tradeInviteRef(session.targetUid, tradeId));
       return { ok: true, cancelled: true, tradeId };
     });
@@ -790,12 +877,14 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
     const targetRef = db.doc(`players/${targetUid}`);
     const callerPointer = partyPointerRef(uid);
     const targetPointer = partyPointerRef(targetUid);
+    const inviteLockRef = outgoingInviteRef(uid);
     return db.runTransaction(async (transaction) => {
-      const [callerSnap, targetSnap, callerPointerSnap, targetPointerSnap] = await Promise.all([
-        transaction.get(callerRef), transaction.get(targetRef), transaction.get(callerPointer), transaction.get(targetPointer),
+      const [callerSnap, targetSnap, callerPointerSnap, targetPointerSnap, inviteLockSnap] = await Promise.all([
+        transaction.get(callerRef), transaction.get(targetRef), transaction.get(callerPointer), transaction.get(targetPointer), transaction.get(inviteLockRef),
       ]);
       if (!callerSnap.exists) throw new HttpsError("failed-precondition", "Player save is not ready.");
       if (!targetSnap.exists) return { ok: false, reason: "player-not-found" };
+      if (inviteLockSnap.exists) return { ok: false, reason: "outgoing-invite-pending" };
       if (!(Number(callerSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "caller-unavailable" };
       if (!(Number(targetSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "target-unavailable" };
       if (targetPointerSnap.exists) return { ok: false, reason: "target-in-party" };
@@ -810,6 +899,7 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
         if (currentParty.state !== "idle" || currentParty.battleId || currentParty.transition) return { ok: false, reason: "party-busy" };
       }
       const inviteId = partyInviteId();
+      const targetName = socialNameFromSave(targetSnap.data());
       transaction.set(partyInviteRef(targetUid, inviteId), {
         inviteId,
         partyId: currentPartyId,
@@ -817,7 +907,8 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
         fromName: socialNameFromSave(callerSnap.data()),
         createdAtMs: nowMs,
       });
-      return { ok: true, inviteId, targetUid, partyId: currentPartyId || null };
+      transaction.set(inviteLockRef, outgoingInvitePayload("party", targetUid, targetName, inviteId, nowMs));
+      return { ok: true, inviteId, targetUid, targetName, partyId: currentPartyId || null };
     });
   }
 
@@ -826,10 +917,17 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
     if (!inviteId) return { ok: false, reason: "invalid-invite" };
     const inviteRef = partyInviteRef(uid, inviteId);
     if (action === "reject") {
-      const snap = await inviteRef.get();
-      if (!snap.exists) return { ok: false, reason: "invite-not-found" };
-      await inviteRef.delete();
-      return { ok: true, rejected: true, inviteId };
+      return db.runTransaction(async (transaction) => {
+        const inviteSnap = await transaction.get(inviteRef);
+        if (!inviteSnap.exists) return { ok: false, reason: "invite-not-found" };
+        const invite = inviteSnap.data() || {};
+        const inviterUid = PartySystem.safeUid(invite.fromUid);
+        const inviterLockRef = inviterUid ? outgoingInviteRef(inviterUid) : null;
+        const inviterLockSnap = inviterLockRef ? await transaction.get(inviterLockRef) : null;
+        transaction.delete(inviteRef);
+        if (inviterLockSnap?.exists && outgoingInviteMatches(inviterLockSnap, "party", uid, inviteId)) transaction.delete(inviterLockRef);
+        return { ok: true, rejected: true, inviteId };
+      });
     }
     return db.runTransaction(async (transaction) => {
       const inviteSnap = await transaction.get(inviteRef);
@@ -841,8 +939,9 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
       const accepterRef = db.doc(`players/${uid}`);
       const inviterPointerRef = partyPointerRef(inviterUid);
       const accepterPointerRef = partyPointerRef(uid);
-      const [inviterSnap, accepterSnap, inviterPointerSnap, accepterPointerSnap] = await Promise.all([
-        transaction.get(inviterRef), transaction.get(accepterRef), transaction.get(inviterPointerRef), transaction.get(accepterPointerRef),
+      const inviterLockRef = outgoingInviteRef(inviterUid);
+      const [inviterSnap, accepterSnap, inviterPointerSnap, accepterPointerSnap, inviterLockSnap] = await Promise.all([
+        transaction.get(inviterRef), transaction.get(accepterRef), transaction.get(inviterPointerRef), transaction.get(accepterPointerRef), transaction.get(inviterLockRef),
       ]);
       if (!inviterSnap.exists || !accepterSnap.exists) return { ok: false, reason: "player-not-found" };
       if (accepterPointerSnap.exists) return { ok: false, reason: "already-in-party" };
@@ -887,6 +986,7 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
       transaction.set(inviterPointerRef, partyPointerPayload(activePartyId, activeParty.leaderUid, nowMs));
       transaction.set(accepterPointerRef, partyPointerPayload(activePartyId, activeParty.leaderUid, nowMs));
       transaction.delete(inviteRef);
+      if (inviterLockSnap.exists && outgoingInviteMatches(inviterLockSnap, "party", uid, inviteId)) transaction.delete(inviterLockRef);
       return { ok: true, accepted: true, partyId: activePartyId, leaderUid: activeParty.leaderUid };
     });
   }

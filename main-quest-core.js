@@ -94,20 +94,28 @@
     return QUESTS.find((quest) => quest.id === key) || null;
   }
 
+  const BOUND_CHOICE_ENVELOPE_STARS = freeze([...new Set(QUESTS.map((quest) => whole(quest.reward?.manualStar, 0, 0, 99)).filter(Boolean))]);
+
+  function emptyBoundChoiceEnvelopes() {
+    return Object.fromEntries(BOUND_CHOICE_ENVELOPE_STARS.map((star) => [star, 0]));
+  }
+
   function emptyProgress() {
     return {
       commissionStars: { 1: false, 2: false, 3: false },
       quizIndex: 0,
+      nextQuizDay: 0,
       guildmasterRecognition: false,
     };
   }
 
   function emptyState() {
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       activeQuestId: null,
       status: "idle",
       completedQuestIds: [],
+      boundChoiceEnvelopes: emptyBoundChoiceEnvelopes(),
       progress: emptyProgress(),
     };
   }
@@ -126,13 +134,19 @@
     const progress = emptyProgress();
     for (const star of [1, 2, 3]) progress.commissionStars[star] = Boolean(stars[star]);
     progress.quizIndex = whole(progressSource.quizIndex, 0, 0, QUIZ_QUESTIONS.length);
+    progress.nextQuizDay = whole(progressSource.nextQuizDay, 0, 0, Number.MAX_SAFE_INTEGER);
     progress.guildmasterRecognition = Boolean(progressSource.guildmasterRecognition);
+    const envelopeSource = source.boundChoiceEnvelopes && typeof source.boundChoiceEnvelopes === "object"
+      ? source.boundChoiceEnvelopes
+      : {};
+    const boundChoiceEnvelopes = emptyBoundChoiceEnvelopes();
+    for (const star of BOUND_CHOICE_ENVELOPE_STARS) boundChoiceEnvelopes[star] = whole(envelopeSource[star], 0, 0, 9999);
     let status = activeQuestId && ["active", "ready_to_claim"].includes(source.status) ? source.status : activeQuestId ? "active" : "idle";
     const active = getQuest(activeQuestId);
     if (active?.objectiveType === "commission-stars" && [1, 2, 3].every((star) => progress.commissionStars[star])) status = "ready_to_claim";
     if (active?.objectiveType === "quiz" && progress.quizIndex >= QUIZ_QUESTIONS.length) status = "ready_to_claim";
     if (active?.objectiveType === "guildmaster-recognition" && progress.guildmasterRecognition) status = "ready_to_claim";
-    return { schemaVersion: 1, activeQuestId, status, completedQuestIds: completed, progress };
+    return { schemaVersion: 2, activeQuestId, status, completedQuestIds: completed, boundChoiceEnvelopes, progress };
   }
 
   function nextIncompleteQuest(rawState) {
@@ -198,18 +212,26 @@
     return QUIZ_QUESTIONS[state.progress.quizIndex] || null;
   }
 
-  function answerQuiz(rawState, questionId, answerIndex) {
+  function answerQuiz(rawState, questionId, answerIndex, currentDay) {
     const state = normalizeState(rawState);
     const quest = activeQuest(state);
     if (!quest || quest.objectiveType !== "quiz") return { ok: false, reason: "not-active-quiz", state, quest, correct: false };
     if (state.status === "ready_to_claim") return { ok: false, reason: "already-complete", state, quest, correct: true };
+    const day = whole(currentDay, 0, 0, Number.MAX_SAFE_INTEGER);
+    if (day < 1) return { ok: false, reason: "quiz-day-required", state, quest, correct: false };
+    if (state.progress.nextQuizDay > day) {
+      return { ok: false, reason: "quiz-cooldown", state, quest, correct: false, nextQuizDay: state.progress.nextQuizDay };
+    }
     const question = QUIZ_QUESTIONS[state.progress.quizIndex];
     if (!question || question.id !== String(questionId || "")) return { ok: false, reason: "question-mismatch", state, quest, correct: false };
     const selected = whole(answerIndex, -1, -1, 99);
     if (selected !== question.correctIndex) {
-      return { ok: true, reason: "wrong-answer", state, quest, correct: false, question, explanation: question.explanation };
+      const next = clone(state);
+      next.progress.nextQuizDay = day + 1;
+      return { ok: true, reason: "wrong-answer", state: next, quest, correct: false, question, explanation: question.explanation, nextQuizDay: next.progress.nextQuizDay };
     }
     const next = clone(state);
+    next.progress.nextQuizDay = 0;
     next.progress.quizIndex = Math.min(QUIZ_QUESTIONS.length, next.progress.quizIndex + 1);
     if (next.progress.quizIndex >= QUIZ_QUESTIONS.length) next.status = "ready_to_claim";
     return { ok: true, reason: null, state: next, quest, correct: true, question, explanation: question.explanation, completedObjective: next.status === "ready_to_claim" };
@@ -225,30 +247,34 @@
     return { changed: true, state: next, quest, completedObjective: true };
   }
 
-  function rewardSkillPool(rawState, rawSkillState) {
-    const state = normalizeState(rawState);
-    const quest = activeQuest(state);
-    if (!quest || state.status !== "ready_to_claim") return [];
+  function choiceSkillPool(rawSkillState, star) {
     const skills = Skills.normalizeSkillState(rawSkillState);
-    const star = quest.reward.manualStar;
+    const safeStar = whole(star, 0, 0, 99);
     const pool = skills.classId === "fighter"
-      ? Skills.getFighterGuildBookPool(star)
-      : Skills.getSkillsByStar(star, { classId: skills.classId });
+      ? Skills.getFighterGuildBookPool(safeStar)
+      : Skills.getSkillsByStar(safeStar, { classId: skills.classId });
     const learned = new Set((skills.unlockedSkillIds || []).map((id) => Skills.canonicalSkillId?.(id) || String(id)));
     const unlearned = pool.filter((skill) => !learned.has(skill.id));
     const choices = unlearned.length ? unlearned : pool;
     return choices.map((skill) => ({ id: skill.id, name: skill.name, description: skill.description, apCost: skill.apCost, speedGrade: skill.speedGrade }));
   }
 
-  function claim(rawState, rawSkillState, skillId) {
+  function rewardSkillPool(rawState, rawSkillState) {
+    const state = normalizeState(rawState);
+    const quest = activeQuest(state);
+    if (!quest || state.status !== "ready_to_claim") return [];
+    return choiceSkillPool(rawSkillState, quest.reward.manualStar);
+  }
+
+  function claim(rawState) {
     const state = normalizeState(rawState);
     const quest = activeQuest(state);
     if (!quest) return { ok: false, reason: "not-active", state, quest: null };
     if (state.status !== "ready_to_claim") return { ok: false, reason: "not-ready", state, quest };
-    const pool = rewardSkillPool(state, rawSkillState);
-    const selected = pool.find((skill) => skill.id === String(skillId || ""));
-    if (!selected) return { ok: false, reason: "invalid-reward-skill", state, quest };
     const next = clone(state);
+    const envelopeStar = whole(quest.reward.manualStar, 0, 0, 99);
+    if (!BOUND_CHOICE_ENVELOPE_STARS.includes(envelopeStar)) return { ok: false, reason: "invalid-reward-star", state, quest };
+    next.boundChoiceEnvelopes[envelopeStar] = Math.min(9999, whole(next.boundChoiceEnvelopes[envelopeStar], 0, 0, 9999) + 1);
     next.completedQuestIds = [...new Set([...next.completedQuestIds, quest.id])];
     next.activeQuestId = null;
     next.status = "idle";
@@ -258,9 +284,18 @@
       reason: null,
       state: next,
       quest,
-      skill: selected,
-      reward: clone(quest.reward),
+      reward: { ...clone(quest.reward), boundChoiceEnvelopeStar: envelopeStar },
     };
+  }
+
+  function consumeBoundChoiceEnvelope(rawState, star) {
+    const state = normalizeState(rawState);
+    const safeStar = whole(star, 0, 0, 99);
+    if (!BOUND_CHOICE_ENVELOPE_STARS.includes(safeStar)) return { ok: false, reason: "invalid-star", state };
+    if (whole(state.boundChoiceEnvelopes[safeStar], 0) < 1) return { ok: false, reason: "no-envelope", state };
+    const next = clone(state);
+    next.boundChoiceEnvelopes[safeStar] -= 1;
+    return { ok: true, reason: null, star: safeStar, state: next };
   }
 
   function view(rawState, level) {
@@ -304,6 +339,7 @@
   return Object.freeze({
     QUESTS,
     QUIZ_QUESTIONS,
+    BOUND_CHOICE_ENVELOPE_STARS,
     emptyState,
     normalizeState,
     getQuest,
@@ -316,8 +352,10 @@
     currentQuizQuestion,
     answerQuiz,
     recordGuildmasterRecognition,
+    choiceSkillPool,
     rewardSkillPool,
     claim,
+    consumeBoundChoiceEnvelope,
     view,
   });
 });

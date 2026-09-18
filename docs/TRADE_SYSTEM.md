@@ -6,8 +6,8 @@ V1 trading is a direct player-to-player exchange launched from the same-map play
 
 ## User flow
 
-1. Select another player and choose `交易`.
-2. The target accepts or rejects the trade invite.
+1. Select another player and choose `交易`. The sender sees a small `等待對方回覆` card; this pending invite is **not** an active trade.
+2. The target accepts or rejects the trade invite. Only acceptance creates both players' active `tradeState/current` pointers and opens the trade panel.
 3. Both players edit their own offer. Each side can see the other side's current items and Gold in realtime.
 4. Each player presses `鎖定`. Locking freezes that player's offer.
 5. Only after **both** offers are locked does `確認交易` become available.
@@ -38,11 +38,12 @@ tradeSessions/{tradeId}
 }
 ```
 
-Per-player lightweight pointers/invites live under:
+Per-player lightweight pointers/invites live under. `tradeState/current` exists only after acceptance; a pending invitation never counts as an active trade:
 
 ```text
 players/{uid}/tradeState/current
 players/{uid}/tradeInvites/{tradeId}
+players/{uid}/outgoingInvite/current   # shared friend/trade/party sender lock
 ```
 
 Clients may read only relevant trade state. All mutations go through the callable `tradeCommand`.

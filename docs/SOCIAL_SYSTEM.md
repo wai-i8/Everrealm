@@ -2,7 +2,7 @@
 
 ## Scope
 
-V1 social covers selecting another realtime player in exploration, a confirmed friend graph, one-to-one whispers between friends, and the entry point for direct player trading. The trading economy and lock/confirm flow are specified separately in `docs/TRADE_SYSTEM.md`; parties and shared combat remain outside this version.
+Social covers selecting another realtime player in exploration, confirmed friends, unrestricted one-to-one whispers, direct trading and party invitations. Trading and party/shared-combat remain server-authoritative systems specified outside the social presentation layer.
 
 ## Player selection
 
@@ -14,10 +14,11 @@ Selecting a player opens a compact interaction popup with:
 
 - 查看資料
 - 加好友 / 接受好友 / 好友狀態
-- 密語 (friends only)
+- 密語
 - 交易
+- 邀請組隊
 
-The `交易` action opens the server-authoritative trade flow described in `docs/TRADE_SYSTEM.md`. Party commands are not shown until that system exists.
+好友、交易、組隊共用一個 server-authoritative outgoing invite lock：同一時間每名玩家只可以有一個待回覆邀請。發出後顯示等待回覆卡；接受、拒絕、取消或目標離線時才解除。
 
 ## Friend graph
 
@@ -40,26 +41,28 @@ A request must be explicitly accepted. Acceptance creates symmetric friend docum
 
 ## Whispers
 
-Each accepted friendship owns one deterministic private RTDB thread. The thread id is derived server-side from the sorted pair of UIDs and is not player-selected.
+密語唔要求好友關係。任何已存在嘅玩家都可以成為一對一密語對象；`ensure-whisper` 由 Cloud Function 驗證兩個玩家 document 後建立 deterministic thread membership，同時喺雙方 Firestore 建立 `whisperPeers` 索引。
 
 ```text
+players/{uid}/whisperPeers/{peerUid}
 chat/whispers/{threadId}
   members/{uid}: true
   names/{uid}: string
   updatedAt: number
   messages/{messageId}
-  {
-    uid,
-    toUid,
-    name,
-    text,
-    createdAt
-  }
+  { uid, toUid, name, text, createdAt }
 ```
 
-Only thread members can read the thread. A client may append only a message whose `uid` equals `auth.uid`, whose `toUid` is the other member, and whose text is at most 200 characters. Membership metadata is written only by Cloud Functions. If an old friendship is missing RTDB membership metadata, `ensure-whisper` revalidates both Firestore friendship documents before repairing the thread.
+只有 thread members 可以讀取 RTDB thread；browser 只可以以自己 `auth.uid` 寫訊息。好友關係唔係權限條件。左下角 `世界 / 密語` composer 會保留目前密語對象，直到玩家轉返世界頻道或揀另一個玩家。
 
-The lower-left chat UI has `世界` and `密語` filters. Choosing a friend makes the composer target that friend until the user switches back to `世界` or selects another friend. V1 subscribes to whisper messages from the current gameplay session start onward, matching the existing world-chat no-history-on-login behaviour.
+待回覆邀請另外記喺：
+
+```text
+players/{uid}/outgoingInvite/current
+{ type: friend | trade | party, targetUid, targetName, referenceId, createdAtMs }
+```
+
+呢個 document 只由 Cloud Functions 寫；client 只讀，用嚟呈現等待視窗同跨三種邀請嘅全域 lock。
 
 ## Security boundary
 
@@ -68,4 +71,4 @@ The lower-left chat UI has `世界` and `密語` filters. Choosing a friend make
 - RTDB owns transient/private chat messages and same-map remote-player presentation.
 - Remote-player presence, coordinates or names are never trusted for inventory, economy, battle or progression authority.
 - Trading uses its own Firestore session/pointer model and server-authoritative callable; it does not piggyback on friendship state.
-- Parties, following and shared battle are deferred systems and must not piggyback on friendship or trade state.
+- Party/follow/shared battle has its own authoritative state. Party member coordinates used by gameplay remain unchanged; clients may use a presentation-only formation around the local player to hide normal network interpolation lag.

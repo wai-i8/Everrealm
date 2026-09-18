@@ -203,6 +203,10 @@
   const socialFriendsContent = document.getElementById("socialFriendsContent");
   const friendInvitePanel = document.getElementById("friendInvitePanel");
   const friendInviteName = document.getElementById("friendInviteName");
+  const outgoingInvitePanel = document.getElementById("outgoingInvitePanel");
+  const outgoingInviteName = document.getElementById("outgoingInviteName");
+  const outgoingInviteType = document.getElementById("outgoingInviteType");
+  const outgoingInviteCancelButton = document.getElementById("outgoingInviteCancelButton");
   const partyButton = document.getElementById("partyButton");
   const partyBadge = document.getElementById("partyBadge");
   const partyPopover = document.getElementById("partyPopover");
@@ -410,7 +414,7 @@
   let systemLogDragGesture = null;
   let systemLogScrollGesture = null;
   let systemLogCollapsed = false;
-  let socialState = Object.freeze({ active: false, uid: "", friends: [], incoming: [], outgoing: [] });
+  let socialState = Object.freeze({ active: false, uid: "", friends: [], whisperPeers: [], incoming: [], outgoing: [], outgoingInvite: null });
   let tradeState = Object.freeze({ active: false, uid: "", session: null, invites: [] });
   let partyState = Object.freeze({ active: false, uid: "", party: null, battle: null, invites: [] });
   let activeFriendInvite = null;
@@ -430,6 +434,7 @@
   let tradeCommandPending = false;
   let lastCompletedTradeId = "";
   let activeWhisperUid = "";
+  let activeWhisperName = "";
   let chatComposeMode = "world";
   let selectedRemotePlayer = null;
   const remotePlayerHitRegions = new Map();
@@ -10551,14 +10556,15 @@
     sendCooldownMs: 650,
     onState: (nextState) => {
       socialState = nextState;
-      if (activeWhisperUid && !social?.hasFriend?.(activeWhisperUid)) {
-        activeWhisperUid = "";
-        if (chatComposeMode === "whisper") chatComposeMode = "world";
+      if (activeWhisperUid) {
+        const knownPeer = social?.getWhisperPeer?.(activeWhisperUid) || socialFriend(activeWhisperUid);
+        if (knownPeer?.name) activeWhisperName = knownPeer.name;
       }
       if (activeFriendInvite && !(nextState.incoming || []).some((entry) => entry.uid === activeFriendInvite.uid)) activeFriendInvite = null;
       if (!activeFriendInvite && mode === "playing") activeFriendInvite = (nextState.incoming || [])[0] || null;
       renderSocialFriends();
       renderSocialInviteUi();
+      renderOutgoingInviteUi();
       syncChatComposer();
       syncRemotePlayerMenu();
     },
@@ -10571,11 +10577,19 @@
     onWhisper: (message) => {
       const author = message.direction === "outgoing" ? `→ ${message.peerName}` : message.peerName;
       addWhisperMessage(author, message.text, message.direction);
-      if (message.direction === "incoming" && !activeWhisperUid) activeWhisperUid = message.peerUid;
+      if (message.direction === "incoming" && !activeWhisperUid) {
+        activeWhisperUid = message.peerUid;
+        activeWhisperName = message.peerName || "冒險者";
+      }
       if (message.direction === "incoming" && systemLogFilter !== "whisper") {
         showToast(`${message.peerName} 傳來密語。`, "");
       }
       syncChatComposer();
+    },
+    onOutgoingInviteTargetOffline: (pending) => {
+      const label = pending?.targetName || "對方";
+      showToast(`${label} 已離線，邀請已取消。`, "warning");
+      addSystemMessage("system", `${label} 已離線，邀請已取消`);
     },
     onError: (error) => console.warn("Everrealm social failed.", error),
   }) || null;
@@ -10821,6 +10835,7 @@
       "invalid-target": "無法同呢位玩家交易。",
       "player-not-found": "暫時搵唔到呢位玩家。",
       "busy": "你而家已經有另一個交易進行中。",
+      "outgoing-invite-pending": "你仲有一個邀請等待對方回覆。",
       "target-busy": "對方而家正進行其他交易。",
       "caller-unavailable": "你而家嘅狀態唔可以交易。",
       "target-unavailable": "對方而家嘅狀態唔可以交易。",
@@ -10886,7 +10901,8 @@
   async function requestTradeWithRemote(remote) {
     if (!remote?.uid || !trade?.isActive?.()) return showToast("交易系統暫時未連線。", "warning");
     if (remote.state === "battle") return showToast("對方而家戰鬥中，暫時唔可以交易。", "warning");
-    if (tradeState.session && ["pending", "active"].includes(tradeState.session.status)) return showToast("你已經有一個交易進行中。", "warning");
+    if (socialState.outgoingInvite) return showToast("你仲有一個邀請等待對方回覆。", "warning");
+    if (tradeState.session?.status === "active") return showToast("你已經有一個交易進行中。", "warning");
     const result = await runTradeCommand(() => trade.createTrade(remote.uid));
     if (result?.ok) {
       closeRemotePlayerMenu();
@@ -10909,6 +10925,19 @@
   function socialOutgoing(uid) {
     const key = String(uid || "").trim();
     return socialState.outgoing?.find?.((entry) => entry.uid === key) || null;
+  }
+
+  function outgoingInviteLabel(type) {
+    return type === "friend" ? "好友邀請" : type === "trade" ? "交易邀請" : type === "party" ? "組隊邀請" : "邀請";
+  }
+
+  function renderOutgoingInviteUi() {
+    if (!outgoingInvitePanel) return;
+    const pending = socialState.outgoingInvite || null;
+    outgoingInvitePanel.hidden = !pending;
+    if (!pending) return;
+    if (outgoingInviteName) outgoingInviteName.textContent = pending.targetName || "冒險者";
+    if (outgoingInviteType) outgoingInviteType.textContent = outgoingInviteLabel(pending.type);
   }
 
   function setSocialFriendsOpen(open) {
@@ -11045,6 +11074,7 @@
       "party-map-mismatch": "隊伍成員未同步到同一張地圖。",
       "battle-active": "共同戰鬥期間唔可以直接離隊。",
       "invite-not-found": "呢個組隊邀請已經失效。",
+      "outgoing-invite-pending": "你仲有一個邀請等待對方回覆。",
     };
     return messages[reason] || "組隊操作暫時未能完成。";
   }
@@ -11064,6 +11094,7 @@
   async function requestPartyWithRemote(remote) {
     if (!remote?.uid || !partyClient?.isActive?.()) return showToast("組隊系統暫時未連線。", "warning");
     if (remote.state === "battle") return showToast("對方而家戰鬥中。", "warning");
+    if (socialState.outgoingInvite) return showToast("你仲有一個邀請等待對方回覆。", "warning");
     if (partyState.party && !partyClient.isLeader?.()) return showToast("只有隊長可以邀請隊員。", "warning");
     const result = await runPartyCommand(() => partyClient.invite(remote.uid));
     if (result?.ok) {
@@ -11200,13 +11231,12 @@
     }
   }
 
-  function setWhisperTarget(uid, { focus = true } = {}) {
-    const friend = socialFriend(uid);
-    if (!friend) {
-      showToast("要成為好友先可以傳送密語。", "warning");
-      return false;
-    }
-    activeWhisperUid = friend.uid;
+  function setWhisperTarget(uid, { focus = true, name = "" } = {}) {
+    const key = String(uid || "").trim();
+    if (!key || key === authenticatedUid()) return false;
+    const peer = social?.getWhisperPeer?.(key) || socialFriend(key);
+    activeWhisperUid = key;
+    activeWhisperName = peer?.name || String(name || "冒險者").trim() || "冒險者";
     chatComposeMode = "whisper";
     systemLogFilter = "whisper";
     renderSystemLog();
@@ -11225,11 +11255,13 @@
 
   function syncChatComposer() {
     if (!worldChatInput || !chatComposeChannel || !systemLog) return;
-    const friend = chatComposeMode === "whisper" ? socialFriend(activeWhisperUid) : null;
-    if (chatComposeMode === "whisper" && friend) {
-      chatComposeChannel.textContent = `密語・${friend.name}`;
+    const peer = chatComposeMode === "whisper" ? (social?.getWhisperPeer?.(activeWhisperUid) || socialFriend(activeWhisperUid)) : null;
+    if (chatComposeMode === "whisper" && activeWhisperUid) {
+      const peerName = peer?.name || activeWhisperName || "冒險者";
+      activeWhisperName = peerName;
+      chatComposeChannel.textContent = `密語・${peerName}`;
       worldChatInput.placeholder = "輸入密語…";
-      worldChatInput.setAttribute("aria-label", `密語給 ${friend.name}`);
+      worldChatInput.setAttribute("aria-label", `密語給 ${peerName}`);
       systemLog.dataset.chatChannel = "whisper";
       return;
     }
@@ -11300,24 +11332,25 @@
     const friend = socialFriend(remote.uid);
     const incoming = socialIncoming(remote.uid);
     const outgoing = socialOutgoing(remote.uid);
+    const outgoingInviteLocked = Boolean(socialState.outgoingInvite);
     if (friendButton) {
-      friendButton.disabled = Boolean(friend || outgoing);
+      friendButton.disabled = Boolean(friend || outgoing || (outgoingInviteLocked && !incoming));
       friendButton.dataset.friendState = friend ? "friend" : incoming ? "incoming" : outgoing ? "outgoing" : "none";
-      friendButton.textContent = friend ? "好友 ✓" : incoming ? "接受好友" : outgoing ? "已送出" : "加好友";
+      friendButton.textContent = friend ? "好友 ✓" : incoming ? "接受好友" : outgoing ? "已送出" : outgoingInviteLocked ? "等待回覆中" : "加好友";
       if (incoming) friendButton.disabled = false;
     }
-    if (whisperButton) whisperButton.disabled = !friend;
+    if (whisperButton) whisperButton.disabled = !social?.isActive?.();
     if (tradeButton) {
-      const busy = Boolean(tradeState.session && ["pending", "active"].includes(tradeState.session.status));
-      tradeButton.disabled = busy || remote.state === "battle" || !trade?.isActive?.();
-      tradeButton.textContent = busy ? "交易中" : "交易";
+      const busy = Boolean(tradeState.session?.status === "active");
+      tradeButton.disabled = busy || outgoingInviteLocked || remote.state === "battle" || !trade?.isActive?.();
+      tradeButton.textContent = busy ? "交易中" : outgoingInviteLocked ? "等待回覆中" : "交易";
     }
     if (partyActionButton) {
       const currentParty = partyState.party;
       const sameParty = Boolean(currentParty?.memberUids?.includes?.(remote.uid));
       const canInvite = !currentParty || (currentParty.leaderUid === authenticatedUid() && currentParty.state === "idle" && !currentParty.transition && !currentParty.battleId);
-      partyActionButton.disabled = sameParty || remote.state === "battle" || !partyClient?.isActive?.() || !canInvite;
-      partyActionButton.textContent = sameParty ? "隊伍成員 ✓" : currentParty && currentParty.leaderUid !== authenticatedUid() ? "隊長先可邀請" : "邀請組隊";
+      partyActionButton.disabled = sameParty || outgoingInviteLocked || remote.state === "battle" || !partyClient?.isActive?.() || !canInvite;
+      partyActionButton.textContent = sameParty ? "隊伍成員 ✓" : outgoingInviteLocked ? "等待回覆中" : currentParty && currentParty.leaderUid !== authenticatedUid() ? "隊長先可邀請" : "邀請組隊";
     }
     if (remotePlayerProfileDetail && !remotePlayerProfileDetail.hidden) {
       remotePlayerProfileDetail.textContent = `${remoteClassLabel(remote.classId)}｜${remote.state === "battle" ? "目前戰鬥中" : "目前喺同一區域探索"}`;
@@ -11345,6 +11378,7 @@
       "request-not-found": "呢個好友申請已經失效。",
       "not-friends": "你哋而家唔係好友。",
       "invalid-target": "無法對呢位玩家進行操作。",
+      "outgoing-invite-pending": "你仲有一個邀請等待對方回覆。",
     };
     showToast(messages[result?.reason] || "好友功能暫時未能完成操作。", "warning");
     return false;
@@ -13509,7 +13543,14 @@
     for (const enemy of enemies) if (enemy.alive && inView(enemy, 130)) renderables.push(enemy);
     for (const drop of drops) if (drop.life > 0 && inView(drop, 60)) renderables.push(drop);
     for (const remote of multiplayer?.getRenderPlayers?.(currentMapId) || []) {
-      if (inView(remote, 130)) renderables.push(remote);
+      const presented = Party?.presentationRemote?.(
+        remote,
+        partyState.party,
+        authenticatedUid(),
+        player,
+        Math.max(34, player.radius * 3.1),
+      ) || remote;
+      if (inView(presented, 130)) renderables.push(presented);
     }
     renderables.push({ ...player, kind: "player" });
     renderables.sort((a, b) => depthFor(a) - depthFor(b));
@@ -14928,9 +14969,10 @@
     systemLogFilter = ["all", "world", "whisper", "combat", "progress", "system"].includes(next) ? next : "all";
     if (systemLogFilter === "world") setWorldChatTarget();
     if (systemLogFilter === "whisper") {
-      const preferred = socialFriend(activeWhisperUid) || socialState.friends?.[0] || null;
+      const preferred = social?.getWhisperPeer?.(activeWhisperUid) || socialState.whisperPeers?.[0] || socialState.friends?.[0] || null;
       if (preferred) {
         activeWhisperUid = preferred.uid;
+        activeWhisperName = preferred.name || "冒險者";
         chatComposeMode = "whisper";
       } else {
         setSocialFriendsOpen(true);
@@ -14946,17 +14988,15 @@
     if (!text) return;
 
     if (chatComposeMode === "whisper") {
-      const friend = socialFriend(activeWhisperUid);
-      if (!friend || !social?.isActive?.()) {
-        showToast(friend ? "密語暫時未連線。" : "請先喺好友列表揀一位好友。", "warning");
+      if (!activeWhisperUid || !social?.isActive?.()) {
+        showToast(activeWhisperUid ? "密語暫時未連線。" : "請先喺地圖揀一位玩家密語。", "warning");
         return;
       }
       try {
-        const result = await social.sendWhisper(friend.uid, text);
+        const result = await social.sendWhisper(activeWhisperUid, text);
         if (result?.ok) worldChatInput.value = "";
         else if (result?.reason === "cooldown") showToast("訊息傳送得太快，請等一等。", "warning");
         else if (result?.reason === "too-long") showToast(`密語每句最多 ${result.maxLength || 200} 字。`, "warning");
-        else if (result?.reason === "not-friend") showToast("你哋而家唔係好友。", "warning");
         else showToast("密語暫時未能傳送。", "warning");
       } catch (error) {
         console.warn("Everrealm whisper send failed.", error);
@@ -15052,6 +15092,17 @@
     button.disabled = false;
   });
 
+  outgoingInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  outgoingInviteCancelButton?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    if (!socialState.outgoingInvite || outgoingInviteCancelButton.disabled) return;
+    outgoingInviteCancelButton.disabled = true;
+    const result = await social?.cancelOutgoingInvite?.();
+    if (result?.ok) showToast("已取消邀請。", "");
+    else showToast("暫時未能取消邀請。", "warning");
+    outgoingInviteCancelButton.disabled = false;
+  });
+
   friendInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
   friendInvitePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
@@ -15134,12 +15185,17 @@
       }
       return;
     }
-    if (action === "whisper") return setWhisperTarget(remote.uid);
+    if (action === "whisper") return setWhisperTarget(remote.uid, { name: remote.name || "冒險者" });
     if (action === "trade") return requestTradeWithRemote(remote);
     if (action === "party") return requestPartyWithRemote(remote);
     if (action === "friend") {
       button.disabled = true;
       const incoming = socialIncoming(remote.uid);
+      if (!incoming && socialState.outgoingInvite) {
+        showToast("你仲有一個邀請等待對方回覆。", "warning");
+        button.disabled = false;
+        return;
+      }
       const result = incoming
         ? await social?.respondFriendRequest?.(remote.uid, true)
         : await social?.sendFriendRequest?.(remote.uid);

@@ -54,6 +54,7 @@
         command.star = Number(button.dataset.bookStar);
         break;
       case "open-envelope":
+      case "open-main-quest-envelope":
         command.star = Number(button.dataset.envelopeStar);
         break;
       case "use-manual":

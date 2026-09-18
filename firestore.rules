@@ -28,6 +28,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /players/{userId}/whisperPeers/{peerId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // One server-authoritative outgoing invitation lock is shared across
+    // friend, trade and party requests so a client cannot spam parallel invites.
+    match /players/{userId}/outgoingInvite/{stateId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
 
     // Trading is fully server-authoritative. Clients may only observe their
     // own invitations/pointer plus sessions where they are a participant.

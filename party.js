@@ -29,6 +29,38 @@
       offlineSinceMs: Math.max(0, Number(source.offlineSinceMs) || 0),
     };
   }
+
+  function presentationRemote(remote, party, ownUid, localPlayer, spacing = 44) {
+    const source = remote && typeof remote === "object" ? remote : null;
+    const current = party && typeof party === "object" ? party : null;
+    const selfUid = uid(ownUid);
+    if (!source || !current || current.state !== "idle" || current.transition || current.battleId || !selfUid) return source;
+    const memberUids = Array.isArray(current.memberUids) ? current.memberUids.map(uid).filter(Boolean) : [];
+    const ownIndex = memberUids.indexOf(selfUid);
+    const remoteIndex = memberUids.indexOf(uid(source.uid));
+    if (ownIndex < 0 || remoteIndex < 0 || ownIndex === remoteIndex) return source;
+    const local = localPlayer && typeof localPlayer === "object" ? localPlayer : null;
+    if (!local || !Number.isFinite(Number(local.x)) || !Number.isFinite(Number(local.y))) return source;
+    const facing = text(local.facing, "down") || "down";
+    const vectors = {
+      up: { x: 0, y: -1 },
+      down: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+      right: { x: 1, y: 0 },
+    };
+    const vector = vectors[facing] || vectors.down;
+    const gap = Math.max(26, Number(spacing) || 44);
+    const signedSteps = ownIndex - remoteIndex;
+    return {
+      ...source,
+      x: Number(local.x) + vector.x * gap * signedSteps,
+      y: Number(local.y) + vector.y * gap * signedSteps,
+      facing,
+      moving: Boolean(local.moving),
+      presentationOnly: true,
+    };
+  }
+
   function normalizeInvite(id, raw) {
     const source = raw && typeof raw === "object" ? raw : {};
     const inviteId = text(source.inviteId || id);
@@ -372,5 +404,5 @@
     });
   }
 
-  return Object.freeze({ MAX_MEMBERS, PHASE_MS, DISCONNECT_GRACE_MS, normalizeInvite, normalizeParty, normalizeBattle, create });
+  return Object.freeze({ MAX_MEMBERS, PHASE_MS, DISCONNECT_GRACE_MS, presentationRemote, normalizeInvite, normalizeParty, normalizeBattle, create });
 });

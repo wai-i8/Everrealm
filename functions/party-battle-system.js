@@ -412,14 +412,16 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(entry.skill)) || 0);
       const hitCount = Math.max(1, whole(entry.skill.hitResolution?.hit_count || damageEffect.hits, 1));
       for (const target of targetResult.affected.filter((unit) => unit.side === "enemy").slice(0, 3)) {
-        for (let hit = 0; hit < hitCount && target.alive && target.hp > 0; hit += 1) {
-          const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
-          const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
-          const positional = Tactics.positionalAttack(actor, target, { attackPath: targetResult.attackPath, facing: actor.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
-          const damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(Tactics.calculateDamage(actor, target, { defence, multiplier: authoredMultiplier * positional.multiplier, minimum: Tactics.MIN_DIRECT_DAMAGE }), Tactics.MIN_DIRECT_DAMAGE));
+        const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
+        const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
+        const positional = Tactics.positionalAttack(actor, target, { attackPath: targetResult.attackPath, facing: actor.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
+        const totalDamage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(Tactics.calculateDamage(actor, target, { defence, multiplier: authoredMultiplier * positional.multiplier, minimum: Tactics.MIN_DIRECT_DAMAGE }), Tactics.MIN_DIRECT_DAMAGE));
+        const hitDamages = Skills.splitDamageLaterHits(totalDamage, hitCount);
+        for (let hit = 0; hit < hitDamages.length && target.alive && target.hp > 0; hit += 1) {
+          const damage = Math.min(Math.max(0, whole(hitDamages[hit], 0)), target.hp);
           target.hp = Math.max(0, target.hp - damage);
           target.alive = target.hp > 0;
-          appendEvent(next, { type: "damage", actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetName: target.name, amount: damage, skillName: entry.skill.name, hit: hit + 1, hits: hitCount, text: `${actor.name} 用 ${entry.skill.name} 對 ${target.name} 造成 ${damage} 傷害` });
+          appendEvent(next, { type: "damage", actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetName: target.name, amount: damage, skillName: entry.skill.name, hit: hit + 1, hits: hitDamages.length, totalDamage, hitDamages, text: `${actor.name} 用 ${entry.skill.name} 對 ${target.name} 造成 ${damage} 傷害` });
         }
       }
     }

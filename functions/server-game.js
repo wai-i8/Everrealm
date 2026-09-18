@@ -613,6 +613,20 @@ function economyCommand(save, input = {}, options = {}) {
     return resultWithState(state, { action, star, skill: { id: skill.id, name: skill.name } });
   }
 
+  if (action === "open-main-quest-envelope") {
+    const star = clamp(whole(input.star, 0), 0, 99);
+    const skillId = Skills.canonicalSkillId(String(input.skillId || ""));
+    const consumed = MainQuest.consumeBoundChoiceEnvelope(state.expansion.mainQuest, star);
+    if (!consumed.ok) return { ok: false, reason: consumed.reason };
+    const choice = MainQuest.choiceSkillPool(state.expansion.skills, star).find((skill) => skill.id === skillId);
+    if (!choice) return { ok: false, reason: "invalid-reward-skill" };
+    const granted = Skills.grantBoundSkillManuals(state.expansion.skills, choice.id, 1);
+    if (!granted.ok) return { ok: false, reason: granted.reason };
+    state.expansion.mainQuest = consumed.state;
+    state.expansion.skills = granted.state;
+    return resultWithState(state, { action, star, skill: { id: choice.id, name: choice.name, bound: true } });
+  }
+
 
   if (action === "open-skill-book") {
     const star = clamp(whole(input.star, 0), 0, 99);
@@ -753,28 +767,32 @@ function questCommand(save, input = {}, options = {}) {
 
   if (action === "main-answer") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex);
-    if (!result.ok) return { ok: false, reason: result.reason };
+    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex, options.currentGameDay);
+    if (!result.ok) return { ok: false, reason: result.reason, nextQuizDay: result.nextQuizDay || 0 };
     state.expansion.mainQuest = result.state;
-    return resultWithState(state, { action, correct: result.correct, explanation: result.explanation || "", completedObjective: result.completedObjective === true });
+    return resultWithState(state, {
+      action,
+      correct: result.correct,
+      explanation: result.explanation || "",
+      completedObjective: result.completedObjective === true,
+      nextQuizDay: result.nextQuizDay || 0,
+    });
   }
 
   if (action === "main-claim") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const claim = MainQuest.claim(state.expansion.mainQuest, state.expansion.skills, String(input.skillId || ""));
+    const claim = MainQuest.claim(state.expansion.mainQuest);
     if (!claim.ok) return { ok: false, reason: claim.reason };
-    const manual = Skills.grantBoundSkillManuals(state.expansion.skills, claim.skill.id, 1);
-    if (!manual.ok) return { ok: false, reason: manual.reason };
-    const panel = Panels.grantPanel(state.expansion.panels, claim.reward.panelId, manual.state);
+    const panel = Panels.grantPanel(state.expansion.panels, claim.reward.panelId, state.expansion.skills);
     if (!panel.ok) return { ok: false, reason: panel.reason };
     state.expansion.mainQuest = claim.state;
     state.expansion.panels = panel.state;
-    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, manual.state);
+    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, state.expansion.skills);
     return resultWithState(state, {
       action,
       quest: claim.quest,
       reward: {
-        skill: { id: claim.skill.id, name: claim.skill.name, bound: true },
+        envelope: { star: claim.reward.boundChoiceEnvelopeStar, bound: true, choice: true },
         panel: panel.panel,
       },
     });
@@ -1234,6 +1252,7 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
   let targetResult = null;
   let guardReduction = 0;
   let evasionBonus = 0;
+  const heroHits = [];
   if (heroAction === "potion") {
     const count = clamp(whole(state.player.potions, 0), 0, 9);
     if (count <= 0) return { ok: false, reason: "empty" };
@@ -1297,18 +1316,33 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
           side: 1 + SERVER_BATTLE_SIDE_DAMAGE_BONUS,
           rear: 1 + SERVER_BATTLE_REAR_DAMAGE_BONUS,
         });
-        let damage = Tactics.calculateDamage(hero, target, {
+        let totalDamage = Tactics.calculateDamage(hero, target, {
           defence,
           multiplier: authoredMultiplier * positional.multiplier,
           minimum: Tactics.MIN_DIRECT_DAMAGE,
         });
-        damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(damage, Tactics.MIN_DIRECT_DAMAGE) * hitCount);
-        if (specialHpEffect?.type === "halve_hp") damage = Math.max(damage, Math.floor(enemyState.hp / 2));
-        if (specialHpEffect?.type === "set_hp") damage = Math.max(damage, Math.max(0, enemyState.hp - Math.max(0, whole(specialHpEffect.value, 1))));
-        enemyState.hp = Math.max(0, enemyState.hp - damage);
-        enemyState.alive = enemyState.hp > 0;
-        target.hp = enemyState.hp;
-        target.alive = enemyState.alive;
+        totalDamage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(totalDamage, Tactics.MIN_DIRECT_DAMAGE));
+        if (specialHpEffect?.type === "halve_hp") totalDamage = Math.max(totalDamage, Math.floor(enemyState.hp / 2));
+        if (specialHpEffect?.type === "set_hp") totalDamage = Math.max(totalDamage, Math.max(0, enemyState.hp - Math.max(0, whole(specialHpEffect.value, 1))));
+        const hitDamages = Skills.splitDamageLaterHits(totalDamage, hitCount);
+        const appliedHitDamages = [];
+        for (const hitDamage of hitDamages) {
+          if (!enemyState.alive || enemyState.hp <= 0) break;
+          const applied = Math.min(Math.max(0, whole(hitDamage, 0)), enemyState.hp);
+          enemyState.hp = Math.max(0, enemyState.hp - applied);
+          enemyState.alive = enemyState.hp > 0;
+          target.hp = enemyState.hp;
+          target.alive = enemyState.alive;
+          appliedHitDamages.push(applied);
+        }
+        heroHits.push({
+          targetId: target.id,
+          targetIndex: index,
+          totalDamage,
+          hitDamages,
+          appliedHitDamages,
+          position: positional.position,
+        });
       }
     }
     if (heals.length) {
@@ -1412,7 +1446,14 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
       if (enemyEntry) executeEnemy(enemyEntry);
     }
   }
-  return { ok: true };
+  return {
+    ok: true,
+    report: {
+      heroAction,
+      skillId: skill?.id || null,
+      heroHits,
+    },
+  };
 }
 
 function persistServerBattleUnits(battle, hero, enemies) {
@@ -1554,7 +1595,7 @@ function battleCommand(save, input = {}, options = {}) {
     persistServerBattleUnits(existing, units.hero, units.enemies);
     state.player.hp = clamp(existing.heroHp, 0, existing.heroMaxHp);
     state.expansion.serverBattle = existing;
-    return resultWithState(state, { action, battle: clone(existing) });
+    return resultWithState(state, { action, battle: clone(existing), actionReport: actionResult.report || null });
   }
 
   if (action === "settle") {

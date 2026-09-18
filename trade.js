@@ -197,9 +197,10 @@
     async function createTrade(targetUid) {
       const target = safeUid(targetUid);
       if (!target || target === uid) return { ok: false, reason: "invalid-target" };
-      const result = await command("create", { targetUid: target });
-      if (result?.ok && result.tradeId) watchSession(result.tradeId, token);
-      return result;
+      // A pending invitation is not an active trade. The initiator stays on the
+      // generic waiting-invite UI until the receiver accepts; only then will
+      // tradeState/current appear and attach the live trade session listener.
+      return command("create", { targetUid: target });
     }
     async function respondInvite(tradeId, accept) {
       const id = safeTradeId(tradeId);
