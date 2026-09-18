@@ -88,6 +88,8 @@
   const SFX_VOLUME_KEY = "everrealm-sfx-volume-v1";
   const ZOOM_KEY = "everrealm-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
+  const MOBILE_HUD_IDLE_MS = 10000;
+  const MOBILE_HUD_MEDIA_QUERY = "(max-width: 820px) and (orientation: portrait)";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
   const LOCAL_BATTLE_RESUME_KEY = "everrealm-battle-resume-v1";
@@ -694,6 +696,8 @@
     ? Core.clamp(storedExploreZoom, EXPLORE_ZOOM_MIN, EXPLORE_ZOOM_MAX)
     : EXPLORE_ZOOM_DEFAULT;
   let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
+  let mobileHudIdleTimer = 0;
+  let mobileHudModeActive = false;
 
   const player = createPlayer();
   serverCommandPositionProvider = () => ({ mapId: currentMapId, x: player.x, y: player.y });
@@ -2385,6 +2389,26 @@
     }
   }
 
+  function usesMobilePortraitSidebar() {
+    return window.matchMedia(MOBILE_HUD_MEDIA_QUERY).matches;
+  }
+
+  function clearMobileHudAutoHide() {
+    if (!mobileHudIdleTimer) return;
+    window.clearTimeout(mobileHudIdleTimer);
+    mobileHudIdleTimer = 0;
+  }
+
+  function scheduleMobileHudAutoHide() {
+    clearMobileHudAutoHide();
+    if (!usesMobilePortraitSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
+    mobileHudIdleTimer = window.setTimeout(() => {
+      mobileHudIdleTimer = 0;
+      if (!usesMobilePortraitSidebar() || hudCollapsed) return;
+      setHudCollapsed(true, { persist: false });
+    }, MOBILE_HUD_IDLE_MS);
+  }
+
   function syncHudCollapse() {
     exploreSidebar?.classList.toggle("is-collapsed", hudCollapsed);
     stage.dataset.hudCollapsed = String(hudCollapsed);
@@ -2395,9 +2419,27 @@
     }
   }
 
-  function setHudCollapsed(collapsed) {
+  function setHudCollapsed(collapsed, options = {}) {
     hudCollapsed = Boolean(collapsed);
-    try { localStorage.setItem(HUD_COLLAPSED_KEY, hudCollapsed ? "1" : "0"); } catch (_) {}
+    if (options.persist !== false) {
+      try { localStorage.setItem(HUD_COLLAPSED_KEY, hudCollapsed ? "1" : "0"); } catch (_) {}
+    }
+    syncHudCollapse();
+    if (hudCollapsed) clearMobileHudAutoHide();
+    else scheduleMobileHudAutoHide();
+  }
+
+  function syncMobileHudAutoHideMode() {
+    const active = usesMobilePortraitSidebar();
+    if (active === mobileHudModeActive) return;
+    mobileHudModeActive = active;
+    clearMobileHudAutoHide();
+    if (active) {
+      setHudCollapsed(true, { persist: false });
+      return;
+    }
+    const storedCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
+    hudCollapsed = storedCollapsed;
     syncHudCollapse();
   }
 
@@ -12870,7 +12912,20 @@
     document.getElementById("newGameButton").focus({ preventScroll: true });
   });
   document.getElementById("dialogueNext").addEventListener("click", advanceDialogue);
-  sidebarToggle?.addEventListener("click", () => setHudCollapsed(!hudCollapsed));
+  sidebarToggle?.addEventListener("click", () => {
+    const mobilePortrait = usesMobilePortraitSidebar();
+    setHudCollapsed(!hudCollapsed, { persist: !mobilePortrait });
+  });
+  exploreSidebar?.addEventListener("pointerdown", (event) => {
+    if (!usesMobilePortraitSidebar()) return;
+    if (!event.target.closest?.(".sidebar-primary")) return;
+    scheduleMobileHudAutoHide();
+  }, { passive: true });
+  document.addEventListener("pointerdown", (event) => {
+    if (!usesMobilePortraitSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
+    if (exploreSidebar?.contains(event.target)) return;
+    setHudCollapsed(true, { persist: false });
+  }, { capture: true, passive: true });
   const draggableWindowSelector = ".facility-window.ui-window, .ui-modal-window, .system-settings-window.ui-window";
   const nonDraggableControlSelector = "button, a, input, select, textarea, [contenteditable], [role=button], [data-no-window-drag], [data-deck-drag-source]";
 
@@ -13283,6 +13338,7 @@
     worldChat?.stop?.();
   });
   window.addEventListener("resize", resize, { passive: true });
+  window.addEventListener("resize", syncMobileHudAutoHideMode, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
   titleScreen.hidden = false;
@@ -13295,6 +13351,7 @@
   syncSystemSoundControl();
   startTitleBgm();
   syncHudCollapse();
+  syncMobileHudAutoHideMode();
   resetEnemies();
   drawPlayerHudPortrait();
   window.addEventListener("everrealm-art-ready", () => {

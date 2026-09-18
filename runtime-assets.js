@@ -85,7 +85,7 @@
     "game/facility-action-router.js?v=20260917-latency-cleanup-02",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260918-battle-ui-01",
+    "game.js?v=20260918-mobile-sidebar-01",
   ]);
 
   return Object.freeze({ scripts });
