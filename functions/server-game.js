@@ -672,6 +672,13 @@ function questCommand(save, input = {}, options = {}) {
     state.player.coins = clamp(whole(state.player.coins, 0) + rewardCoins, 0, MAX_COINS);
     return resultWithState(state, { action, commission: result.commission, reward: result.reward });
   }
+  if (action === "claim-four-star") {
+    if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
+    const result = Guild.claimFourStarReward(current);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    state.expansion.guildCommission = result.state;
+    return resultWithState(state, { action, reward: result.reward });
+  }
   if (action === "abandon") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
     const result = Guild.abandon(current);

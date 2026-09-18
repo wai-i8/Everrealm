@@ -8,6 +8,8 @@
   "use strict";
 
   const COMMISSION_STARS = Object.freeze([1, 2, 3, 5, 7]);
+  const ENVELOPE_STARS = Object.freeze([1, 2, 3, 4, 5, 7]);
+  const FOUR_STAR_PROGRESS_STARS = Object.freeze([1, 2, 3]);
   const COMMISSION_TYPES = Object.freeze(["hunt", "delivery", "wish"]);
   const MAX_COUNTED_DEFEATS = 128;
 
@@ -25,9 +27,14 @@
     return Math.min(max, Math.max(min, Math.floor(number)));
   }
 
-  function validStar(value) {
+  function validCommissionStar(value) {
     const star = Math.trunc(Number(value));
     return COMMISSION_STARS.includes(star) ? star : null;
+  }
+
+  function validEnvelopeStar(value) {
+    const star = Math.trunc(Number(value));
+    return ENVELOPE_STARS.includes(star) ? star : null;
   }
 
   function cloneCommission(commission) {
@@ -46,13 +53,13 @@
     for (const raw of source) {
       if (!raw || typeof raw !== "object") continue;
       const id = String(raw.id || "").trim();
-      const star = validStar(raw.star);
+      const star = validCommissionStar(raw.star);
       const type = String(raw.type || "").trim();
       if (!id || seen.has(id) || !star || !COMMISSION_TYPES.includes(type)) continue;
       const objective = raw.objective && typeof raw.objective === "object" ? raw.objective : {};
       const reward = raw.reward && typeof raw.reward === "object" ? raw.reward : {};
       const count = wholeNumber(objective.count, type === "delivery" ? 1 : 1, 1, 999);
-      const skillEnvelopeStar = validStar(reward.skill_envelope_star);
+      const skillEnvelopeStar = validEnvelopeStar(reward.skill_envelope_star);
       if (!skillEnvelopeStar) continue;
       seen.add(id);
       result.push(freeze({
@@ -93,7 +100,8 @@
       countedDefeatIds: [],
       cycle: 0,
       envelopeDrawSerial: 0,
-      envelopes: { 1: 0, 2: 0, 3: 0, 5: 0, 7: 0 },
+      envelopes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 7: 0 },
+      fourStarProgress: { 1: false, 2: false, 3: false },
       rewardClaimed: false,
     };
   }
@@ -113,7 +121,9 @@
     state.cycle = wholeNumber(source.cycle, 0, 0, 999999999);
     state.envelopeDrawSerial = wholeNumber(source.envelopeDrawSerial, 0, 0, 999999999);
     const envelopes = source.envelopes && typeof source.envelopes === "object" ? source.envelopes : {};
-    for (const star of COMMISSION_STARS) state.envelopes[star] = wholeNumber(envelopes[star], 0, 0, 9999);
+    for (const star of ENVELOPE_STARS) state.envelopes[star] = wholeNumber(envelopes[star], 0, 0, 9999);
+    const fourStarProgress = source.fourStarProgress && typeof source.fourStarProgress === "object" ? source.fourStarProgress : {};
+    for (const star of FOUR_STAR_PROGRESS_STARS) state.fourStarProgress[star] = Boolean(fourStarProgress[star]);
     state.rewardClaimed = Boolean(source.rewardClaimed);
     if (state.activeCommissionId && !getCommission(state.activeCommissionId, catalog)) {
       state.activeCommissionId = null;
@@ -267,13 +277,32 @@
       cycle: current.cycle + 1,
       rewardClaimed: true,
       envelopes: { ...current.envelopes, [star]: current.envelopes[star] + 1 },
+      fourStarProgress: FOUR_STAR_PROGRESS_STARS.includes(commission.star)
+        ? { ...current.fourStarProgress, [commission.star]: true }
+        : { ...current.fourStarProgress },
     });
     return { ok: true, reason: null, state: next, commission, reward: { skill_envelope_star: star, quantity: 1, coins: wholeNumber(commission.reward.coins, 0, 0, 999999) } };
   }
 
+  function claimFourStarReward(state) {
+    const current = normalizeState(state);
+    const ready = FOUR_STAR_PROGRESS_STARS.every((star) => current.fourStarProgress[star]);
+    if (!ready) return { ok: false, reason: "not-ready", state: current, reward: null };
+    return {
+      ok: true,
+      reason: null,
+      reward: { skill_envelope_star: 4, quantity: 1 },
+      state: {
+        ...current,
+        envelopes: { ...current.envelopes, 4: current.envelopes[4] + 1 },
+        fourStarProgress: { 1: false, 2: false, 3: false },
+      },
+    };
+  }
+
   function consumeEnvelope(state, star) {
     const current = normalizeState(state);
-    const safeStar = validStar(star);
+    const safeStar = validEnvelopeStar(star);
     if (!safeStar) return { ok: false, reason: "invalid-star", state: current };
     if (current.envelopes[safeStar] < 1) return { ok: false, reason: "no-envelope", state: current };
     return {
@@ -290,6 +319,8 @@
 
   return {
     COMMISSION_STARS,
+    ENVELOPE_STARS,
+    FOUR_STAR_PROGRESS_STARS,
     COMMISSION_TYPES,
     DEFAULT_COMMISSIONS: CATALOG,
     normalizeCatalog,
@@ -304,6 +335,7 @@
     recordInteraction,
     abandon,
     report,
+    claimFourStarReward,
     consumeEnvelope,
   };
 });

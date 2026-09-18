@@ -4260,21 +4260,67 @@
     });
   }
 
-  function interactGuildSocialNpc(npc) {
+  async function interactGuildSocialNpc(npc) {
     const isEris = npc.id === "guild-eris";
+    if (isEris) {
+      return startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: [
+          "坐低先，冒險唔係鬥邊個行得最快。睇清楚同伴、地形，同埋自己想去邊度。",
+          "如果你打算接委託，記住返嚟同接待員報告；如果只係想聽故事，火爐今晚都未熄。",
+        ],
+      });
+    }
+
+    const progress = Guild.normalizeState(guildCommissionState).fourStarProgress;
+    const rewardReady = Guild.FOUR_STAR_PROGRESS_STARS.every((star) => progress[star]);
+    if (!rewardReady) {
+      const nextStar = Guild.FOUR_STAR_PROGRESS_STARS.find((star) => !progress[star]);
+      const hint = nextStar === 1
+        ? "最近城外啲小雞又開始周圍搞事。你如果順手幫公會處理下，我可能有啲好嘢畀你。"
+        : nextStar === 2
+          ? "最近有啲人將心願交咗畀公會。你有空去幫佢哋完成下，我會記住你嘅。"
+          : "灰紋紅嗰邊最近又有啲麻煩。如果你肯幫手討伐，我會準備份獎勵畀你。";
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: [hint] });
+    }
+
+    if (!ServerApi?.quest) return startDialogue({ speaker: npc.name, color: npc.color, lines: ["我本來準備咗份獎勵畀你，不過而家公會記錄暫時連唔上。遲啲再搵我啦。"] });
+    if (!beginGuildQuestMutation()) return;
+    const optimisticSnapshot = captureGuildQuestOptimisticState();
+    const predicted = Guild.claimFourStarReward(guildCommissionState);
+    if (!predicted.ok) {
+      endGuildQuestMutation();
+      return startDialogue({ speaker: npc.name, color: npc.color, lines: ["再幫公會處理多啲委託先啦，我會留意住你嘅表現。"] });
+    }
+
+    guildCommissionState = predicted.state;
+    renderGuildQuestOptimisticState();
+    sound.level();
     startDialogue({
       speaker: npc.name,
       color: npc.color,
-      lines: isEris
-        ? [
-          "坐低先，冒險唔係鬥邊個行得最快。睇清楚同伴、地形，同埋自己想去邊度。",
-          "如果你打算接委託，記住返嚟同接待員報告；如果只係想聽故事，火爐今晚都未熄。",
-        ]
-        : [
-          "呢張椅留畀會長，但公會從來唔係一個人嘅地方。每個完成委託、帶人返屋企嘅冒險者，都令呢度更像一個家。",
-          "等你有一日成為大家信任嘅人，我會親自替你留一張最舒服嘅椅。",
-        ],
+      lines: [
+        "呢排你替公會分擔咗唔少事情，由零碎瑣事到較麻煩嘅委託，都見到你有份幫手。",
+        "呢份獎勵，算係我私人畀你嘅。",
+      ],
     });
+    showToast("洛琪希特別獎勵・4★技能書信封 ×1", "good");
+
+    try {
+      const result = await runGuildQuestServerCommand("claim-four-star", {});
+      if (!result?.ok) {
+        restoreGuildQuestOptimisticState(optimisticSnapshot);
+        return showToast(guildQuestServerRejectMessage(result?.reason, "四星獎勵暫時未能領取，請再試一次。"), "danger");
+      }
+      applyAuthoritativeState(result.state);
+      addSystemMessage("reward", "洛琪希特別獎勵・4★技能書信封 ×1");
+    } catch (error) {
+      restoreGuildQuestOptimisticState(optimisticSnapshot);
+      serverCommandError(error, "伺服器暫時未能領取四星獎勵。");
+    } finally {
+      endGuildQuestMutation();
+    }
   }
 
   function openChest(chest) {
@@ -4554,7 +4600,7 @@
 
   function totalOwnedSkillBooks() {
     const state = Skills.normalizeSkillState(skillState);
-    return Guild.COMMISSION_STARS.reduce((total, star) => total + (guildCommissionState.envelopes[star] || 0), 0)
+    return Guild.ENVELOPE_STARS.reduce((total, star) => total + (guildCommissionState.envelopes[star] || 0), 0)
       + Skills.BOOK_STARS.reduce((total, star) => total + (state.books[star] || 0), 0)
       + Object.values(state.manualCounts || {}).reduce((total, count) => total + count, 0);
   }
@@ -4625,7 +4671,7 @@
       action: "use-weak-potion", actionLabel: weakPotionStepsRemaining > 0 ? "重新使用" : "使用",
       destroyable: true,
     });
-    for (const star of Guild.COMMISSION_STARS) {
+    for (const star of Guild.ENVELOPE_STARS) {
       const count = guildCommissionState.envelopes[star] || 0;
       if (!count) continue;
       items.push({
