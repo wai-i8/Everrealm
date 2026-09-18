@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-victory-art-01"],
+          ["everrealmStyles", "styles.css?v=20260918-victory-art-02"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -562,7 +562,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-victory-art-01", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260918-victory-art-02", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });
