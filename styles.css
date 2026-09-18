@@ -8384,22 +8384,25 @@ html body [aria-disabled="true"] {
 
 /* --- 2026-09-18 title logo refresh --- */
 .title-logo {
-  width: min(92vw, 52rem);
+  width: min(80vw, 40rem);
   max-width: 100%;
+  max-height: min(28vh, 17rem);
   height: auto;
+  object-fit: contain;
   display: block;
-  margin: 0 auto 1rem;
-  filter: drop-shadow(0 .65rem 1rem rgba(0, 0, 0, .45));
+  margin: 0 auto .72rem;
+  filter: drop-shadow(0 .5rem .85rem rgba(0, 0, 0, .42));
   user-select: none;
   -webkit-user-drag: none;
   pointer-events: none;
 }
 .title-screen .title-actions {
-  margin-top: .25rem;
+  margin-top: .12rem;
 }
 @media (max-width: 640px) {
   .title-logo {
-    width: min(96vw, 34rem);
-    margin-bottom: .85rem;
+    width: min(88vw, 23rem);
+    max-height: min(18vh, 8.8rem);
+    margin-bottom: .62rem;
   }
 }
