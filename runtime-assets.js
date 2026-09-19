@@ -1,4 +1,4 @@
-// staged startup manifest: 20260919-loading-01
+// staged startup manifest: 20260919-monster-death-sfx-01
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -71,11 +71,11 @@
     "save-persistence.js?v=20260917-latency-cleanup-02",
     "world-time.js?v=20260917-latency-cleanup-02",
     "fighter-effects.js?v=20260917-latency-cleanup-02",
-    "locomotion.js?v=20260917-latency-cleanup-02",
+    "locomotion.js?v=20260919-monster-death-sfx-01",
     "footstep-sfx.js?v=20260917-latency-cleanup-02",
-    "character-art.js?v=20260917-latency-cleanup-02",
+    "character-art.js?v=20260919-monster-death-sfx-01",
     "multiplayer.js?v=20260917-latency-cleanup-02",
-    "game/battle-sfx.js?v=20260919-unified-battle-01",
+    "game/battle-sfx.js?v=20260919-monster-death-sfx-01",
     "game/ui-dom-helpers.js?v=20260917-latency-cleanup-02",
     "game/ui-presentation-helpers.js?v=20260917-latency-cleanup-02",
     "game/system-feedback.js?v=20260918-social-01",
@@ -88,7 +88,7 @@
     "game/facility-action-router.js?v=20260918-main-quest-panels-01",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260919-uifix7-01",
+    "game.js?v=20260919-monster-death-sfx-01",
   ]);
 
   const warmAssets = Object.freeze([

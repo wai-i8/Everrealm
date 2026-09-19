@@ -23,6 +23,13 @@
     "ordinary-monster": Object.freeze({ maxWidth: 184, maxHeight: 160, nameLift: 160 }),
   });
   const ORDINARY_MONSTER_BATTLE_ROWS = Object.freeze({ left: 0, right: 1, down: 2, up: 3 });
+  const FIGHTER_BATTLE_DEATH_ASSET = Object.freeze({
+    src: "assets/battle/fighter/fighter-battle-death-v1.png",
+    columns: 1, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
+    rowByFacing: Object.freeze({ right: 0, down: 1, left: 2, up: 3 }),
+    visualProfile: "player",
+    idleColumn: 0, deathColumn: 0,
+  });
   const ordinaryMonsterBattleAsset = (id) => Object.freeze({
     src: `assets/battle/${id}/${id}-battle-diagonal-v1.png`,
     columns: 6, rows: 4, cellWidth: 256, cellHeight: 256, anchorX: 128, anchorY: 224,
@@ -39,7 +46,7 @@
     attackMirrorFacing: Object.freeze({ right: false, down: false, left: true, up: true }),
     visualProfile: "player",
     idleColumn: 0, walkColumns: Object.freeze([1, 2]),
-    attackColumn: 3, hurtColumn: 4, walkFps: 8,
+    attackColumn: 3, hurtColumn: 4, walkFps: 8, deathAsset: FIGHTER_BATTLE_DEATH_ASSET,
   });
 
   const BATTLE_DIAGONAL_ASSETS = Object.freeze({

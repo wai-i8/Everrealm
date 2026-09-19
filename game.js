@@ -7758,7 +7758,7 @@
         target.hitFlash = .3;
         targetBattle.effects.push({ cell: { ...target.cell }, text: `-${requested}`, color: "#ff8b8b", life: .9, maxLife: .9, kind: "damage", offsetY: .16 });
         sound.hit();
-        if (event.defeated === true && String(target.type || "").toLowerCase() === "chick") battleSfxRuntime()?.playChickDeath?.();
+        if (event.defeated === true) battleSfxRuntime()?.playMonsterDeath?.(target);
       } else if (target && event.type === "heal") {
         const healed = Math.max(0, Number(event.amount) || 0);
         target.hp = Math.min(Math.max(1, Number(target.maxHp) || 1), Math.max(0, Number(target.hp) || 0) + healed);
@@ -13652,25 +13652,6 @@
     ctx.restore();
   }
 
-  function drawBattleCorpsePlaceholder(unit, layout, point, baseline) {
-    const actorCell = layout.actorCell || layout.cell;
-    ctx.save();
-    ctx.translate(point.x, baseline - actorCell * .03);
-    ctx.rotate(unit.side === "ally" ? -.16 : .16);
-    ctx.globalAlpha = .9;
-    ctx.fillStyle = unit.side === "ally" ? "rgba(117,151,181,.82)" : "rgba(98,82,78,.86)";
-    ctx.strokeStyle = "rgba(13,15,20,.88)";
-    ctx.lineWidth = Math.max(2, actorCell * .035);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, actorCell * .34, actorCell * .115, 0, 0, Core.TAU);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "rgba(224,231,235,.72)";
-    ctx.beginPath();
-    ctx.arc(-actorCell * .22, -actorCell * .015, actorCell * .095, 0, Core.TAU);
-    ctx.fill();
-    ctx.restore();
-  }
-
   function drawBattleCorpseCountdown(unit, layout, point) {
     if (!battleUnitIsCorpse(unit) || ["victory", "defeat", "finished"].includes(String(battle?.phase || ""))) return;
     const deathRound = Math.max(1, Math.floor(Number(unit.deathRound) || 1));
@@ -13696,12 +13677,37 @@
     const baseline = point.y + actorCell * (layout.projected ? .2 : .29);
     const corpse = battleCorpseVisible(unit);
     if (corpse) {
-      let drewDeathArt = false;
-      const deathAsset = unit.side !== "ally" ? Locomotion.BATTLE_DIAGONAL_ASSETS?.[unit.type] : null;
-      if (unit.side !== "ally" && layout.projected && Number.isInteger(deathAsset?.deathColumn)) {
-        drewDeathArt = Art.drawEnemy(ctx, { x: point.x, y: baseline, scale: monsterScale * (unit.boss ? .98 : .92), type: unit.type, facing: battleUnitRenderFacing(unit), phase: elapsed, state: "death", locomotion: unit.locomotion || Locomotion.create(unit.facing || "left"), battleDiagonal: true, alpha: 1, selected: false }) === true;
+      if (layout.projected && unit.side === "ally") {
+        Art.drawCharacter(ctx, {
+          x: point.x,
+          y: baseline,
+          scale: heroScale,
+          actor: "player",
+          classId: unit.classId || playerClassId,
+          gender: unit.gender || player.gender,
+          facing: battleUnitRenderFacing(unit),
+          phase: elapsed,
+          state: "death",
+          locomotion: unit.locomotion || Locomotion.create(unit.facing || "down"),
+          battleDiagonal: true,
+          alpha: 1,
+          selected: false,
+        });
+      } else if (layout.projected && unit.side !== "ally") {
+        Art.drawEnemy(ctx, {
+          x: point.x,
+          y: baseline,
+          scale: monsterScale * (unit.boss ? .98 : .92),
+          type: unit.type,
+          facing: battleUnitRenderFacing(unit),
+          phase: elapsed,
+          state: "death",
+          locomotion: unit.locomotion || Locomotion.create(unit.facing || "left"),
+          battleDiagonal: true,
+          alpha: 1,
+          selected: false,
+        });
       }
-      if (!drewDeathArt) drawBattleCorpsePlaceholder(unit, layout, point, baseline);
       drawBattleCorpseCountdown(unit, layout, point);
       return;
     }

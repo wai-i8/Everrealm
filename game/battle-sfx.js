@@ -22,6 +22,42 @@
     chickAttack: "assets/audio/sfx/battle/chick/chick-attack.wav",
     chickFootstep: "assets/audio/sfx/battle/chick/chick-footstep.wav",
     chickDeath: "assets/audio/sfx/battle/chick/chick-death.wav",
+    foxAttack: "assets/audio/sfx/battle/fox/fox-attack-generated-v1.wav",
+    foxFootstep: "assets/audio/sfx/battle/fox/fox-footstep-generated-v1.wav",
+    foxDeath: "assets/audio/sfx/battle/fox/fox-death-generated-v1.wav",
+    raccoonAttack: "assets/audio/sfx/battle/raccoon/raccoon-attack-generated-v1.wav",
+    raccoonFootstep: "assets/audio/sfx/battle/raccoon/raccoon-footstep-generated-v1.wav",
+    raccoonDeath: "assets/audio/sfx/battle/raccoon/raccoon-death-generated-v1.wav",
+    frogAttack: "assets/audio/sfx/battle/frog/frog-attack-generated-v1.wav",
+    frogFootstep: "assets/audio/sfx/battle/frog/frog-footstep-generated-v1.wav",
+    frogDeath: "assets/audio/sfx/battle/frog/frog-death-generated-v1.wav",
+    blackcatAttack: "assets/audio/sfx/battle/blackcat/blackcat-attack-generated-v1.wav",
+    blackcatFootstep: "assets/audio/sfx/battle/blackcat/blackcat-footstep-generated-v1.wav",
+    blackcatDeath: "assets/audio/sfx/battle/blackcat/blackcat-death-generated-v1.wav",
+    coyoteAttack: "assets/audio/sfx/battle/coyote/coyote-attack-generated-v1.wav",
+    coyoteFootstep: "assets/audio/sfx/battle/coyote/coyote-footstep-generated-v1.wav",
+    coyoteDeath: "assets/audio/sfx/battle/coyote/coyote-death-generated-v1.wav",
+    turtleAttack: "assets/audio/sfx/battle/turtle/turtle-attack-generated-v1.wav",
+    turtleFootstep: "assets/audio/sfx/battle/turtle/turtle-footstep-generated-v1.wav",
+    turtleDeath: "assets/audio/sfx/battle/turtle/turtle-death-generated-v1.wav",
+    snakeAttack: "assets/audio/sfx/battle/snake/snake-attack-generated-v1.wav",
+    snakeFootstep: "assets/audio/sfx/battle/snake/snake-footstep-generated-v1.wav",
+    snakeDeath: "assets/audio/sfx/battle/snake/snake-death-generated-v1.wav",
+    bearAttack: "assets/audio/sfx/battle/bear/bear-attack-generated-v1.wav",
+    bearFootstep: "assets/audio/sfx/battle/bear/bear-footstep-generated-v1.wav",
+    bearDeath: "assets/audio/sfx/battle/bear/bear-death-generated-v1.wav",
+  });
+
+  const MONSTER_SFX_IDS = Object.freeze({
+    chick: Object.freeze({ attack: "chickAttack", footstep: "chickFootstep", death: "chickDeath" }),
+    fox: Object.freeze({ attack: "foxAttack", footstep: "foxFootstep", death: "foxDeath" }),
+    raccoon: Object.freeze({ attack: "raccoonAttack", footstep: "raccoonFootstep", death: "raccoonDeath" }),
+    frog: Object.freeze({ attack: "frogAttack", footstep: "frogFootstep", death: "frogDeath" }),
+    blackcat: Object.freeze({ attack: "blackcatAttack", footstep: "blackcatFootstep", death: "blackcatDeath" }),
+    coyote: Object.freeze({ attack: "coyoteAttack", footstep: "coyoteFootstep", death: "coyoteDeath" }),
+    turtle: Object.freeze({ attack: "turtleAttack", footstep: "turtleFootstep", death: "turtleDeath" }),
+    snake: Object.freeze({ attack: "snakeAttack", footstep: "snakeFootstep", death: "snakeDeath" }),
+    bear: Object.freeze({ attack: "bearAttack", footstep: "bearFootstep", death: "bearDeath" }),
   });
 
   const GAINS = Object.freeze({
@@ -68,15 +104,33 @@
     return Boolean(skill && skill.classId === "fighter");
   }
 
+  function monsterType(value) {
+    const explicit = typeof value === "string" ? value : value?.type;
+    const normalized = String(explicit || "").toLowerCase();
+    if (MONSTER_SFX_IDS[normalized]) return normalized;
+    const id = String(typeof value === "string" ? value : value?.id || "").toLowerCase();
+    return Object.keys(MONSTER_SFX_IDS).find((type) => id.includes(type)) || null;
+  }
+
+  function monsterSfxId(value, kind) {
+    const type = monsterType(value);
+    return type ? MONSTER_SFX_IDS[type]?.[kind] || null : null;
+  }
+
+  function isMonsterUnit(unit) {
+    return Boolean(monsterType(unit));
+  }
+
   function isChickUnit(unit) {
-    if (!unit) return false;
-    if (String(unit.type || "").toLowerCase() === "chick") return true;
-    return String(unit.id || "").toLowerCase().includes("chick");
+    return monsterType(unit) === "chick";
   }
 
   function isChickBattleId(id, type) {
-    return String(id || "").toLowerCase().includes("chick")
-      || String(type || "").toLowerCase() === "chick";
+    return monsterType(type || id) === "chick";
+  }
+
+  function isMonsterBattleId(id, type) {
+    return Boolean(monsterType(type || id));
   }
 
   function createSamplePlayer(root) {
@@ -150,9 +204,9 @@
       heroActionStrikeIndex: -1,
       freshSkill: null,
       freshSkillToken: 0,
-      chickWalkState: new Map(),
-      chickVisualState: new Map(),
-      deadChicks: typeof WeakSet === "function" ? new WeakSet() : null,
+      monsterWalkState: new Map(),
+      monsterVisualState: new Map(),
+      deadMonsters: typeof WeakSet === "function" ? new WeakSet() : null,
       player,
       beginAction({ skill = null } = {}) {
         runtime.activeHeroSkill = skill || null;
@@ -167,8 +221,20 @@
       playMiss() {
         return player.play("miss", { delay: 90, cooldown: 170, cooldownKey: "battle-miss" });
       },
+      playMonster(typeOrUnit, kind, options = {}) {
+        const id = monsterSfxId(typeOrUnit, kind);
+        if (!id) return false;
+        const gain = kind === "footstep" ? .72 : kind === "death" ? .9 : .82;
+        return player.play(id, { gain, ...options });
+      },
+      playMonsterDeath(unit) {
+        if (!isMonsterUnit(unit)) return false;
+        if (unit && typeof unit === "object" && runtime.deadMonsters?.has(unit)) return false;
+        if (unit && typeof unit === "object") runtime.deadMonsters?.add(unit);
+        return runtime.playMonster(unit, "death");
+      },
       playChickDeath() {
-        return player.play("chickDeath", { gain: GAINS.chickDeath });
+        return runtime.playMonster("chick", "death", { gain: GAINS.chickDeath });
       },
     };
     root[INSTALL_KEY] = runtime;
@@ -227,13 +293,7 @@
       Tactics.applyDamage = function (unit, ...args) {
         const wasAlive = Boolean(unit && unit.hp > 0 && unit.alive !== false);
         const result = originalApplyDamage(unit, ...args);
-        if (wasAlive && result?.defeated && isChickUnit(unit)) {
-          const alreadyPlayed = runtime.deadChicks?.has(unit) || false;
-          if (!alreadyPlayed) {
-            runtime.deadChicks?.add(unit);
-            player.play("chickDeath", { gain: GAINS.chickDeath });
-          }
-        }
+        if (wasAlive && result?.defeated && isMonsterUnit(unit)) runtime.playMonsterDeath(unit);
         return result;
       };
     }
@@ -267,17 +327,18 @@
           return originalArt.drawCharacter(ctx, options);
         },
         drawEnemy(ctx, options = {}) {
-          if (String(options.type || "").toLowerCase() === "chick") {
+          const type = monsterType(options.type);
+          if (type) {
             // x/y are stable while an action animation is playing, which gives
             // us a lightweight per-unit key even though drawEnemy() does not
             // receive the battle unit id.
-            const key = `chick:${Math.round(Number(options.x) || 0)}:${Math.round(Number(options.y) || 0)}`;
-            const previous = runtime.chickVisualState.get(key) || "idle";
+            const key = `${type}:${Math.round(Number(options.x) || 0)}:${Math.round(Number(options.y) || 0)}`;
+            const previous = runtime.monsterVisualState.get(key) || "idle";
             const next = String(options.state || "idle");
             if (next === "attack" && previous !== "attack") {
-              player.play("chickAttack", { cooldown: 120, cooldownKey: `chick-attack:${key}` });
+              runtime.playMonster(type, "attack", { cooldown: 120, cooldownKey: `monster-attack:${key}` });
             }
-            runtime.chickVisualState.set(key, next);
+            runtime.monsterVisualState.set(key, next);
           }
           return originalArt.drawEnemy(ctx, options);
         },
@@ -292,15 +353,16 @@
         ...originalLocomotion,
         sampleMovement(movement, id, seconds, fallbackFacing, unitType) {
           const result = originalSampleMovement(movement, id, seconds, fallbackFacing);
-          if (isChickBattleId(id, unitType)) {
-            const previous = runtime.chickWalkState.get(id) || "idle";
+          if (isMonsterBattleId(id, unitType)) {
+            const type = monsterType(unitType) || monsterType(id);
+            const previous = runtime.monsterWalkState.get(id) || "idle";
             const next = result?.state || "idle";
             if (next === "walk" && previous !== "walk") {
-              player.play("chickFootstep", {
+              runtime.playMonster(type, "footstep", {
                 rate: .98 + Math.random() * .04,
               });
             }
-            runtime.chickWalkState.set(id, next);
+            runtime.monsterWalkState.set(id, next);
           }
           return result;
         },
@@ -313,12 +375,17 @@
 
   return Object.freeze({
     ASSETS,
+    MONSTER_SFX_IDS,
     GAINS,
     clamp01,
     sfxEnabled,
     sfxVolume,
     isDamagingSkill,
     isFighterSkill,
+    monsterType,
+    monsterSfxId,
+    isMonsterUnit,
+    isMonsterBattleId,
     isChickUnit,
     isChickBattleId,
     createSamplePlayer,

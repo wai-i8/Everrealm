@@ -325,6 +325,26 @@
       ready: false,
       failed: false,
     };
+    if (config.deathAsset) {
+      const death = config.deathAsset;
+      spriteAtlases[`battleDeath_${id}`] = {
+        src: death.src,
+        battleDiagonal: true,
+        columns: death.columns,
+        rows: death.rows,
+        cellWidth: death.cellWidth,
+        cellHeight: death.cellHeight,
+        anchorX: death.anchorX,
+        anchorY: death.anchorY,
+        visualProfile: death.visualProfile,
+        rowByFacing: death.rowByFacing,
+        idleColumn: death.idleColumn,
+        deathColumn: death.deathColumn,
+        image: null,
+        ready: false,
+        failed: false,
+      };
+    }
   }
 
   function loadSpriteAtlases() {
@@ -547,12 +567,14 @@
   }
 
   function battleDiagonalFrame(settings, id) {
-    const config = Locomotion.BATTLE_DIAGONAL_ASSETS?.[id];
-    const atlas = spriteAtlases[`battleDiagonal_${id}`];
+    const baseConfig = Locomotion.BATTLE_DIAGONAL_ASSETS?.[id];
+    const state = settings.state || settings.locomotion?.state || "idle";
+    const deathConfig = baseConfig?.deathAsset;
+    const config = state === "death" && deathConfig ? deathConfig : baseConfig;
+    const atlas = spriteAtlases[state === "death" && deathConfig ? `battleDeath_${id}` : `battleDiagonal_${id}`];
     if (!config || !atlas) return null;
     const requestedFacing = settings.facing || settings.locomotion?.facing || "right";
     const facing = Object.hasOwn(config.rowByFacing || {}, requestedFacing) ? requestedFacing : "right";
-    const state = settings.state || settings.locomotion?.state || "idle";
     const phase = Math.max(0, Number(settings.phase) || Number(settings.locomotion?.time) || 0);
     let sourceFacing = facing;
     let mirror = false;
@@ -635,7 +657,7 @@
     const nameLift = Number(visualProfile?.nameLift) || Math.max(1, cellHeight - 12);
     ctx.save();
     try {
-      drawGroundShadow(ctx, x, y, visualScale, id === "fighter" ? 15 : 12, selected.state === "hurt" ? .24 : .34);
+      drawGroundShadow(ctx, x, y, visualScale, ["fighter", "fighterFemale"].includes(id) ? 15 : 12, selected.state === "hurt" ? .24 : .34);
       ctx.globalAlpha *= Number.isFinite(settings.alpha) ? Math.max(0, Math.min(1, settings.alpha)) : 1;
       if (selected.state === "hurt") {
         ctx.globalAlpha *= .84;
