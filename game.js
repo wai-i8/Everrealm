@@ -12996,7 +12996,7 @@
     }
     if (pvpActionButton) {
       const busy = Boolean(pvpState.pointer || partyState.party || tradeState.session?.status === "active");
-      pvpActionButton.disabled = busy || outgoingInviteLocked || remote.state === "battle" || !pvpClient?.isActive?.();
+      pvpActionButton.disabled = busy || outgoingInviteLocked || remote.state === "battle";
       pvpActionButton.textContent = pvpState.pointer ? "切磋中" : outgoingInviteLocked ? "等待回覆中" : "邀請切磋";
     }
     if (partyActionButton) {
