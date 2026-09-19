@@ -53,10 +53,12 @@
   const Social = window.EverrealmSocial;
   const Trade = window.EverrealmTrade;
   const Party = window.EverrealmParty;
+  const Pvp = window.EverrealmPvp;
   let worldChat = null;
   let social = null;
   let trade = null;
   let partyClient = null;
+  let pvpClient = null;
   const {
     normalizeCharacterName,
     statText,
@@ -214,6 +216,8 @@
   const partyContent = document.getElementById("partyContent");
   const partyInvitePanel = document.getElementById("partyInvitePanel");
   const partyInviteName = document.getElementById("partyInviteName");
+  const pvpInvitePanel = document.getElementById("pvpInvitePanel");
+  const pvpInviteName = document.getElementById("pvpInviteName");
   const remotePlayerMenu = document.getElementById("remotePlayerMenu");
   const remotePlayerMenuName = document.getElementById("remotePlayerMenuName");
   const remotePlayerMenuClose = document.getElementById("remotePlayerMenuClose");
@@ -426,12 +430,15 @@
   let socialState = Object.freeze({ active: false, uid: "", friends: [], whisperPeers: [], incoming: [], outgoing: [], outgoingInvite: null });
   let tradeState = Object.freeze({ active: false, uid: "", session: null, invites: [] });
   let partyState = Object.freeze({ active: false, uid: "", party: null, battle: null, invites: [] });
+  let pvpState = Object.freeze({ active: false, uid: "", pointer: null, battle: null, invites: [] });
   let activeFriendInvite = null;
   let activeTradeInvite = null;
   let activePartyInvite = null;
+  let activePvpInvite = null;
   let lastPartyTransitionId = "";
   let partyTransitionApplying = false;
   let lastPartyBattleEventSerial = 0;
+  let hiddenRealtimeTimer = null;
   let partyAdvanceKey = "";
   let partyAdvanceRetryAtMs = 0;
   let partyBattleReadyId = "";
@@ -820,6 +827,7 @@
   let socialStartPromise = null;
   let tradeStartPromise = null;
   let partyStartPromise = null;
+  let pvpStartPromise = null;
   let realtimeSessionToken = 0;
 
   function realtimePlayerSnapshot(state = ["battle", "dead"].includes(mode) ? "battle" : "exploring") {
@@ -918,6 +926,18 @@
         return false;
       });
     }
+    if (pvpClient) {
+      pvpStartPromise = pvpClient.start({ uid, name: playerDisplayName() }).then((started) => {
+        if (token !== realtimeSessionToken) {
+          if (started) pvpClient.stop();
+          return false;
+        }
+        return started;
+      }).catch((error) => {
+        console.warn("Everrealm PVP unavailable.", error);
+        return false;
+      });
+    }
   }
 
   function stopRealtimeSession() {
@@ -927,11 +947,13 @@
     socialStartPromise = null;
     tradeStartPromise = null;
     partyStartPromise = null;
+    pvpStartPromise = null;
     if (multiplayer?.isActive?.()) void multiplayer.stop();
     worldChat?.stop?.();
     social?.stop?.();
     trade?.stop?.();
     partyClient?.stop?.();
+    pvpClient?.stop?.();
   }
 
   function syncRealtimeState(state) {
@@ -2356,6 +2378,10 @@
         weakPotionDistanceRemainder = 0;
         markPersistenceDirty();
         saveGame(false, true);
+      } else if (mode !== "title") {
+        // Queue any movement since the last 60 s autosave before flushing,
+        // otherwise logging out mid-walk rolls the player back.
+        saveGame(false);
       }
       const result = await savePersistence?.flushCloud();
       if (result && result.saved === false && !result.created) throw result.error || new Error("cloud save failed");
@@ -3113,6 +3139,7 @@
       classSelectPanel?.hidden === false ||
       deathPanel?.hidden === false ||
       dialoguePanel?.hidden === false ||
+      pvpInvitePanel?.hidden === false ||
       hasBlockingFacilityWindow()
     );
   }
@@ -3418,7 +3445,10 @@
   async function flushForServerCommand() {
     const reset = await playerResetWrite;
     if (reset?.error) throw reset.error;
-    saveImportant(false);
+    // Only send a cloud save when something actually changed (dirty flag or
+    // fingerprint mismatch). Forcing dirty here cost one extra Cloud Function
+    // call + Firestore read/write before every shop/item/battle/map command.
+    saveGame(false);
     const flush = await savePersistence?.flushCloud?.();
     if (flush?.error) throw flush.error;
     return true;
@@ -3426,6 +3456,10 @@
 
   function applyAuthoritativeState(snapshot, options = {}) {
     if (!snapshot || typeof snapshot !== "object") return false;
+    // If nothing was waiting to be saved before this server result arrived,
+    // the result is already persisted by the server, so a follow-up client save
+    // would only write identical data.
+    const wasCleanBeforeApply = Boolean(persistence) && !persistence.needsSave();
     const incomingRevision = Math.max(0, Math.floor(Number(snapshot.stateRevision) || 0));
     if (incomingRevision > 0 && incomingRevision < lastAppliedServerRevision) {
       console.warn(`[AuthoritativeState] Ignored stale revision ${incomingRevision}; latest is ${lastAppliedServerRevision}.`);
@@ -3464,7 +3498,10 @@
       const nextMapId = expansion.currentMapId === "dungeon" ? "mountain-southeast" : expansion.currentMapId;
       if (hasMap(nextMapId)) currentMapId = nextMapId;
     }
-    if (options.markDirty !== false) markPersistenceDirty();
+    if (options.markDirty !== false) {
+      if (wasCleanBeforeApply) persistence.markSaved(getPersistenceFingerprint());
+      else markPersistenceDirty();
+    }
     updateHud(true);
     updateMenuBadges();
     if (facilityWindows.size) renderFacility();
@@ -6021,7 +6058,7 @@
       applyAuthoritativeState(result.state);
       sound.crystal();
       showToast(`已換成「${panelState.panels?.[panelId]?.name || "戰技面板"}」`, "good");
-      saveImportant(false);
+      saveGame(false);
       return true;
     } catch (error) {
       restoreOptimisticUiState(optimisticSnapshot);
@@ -6047,7 +6084,7 @@
       addSystemMessage("reward", openedBookMessage);
       announce(openedBookMessage);
       renderFacility();
-      saveImportant(false);
+      saveGame(false);
     } catch (error) {
       serverCommandError(error, "暫時未能打開技能書。");
     }
@@ -6187,7 +6224,7 @@
       applyAuthoritativeState(result.state);
       showToast(`${equip ? "已配置" : "已移除"}：${Skills.getSkill(skillId)?.name || skillId}`, "good");
       renderFacility();
-      saveImportant(false);
+      saveGame(false);
     } catch (error) {
       restoreOptimisticUiState(optimisticSnapshot);
       serverCommandError(error, "暫時未能更改技能配置。");
@@ -7053,6 +7090,23 @@
     backgroundId: "mountain-battle-background-v1",
   });
 
+  const PVP_PLAZA_BATTLEFIELD = Object.freeze({
+    id: "pvp-plaza-v1",
+    biome: "town",
+    theme: "plaza",
+    width: 12,
+    height: 3,
+    projection: Object.freeze({
+      xAxis: Object.freeze({ x: .78, y: -.50 }),
+      yAxis: Object.freeze({ x: .78, y: .50 }),
+      elevationStep: .18,
+      baseThickness: .20,
+    }),
+    deploymentZones: Object.freeze({ ally: Object.freeze([{ x: 1, y: 1 }]), enemy: Object.freeze([{ x: 10, y: 1 }]) }),
+    heightMap: Object.freeze({}),
+    terrainCells: Object.freeze({}),
+  });
+
   function scheduleBattle(callback, delay = 0) {
     if (!battle) return;
     const token = battle.token;
@@ -7221,6 +7275,24 @@
 
   function partyBattleSource(snapshot) {
     if (!snapshot) return null;
+    if (snapshot.pvp === true) {
+      return {
+        id: `pvp:${snapshot.id}`,
+        instanceId: `pvp:${snapshot.id}`,
+        type: "player",
+        artType: "player",
+        name: "對戰開始",
+        level: 1,
+        hp: 1,
+        maxHp: 1,
+        damage: 1,
+        defence: 0,
+        alive: true,
+        x: player.x,
+        y: player.y,
+        encounterCooldown: 0,
+      };
+    }
     const encounterId = String(snapshot.encounterId || "");
     const live = enemies.find((enemy) => String(enemy.instanceId || enemy.id || "") === encounterId)
       || enemies.find((enemy) => String(enemy.type || "") === String(snapshot.monsterType || ""));
@@ -7253,13 +7325,13 @@
     }
   }
 
-  function partyBattleUnitFromMember(memberUid, member, isLocal = false) {
+  function partyBattleUnitFromMember(memberUid, member, isLocal = false, side = "ally") {
     const stats = isLocal ? playerStats() : {};
     return {
       id: String(member?.battleUnitId || `party:${memberUid}`),
       uid: memberUid,
-      side: "ally",
-      team: "ally",
+      side,
+      team: side,
       type: "player",
       name: member?.name || (isLocal ? playerDisplayName() : "冒險者"),
       classId: member?.classId || (isLocal ? playerClassId : "fighter"),
@@ -7296,6 +7368,14 @@
     return uid && snapshot?.members ? snapshot.members[uid] || null : null;
   }
 
+  function sharedBattleClient() {
+    return battle?.isPvpBattle ? pvpClient : partyClient;
+  }
+
+  function runSharedBattleCommand(callback, options = {}) {
+    return battle?.isPvpBattle ? runPvpCommand(callback, options) : runPartyCommand(callback, options);
+  }
+
   function partyBattleSubmissionLocked(kind = "") {
     if (!battle?.isPartyBattle) return false;
     if (kind === "move") return Boolean(battle.partyMoveSubmitted);
@@ -7322,11 +7402,11 @@
     battle.awaitingFacing = false;
     battle.partyMoveSubmitted = true;
     battle.messageDanger = false;
-    battle.message = "移動已提交，等待隊友…";
+    battle.message = battle.isPvpBattle ? "移動已提交，等待對手…" : "移動已提交，等待隊友…";
     updateBattleUi();
     const battleId = battle.partyBattleId;
     const round = battle.round;
-    const result = await runPartyCommand(() => partyClient?.submitMove?.(battleId, round, commands, schedule.finalTravelFacing || battle.hero.facing));
+    const result = await runSharedBattleCommand(() => sharedBattleClient()?.submitMove?.(battleId, round, commands, schedule.finalTravelFacing || battle.hero.facing));
     if (!battle?.isPartyBattle || battle.partyBattleId !== battleId || battle.round !== round) return Boolean(result?.ok);
     if (!result?.ok) {
       battle.partyMoveSubmitted = false;
@@ -7346,11 +7426,11 @@
     battle.partyActionSubmitted = true;
     battle.selectedAction = null;
     battle.messageDanger = false;
-    battle.message = "行動已提交，等待隊友…";
+    battle.message = battle.isPvpBattle ? "行動已提交，等待對手…" : "行動已提交，等待隊友…";
     updateBattleUi();
     const battleId = battle.partyBattleId;
     const round = battle.round;
-    const result = await runPartyCommand(() => partyClient?.submitAction?.(battleId, round, payload));
+    const result = await runSharedBattleCommand(() => sharedBattleClient()?.submitAction?.(battleId, round, payload));
     if (!battle?.isPartyBattle || battle.partyBattleId !== battleId || battle.round !== round) return Boolean(result?.ok);
     if (!result?.ok) {
       battle.partyActionSubmitted = false;
@@ -7506,7 +7586,7 @@
     const key = `${battle.partyBattleId}:${battle.round}:${battle.phase}`;
     if (partyAdvanceKey === key) return false;
     partyAdvanceKey = key;
-    const result = await runPartyCommand(() => partyClient?.advanceBattle?.(battle.partyBattleId), { silent: true });
+    const result = await runSharedBattleCommand(() => sharedBattleClient()?.advanceBattle?.(battle.partyBattleId), { silent: true });
     const stillSamePhase = Boolean(battle?.isPartyBattle && `${battle.partyBattleId}:${battle.round}:${battle.phase}` === key);
     if (!result?.ok) {
       if (stillSamePhase) {
@@ -7532,7 +7612,7 @@
 
   async function retreatPartyBattle() {
     if (!battle?.isPartyBattle || !battle.partyBattleId || !["planning_move", "planning_action"].includes(battle.phase)) return false;
-    const result = await runPartyCommand(() => partyClient?.retreat?.(battle.partyBattleId));
+    const result = await runSharedBattleCommand(() => sharedBattleClient()?.retreat?.(battle.partyBattleId));
     if (!result?.ok) return false;
     const chance = Core.clamp(Number(result.chance) || 0, 0, 1);
     if (!result.success) {
@@ -7564,11 +7644,37 @@
       battlePhaseTimer.classList.remove("is-urgent");
       return;
     }
-    const remainingMs = deadline > 0 ? Math.max(0, deadline - Date.now()) : (Party?.PHASE_MS || 30000);
+    // Compare against server time: a client clock that runs fast would see the
+    // deadline as passed early and spam battle-advance (each = a Function call).
+    const serverNow = serverNowMs();
+    const remainingMs = deadline > 0 ? Math.max(0, deadline - serverNow) : (Party?.PHASE_MS || 30000);
     const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
     battlePhaseTimer.textContent = `${authoritativePhase === "planning_move" ? "移動" : "行動"} ${seconds}s`;
     battlePhaseTimer.classList.toggle("is-urgent", deadline > 0 && seconds <= 5);
-    if (deadline > 0 && remainingMs <= 0 && battle.phase === authoritativePhase) void requestPartyBattleAdvance();
+    // Only the leader (or a solo player) advances at the deadline; other
+    // members act as a fallback after a grace period so a disconnected leader
+    // cannot stall the battle. This avoids N simultaneous transactions.
+    const advancesFirst = battle?.isPvpBattle
+      ? String(authoritative?.initiatorUid || "") === authenticatedUid()
+      : (authoritative?.solo === true || !partyState?.party || Boolean(partyClient?.isLeader?.()));
+    const advanceGraceMs = advancesFirst ? 120 : 2500;
+    if (deadline > 0 && serverNow - deadline >= advanceGraceMs && battle.phase === authoritativePhase) void requestPartyBattleAdvance();
+  }
+
+  function saveOnLeavingPage() {
+    try {
+      if (mode === "title" || !isGameplayAuthorized()) return;
+      saveGame(false);
+      void savePersistence?.flushCloud?.();
+    } catch (_) {}
+  }
+
+  function serverNowMs() {
+    try {
+      const value = Number(worldTime?.getServerNow?.());
+      if (Number.isFinite(value) && value > 0) return value;
+    } catch (_) {}
+    return Date.now();
   }
 
   function startPartyMovementReplay(targetBattle, replay, targetPhase = "planning_action", options = {}) {
@@ -7641,37 +7747,48 @@
       baseMoveRange: targetBattle.hero.baseMoveRange,
       moveRange: Math.max(0, targetBattle.hero.baseMoveRange - (FighterEffects?.movementPenalty?.(local, targetBattle.round) || 0)),
     });
-    player.hp = targetBattle.hero.hp;
+    if (snapshot.pvp !== true) player.hp = targetBattle.hero.hp;
     targetBattle.ap = local.ap;
 
-    targetBattle.partyAllies = snapshot.solo === true ? [] : (snapshot.memberUids || [])
-      .filter((uid) => String(uid) !== String(memberUid))
-      .map((uid) => partyBattleUnitFromMember(uid, snapshot.members?.[uid], false));
+    if (snapshot.pvp === true) {
+      const opponentUid = (snapshot.memberUids || []).find((uid) => String(uid) !== String(memberUid));
+      targetBattle.partyAllies = [];
+      targetBattle.enemies = opponentUid && snapshot.members?.[opponentUid]
+        ? [partyBattleUnitFromMember(opponentUid, snapshot.members[opponentUid], false, "enemy")]
+        : [];
+      targetBattle.hero.side = "ally";
+      targetBattle.hero.team = "ally";
+      targetBattle.hero.id = String(localMember?.battleUnitId || `pvp:${memberUid}`);
+    } else {
+      targetBattle.partyAllies = snapshot.solo === true ? [] : (snapshot.memberUids || [])
+        .filter((uid) => String(uid) !== String(memberUid))
+        .map((uid) => partyBattleUnitFromMember(uid, snapshot.members?.[uid], false));
 
-    for (let index = 0; index < targetBattle.enemies.length; index += 1) {
-      const canonical = snapshot.enemies?.[index];
-      const enemy = targetBattle.enemies[index];
-      if (!canonical || !enemy) continue;
-      enemy.id = canonical.id || enemy.id;
-      enemy.type = canonical.type || enemy.type;
-      enemy.name = canonical.name || enemy.name;
-      enemy.level = Math.max(1, Number(canonical.level) || enemy.level || snapshot.level || 1);
-      enemy.maxHp = Math.max(1, Number(canonical.maxHp) || enemy.maxHp || 1);
-      enemy.hp = Core.clamp(Number(canonical.hp) || 0, 0, enemy.maxHp);
-      enemy.alive = canonical.alive !== false && enemy.hp > 0;
-      enemy.deathRound = Number.isFinite(Number(canonical.deathRound)) && Number(canonical.deathRound) > 0
-        ? Math.floor(Number(canonical.deathRound))
-        : (enemy.alive ? null : (enemy.deathRound || Math.max(1, targetBattle.round - 1)));
-      if (canonical.cell) enemy.cell = copyBattleCell(canonical.cell);
-      if (["up", "right", "down", "left"].includes(canonical.facing)) enemy.facing = canonical.facing;
-      enemy.ap = Math.max(0, Number(canonical.ap) || 0);
-      enemy.statusEffects = { ...(canonical.statusEffects || {}) };
-      enemy.defenceDown = Math.max(0, Number(canonical.defenceDown) || 0);
-      enemy.defenceDownUntilRound = Math.max(0, Number(canonical.defenceDownUntilRound) || 0);
-      enemy.moveDown = Math.max(0, Number(canonical.moveDown) || 0);
-      enemy.moveDownUntilRound = Math.max(0, Number(canonical.moveDownUntilRound) || 0);
-      enemy.hitFlash = enemy.hitFlash || 0;
-      enemy.stopFlash = enemy.stopFlash || 0;
+      for (let index = 0; index < targetBattle.enemies.length; index += 1) {
+        const canonical = snapshot.enemies?.[index];
+        const enemy = targetBattle.enemies[index];
+        if (!canonical || !enemy) continue;
+        enemy.id = canonical.id || enemy.id;
+        enemy.type = canonical.type || enemy.type;
+        enemy.name = canonical.name || enemy.name;
+        enemy.level = Math.max(1, Number(canonical.level) || enemy.level || snapshot.level || 1);
+        enemy.maxHp = Math.max(1, Number(canonical.maxHp) || enemy.maxHp || 1);
+        enemy.hp = Core.clamp(Number(canonical.hp) || 0, 0, enemy.maxHp);
+        enemy.alive = canonical.alive !== false && enemy.hp > 0;
+        enemy.deathRound = Number.isFinite(Number(canonical.deathRound)) && Number(canonical.deathRound) > 0
+          ? Math.floor(Number(canonical.deathRound))
+          : (enemy.alive ? null : (enemy.deathRound || Math.max(1, targetBattle.round - 1)));
+        if (canonical.cell) enemy.cell = copyBattleCell(canonical.cell);
+        if (["up", "right", "down", "left"].includes(canonical.facing)) enemy.facing = canonical.facing;
+        enemy.ap = Math.max(0, Number(canonical.ap) || 0);
+        enemy.statusEffects = { ...(canonical.statusEffects || {}) };
+        enemy.defenceDown = Math.max(0, Number(canonical.defenceDown) || 0);
+        enemy.defenceDownUntilRound = Math.max(0, Number(canonical.defenceDownUntilRound) || 0);
+        enemy.moveDown = Math.max(0, Number(canonical.moveDown) || 0);
+        enemy.moveDownUntilRound = Math.max(0, Number(canonical.moveDownUntilRound) || 0);
+        enemy.hitFlash = enemy.hitFlash || 0;
+        enemy.stopFlash = enemy.stopFlash || 0;
+      }
     }
 
     if (targetBattle.isPartyBattle) {
@@ -7878,7 +7995,7 @@
     targetBattle.phase = "resolving_action";
     targetBattle.selectedAction = null;
     targetBattle.messageDanger = false;
-    targetBattle.message = targetBattle.isPartyBattle ? "全隊與敵人同步行動中…" : "正在播放本回合行動…";
+    targetBattle.message = targetBattle.isPvpBattle ? "你與對手同步行動中…" : targetBattle.isPartyBattle ? "全隊與敵人同步行動中…" : "正在播放本回合行動…";
     targetBattle.actionResolution = {
       partyReplay: true,
       partyReplayId: replayId,
@@ -7925,12 +8042,12 @@
       const latest = battle.partyLatestSnapshot;
       if (latest?.id === battle.partyBattleId) hydratePartyBattleSnapshot(battle, latest, { render: false });
       battle.messageDanger = false;
-      battle.message = "戰鬥結算同步中，等待全部隊員完成動畫…";
+      battle.message = battle.isPvpBattle ? "對戰結算同步中，等待雙方完成動畫…" : "戰鬥結算同步中，等待全部隊員完成動畫…";
       updateBattleUi();
       if (!battle.partyFinishReadySent) {
         battle.partyFinishReadySent = true;
         const battleId = battle.partyBattleId;
-        const result = await runPartyCommand(() => partyClient?.finishReady?.(battleId, item.serial), { silent: true });
+        const result = await runSharedBattleCommand(() => sharedBattleClient()?.finishReady?.(battleId, item.serial), { silent: true });
         if (!result?.ok && battle?.isPartyBattle && battle.partyBattleId === battleId) battle.partyFinishReadySent = false;
       }
     }
@@ -7958,7 +8075,7 @@
       }
       if (latest.status === "finished") {
         battle.messageDanger = false;
-        battle.message = "戰鬥結算同步中，等待隊友完成動畫…";
+        battle.message = battle.isPvpBattle ? "對戰結算同步中，等待對手完成動畫…" : "戰鬥結算同步中，等待隊友完成動畫…";
       }
       updateHud(true);
       updateBattleUi();
@@ -7988,6 +8105,48 @@
     hydratePartyBattleSnapshot(battle, snapshot, { render: false });
     const uid = authenticatedUid();
     const member = snapshot.members?.[uid];
+    if (snapshot.pvp === true) {
+      const won = String(snapshot.winnerUid || "") === String(uid);
+      if (member?.retreated) {
+        void pvpClient?.exitBattle?.(snapshot.id);
+        closeBattleHud();
+        restoreExplorationUiAfterBattle();
+        encounterGrace = 1.4;
+        return;
+      }
+      if (!won) {
+        battle.phase = "defeat";
+        battle.message = "切磋落敗。";
+        battle.messageDanger = true;
+        addSystemMessage("combat", "切磋落敗。", "danger");
+        updateBattleUi();
+        showToast("切磋落敗。", "danger");
+        void pvpClient?.exitBattle?.(snapshot.id);
+        window.setTimeout(() => {
+          if (!battle?.isPvpBattle || battle.partyBattleId !== snapshot.id) return;
+          closeBattleHud();
+          restoreExplorationUiAfterBattle();
+          encounterGrace = 1;
+          canvas.focus({ preventScroll: true });
+        }, reducedMotion ? 80 : 850);
+        return;
+      }
+      battle.phase = "victory";
+      battle.victoryResult = {
+        earnedXp: 0, coins: 0, drops: [],
+        beforeLevel: player.level, beforeXp: player.xp,
+        afterLevel: player.level, afterXp: player.xp,
+      };
+      addSystemMessage("combat", "切磋勝利！", "good");
+      startVictoryBgm();
+      updateBattleUi();
+      ensureBattleVictoryPresenter().show(battle.victoryResult);
+      const victoryPrompt = battleVictoryContinue?.querySelector?.("[data-victory-prompt]");
+      if (victoryPrompt) victoryPrompt.textContent = "返回";
+      if (battleVictoryContinue) battleVictoryContinue.disabled = false;
+      battleVictoryContinue?.focus({ preventScroll: true });
+      return;
+    }
     if (snapshot.result === "victory" && member?.alive && !member.retreated && !member.disconnected) {
       await refreshTradeAuthoritativeState();
       const result = snapshot.rewards?.[uid] || {};
@@ -8043,6 +8202,11 @@
     restoreExplorationUiAfterBattle();
   }
 
+  function syncPvpBattleSnapshot(snapshot) {
+    if (!snapshot?.id) return;
+    syncPartyBattleSnapshot(snapshot);
+  }
+
   function syncPartyBattleSnapshot(snapshot) {
     if (!snapshot?.id) return;
     if (snapshot.id === partyBattleExitedId && snapshot.status !== "finished") return;
@@ -8064,9 +8228,15 @@
       battle.partyVictoryExitReleased = true;
     }
     const ownMember = partyBattleOwnMember(snapshot);
-    if (snapshot.status === "active" && ownMember?.retreated && !ownMember?.disconnected) {
+    if (ownMember?.retreated && !ownMember?.disconnected) {
       partyBattleExitedId = snapshot.id;
-      addSystemMessage("combat", "撤退成功，已離開隊伍。", "good");
+      if (snapshot.pvp === true) {
+        addSystemMessage("combat", "你已投降，切磋結束。", "danger");
+        showToast("你已投降。", "danger");
+        void pvpClient?.exitBattle?.(snapshot.id);
+      } else {
+        addSystemMessage("combat", "撤退成功，已離開隊伍。", "good");
+      }
       closeBattleHud();
       restoreExplorationUiAfterBattle();
       encounterGrace = 1.4;
@@ -8078,7 +8248,7 @@
       hydratePartyBattleSnapshot(battle, snapshot, { render: false });
       if (partyBattleReadyId !== snapshot.id) {
         partyBattleReadyId = snapshot.id;
-        void runPartyCommand(() => partyClient?.battleReady?.(snapshot.id)).then((result) => {
+        void runSharedBattleCommand(() => sharedBattleClient()?.battleReady?.(snapshot.id)).then((result) => {
           if (!result?.ok && partyBattleReadyId === snapshot.id) partyBattleReadyId = "";
         });
       }
@@ -8111,7 +8281,7 @@
       if (snapshot.finishReleased === true) void finishPartyBattle(snapshot);
       else {
         battle.messageDanger = false;
-        battle.message = "戰鬥結算同步中，等待隊友完成動畫…";
+        battle.message = battle.isPvpBattle ? "對戰結算同步中，等待對手完成動畫…" : "戰鬥結算同步中，等待隊友完成動畫…";
         updateBattleUi();
       }
     }
@@ -8154,7 +8324,7 @@
     battleView = { zoom: 1, offsetX: 0, offsetY: 0 };
     const stats = playerStats();
     const battleMoveCapacity = battleMoveCapacityForPlayer(stats);
-    const battlefield = battleFieldContextFor(currentMapId);
+    const battlefield = partyBattleSnapshot?.pvp === true ? PVP_PLAZA_BATTLEFIELD : battleFieldContextFor(currentMapId);
     const dimensions = battleDimensionsFor(battlefield);
     const heroSpawn = battleDeploymentCell(battlefield, "ally", 0);
     if (!resumingServerBattle && !localResumeSnapshot) showBattleEntryTransition(source);
@@ -8196,7 +8366,7 @@
       grid: battleGrid,
       blocked,
       hero,
-      enemies: battlePartyFor(source, battlefield),
+      enemies: partyBattleSnapshot?.pvp === true ? [] : battlePartyFor(source, battlefield),
       rng: Tactics.createSeededRng(`battle:${battleToken}:${source.instanceId || source.id}`),
       phase: "intro",
       round: 1,
@@ -8231,6 +8401,7 @@
       predictedRoundPending: false,
       entryTransitionStartedAt,
       isPartyBattle: Boolean(partyBattleSnapshot),
+      isPvpBattle: partyBattleSnapshot?.pvp === true,
       partyBattleId: partyBattleSnapshot?.id || "",
       partySnapshot: null,
       partyAllies: [],
@@ -8255,7 +8426,7 @@
     battleHud.hidden = true;
     window.EverrealmFootstepsRuntime?.suspend();
     bgm.setEnabled(false);
-    announce(resumingServerBattle ? `重新連接${source.name}戰鬥。` : `遇上${source.name}。進入格仔回合戰。`);
+    announce(partyBattleSnapshot?.pvp === true ? "對戰開始。" : (resumingServerBattle ? `重新連接${source.name}戰鬥。` : `遇上${source.name}。進入格仔回合戰。`));
     maintainGodModeState();
     if (partyBattleSnapshot) {
       battle.hero.id = `party:${authenticatedUid()}`;
@@ -8275,7 +8446,7 @@
       }
       if (partyBattleReadyId !== partyBattleSnapshot.id) {
         partyBattleReadyId = partyBattleSnapshot.id;
-        void runPartyCommand(() => partyClient?.battleReady?.(partyBattleSnapshot.id)).then((result) => {
+        void runSharedBattleCommand(() => sharedBattleClient()?.battleReady?.(partyBattleSnapshot.id)).then((result) => {
           if (!result?.ok && partyBattleReadyId === partyBattleSnapshot.id) partyBattleReadyId = "";
         });
       }
@@ -10783,6 +10954,11 @@
   function exitBattleVictory() {
     if (!battle || battle.phase !== "victory" || !battle.victoryResult) return false;
     if (!battle.isPartyBattle) return completeBattleVictoryExit();
+    if (battle.isPvpBattle) {
+      const battleId = battle.partyBattleId;
+      void pvpClient?.exitBattle?.(battleId);
+      return completeBattleVictoryExit();
+    }
     if (!isPartyLeader()) {
       const prompt = battleVictoryContinue?.querySelector?.("[data-victory-prompt]");
       if (prompt) prompt.textContent = "等待隊長";
@@ -10808,7 +10984,7 @@
 
   function advanceBattleVictory() {
     if (!battle || battle.phase !== "victory" || battleVictoryOverlay.hidden) return false;
-    if (battle.isPartyBattle && !isPartyLeader()) return true;
+    if (battle.isPartyBattle && !battle.isPvpBattle && !isPartyLeader()) return true;
     const action = ensureBattleVictoryPresenter().advance();
     if (action.exit) return exitBattleVictory();
     return action.handled;
@@ -11636,6 +11812,26 @@
     onError: (error) => console.warn("Everrealm party failed.", error),
   }) || null;
 
+  pvpClient = Pvp?.create?.({
+    firebase: Firebase,
+    serverApi: ServerApi,
+    onState: (nextState) => {
+      pvpState = nextState;
+      if (activePvpInvite && !(nextState.invites || []).some((entry) => entry.inviteId === activePvpInvite.inviteId)) activePvpInvite = null;
+      if (!activePvpInvite && mode === "playing" && !nextState.pointer) activePvpInvite = (nextState.invites || [])[0] || null;
+      renderPvpInviteUi();
+      syncRemotePlayerMenu();
+    },
+    onInvite: (invite) => {
+      activePvpInvite = invite;
+      renderPvpInviteUi();
+      addSystemMessage("system", `${invite.fromName} 邀請你進行切磋`);
+      showToast(`${invite.fromName} 邀請你進行切磋。`, "");
+    },
+    onBattle: (snapshot) => syncPvpBattleSnapshot(snapshot),
+    onError: (error) => console.warn("Everrealm PVP failed.", error),
+  }) || null;
+
   async function refreshTradeAuthoritativeState() {
     const uid = authenticatedUid();
     if (!uid || !CloudSave?.load) return false;
@@ -12036,7 +12232,7 @@
   }
 
   function outgoingInviteLabel(type) {
-    return type === "friend" ? "好友邀請" : type === "trade" ? "交易邀請" : type === "party" ? "組隊邀請" : "邀請";
+    return type === "friend" ? "好友邀請" : type === "trade" ? "交易邀請" : type === "party" ? "組隊邀請" : type === "pvp" ? "切磋邀請" : "邀請";
   }
 
   function renderOutgoingInviteUi() {
@@ -12152,6 +12348,56 @@
     if (!valid) activePartyInvite = pending[0] || null;
     partyInvitePanel.hidden = !activePartyInvite || mode !== "playing" || Boolean(partyState.party);
     if (activePartyInvite && partyInviteName) partyInviteName.textContent = activePartyInvite.fromName || "冒險者";
+  }
+
+  function renderPvpInviteUi() {
+    if (!pvpInvitePanel) return;
+    const pending = pvpState.invites || [];
+    const valid = activePvpInvite && pending.some((entry) => entry.inviteId === activePvpInvite.inviteId);
+    if (!valid) activePvpInvite = pending[0] || null;
+    pvpInvitePanel.hidden = !activePvpInvite || mode !== "playing" || Boolean(pvpState.pointer);
+    if (activePvpInvite && pvpInviteName) pvpInviteName.textContent = activePvpInvite.fromName || "冒險者";
+  }
+
+  function pvpFailureMessage(reason) {
+    const messages = {
+      "invalid-target": "無法向此玩家發起切磋。",
+      "player-not-found": "暫時找不到此玩家。",
+      "outgoing-invite-pending": "你仍有一個邀請正在等待對方回覆。",
+      "caller-busy": "你目前正在其他切磋中。",
+      "target-busy": "對方目前正在其他切磋中。",
+      "player-busy": "其中一方目前正忙於交易、組隊或戰鬥。",
+      "player-unavailable": "其中一方目前無法進行切磋。",
+      "map-mismatch": "雙方必須在同一張地圖才能切磋。",
+      "invite-not-found": "此切磋邀請已經失效。",
+      "invite-closed": "此切磋邀請已經失效。",
+    };
+    return messages[reason] || "切磋操作暫時未能完成。";
+  }
+
+  async function runPvpCommand(action, { silent = false } = {}) {
+    try {
+      const result = await action();
+      if (!result?.ok && !silent) showToast(pvpFailureMessage(result?.reason), "warning");
+      return result;
+    } catch (error) {
+      console.warn("Everrealm PVP command failed.", error);
+      if (!silent) showToast("切磋操作暫時未能完成。", "danger");
+      return { ok: false, reason: "command-failed", error };
+    }
+  }
+
+  async function requestPvpWithRemote(remote) {
+    if (!remote?.uid || !pvpClient?.isActive?.()) return showToast("切磋系統暫時未連線。", "warning");
+    if (remote.state === "battle") return showToast("對方目前正在戰鬥。", "warning");
+    if (socialState.outgoingInvite) return showToast("你仍有一個邀請正在等待對方回覆。", "warning");
+    if (pvpState.pointer || partyState.party || tradeState.session?.status === "active") return showToast("你目前正忙於其他互動。", "warning");
+    const result = await runPvpCommand(() => pvpClient.invite(remote.uid));
+    if (result?.ok) {
+      closeRemotePlayerMenu();
+      showToast(`已向 ${remote.name || "對方"} 發送切磋邀請。`, "");
+    }
+    return result;
   }
 
   function partyFailureMessage(reason) {
@@ -12731,6 +12977,7 @@
     const whisperButton = remotePlayerMenu.querySelector('[data-player-action="whisper"]');
     const tradeButton = remotePlayerMenu.querySelector('[data-player-action="trade"]');
     const partyActionButton = remotePlayerMenu.querySelector('[data-player-action="party"]');
+    const pvpActionButton = remotePlayerMenu.querySelector('[data-player-action="pvp"]');
     const friend = socialFriend(remote.uid);
     const incoming = socialIncoming(remote.uid);
     const outgoing = socialOutgoing(remote.uid);
@@ -12746,6 +12993,11 @@
       const busy = Boolean(tradeState.session?.status === "active");
       tradeButton.disabled = busy || outgoingInviteLocked || remote.state === "battle" || !trade?.isActive?.();
       tradeButton.textContent = busy ? "交易中" : outgoingInviteLocked ? "等待回覆中" : "交易";
+    }
+    if (pvpActionButton) {
+      const busy = Boolean(pvpState.pointer || partyState.party || tradeState.session?.status === "active");
+      pvpActionButton.disabled = busy || outgoingInviteLocked || remote.state === "battle" || !pvpClient?.isActive?.();
+      pvpActionButton.textContent = pvpState.pointer ? "切磋中" : outgoingInviteLocked ? "等待回覆中" : "邀請切磋";
     }
     if (partyActionButton) {
       const currentParty = partyState.party;
@@ -13217,9 +13469,15 @@
       const minY = Math.min(...face.points.map((point) => point.y));
       const maxY = Math.max(...face.points.map((point) => point.y));
       const earth = ctx.createLinearGradient(0, minY, 0, maxY || minY + 1);
-      earth.addColorStop(0, face.outside ? "#806241" : "#765235");
-      earth.addColorStop(.5, face.shade === "west" ? "#62462f" : "#59402b");
-      earth.addColorStop(1, "#3d2c20");
+      if (battle?.battlefield?.theme === "plaza") {
+        earth.addColorStop(0, face.outside ? "#8f8575" : "#847969");
+        earth.addColorStop(.5, face.shade === "west" ? "#716758" : "#685f52");
+        earth.addColorStop(1, "#4d463e");
+      } else {
+        earth.addColorStop(0, face.outside ? "#806241" : "#765235");
+        earth.addColorStop(.5, face.shade === "west" ? "#62462f" : "#59402b");
+        earth.addColorStop(1, "#3d2c20");
+      }
       battleDrawPolygon(face.points, earth, "rgba(38,27,19,.58)", Math.max(1, layout.cell * .012));
 
       ctx.save();
@@ -13266,6 +13524,7 @@
     ctx.save();
     battleTracePolygon(corners);
     ctx.clip();
+    const plazaBattle = battle?.battlefield?.theme === "plaza";
     if (mountainBattle) {
       ctx.fillStyle = "#86613b";
       const boundsX = corners.map((point) => point.x);
@@ -13290,6 +13549,17 @@
         ctx.fillStyle = ground;
         ctx.fillRect(centre.x - radius, centre.y - radius, radius * 2, radius * 2);
       }
+    } else if (plazaBattle) {
+      ctx.fillStyle = blocked
+        ? "rgba(67,57,48,.9)"
+        : ((cell.x + cell.y) % 2 ? "#a99d88" : "#b8ad98");
+      const xs = corners.map((point) => point.x);
+      const ys = corners.map((point) => point.y);
+      ctx.fillRect(Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) - Math.min(...xs) + 2, Math.max(...ys) - Math.min(...ys) + 2);
+      ctx.strokeStyle = "rgba(73,61,48,.34)";
+      ctx.lineWidth = Math.max(1, layout.cell * .012);
+      battleTracePolygon(corners);
+      ctx.stroke();
     } else {
       ctx.fillStyle = blocked
         ? "rgba(10,15,29,.88)"
@@ -13334,12 +13604,39 @@
     drawMountainBoardFrame(layout);
   }
 
+  function drawPvpPlazaBackdrop(layout) {
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, "#7794a2");
+    sky.addColorStop(.52, "#b9b29e");
+    sky.addColorStop(1, "#625b51");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    ctx.globalAlpha = .34;
+    ctx.fillStyle = "#d6cdb7";
+    const horizon = Math.max(70, layout.y - layout.cell * .65);
+    for (let i = 0; i < 9; i += 1) {
+      const w = width / 8;
+      const h = 35 + (i % 3) * 13;
+      ctx.fillRect(i * w - w * .18, horizon - h, w * .72, h);
+    }
+    ctx.restore();
+    const shade = ctx.createLinearGradient(0, 0, 0, height);
+    shade.addColorStop(0, "rgba(16,21,24,.05)");
+    shade.addColorStop(1, "rgba(18,16,14,.45)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, width, height);
+    drawMountainBoardFrame(layout);
+  }
+
   function drawBattle() {
     if (!battle) return;
     const layout = battleLayout();
     const bossFight = battle.source.boss;
     const mountainBattle = battle.battlefield?.theme === "mountain";
+    const plazaBattle = battle.battlefield?.theme === "plaza";
     if (mountainBattle) drawMountainBattleBackdrop(layout);
+    else if (plazaBattle) drawPvpPlazaBackdrop(layout);
     else {
       const background = ctx.createLinearGradient(0, 0, 0, height);
       background.addColorStop(0, bossFight ? "#241a37" : "#142c38");
@@ -13693,6 +13990,12 @@
           alpha: 1,
           selected: false,
         });
+      } else if (layout.projected && unit.side !== "ally" && unit.type === "player") {
+        Art.drawCharacter(ctx, {
+          x: point.x, y: baseline, scale: heroScale, actor: "player", classId: unit.classId || "fighter", gender: unit.gender || "male",
+          facing: battleUnitRenderFacing(unit), phase: elapsed, state: "death", locomotion: unit.locomotion || Locomotion.create(unit.facing || "left"),
+          battleDiagonal: true, alpha: 1, selected: false,
+        });
       } else if (layout.projected && unit.side !== "ally") {
         Art.drawEnemy(ctx, {
           x: point.x,
@@ -13780,6 +14083,26 @@
         expression: hurt ? "hurt" : acting ? "determined" : "happy",
         // The old selected ring and AP orbit were persistent visual noise; tile
         // overlays/cursor already communicate tactical selection.
+        selected: false,
+      });
+    } else if (unit.type === "player") {
+      Art.drawCharacter(ctx, {
+        x: point.x,
+        y: baseline,
+        scale: heroScale,
+        actor: "player",
+        classId: unit.classId || "fighter",
+        gender: unit.gender || "male",
+        facing: attackFacing,
+        battleDiagonal: layout.projected,
+        state: visualState,
+        locomotion,
+        phase: elapsed,
+        progress: actionStrikeProgress,
+        actionStrikeIndex,
+        actionHitCount,
+        alpha: untargetable ? BATTLE_UNTARGETABLE_ALPHA : 1,
+        expression: hurt ? "hurt" : acting ? "determined" : "happy",
         selected: false,
       });
     } else {
@@ -16691,6 +17014,7 @@
     if (action === "whisper") return setWhisperTarget(remote.uid, { name: remote.name || "冒險者" });
     if (action === "trade") return requestTradeWithRemote(remote);
     if (action === "party") return requestPartyWithRemote(remote);
+    if (action === "pvp") return requestPvpWithRemote(remote);
     if (action === "friend") {
       button.disabled = true;
       const incoming = socialIncoming(remote.uid);
@@ -16708,6 +17032,23 @@
     }
   });
 
+
+  pvpInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
+  pvpInvitePanel?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const button = event.target.closest("[data-pvp-invite-action]");
+    if (!button || button.disabled || !activePvpInvite) return;
+    const invite = activePvpInvite;
+    const accept = button.dataset.pvpInviteAction === "accept";
+    button.disabled = true;
+    const result = await runPvpCommand(() => pvpClient?.respondInvite?.(invite.inviteId, accept));
+    if (result?.ok) {
+      activePvpInvite = null;
+      showToast(accept ? "已接受切磋邀請。" : "已拒絕切磋邀請。", accept ? "good" : "");
+    }
+    button.disabled = false;
+    renderPvpInviteUi();
+  });
 
   tradeInvitePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
@@ -16997,10 +17338,33 @@
     keys.clear();
     resetMobileTouchGestures({ cancelExplore: true });
     previousTime = performance.now();
-    if (document.visibilityState === "visible") resumeGameAudio();
-    else suspendGameAudio();
+    if (document.visibilityState === "visible") {
+      resumeGameAudio();
+      if (hiddenRealtimeTimer != null) {
+        window.clearTimeout(hiddenRealtimeTimer);
+        hiddenRealtimeTimer = null;
+      }
+      multiplayer?.resumeRemoteListening?.();
+    } else {
+      suspendGameAudio();
+      // The autosave timer runs inside the animation-frame loop, which the
+      // browser freezes in the background. Save now so switching apps on a
+      // phone does not lose the latest position.
+      saveOnLeavingPage();
+      // Stop downloading other players' movement once the tab has been in the
+      // background for a minute (short tab switches keep the live feed).
+      if (hiddenRealtimeTimer == null) {
+        hiddenRealtimeTimer = window.setTimeout(() => {
+          hiddenRealtimeTimer = null;
+          if (document.visibilityState !== "visible") multiplayer?.pauseRemoteListening?.();
+        }, 60000);
+      }
+    }
   });
-  window.addEventListener("pagehide", suspendGameAudio);
+  window.addEventListener("pagehide", () => {
+    suspendGameAudio();
+    saveOnLeavingPage();
+  });
   window.addEventListener("pageshow", () => {
     resetMobileTouchGestures();
     if (document.visibilityState === "visible") resumeGameAudio();

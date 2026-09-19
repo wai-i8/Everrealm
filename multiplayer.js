@@ -7,7 +7,7 @@
   const PLAYER_STATES = Object.freeze(["exploring", "battle"]);
   const VALID_FACING = Object.freeze(["up", "right", "down", "left"]);
   const POSITION_EPSILON = 1;
-  const EXPLORATION_WRITE_INTERVAL_MS = 100;
+  const EXPLORATION_WRITE_INTERVAL_MS = 160;
   const BATTLE_HEARTBEAT_INTERVAL_MS = 15000;
   const PRESENCE_HEARTBEAT_INTERVAL_MS = 15000;
   // Render remote exploration on a deliberately delayed 500 ms timeline.
@@ -234,7 +234,7 @@
       // previous idle sample can be several seconds older than the first
       // moving sample. Never stretch that whole idle gap into a walking
       // segment. Hold the old idle pose until the delayed timeline actually
-      // reaches the first moving sample; then the following 100 ms samples
+      // reaches the first moving sample; then the following ~160 ms samples
       // carry the real movement path.
       const idleToMovingGap = !Boolean(previous.moving)
         && Boolean(next.moving)
@@ -443,6 +443,7 @@
     let mapRef = null;
     let presenceRef = null;
     let mapUnsubscribe = () => {};
+    let remoteListenerPaused = false;
     let connectedUnsubscribe = () => {};
     let serverTimeOffsetUnsubscribe = () => {};
     let serverTimeOffset = 0;
@@ -659,35 +660,92 @@
       // from stale callbacks as an additional guard.
       trace("map.write.begin", { mapId: snapshot.mapId, state: snapshot.state, moving: snapshot.moving, seq: sequence, x: snapshot.x, y: snapshot.y, urgent });
       if (!active || token !== operationToken || ref !== mapRef) return;
+      // Pure walking samples only change x/y/seq/time. Send just those fields
+      // (RTDB update) instead of re-uploading name/class/uid every ~160 ms:
+      // every other player on the map downloads each write, so smaller
+      // records cut RTDB download usage. Anything urgent (first write, map
+      // join, facing/state/moving change, reconnect) still sends the full
+      // record via set() so the rules' required-children validation passes.
+      const partial = !urgent
+        && snapshot.state === "exploring"
+        && typeof sdk.update === "function";
+      const sampledAt = Number(snapshot.sampledAt) || serverTimelineNow();
       let writePromise;
       try {
-        writePromise = sdk.set(ref, {
-          uid: snapshot.uid,
-          name: snapshot.name,
-          classId: snapshot.classId,
-          gender: snapshot.gender,
-          x: snapshot.x,
-          y: snapshot.y,
-          facing: snapshot.facing,
-          state: snapshot.state,
-          moving: Boolean(snapshot.moving),
-          seq: sequence,
-          // Coordinate sample time and Firebase commit time are deliberately
-          // separate. Remote interpolation uses sampledAt.
-          sampledAt: Number(snapshot.sampledAt) || serverTimelineNow(),
-          updatedAt: sdk.serverTimestamp(),
-        });
+        writePromise = partial
+          ? sdk.update(ref, {
+            x: snapshot.x,
+            y: snapshot.y,
+            seq: sequence,
+            sampledAt,
+            updatedAt: sdk.serverTimestamp(),
+          })
+          : sdk.set(ref, {
+            uid: snapshot.uid,
+            name: snapshot.name,
+            classId: snapshot.classId,
+            gender: snapshot.gender,
+            x: snapshot.x,
+            y: snapshot.y,
+            facing: snapshot.facing,
+            state: snapshot.state,
+            moving: Boolean(snapshot.moving),
+            seq: sequence,
+            // Coordinate sample time and Firebase commit time are deliberately
+            // separate. Remote interpolation uses sampledAt.
+            sampledAt,
+            updatedAt: sdk.serverTimestamp(),
+          });
       } catch (error) {
         logError("snapshot write", error);
+        if (partial) lastPublishedSnapshot = null;
         return;
       }
       return Promise.resolve(writePromise).then((result) => {
-        trace("map.write.complete", { mapId: snapshot.mapId, state: snapshot.state, seq: sequence });
+        trace("map.write.complete", { mapId: snapshot.mapId, state: snapshot.state, seq: sequence, partial });
         return result;
       }).catch((error) => {
         logError("snapshot write", error);
+        // A rejected partial update (e.g. record was removed) must be followed
+        // by a full write, so forget the last published snapshot.
+        if (partial) lastPublishedSnapshot = null;
         return null;
       });
+    }
+
+    function attachMapListener() {
+      if (!context || !mapId) return;
+      try { mapUnsubscribe(); } catch (_) {}
+      mapUnsubscribe = context.sdk.onValue(
+        context.sdk.ref(context.database, `maps/${mapId}/players`),
+        applyRemoteSnapshot,
+        (error) => logError("map subscription", error),
+      );
+    }
+
+    // A hidden/idle tab does not render remote players, but the map listener
+    // would keep downloading every other player's movement. Detach it while
+    // the tab is in the background and re-attach (full snapshot) on return.
+    function pauseRemoteListening() {
+      if (!active || remoteListenerPaused) return false;
+      remoteListenerPaused = true;
+      try { mapUnsubscribe(); } catch (_) {}
+      mapUnsubscribe = () => {};
+      remotePlayers = new Map();
+      renderedRemotePlayers.clear();
+      firstRenderedRemotePlayers.clear();
+      renderedBattleIcons.clear();
+      trace("map.listener.paused", { mapId });
+      return true;
+    }
+
+    function resumeRemoteListening() {
+      if (!remoteListenerPaused) return false;
+      remoteListenerPaused = false;
+      if (!active || !mapId) return false;
+      attachMapListener();
+      trace("map.listener.resumed", { mapId });
+      return true;
     }
 
     async function setMap(nextMapId) {
@@ -713,12 +771,8 @@
       firstRenderedRemotePlayers.clear();
       renderedBattleIcons.clear();
       trace("map.join.begin", { fromMapId: oldMapId, toMapId: safeMapId });
-      mapUnsubscribe = context.sdk.onValue(
-        context.sdk.ref(context.database, `maps/${mapId}/players`),
-        applyRemoteSnapshot,
-        (error) => logError("map subscription", error),
-      );
-      trace("map.listener.attached", { mapId: safeMapId });
+      if (!remoteListenerPaused) attachMapListener();
+      trace("map.listener.attached", { mapId: safeMapId, paused: remoteListenerPaused });
 
       const disconnectSetup = Promise.all([armDisconnect(mapRef), armDisconnect(presenceRef)]);
       const oldMapRemoval = oldWriteDrain.then(async () => {
@@ -771,6 +825,9 @@
         context.sdk.ref(context.database, ".info/connected"),
         (snapshot) => {
           if (!active || !snapshot.val()) return;
+          // After a reconnect the server may have removed our map record
+          // (onDisconnect), so the next movement write must be a full set().
+          lastPublishedSnapshot = null;
           void armDisconnect(mapRef);
           void armDisconnect(presenceRef);
           void writePresence(true);
@@ -793,6 +850,7 @@
       connectedUnsubscribe = () => {};
       serverTimeOffsetUnsubscribe = () => {};
       mapUnsubscribe = () => {};
+      remoteListenerPaused = false;
       serverTimeOffset = 0;
       mapRef = null;
       presenceRef = null;
@@ -888,6 +946,8 @@
       start,
       stop,
       setMap,
+      pauseRemoteListening,
+      resumeRemoteListening,
       updateLocal,
       setState,
       tick,

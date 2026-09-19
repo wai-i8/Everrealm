@@ -135,6 +135,16 @@ function outgoingInviteMatches(snapshot, type, targetUid, referenceId = "") {
   return !wantedReference || String(data.referenceId || "").trim() === wantedReference;
 }
 
+
+function pvpBattleRef(battleId) { return db.doc(`pvpBattles/${String(battleId || "").trim()}`); }
+function pvpPointerRef(uid) { return db.doc(`players/${uid}/pvpState/current`); }
+function pvpInviteRef(uid, inviteId) { return db.doc(`players/${uid}/pvpInvites/${String(inviteId || "").trim()}`); }
+function pvpInviteId() { return `duel-${crypto.randomBytes(10).toString("hex")}`; }
+function pvpBattleId() { return `pvp-${crypto.randomBytes(10).toString("hex")}`; }
+function pvpPointerPayload(battleId, opponentUid, opponentName, initiatorUid, nowMs) {
+  return { battleId, opponentUid, opponentName, initiatorUid, updatedAtMs: nowMs };
+}
+
 function partyRef(partyId) { return db.doc(`parties/${String(partyId || "").trim()}`); }
 function partyPointerRef(uid) { return db.doc(`players/${uid}/partyState/current`); }
 function partyInviteRef(uid, inviteId) { return db.doc(`players/${uid}/partyInvites/${String(inviteId || "").trim()}`); }
@@ -586,6 +596,8 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
         if (legacyPointer.exists && legacyPointer.data()?.tradeId === referenceId) transaction.delete(legacyPointerRef);
       } else if (type === "party" && targetUid && referenceId) {
         transaction.delete(partyInviteRef(targetUid, referenceId));
+      } else if (type === "pvp" && targetUid && referenceId) {
+        transaction.delete(pvpInviteRef(targetUid, referenceId));
       } else if (type === "friend" && targetUid) {
         transaction.delete(outgoingFriendRequestRef(uid, targetUid));
         transaction.delete(incomingFriendRequestRef(targetUid, uid));
@@ -937,6 +949,196 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
   return { ok: false, reason: "unsupported-action", action };
 });
 
+
+exports.pvpCommand = onCall({ region: REGION, maxInstances: 30 }, async (request) => {
+  const uid = authenticatedUid(request);
+  assertCommandVersion(request);
+  const action = String(request.data?.action || "").trim();
+  const nowMs = Date.now();
+
+  if (action === "invite") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    const callerRef = db.doc(`players/${uid}`);
+    const targetRef = db.doc(`players/${targetUid}`);
+    const callerPvpRef = pvpPointerRef(uid);
+    const targetPvpRef = pvpPointerRef(targetUid);
+    const lockRef = outgoingInviteRef(uid);
+    return db.runTransaction(async (transaction) => {
+      const [callerSnap, targetSnap, callerPvp, targetPvp, lockSnap, callerTrade, targetTrade, callerParty, targetParty] = await Promise.all([
+        transaction.get(callerRef), transaction.get(targetRef), transaction.get(callerPvpRef), transaction.get(targetPvpRef), transaction.get(lockRef),
+        transaction.get(tradePointerRef(uid)), transaction.get(tradePointerRef(targetUid)), transaction.get(partyPointerRef(uid)), transaction.get(partyPointerRef(targetUid)),
+      ]);
+      if (!callerSnap.exists || !targetSnap.exists) return { ok: false, reason: "player-not-found" };
+      if (lockSnap.exists) return { ok: false, reason: "outgoing-invite-pending" };
+      if (callerPvp.exists) return { ok: false, reason: "caller-busy" };
+      if (targetPvp.exists) return { ok: false, reason: "target-busy" };
+      if (callerTrade.exists || targetTrade.exists || callerParty.exists || targetParty.exists) return { ok: false, reason: "player-busy" };
+      if (callerSnap.data()?.expansion?.serverBattle?.status === "active" || targetSnap.data()?.expansion?.serverBattle?.status === "active") return { ok: false, reason: "player-busy" };
+      if (!(Number(callerSnap.data()?.player?.hp) > 0) || !(Number(targetSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "player-unavailable" };
+      const callerMap = String(callerSnap.data()?.expansion?.currentMapId || "");
+      const targetMap = String(targetSnap.data()?.expansion?.currentMapId || "");
+      if (!callerMap || callerMap !== targetMap) return { ok: false, reason: "map-mismatch" };
+      const inviteId = pvpInviteId();
+      const targetName = socialNameFromSave(targetSnap.data());
+      transaction.set(pvpInviteRef(targetUid, inviteId), { inviteId, fromUid: uid, fromName: socialNameFromSave(callerSnap.data()), createdAtMs: nowMs });
+      transaction.set(lockRef, outgoingInvitePayload("pvp", targetUid, targetName, inviteId, nowMs));
+      return { ok: true, inviteId, targetUid, targetName };
+    });
+  }
+
+  if (action === "accept" || action === "reject") {
+    const inviteId = String(request.data?.inviteId || "").trim();
+    if (!inviteId) return { ok: false, reason: "invalid-invite" };
+    const inviteRef = pvpInviteRef(uid, inviteId);
+    return db.runTransaction(async (transaction) => {
+      const inviteSnap = await transaction.get(inviteRef);
+      if (!inviteSnap.exists) return { ok: false, reason: "invite-not-found" };
+      const invite = inviteSnap.data() || {};
+      const initiatorUid = safeSocialUid(invite.fromUid);
+      const lockRef = initiatorUid ? outgoingInviteRef(initiatorUid) : null;
+      const lockSnap = lockRef ? await transaction.get(lockRef) : null;
+      if (action === "reject") {
+        transaction.delete(inviteRef);
+        if (lockSnap?.exists && outgoingInviteMatches(lockSnap, "pvp", uid, inviteId)) transaction.delete(lockRef);
+        return { ok: true, rejected: true, inviteId };
+      }
+      if (!initiatorUid || initiatorUid === uid) return { ok: false, reason: "invalid-invite" };
+      const initiatorRef = db.doc(`players/${initiatorUid}`);
+      const targetRef = db.doc(`players/${uid}`);
+      const refs = [initiatorRef, targetRef, pvpPointerRef(initiatorUid), pvpPointerRef(uid), tradePointerRef(initiatorUid), tradePointerRef(uid), partyPointerRef(initiatorUid), partyPointerRef(uid)];
+      const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
+      const [initiatorSnap, targetSnap, initiatorPvp, targetPvp, initiatorTrade, targetTrade, initiatorParty, targetParty] = snaps;
+      if (!initiatorSnap.exists || !targetSnap.exists) return { ok: false, reason: "player-not-found" };
+      if (initiatorPvp.exists || targetPvp.exists || initiatorTrade.exists || targetTrade.exists || initiatorParty.exists || targetParty.exists) return { ok: false, reason: "player-busy" };
+      if (initiatorSnap.data()?.expansion?.serverBattle?.status === "active" || targetSnap.data()?.expansion?.serverBattle?.status === "active") return { ok: false, reason: "player-busy" };
+      if (!(Number(initiatorSnap.data()?.player?.hp) > 0) || !(Number(targetSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "player-unavailable" };
+      if (String(initiatorSnap.data()?.expansion?.currentMapId || "") !== String(targetSnap.data()?.expansion?.currentMapId || "")) return { ok: false, reason: "map-mismatch" };
+      if (!lockSnap?.exists || !outgoingInviteMatches(lockSnap, "pvp", uid, inviteId)) return { ok: false, reason: "invite-closed" };
+      const battleId = pvpBattleId();
+      const saves = { [initiatorUid]: initiatorSnap.data(), [uid]: targetSnap.data() };
+      const battle = PartyBattle.createPvpBattle({ id: battleId, initiatorUid, targetUid: uid, saves, nowMs });
+      transaction.set(pvpBattleRef(battleId), battle);
+      transaction.set(pvpPointerRef(initiatorUid), pvpPointerPayload(battleId, uid, socialNameFromSave(targetSnap.data()), initiatorUid, nowMs));
+      transaction.set(pvpPointerRef(uid), pvpPointerPayload(battleId, initiatorUid, socialNameFromSave(initiatorSnap.data()), initiatorUid, nowMs));
+      transaction.delete(inviteRef);
+      transaction.delete(lockRef);
+      return { ok: true, accepted: true, inviteId, battleId };
+    });
+  }
+
+  const battleActions = new Set(["battle-ready", "battle-move", "battle-action", "battle-advance", "battle-finish-ready", "battle-exit", "battle-retreat"]);
+  if (battleActions.has(action)) {
+    const battleId = String(request.data?.battleId || "").trim();
+    if (!battleId) return { ok: false, reason: "invalid-battle" };
+    return db.runTransaction(async (transaction) => {
+      const battleRef = pvpBattleRef(battleId);
+      const battleSnap = await transaction.get(battleRef);
+      if (!battleSnap.exists) return { ok: false, reason: "battle-not-found" };
+      let battle = battleSnap.data();
+      if (battle.pvp !== true || !(battle.memberUids || []).includes(uid) || !battle.members?.[uid]) return { ok: false, reason: "not-participant" };
+
+      if (action === "battle-ready") {
+        if (battle.status !== "loading") return { ok: true, alreadyReady: true, battleId };
+        battle.readyUids = [...new Set([...(battle.readyUids || []), uid])];
+        if (battle.memberUids.every((memberUid) => battle.readyUids.includes(memberUid))) {
+          battle.status = "active";
+          PartyBattle.beginMovePhase(battle, nowMs);
+        }
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, started: battle.status === "active" };
+      }
+
+      if (action === "battle-finish-ready") {
+        if (battle.status !== "finished") return { ok: false, reason: "battle-not-finished" };
+        battle.finishReadyUids = [...new Set([...(battle.finishReadyUids || []), uid])];
+        const expected = battle.memberUids || [];
+        if (expected.every((memberUid) => battle.finishReadyUids.includes(memberUid))) {
+          battle.finishReleased = true;
+          battle.finishReleasedAtMs = nowMs;
+        }
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, released: battle.finishReleased === true };
+      }
+
+      if (action === "battle-exit") {
+        if (battle.status !== "finished") return { ok: false, reason: "battle-not-finished" };
+        transaction.delete(pvpPointerRef(uid));
+        return { ok: true, battleId, released: true };
+      }
+
+      if (action === "battle-retreat") {
+        if (battle.status !== "active" || battle.members[uid].retreated) return { ok: false, reason: "battle-closed" };
+        const opponentUid = (battle.memberUids || []).find((memberUid) => memberUid !== uid) || "";
+        battle.members[uid] = { ...battle.members[uid], retreated: true, alive: false };
+        battle.status = "finished";
+        battle.phase = "finished";
+        battle.phaseEndsAtMs = 0;
+        battle.result = opponentUid ? "victory" : "draw";
+        battle.winnerUid = opponentUid;
+        battle.loserUid = uid;
+        battle.finishParticipantUids = battle.memberUids || [];
+        battle.finishReadyUids = [uid];
+        battle.finishedAtMs = nowMs;
+        battle.presentationSerial = Math.max(0, Number(battle.presentationSerial) || 0) + 1;
+        battle.presentations = [...(battle.presentations || []), { serial: battle.presentationSerial, type: "result", round: battle.round || 1, result: battle.result }].slice(-24);
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, success: true, chance: 1, battleId };
+      }
+
+      if (battle.status !== "active") return { ok: false, reason: "battle-closed" };
+      if (action !== "battle-advance" && Math.floor(Number(request.data?.round)) !== Math.floor(Number(battle.round) || 1)) return { ok: false, reason: "round" };
+      if (action === "battle-advance" && ["planning_move", "planning_action"].includes(battle.phase) && nowMs < Number(battle.phaseEndsAtMs || 0)) return { ok: true, early: true, battleId, phase: battle.phase };
+      const saveRefs = Object.fromEntries((battle.memberUids || []).map((memberUid) => [memberUid, db.doc(`players/${memberUid}`)]));
+      const saveSnaps = {};
+      for (const memberUid of battle.memberUids || []) saveSnaps[memberUid] = await transaction.get(saveRefs[memberUid]);
+      const saves = Object.fromEntries(Object.entries(saveSnaps).filter(([, snap]) => snap.exists).map(([memberUid, snap]) => [memberUid, snap.data()]));
+      let shouldResolve = false;
+      let resolving = battle.phase;
+      if (action === "battle-move") {
+        const validation = PartyBattle.validateMoveSubmission(battle, uid, saves[uid], request.data?.commands || [], request.data?.facing);
+        if (!validation.ok) return { ...validation };
+        battle.movePlans = { ...(battle.movePlans || {}), [uid]: { commands: validation.commands, facing: validation.finalFacing, submittedAtMs: nowMs } };
+        shouldResolve = PartyBattle.activeMemberUids(battle).every((memberUid) => battle.movePlans?.[memberUid]);
+      } else if (action === "battle-action") {
+        const validation = PartyBattle.validatePlayerAction(battle, uid, saves[uid], request.data?.battleAction || {});
+        if (!validation.ok) return { ...validation };
+        battle.actions = { ...(battle.actions || {}), [uid]: { ...validation.action, submittedAtMs: nowMs } };
+        shouldResolve = PartyBattle.activeMemberUids(battle).every((memberUid) => battle.actions?.[memberUid]);
+      } else {
+        if (nowMs < Number(battle.phaseEndsAtMs || 0)) return { ok: true, early: true, battleId, phase: battle.phase };
+        if (battle.phase === "planning_move") {
+          for (const memberUid of PartyBattle.activeMemberUids(battle)) if (!battle.movePlans?.[memberUid]) battle.movePlans = { ...(battle.movePlans || {}), [memberUid]: { commands: [], facing: battle.members?.[memberUid]?.facing || "right", timedOut: true, submittedAtMs: nowMs } };
+          resolving = "planning_move"; shouldResolve = true;
+        } else if (battle.phase === "planning_action") {
+          for (const memberUid of PartyBattle.activeMemberUids(battle)) if (!battle.actions?.[memberUid]) battle.actions = { ...(battle.actions || {}), [memberUid]: { type: "wait", timedOut: true, submittedAtMs: nowMs } };
+          resolving = "planning_action"; shouldResolve = true;
+        } else return { ok: false, reason: "phase" };
+      }
+      if (!shouldResolve) {
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, submitted: true, battleId, phase: battle.phase };
+      }
+      if (resolving === "planning_move") {
+        const result = PartyBattle.resolveMovement(battle, saves, nowMs);
+        if (!result.ok) return { ...result };
+        battle = result.battle;
+      } else {
+        const result = PartyBattle.resolveActions(battle, saves, nowMs);
+        if (!result.ok) return { ...result };
+        battle = result.battle;
+      }
+      transaction.set(battleRef, battle);
+      return { ok: true, resolved: true, finished: battle.status === "finished", result: battle.result || null, battleId, phase: battle.phase };
+    });
+  }
+
+  return { ok: false, reason: "unsupported-action", action };
+});
 
 exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (request) => {
   const uid = authenticatedUid(request);
@@ -1306,6 +1508,9 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
 
       if (battle.status !== "active") return { ok: false, reason: "battle-closed" };
       if (action !== "battle-advance" && whole(request.data?.round, -1) !== whole(battle.round, 1)) return { ok: false, reason: "round" };
+      // Deadline not reached yet: answer before loading every member's save
+      // (saves N Firestore reads per premature advance request).
+      if (action === "battle-advance" && ["planning_move", "planning_action"].includes(battle.phase) && nowMs < Number(battle.phaseEndsAtMs || 0)) return { ok: true, early: true, battleId, phase: battle.phase };
       const saveRefs = Object.fromEntries((battle.memberUids || []).map((memberUid) => [memberUid, db.doc(`players/${memberUid}`)]));
       const saveSnaps = {};
       for (const memberUid of battle.memberUids || []) saveSnaps[memberUid] = await transaction.get(saveRefs[memberUid]);

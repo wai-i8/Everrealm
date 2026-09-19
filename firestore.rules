@@ -75,12 +75,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /players/{userId}/pvpInvites/{inviteId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /players/{userId}/pvpState/{stateId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
     match /parties/{partyId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
       allow write: if false;
     }
 
     match /partyBattles/{battleId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
+      allow write: if false;
+    }
+
+    match /pvpBattles/{battleId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
       allow write: if false;
     }

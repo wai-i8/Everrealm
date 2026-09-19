@@ -55,7 +55,7 @@
     if (!source) return null;
     const type = String(source.type || "").trim();
     const targetUid = safeUid(source.targetUid);
-    if (!["friend", "trade", "party"].includes(type) || !targetUid) return null;
+    if (!["friend", "trade", "party", "pvp"].includes(type) || !targetUid) return null;
     return {
       type,
       targetUid,

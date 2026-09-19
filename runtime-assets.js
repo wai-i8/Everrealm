@@ -67,6 +67,7 @@
     "social.js?v=20260919-uifix7-01",
     "trade.js?v=20260918-invite-ui-02",
     "party.js?v=20260919-uifix7-01",
+    "pvp.js?v=20260919-pvp-01",
     "cloud-save.js?v=20260917-latency-cleanup-02",
     "save-persistence.js?v=20260917-latency-cleanup-02",
     "world-time.js?v=20260917-latency-cleanup-02",

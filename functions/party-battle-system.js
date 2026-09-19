@@ -46,11 +46,12 @@ function deploymentCells(battlefield, count) {
 function memberUnit(battle, memberUid, save) {
   const member = battle.members?.[memberUid];
   const stats = ServerGame.serverHeroBattleStats(save);
+  const pvpSide = battle?.pvp === true && memberUid === battle?.targetUid ? "enemy" : "ally";
   return {
-    id: String(member?.battleUnitId || `party:${memberUid}`),
+    id: String(member?.battleUnitId || `${battle?.pvp === true ? "pvp" : "party"}:${memberUid}`),
     uid: memberUid,
-    side: "ally",
-    team: "ally",
+    side: pvpSide,
+    team: pvpSide,
     type: "player",
     name: member?.name || save?.player?.name || "冒險者",
     classId: member?.classId || save?.expansion?.classId || "fighter",
@@ -94,7 +95,7 @@ function corpseBlockers(battle, saves = {}) {
 }
 function allUnits(battle, saves) {
   const allies = activeMemberUids(battle).map((memberUid) => memberUnit(battle, memberUid, saves[memberUid])).filter(Boolean);
-  const enemies = enemyUnits(battle).filter((enemy) => enemy.alive && enemy.hp > 0);
+  const enemies = battle?.pvp === true ? [] : enemyUnits(battle).filter((enemy) => enemy.alive && enemy.hp > 0);
   return { allies, enemies, units: [...allies, ...enemies] };
 }
 function persistMember(battle, unit) {
@@ -231,6 +232,45 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now(), p
   if (!loading) beginMovePhase(battle, nowMs, battle.phaseDurationMs);
   return battle;
 }
+
+function createPvpBattle({ id, initiatorUid, targetUid, saves, nowMs = Date.now(), phaseMs = Party.PHASE_MS }) {
+  const battleId = String(id || "").trim();
+  if (!battleId || !initiatorUid || !targetUid || !saves?.[initiatorUid] || !saves?.[targetUid]) throw new Error("pvp battle requires both players");
+  const battlefield = ServerGame.serverBattlefieldFor("pvp-plaza", "pvp");
+  const members = {};
+  for (const memberUid of [initiatorUid, targetUid]) {
+    const save = saves[memberUid];
+    const maxHp = maxHpForSave(save);
+    members[memberUid] = {
+      ...Party.memberFromSave(memberUid, save),
+      battleUnitId: `pvp:${memberUid}`,
+      hp: maxHp,
+      maxHp,
+      ap: 0,
+      alive: true,
+      deathRound: null,
+      retreated: false,
+      disconnected: false,
+      offlineSinceMs: 0,
+      cell: memberUid === initiatorUid ? { x: 1, y: 1 } : { x: 10, y: 1 },
+      facing: memberUid === initiatorUid ? "right" : "left",
+      statusEffects: {},
+    };
+  }
+  return {
+    id: battleId, pvp: true, mode: "pvp", initiatorUid, targetUid,
+    leaderUid: initiatorUid, memberUids: [initiatorUid, targetUid], members,
+    mapId: "pvp-plaza", monsterType: "pvp", encounterId: battleId, level: 1,
+    status: "loading", result: "", winnerUid: "", loserUid: "",
+    phase: "loading", round: 1, phaseDurationMs: Math.max(0, Number(phaseMs) || 0), phaseEndsAtMs: 0,
+    readyUids: [], movePlans: {}, actions: {}, enemies: [], eventSerial: 0, events: [],
+    presentationSerial: 0, presentations: [], movementReplay: null,
+    finishParticipantUids: [], finishReadyUids: [], finishReleased: false, exitReleased: false,
+    finishedAtMs: 0, finishReleasedAtMs: 0, exitReleasedAtMs: 0, rewards: {},
+    createdAtMs: nowMs, updatedAtMs: nowMs,
+  };
+}
+
 function validateMoveSubmission(battle, memberUid, save, commands, requestedFacing) {
   if (battle.phase !== "planning_move") return { ok: false, reason: "phase" };
   const member = battle.members?.[memberUid];
@@ -358,6 +398,7 @@ function validatePlayerAction(battle, memberUid, save, rawAction) {
   const type = String(action.type || action.heroAction || "wait");
   if (type === "wait") return { ok: true, action: { type: "wait" } };
   if (type === "potion") {
+    if (battle?.pvp === true) return { ok: false, reason: "pvp-no-items" };
     if (whole(save?.player?.potions, 0) <= 0) return { ok: false, reason: "empty" };
     if (Number(member.hp) >= Number(member.maxHp)) return { ok: false, reason: "full" };
     return { ok: true, action: { type: "potion" } };
@@ -378,13 +419,19 @@ function validatePlayerAction(battle, memberUid, save, rawAction) {
 }
 function skillTargets(battle, actor, skill, targetCell, allies, enemies, grid) {
   const units = [...allies, ...enemies];
+  const friendlyUnits = units.filter((unit) => unit.side === actor.side);
+  const hostileUnits = units.filter((unit) => unit.side !== actor.side);
   const preferredTeam = skill.targeting?.team || (skill.tags?.includes("heal") ? "ally" : "enemy");
-  const targetUnit = targetAt(units, targetCell, preferredTeam, actor.uid);
+  const targetUnit = preferredTeam === "enemy"
+    ? targetAt(hostileUnits, targetCell, null, actor.uid)
+    : preferredTeam === "self"
+      ? targetAt(friendlyUnits, targetCell, "self", actor.uid)
+      : targetAt(friendlyUnits, targetCell, null, actor.uid);
   const validation = Skills.validateSkillTarget(skill, actor.cell, targetCell, {
     grid,
     heightMap: grid.heightMap,
     facing: actor.facing,
-    actorTeam: "ally",
+    actorTeam: actor.side,
     actorId: actor.id,
     targetUnit: targetUnit ? { ...targetUnit, team: targetUnit.side } : null,
     canDirectTarget: (unit) => FighterEffects.isDirectTargetable(unit, battle.round),
@@ -393,8 +440,8 @@ function skillTargets(battle, actor, skill, targetCell, allies, enemies, grid) {
   const pattern = Skills.patternCells(skill, actor.cell, targetCell, { grid, heightMap: grid.heightMap, facing: actor.facing });
   const keys = new Set(pattern.map((entry) => Tactics.cellKey(entry)));
   let affected = preferredTeam === "ally" || preferredTeam === "self"
-    ? allies.filter((unit) => unit.alive && keys.has(Tactics.cellKey(unit.cell)))
-    : enemies.filter((unit) => unit.alive && keys.has(Tactics.cellKey(unit.cell)));
+    ? friendlyUnits.filter((unit) => unit.alive && keys.has(Tactics.cellKey(unit.cell)))
+    : hostileUnits.filter((unit) => unit.alive && keys.has(Tactics.cellKey(unit.cell)));
   let attackPath = [];
   if (Tactics.usesAttackPath(skill.deliveryMode)) {
     attackPath = Tactics.facingOrthogonalPriority(actor.cell, targetCell, actor.facing);
@@ -448,7 +495,11 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     const enemy = enemies.find((unit) => unit.id === plan.enemyId);
     if (enemy) queued.push({ actorId: enemy.id, kind: "enemy", plan, enemy, speedGrade: plan.speedGrade || enemy.speedGrade || "C", initiative: enemy.initiative || 0 });
   }
-  const order = Skills.orderActionsBySpeed(queued);
+  const order = next.pvp === true
+    ? queued.map((entry, index) => ({ ...entry, __tie: ServerGame.deterministicBattleRng(next, next.round, `pvp-order:${index}:${entry.actorId}`)() }))
+      .sort((left, right) => Skills.speedGradeIndex(left.speedGrade) - Skills.speedGradeIndex(right.speedGrade) || left.__tie - right.__tie)
+      .map(({ __tie, ...entry }) => entry)
+    : Skills.orderActionsBySpeed(queued);
   const guardByUid = new Map();
   const evasionByUid = new Map();
   const pendingByActorId = new Map();
@@ -836,7 +887,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     }
     const heals = effects.filter((effect) => effect.type === "heal");
     if (heals.length) {
-      for (const target of targetResult.affected.filter((unit) => unit.side === "ally")) {
+      for (const target of targetResult.affected.filter((unit) => unit.side === actor.side)) {
         const amount = heals.reduce((sum, effect) => sum + Math.max(0, whole(effect.flat, 0)) + Math.floor(target.maxHp * Math.max(0, Number(effect.maxHpRatio) || 0)), 0);
         const healed = Math.min(amount, target.maxHp - target.hp);
         target.hp += healed;
@@ -951,13 +1002,29 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
   for (const ally of allies) {
     persistMember(next, ally);
     const save = nextSaves[ally.uid];
-    if (save?.player) save.player.hp = Math.max(0, Math.min(ally.maxHp, whole(ally.hp, 0)));
+    if (next.pvp !== true && save?.player) save.player.hp = Math.max(0, Math.min(ally.maxHp, whole(ally.hp, 0)));
   }
   enemies.forEach((enemy, index) => persistEnemy(next, enemy, index));
 
   function finishFromCurrentState() {
-    const living = next.enemies.filter((enemy) => enemy.alive !== false && Number(enemy.hp) > 0);
     const active = activeMemberUids(next);
+    if (next.pvp === true) {
+      const livingPlayers = (next.memberUids || []).filter((memberUid) => {
+        const member = next.members?.[memberUid];
+        return member && member.retreated !== true && member.disconnected !== true && member.alive !== false && Number(member.hp) > 0;
+      });
+      if (livingPlayers.length <= 1) {
+        next.status = "finished";
+        next.phase = "finished";
+        next.phaseEndsAtMs = 0;
+        next.winnerUid = livingPlayers[0] || "";
+        next.loserUid = (next.memberUids || []).find((memberUid) => memberUid !== next.winnerUid) || "";
+        next.result = next.winnerUid ? "victory" : "draw";
+        return true;
+      }
+      return false;
+    }
+    const living = next.enemies.filter((enemy) => enemy.alive !== false && Number(enemy.hp) > 0);
     if (!living.length) {
       next.status = "finished";
       next.result = "victory";
@@ -984,7 +1051,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       appendStatusTickEvents(unit, tick);
       persistMember(next, unit);
       const save = nextSaves[memberUid];
-      if (save?.player) save.player.hp = Math.max(0, Math.min(unit.maxHp, whole(unit.hp, 0)));
+      if (next.pvp !== true && save?.player) save.player.hp = Math.max(0, Math.min(unit.maxHp, whole(unit.hp, 0)));
     }
     const refreshedEnemies = enemyUnits(next);
     refreshedEnemies.forEach((enemy, index) => {
@@ -1061,6 +1128,7 @@ module.exports = Object.freeze({
   TURN_COST,
   AP_GAIN,
   createBattle,
+  createPvpBattle,
   beginMovePhase,
   phaseDurationMs,
   validateMoveSubmission,

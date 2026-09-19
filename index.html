@@ -232,6 +232,7 @@
             <button class="secondary-button" type="button" data-player-action="whisper">密語</button>
             <button class="secondary-button" type="button" data-player-action="trade">交易</button>
             <button class="secondary-button" type="button" data-player-action="party">邀請組隊</button>
+            <button class="secondary-button" type="button" data-player-action="pvp">邀請切磋</button>
           </div>
         </section>
 
@@ -263,6 +264,17 @@
             <div class="trade-invite-actions ui-actions ui-actions--center">
               <button class="secondary-button" type="button" data-party-invite-action="reject">拒絕</button>
               <button class="primary-button" type="button" data-party-invite-action="accept">接受</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="pvpInvitePanel" class="trade-invite-panel social-invite-panel" role="dialog" aria-modal="true" aria-labelledby="pvpInviteTitle" hidden>
+          <div class="trade-invite-card ui-modal-window">
+            <strong id="pvpInviteTitle">切磋邀請</strong>
+            <p><span id="pvpInviteName">冒險者</span> 邀請你進行切磋</p>
+            <div class="trade-invite-actions ui-actions ui-actions--center">
+              <button class="secondary-button" type="button" data-pvp-invite-action="reject">拒絕</button>
+              <button class="primary-button" type="button" data-pvp-invite-action="accept">接受</button>
             </div>
           </div>
         </section>

@@ -862,6 +862,20 @@ function canonicalBattleFacing(value, fallback = "right") {
 
 function serverBattlefieldFor(mapId, monsterType) {
   const normalizedMap = normalizeMapId(mapId);
+  if (String(mapId || "") === "pvp-plaza") {
+    return {
+      id: "pvp-plaza-v1",
+      width: 12,
+      height: 3,
+      theme: "plaza",
+      deploymentZones: {
+        ally: [{ x: 1, y: 1 }],
+        enemy: [{ x: 10, y: 1 }],
+      },
+      heightMap: {},
+      terrainCells: {},
+    };
+  }
   if (normalizedMap === "field" || normalizedMap === "mountain-southeast") {
     return {
       ...SERVER_BATTLE_FIELD_OPENING,

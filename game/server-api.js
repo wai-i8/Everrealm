@@ -100,6 +100,12 @@
       return callable("partyCommand", { version: COMMAND_VERSION, action: command, ...positioned });
     }
 
+    async function pvp(action, payload = {}) {
+      const command = String(action || "").trim();
+      if (!command) return { ok: false, reason: "invalid-action" };
+      return callable("pvpCommand", { version: COMMAND_VERSION, action: command, ...payload });
+    }
+
     return Object.freeze({
       REGION,
       COMMAND_VERSION,
@@ -112,6 +118,7 @@
       social,
       trade,
       party,
+      pvp,
     });
   }
 
