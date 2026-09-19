@@ -136,6 +136,8 @@ function outgoingInviteMatches(snapshot, type, targetUid, referenceId = "") {
 }
 
 
+const PVP_DISCONNECT_GRACE_MS = 8000;
+
 function pvpBattleRef(battleId) { return db.doc(`pvpBattles/${String(battleId || "").trim()}`); }
 function pvpPointerRef(uid) { return db.doc(`players/${uid}/pvpState/current`); }
 function pvpInviteRef(uid, inviteId) { return db.doc(`players/${uid}/pvpInvites/${String(inviteId || "").trim()}`); }
@@ -1027,16 +1029,66 @@ exports.pvpCommand = onCall({ region: REGION, maxInstances: 30 }, async (request
     });
   }
 
-  const battleActions = new Set(["battle-ready", "battle-move", "battle-action", "battle-advance", "battle-finish-ready", "battle-exit", "battle-retreat"]);
+  const battleActions = new Set(["battle-ready", "battle-move", "battle-action", "battle-advance", "battle-finish-ready", "battle-exit", "battle-retreat", "member-offline", "member-reconnected", "disconnect-timeout"]);
   if (battleActions.has(action)) {
     const battleId = String(request.data?.battleId || "").trim();
     if (!battleId) return { ok: false, reason: "invalid-battle" };
+    const disconnectTargetUid = action === "disconnect-timeout" ? safeSocialUid(request.data?.targetUid) : "";
+    if (action === "disconnect-timeout") {
+      if (!disconnectTargetUid || disconnectTargetUid === uid) return { ok: false, reason: "invalid-target" };
+      const presence = await realtimeDb.ref(`presence/${disconnectTargetUid}`).get();
+      if (presence.exists() && presence.val()?.online !== false) return { ok: true, skipped: true, reason: "still-online", battleId };
+    }
     return db.runTransaction(async (transaction) => {
       const battleRef = pvpBattleRef(battleId);
       const battleSnap = await transaction.get(battleRef);
       if (!battleSnap.exists) return { ok: false, reason: "battle-not-found" };
       let battle = battleSnap.data();
       if (battle.pvp !== true || !(battle.memberUids || []).includes(uid) || !battle.members?.[uid]) return { ok: false, reason: "not-participant" };
+
+      if (action === "member-offline" || action === "member-reconnected") {
+        const targetUid = safeSocialUid(request.data?.targetUid);
+        if (!targetUid || targetUid === uid || !(battle.memberUids || []).includes(targetUid) || !battle.members?.[targetUid]) return { ok: false, reason: "invalid-target" };
+        if (!["loading", "active"].includes(String(battle.status || ""))) return { ok: true, skipped: true, reason: "battle-closed", battleId };
+        const member = battle.members[targetUid];
+        if (member.retreated || member.disconnected || member.alive === false || Number(member.hp) <= 0) return { ok: true, skipped: true, reason: "member-inactive", battleId };
+        battle.members[targetUid] = {
+          ...member,
+          offlineSinceMs: action === "member-offline" ? (Number(member.offlineSinceMs) || nowMs) : 0,
+        };
+        battle.updatedAtMs = nowMs;
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, targetUid, offline: action === "member-offline" };
+      }
+
+      if (action === "disconnect-timeout") {
+        const targetUid = disconnectTargetUid;
+        if (!(battle.memberUids || []).includes(targetUid) || !battle.members?.[targetUid]) return { ok: false, reason: "invalid-target" };
+        if (!["loading", "active"].includes(String(battle.status || ""))) return { ok: true, skipped: true, reason: "battle-closed", battleId };
+        const target = battle.members[targetUid];
+        const offlineSinceMs = Number(target.offlineSinceMs) || 0;
+        if (!offlineSinceMs || nowMs - offlineSinceMs < PVP_DISCONNECT_GRACE_MS) return { ok: true, skipped: true, reason: "grace", battleId };
+        if (target.retreated || target.disconnected || target.alive === false || Number(target.hp) <= 0) return { ok: true, skipped: true, reason: "member-inactive", battleId };
+        const winnerUid = (battle.memberUids || []).find((memberUid) => memberUid !== targetUid && battle.members?.[memberUid]?.retreated !== true && battle.members?.[memberUid]?.disconnected !== true) || "";
+        battle.members[targetUid] = { ...target, retreated: true, disconnected: true, alive: false, offlineSinceMs };
+        battle.status = "finished";
+        battle.phase = "finished";
+        battle.phaseEndsAtMs = 0;
+        battle.result = winnerUid ? "victory" : "draw";
+        battle.winnerUid = winnerUid;
+        battle.loserUid = targetUid;
+        battle.finishParticipantUids = winnerUid ? [winnerUid] : [];
+        battle.finishReadyUids = [];
+        battle.finishReleased = battle.finishParticipantUids.length === 0;
+        battle.exitReleased = false;
+        battle.finishedAtMs = nowMs;
+        battle.presentationSerial = Math.max(0, Number(battle.presentationSerial) || 0) + 1;
+        battle.presentations = [...(battle.presentations || []), { serial: battle.presentationSerial, type: "result", round: battle.round || 1, result: battle.result, disconnectedUid: targetUid }].slice(-24);
+        battle.updatedAtMs = nowMs;
+        transaction.delete(pvpPointerRef(targetUid));
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, removed: true, targetUid, winnerUid };
+      }
 
       if (action === "battle-ready") {
         if (battle.status !== "loading") return { ok: true, alreadyReady: true, battleId };
@@ -1053,7 +1105,9 @@ exports.pvpCommand = onCall({ region: REGION, maxInstances: 30 }, async (request
       if (action === "battle-finish-ready") {
         if (battle.status !== "finished") return { ok: false, reason: "battle-not-finished" };
         battle.finishReadyUids = [...new Set([...(battle.finishReadyUids || []), uid])];
-        const expected = battle.memberUids || [];
+        const expected = Array.isArray(battle.finishParticipantUids) && battle.finishParticipantUids.length
+          ? battle.finishParticipantUids
+          : (battle.memberUids || []);
         if (expected.every((memberUid) => battle.finishReadyUids.includes(memberUid))) {
           battle.finishReleased = true;
           battle.finishReleasedAtMs = nowMs;

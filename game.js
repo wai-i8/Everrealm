@@ -278,6 +278,8 @@
     phase: document.getElementById("battlePhaseLabel"),
     unitLevel: document.getElementById("selectedUnitLevel"),
     unitName: document.getElementById("selectedUnitName"),
+    unitDecisionStatus: document.getElementById("selectedUnitDecisionStatus"),
+    allyRows: document.getElementById("battleAllyRows"),
     hpFill: document.getElementById("selectedUnitHpFill"),
     hpText: document.getElementById("selectedUnitHpText"),
     apFill: document.getElementById("selectedUnitApFill"),
@@ -600,7 +602,7 @@
   let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
   if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
   const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
-  const titleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null;
+  const titleBgmAudio = window.__everrealmBootTitleBgm || (typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null);
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3") : null;
   const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
   const defeatBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/defeat-screen-v1.mp3") : null;
@@ -7579,6 +7581,91 @@
     }
   }
 
+  async function requestSoloBattleAdvance() {
+    if (!battle || battle.isPartyBattle || !battle.serverReady || !battle.serverBattleId || !["planning_move", "planning_action"].includes(battle.phase) || battle.serverSyncPending || !ServerApi?.battle) return false;
+    const nowMs = Date.now();
+    if (nowMs < partyAdvanceRetryAtMs) return false;
+    const battleId = battle.serverBattleId;
+    const phase = battle.phase;
+    const round = battle.round;
+    const token = battle.token;
+    const key = `solo:${battleId}:${round}:${phase}`;
+    if (partyAdvanceKey === key) return false;
+    partyAdvanceKey = key;
+    battle.serverSyncPending = true;
+    battle.selectedAction = null;
+    battle.messageDanger = false;
+    battle.message = "時間到，正在自動待機…";
+    updateBattleUi();
+    const afterSerial = Math.max(0, Number(battle.serverPresentationPresentedSerial) || 0);
+    try {
+      const result = await ServerApi.battle("advance", { battleId });
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return Boolean(result?.ok);
+      const stillSamePhase = battle.round === round && battle.phase === phase;
+      if (!result?.ok || !result.battle) {
+        if (stillSamePhase) {
+          battle.serverSyncPending = false;
+          partyAdvanceKey = "";
+          partyAdvanceRetryAtMs = Date.now() + 1200;
+          battle.message = "自動待機同步失敗，可以繼續操作。";
+          battle.messageDanger = true;
+          updateBattleUi();
+        }
+        return false;
+      }
+      if (result.early) {
+        battle.serverSyncPending = false;
+        partyAdvanceKey = "";
+        partyAdvanceRetryAtMs = Date.now() + 300;
+        window.setTimeout(() => {
+          if (battle && !battle.isPartyBattle && battle.serverBattleId === battleId && battle.round === round && battle.phase === phase) void requestSoloBattleAdvance();
+        }, 330);
+        updateBattleUi();
+        return false;
+      }
+      partyAdvanceRetryAtMs = 0;
+      const snapshot = result.battle;
+      const advancedPhases = Math.max(0, Number(result.advancedPhases) || 0);
+      if (advancedPhases > 1 || snapshot.status === "finished") {
+        finishSoloAuthoritativeAction(snapshot, result.state || null);
+        return true;
+      }
+      if (phase === "planning_move") {
+        const presentation = latestAuthoritativePresentation(snapshot, "movement", afterSerial);
+        if (presentation?.serial) battle.serverPresentationPresentedSerial = Number(presentation.serial) || afterSerial;
+        const complete = () => {
+          if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return;
+          hydrateSharedBattleSnapshot(battle, snapshot, { render: false });
+          battle.serverSyncPending = false;
+          battle.phase = snapshot.phase || "planning_action";
+          battle.selectedAction = null;
+          battle.cursor = copyBattleCell(battle.hero.cell);
+          battle.messageDanger = false;
+          battle.message = "移動時間結束；本回合自動待機。";
+          updateBattleUi();
+          schedulePersistBattleResumeState({ delayMs: 0 });
+        };
+        if (presentation?.movementReplay?.id && startPartyMovementReplay(battle, presentation.movementReplay, snapshot.phase || "planning_action", { onComplete: complete })) return true;
+        complete();
+        return true;
+      }
+      const presentation = latestAuthoritativePresentation(snapshot, "action", afterSerial);
+      if (presentation?.serial) battle.serverPresentationPresentedSerial = Number(presentation.serial) || afterSerial;
+      const complete = () => finishSoloAuthoritativeAction(snapshot, result.state || null);
+      if (presentation && startPartyActionReplay(presentation, battle, { onComplete: complete })) return true;
+      complete();
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return false;
+      battle.serverSyncPending = false;
+      partyAdvanceKey = "";
+      partyAdvanceRetryAtMs = Date.now() + 1200;
+      console.warn("Solo battle timeout advance failed.", error);
+      updateBattleUi();
+      return false;
+    }
+  }
+
   async function requestPartyBattleAdvance() {
     if (!battle?.isPartyBattle || !battle.partyBattleId || !["planning_move", "planning_action"].includes(battle.phase)) return false;
     const nowMs = Date.now();
@@ -7626,39 +7713,44 @@
     return true;
   }
 
-  function updatePartyBattleTimer() {
+  function updateBattlePhaseTimer() {
     if (!battlePhaseTimer) return;
-    const authoritative = battle?.partyLatestSnapshot || battle?.partySnapshot || null;
+    const authoritative = battle?.isPartyBattle
+      ? (battle?.partyLatestSnapshot || battle?.partySnapshot || battle?.authoritativeSnapshot || null)
+      : (battle?.authoritativeSnapshot || null);
     const authoritativePhase = String(authoritative?.phase || battle?.phase || "");
-    const activePhase = Boolean(battle?.isPartyBattle && ["planning_move", "planning_action"].includes(authoritativePhase));
+    const activePhase = Boolean(battle && ["planning_move", "planning_action"].includes(authoritativePhase));
     const deadline = Math.max(0,
       Number(authoritative?.phaseEndsAtMs) ||
       Number(battle?.partyPhaseEndsAtMs) ||
+      Number(battle?.phaseEndsAtMs) ||
       0
     );
-    // Shared-battle animation phases are local presentation only.  The visible
-    // timer follows the Firestore authoritative phase/deadline so movement or
-    // attack replay can never hide the 30-second planning countdown.
     battlePhaseTimer.hidden = !activePhase;
     if (!activePhase) {
       battlePhaseTimer.classList.remove("is-urgent");
       return;
     }
-    // Compare against server time: a client clock that runs fast would see the
-    // deadline as passed early and spam battle-advance (each = a Function call).
     const serverNow = serverNowMs();
-    const remainingMs = deadline > 0 ? Math.max(0, deadline - serverNow) : (Party?.PHASE_MS || 30000);
+    const remainingMs = deadline > 0 ? Math.max(0, deadline - serverNow) : 30000;
     const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-    battlePhaseTimer.textContent = `${authoritativePhase === "planning_move" ? "移動" : "行動"} ${seconds}s`;
+    const round = Math.max(1, Math.floor(Number(authoritative?.round || battle?.round) || 1));
+    battlePhaseTimer.textContent = `Round ${round}　${seconds}s`;
     battlePhaseTimer.classList.toggle("is-urgent", deadline > 0 && seconds <= 5);
-    // Only the leader (or a solo player) advances at the deadline; other
-    // members act as a fallback after a grace period so a disconnected leader
-    // cannot stall the battle. This avoids N simultaneous transactions.
+    if (!(deadline > 0) || serverNow < deadline) return;
+
+    if (!battle.isPartyBattle) {
+      void requestSoloBattleAdvance();
+      return;
+    }
+
+    // Shared battles use one preferred caller first, with the remaining client
+    // acting as a fallback so a disconnected leader cannot freeze the phase.
     const advancesFirst = battle?.isPvpBattle
       ? String(authoritative?.initiatorUid || "") === authenticatedUid()
       : (authoritative?.solo === true || !partyState?.party || Boolean(partyClient?.isLeader?.()));
     const advanceGraceMs = advancesFirst ? 120 : 2500;
-    if (deadline > 0 && serverNow - deadline >= advanceGraceMs && battle.phase === authoritativePhase) void requestPartyBattleAdvance();
+    if (serverNow - deadline >= advanceGraceMs && battle.phase === authoritativePhase) void requestPartyBattleAdvance();
   }
 
   function saveOnLeavingPage() {
@@ -7741,6 +7833,7 @@
     targetBattle.serverBattleId = String(snapshot.id);
     targetBattle.serverReady = true;
     targetBattle.round = Math.max(1, Number(snapshot.round) || 1);
+    targetBattle.phaseEndsAtMs = Math.max(0, Number(snapshot.phaseEndsAtMs) || 0);
 
     const local = partyBattleUnitFromMember(memberUid, localMember, true);
     Object.assign(targetBattle.hero, local, {
@@ -8141,10 +8234,12 @@
       startVictoryBgm();
       updateBattleUi();
       ensureBattleVictoryPresenter().show(battle.victoryResult);
+      const exitPolicy = sharedBattleVictoryExitPolicy(snapshot);
       const victoryPrompt = battleVictoryContinue?.querySelector?.("[data-victory-prompt]");
-      if (victoryPrompt) victoryPrompt.textContent = "返回";
-      if (battleVictoryContinue) battleVictoryContinue.disabled = false;
-      battleVictoryContinue?.focus({ preventScroll: true });
+      if (victoryPrompt) victoryPrompt.textContent = exitPolicy.leaderControlled && !exitPolicy.canExit ? "等待隊長離開戰場" : "返回";
+      if (battleVictoryContinue) battleVictoryContinue.disabled = exitPolicy.leaderControlled && !exitPolicy.canExit;
+      if (exitPolicy.canExit) battleVictoryContinue?.focus({ preventScroll: true });
+      else canvas.focus({ preventScroll: true });
       return;
     }
     if (snapshot.result === "victory" && member?.alive && !member.retreated && !member.disconnected) {
@@ -8166,11 +8261,11 @@
       startVictoryBgm();
       updateBattleUi();
       ensureBattleVictoryPresenter().show(battle.victoryResult);
-      const leaderControlsExit = String(snapshot.leaderUid || "") === uid;
+      const exitPolicy = sharedBattleVictoryExitPolicy(snapshot);
       const victoryPrompt = battleVictoryContinue?.querySelector?.("[data-victory-prompt]");
-      if (victoryPrompt) victoryPrompt.textContent = leaderControlsExit ? "返回" : "等待隊長離開戰場";
-      if (battleVictoryContinue) battleVictoryContinue.disabled = !leaderControlsExit;
-      if (leaderControlsExit) battleVictoryContinue?.focus({ preventScroll: true });
+      if (victoryPrompt) victoryPrompt.textContent = exitPolicy.canExit ? "返回" : "等待隊長離開戰場";
+      if (battleVictoryContinue) battleVictoryContinue.disabled = !exitPolicy.canExit;
+      if (exitPolicy.canExit) battleVictoryContinue?.focus({ preventScroll: true });
       else canvas.focus({ preventScroll: true });
       if (snapshot.exitReleased === true || battle.partyLatestSnapshot?.exitReleased === true) completeBattleVictoryExit();
       return;
@@ -8395,6 +8490,7 @@
       serverBattleId: null,
       serverReady: false,
       serverSyncPending: false,
+      phaseEndsAtMs: 0,
       serverPresentationPresentedSerial: 0,
       authoritativeEventSerial: 0,
       authoritativeSnapshot: null,
@@ -8636,7 +8732,35 @@
     const localSnapshot = Number(snapshot.tacticalVersion || 0) < 1
       ? readPersistedBattleResumeSnapshot(snapshot.id)
       : null;
-    return startBattle(source, true, { serverSnapshot: snapshot, localResumeSnapshot: localSnapshot });
+    const started = startBattle(source, true, { serverSnapshot: snapshot, localResumeSnapshot: localSnapshot });
+    if (!started || !battle || battle.isPartyBattle || !ServerApi?.battle) return started;
+    const token = battle.token;
+    const battleId = String(snapshot.id);
+    battle.serverSyncPending = true;
+    battle.messageDanger = false;
+    battle.message = "正在結算離線期間的戰鬥…";
+    updateBattleUi();
+    void ServerApi.battle("resume", { battleId }).then((result) => {
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return;
+      if (!result?.ok || !result.battle) {
+        battle.serverSyncPending = false;
+        battle.message = "未能結算離線戰鬥，可以繼續目前回合。";
+        battle.messageDanger = true;
+        updateBattleUi();
+        return;
+      }
+      const advancedPhases = Math.max(0, Number(result.advancedPhases) || 0);
+      if (advancedPhases > 0) addSystemMessage("battle", `離線期間已自動結算 ${advancedPhases} 個戰鬥階段。`, "info");
+      finishSoloAuthoritativeAction(result.battle, result.state || null);
+    }).catch((error) => {
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return;
+      battle.serverSyncPending = false;
+      battle.message = "離線戰鬥結算暫時失敗，可以繼續目前回合。";
+      battle.messageDanger = true;
+      console.warn("Solo battle reconnect catch-up failed.", error);
+      updateBattleUi();
+    });
+    return true;
   }
 
   async function authorizeBattleSession(targetBattle, source) {
@@ -8962,6 +9086,95 @@
           || (relative === "side" && action.targetArc.some((value) => ["side", "left", "right"].includes(value)));
       },
     });
+  }
+
+  function battleDecisionStatusForUnit(unit, { local = false } = {}) {
+    if (!battle || !unit) return { label: "", state: "" };
+    if (unit.alive === false || Number(unit.hp) <= 0 || unit.retreated === true || unit.disconnected === true) {
+      return { label: "倒下", state: "inactive" };
+    }
+    const phase = String(battle.phase || "");
+    if (phase === "planning_move" || phase === "planning_action") {
+      let submitted = false;
+      if (local) {
+        if (battle.isPartyBattle) {
+          submitted = phase === "planning_move" ? Boolean(battle.partyMoveSubmitted) : Boolean(battle.partyActionSubmitted);
+        } else {
+          submitted = Boolean(battle.serverSyncPending);
+        }
+      } else if (battle.isPartyBattle && unit.uid) {
+        const snapshot = battle.partyLatestSnapshot || battle.partySnapshot || battle.authoritativeSnapshot || {};
+        submitted = phase === "planning_move"
+          ? Boolean(snapshot.movePlans?.[unit.uid])
+          : Boolean(snapshot.actions?.[unit.uid]);
+      }
+      return submitted ? { label: "完成", state: "done" } : { label: "思考中", state: "thinking" };
+    }
+    if (phase === "resolving_move" || phase === "resolving_action") {
+      return { label: "完成", state: "done" };
+    }
+    return { label: "", state: "" };
+  }
+
+  function applyBattleDecisionStatus(element, status) {
+    if (!element) return;
+    const label = String(status?.label || "");
+    element.hidden = !label;
+    element.textContent = label;
+    element.dataset.state = String(status?.state || "");
+  }
+
+  function renderBattleAllyRows() {
+    if (!battleUi.allyRows || !battle) return;
+    const allies = Array.isArray(battle.partyAllies) ? battle.partyAllies : [];
+    const rows = allies.map((ally) => {
+      const row = document.createElement("div");
+      row.className = `battle-ally-row${ally.alive === false || Number(ally.hp) <= 0 ? " is-defeated" : ""}`;
+
+      const identity = document.createElement("div");
+      identity.className = "battle-ally-identity";
+      const name = document.createElement("strong");
+      name.textContent = ally.name || "隊友";
+      const level = document.createElement("b");
+      level.textContent = `LV. ${Math.max(1, Math.floor(Number(ally.level) || 1))}`;
+      const decision = document.createElement("span");
+      decision.className = "battle-decision-status";
+      applyBattleDecisionStatus(decision, battleDecisionStatusForUnit(ally));
+      identity.append(name, level);
+
+      const meters = document.createElement("div");
+      meters.className = "battle-ally-meters";
+      const hpBar = document.createElement("div");
+      hpBar.className = "battle-stat-bar battle-ally-hp-bar";
+      const hpFill = document.createElement("i");
+      hpFill.style.width = `${Core.clamp((Number(ally.hp) || 0) / Math.max(1, Number(ally.maxHp) || 1), 0, 1) * 100}%`;
+      hpBar.append(hpFill);
+      const apBar = document.createElement("div");
+      apBar.className = "battle-stat-bar battle-ap-bar battle-ally-ap-bar";
+      const apFill = document.createElement("i");
+      apFill.style.width = `${Core.clamp((Number(ally.ap) || 0) / BATTLE_AP_MAX, 0, 1) * 100}%`;
+      apBar.append(apFill);
+      meters.append(hpBar, apBar);
+      row.append(identity, meters, decision);
+      return row;
+    });
+    battleUi.allyRows.replaceChildren(...rows);
+    battleUi.allyRows.hidden = rows.length === 0;
+  }
+
+  function battleShouldShowActionDock() {
+    if (!battle || battle.hero?.alive === false || Number(battle.hero?.hp) <= 0) return false;
+    if (battle.phase === "planning_move") {
+      if (battle.isPartyBattle && battle.partyMoveSubmitted) return false;
+      if (!battle.isPartyBattle && battle.serverSyncPending) return false;
+      return true;
+    }
+    if (battle.phase === "planning_action") {
+      if (battle.isPartyBattle && battle.partyActionSubmitted) return false;
+      if (!battle.isPartyBattle && battle.serverSyncPending) return false;
+      return true;
+    }
+    return false;
   }
 
   function livingBattleEnemies() {
@@ -10165,6 +10378,19 @@
     battle.actingUnitId = null;
     battle.actingUnitIds = [];
     battle.actionResolution = null;
+
+    // Shared/PVP action replay is presentation-only. The server may already
+    // have advanced to the next round while the client is still animating the
+    // previous round. Do not leave the local phase stuck at resolving_action:
+    // adopt the latest authoritative active phase before the presentation
+    // queue drains so hydrateSharedBattleSnapshot can reset move/action input.
+    const latest = battle.partyLatestSnapshot;
+    if (latest?.id === battle.partyBattleId && latest.status === "active"
+      && ["planning_move", "planning_action"].includes(latest.phase)) {
+      battle.phase = latest.phase;
+      battle.selectedAction = latest.phase === "planning_move" ? "move" : null;
+    }
+
     if (typeof onComplete === "function") onComplete();
   }
 
@@ -10925,6 +11151,47 @@
     return finished.victorySettlementPending;
   }
 
+  function pvpLocalTeamLeaderUid(snapshot) {
+    if (!snapshot?.pvp) return "";
+    const uid = authenticatedUid();
+    const member = uid ? snapshot.members?.[uid] : null;
+    if (!member) return "";
+    const direct = String(member.teamLeaderUid || member.partyLeaderUid || "").trim();
+    if (direct) return direct;
+    const teamId = String(member.teamId || member.partyId || "").trim();
+    if (!teamId) return "";
+    const mappings = [snapshot.teamLeaderUids, snapshot.partyLeaderUids, snapshot.teamLeaders, snapshot.partyLeaders];
+    for (const mapping of mappings) {
+      const value = mapping && typeof mapping === "object" ? String(mapping[teamId] || "").trim() : "";
+      if (value) return value;
+    }
+    return "";
+  }
+
+  function sharedBattleVictoryExitPolicy(snapshot = battle?.partyLatestSnapshot || battle?.partySnapshot || battle?.authoritativeSnapshot) {
+    const uid = authenticatedUid();
+    if (!battle?.isPartyBattle) return { leaderControlled: false, leaderUid: "", canExit: true };
+    if (battle.isPvpBattle) {
+      // Current 1v1 PVP has no party/team metadata, so each player exits
+      // independently. Future team PVP can provide an explicit team leader in
+      // the member/team fields above and this UI will automatically gate the
+      // local team behind that leader without treating the duel initiator as a
+      // fake party leader.
+      const leaderUid = pvpLocalTeamLeaderUid(snapshot);
+      return {
+        leaderControlled: Boolean(leaderUid),
+        leaderUid,
+        canExit: !leaderUid || String(leaderUid) === String(uid),
+      };
+    }
+    const leaderUid = String(snapshot?.leaderUid || "").trim();
+    return {
+      leaderControlled: Boolean(leaderUid),
+      leaderUid,
+      canExit: leaderUid ? String(leaderUid) === String(uid) : isPartyLeader(),
+    };
+  }
+
   function completeBattleVictoryExit() {
     if (!battle || battle.phase !== "victory" || !battle.victoryResult) return false;
     if (battleVictoryContinue) battleVictoryContinue.disabled = false;
@@ -10940,9 +11207,9 @@
 
   function syncPartyVictoryExitControl() {
     if (!battle?.isPartyBattle || battle.phase !== "victory" || !battleVictoryContinue) return;
-    const leader = isPartyLeader();
+    const policy = sharedBattleVictoryExitPolicy();
     const prompt = battleVictoryContinue.querySelector?.("[data-victory-prompt]");
-    if (!leader) {
+    if (policy.leaderControlled && !policy.canExit) {
       battleVictoryContinue.disabled = true;
       if (prompt) prompt.textContent = "等待隊長離開戰場";
       return;
@@ -10954,16 +11221,17 @@
   function exitBattleVictory() {
     if (!battle || battle.phase !== "victory" || !battle.victoryResult) return false;
     if (!battle.isPartyBattle) return completeBattleVictoryExit();
-    if (battle.isPvpBattle) {
-      const battleId = battle.partyBattleId;
-      void pvpClient?.exitBattle?.(battleId);
-      return completeBattleVictoryExit();
-    }
-    if (!isPartyLeader()) {
+    const policy = sharedBattleVictoryExitPolicy();
+    if (policy.leaderControlled && !policy.canExit) {
       const prompt = battleVictoryContinue?.querySelector?.("[data-victory-prompt]");
       if (prompt) prompt.textContent = "等待隊長";
       showToast("等待隊長離開戰場。", "");
       return true;
+    }
+    if (battle.isPvpBattle) {
+      const battleId = battle.partyBattleId;
+      void pvpClient?.exitBattle?.(battleId);
+      return completeBattleVictoryExit();
     }
     if (battle.partyVictoryExitPending) return true;
     battle.partyVictoryExitPending = true;
@@ -10984,7 +11252,10 @@
 
   function advanceBattleVictory() {
     if (!battle || battle.phase !== "victory" || battleVictoryOverlay.hidden) return false;
-    if (battle.isPartyBattle && !battle.isPvpBattle && !isPartyLeader()) return true;
+    if (battle.isPartyBattle) {
+      const policy = sharedBattleVictoryExitPolicy();
+      if (policy.leaderControlled && !policy.canExit) return true;
+    }
     const action = ensureBattleVictoryPresenter().advance();
     if (action.exit) return exitBattleVictory();
     return action.handled;
@@ -11191,8 +11462,8 @@
       if (battle.actionResolution?.partyReplay) updatePartyActionResolution(dt);
       else updateActionResolution(dt);
     }
+    updateBattlePhaseTimer();
     if (battle.isPartyBattle) {
-      updatePartyBattleTimer();
       syncPartyVictoryExitControl();
     }
     if (autoplay && !battle.isPartyBattle && ["planning_move", "planning_action"].includes(battle.phase)) {
@@ -11320,7 +11591,10 @@
   function updateBattleUi() {
     if (!battle) return;
     const authorizing = battle.phase === "intro";
-    for (const panel of battleHud.querySelectorAll("[data-battle-panel]")) panel.hidden = false;
+    const showActionDock = battleShouldShowActionDock();
+    for (const panel of battleHud.querySelectorAll("[data-battle-panel]")) {
+      panel.hidden = panel === battleActionDock ? !showActionDock : false;
+    }
     battleHud.dataset.battlePhase = battle.phase;
     stage.dataset.battlePhase = battle.phase;
     battleUi.round.textContent = `ROUND ${battle.round}`;
@@ -11335,7 +11609,7 @@
     };
     battleUi.turn.textContent = phaseCopy[battle.phase]?.[0] || "戰鬥";
     battleUi.phase.textContent = phaseCopy[battle.phase]?.[1] || "";
-    updatePartyBattleTimer();
+    updateBattlePhaseTimer();
         battleUi.unitLevel.textContent = `LV. ${battle.hero.level}`;
     battleUi.unitName.textContent = battle.hero.name || playerDisplayName();
     battleUi.hpFill.style.width = `${Core.clamp(battle.hero.hp / battle.hero.maxHp, 0, 1) * 100}%`;
@@ -11343,6 +11617,8 @@
     const displayedAp = authorizing ? BATTLE_AP_GAIN : battle.ap;
     battleUi.apFill.style.width = `${Core.clamp(displayedAp / BATTLE_AP_MAX, 0, 1) * 100}%`;
     battleUi.apText.textContent = `${displayedAp} / ${BATTLE_AP_MAX}`;
+    applyBattleDecisionStatus(battleUi.unitDecisionStatus, battleDecisionStatusForUnit(battle.hero, { local: true }));
+    renderBattleAllyRows();
     if (battleUi.commandAp) {
       const apValue = battleUi.commandAp.querySelector("strong");
       if (apValue) apValue.textContent = `${displayedAp} AP`;
@@ -11355,9 +11631,9 @@
     battleUi.hint.textContent = battle.message;
     battleUi.hint.classList.toggle("danger", Boolean(battle.messageDanger));
     battleUi.hint.hidden = !battle.messageDanger;
-    renderBattleActionButtons();
+    if (showActionDock) renderBattleActionButtons();
     syncBattleFacingPicker();
-    syncBattleCommandMenu();
+    if (showActionDock) syncBattleCommandMenu();
     schedulePersistBattleResumeState();
   }
 

@@ -26,6 +26,7 @@ track, while the guild and hospital have their own music zones.
 - Disabling sound pauses and mutes the active element; enabling it resumes the
   current zone after the browser permits playback.
 - Autoplay rejection is caught so audio policy cannot break gameplay. If a refresh/load is restored while music is enabled, the first subsequent pointer/keyboard user gesture retries the active map track immediately; playback must not wait for a later map transition.
+- The login/title track is preloaded at high priority before the large runtime batch. Bootstrap waits briefly for the title audio to become playable (with a bounded timeout), starts it as soon as browser policy allows, and only then begins bulk gameplay-script loading so network contention does not postpone the login BGM until the loading counter has finished.
 - The debug snapshot reports the selected source, paused/muted state, loop state
   and `activeInstances`; it must never report more than one active instance.
 

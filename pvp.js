@@ -5,6 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const DISCONNECT_GRACE_MS = 8000;
+
   function text(value, fallback = "") { return String(value == null ? fallback : value).trim(); }
   function safeName(value) { return text(value, "冒險者").slice(0, 24) || "冒險者"; }
   function normalizeInvite(id, raw) {
@@ -52,8 +54,13 @@
     let uid = "";
     let token = 0;
     let firestoreContext = null;
+    let realtimeContext = null;
     let unsubs = [];
     let battleUnsub = null;
+    let presenceUnsub = null;
+    let presenceTimer = 0;
+    let watchedOpponentUid = "";
+    let opponentPresenceOnline;
     let battleId = "";
     let battle = null;
     let pointer = null;
@@ -62,16 +69,61 @@
 
     function state() { return Object.freeze({ active, uid, pointer, battle, invites: [...invites.values()].sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0)) }); }
     function emitState() { try { onState(state()); } catch (_) {} }
-    function clearBattle() { try { battleUnsub?.(); } catch (_) {} battleUnsub = null; battleId = ""; battle = null; }
+    function clearPresenceTimer() {
+      if (presenceTimer) clearTimeout(presenceTimer);
+      presenceTimer = 0;
+    }
+    function clearPresenceWatch() {
+      clearPresenceTimer();
+      try { presenceUnsub?.(); } catch (_) {}
+      presenceUnsub = null;
+      watchedOpponentUid = "";
+      opponentPresenceOnline = undefined;
+    }
+    function clearBattle() { try { battleUnsub?.(); } catch (_) {} battleUnsub = null; battleId = ""; battle = null; clearPresenceWatch(); }
     function stop() {
       token += 1; active = false; uid = ""; pointer = null;
       for (const unsub of unsubs) { try { unsub?.(); } catch (_) {} }
-      unsubs = []; clearBattle(); invites = new Map(); seenInvites.clear(); firestoreContext = null; emitState();
+      unsubs = []; clearBattle(); invites = new Map(); seenInvites.clear(); firestoreContext = null; realtimeContext = null; emitState();
     }
     async function command(action, payload = {}) {
       if (!active || !serverApi?.pvp) return { ok: false, reason: "inactive" };
       try { return await serverApi.pvp(action, payload); }
       catch (error) { onError(error); return { ok: false, reason: "command-failed", error }; }
+    }
+    function syncOpponentPresence(localToken) {
+      const opponentUid = text(pointer?.opponentUid);
+      const activeBattleId = text(pointer?.battleId || battleId);
+      if (!active || localToken !== token || !opponentUid || !activeBattleId || !realtimeContext || battle?.status === "finished") {
+        clearPresenceWatch();
+        return;
+      }
+      if (presenceUnsub && watchedOpponentUid === opponentUid) return;
+      clearPresenceWatch();
+      watchedOpponentUid = opponentUid;
+      const { database, sdk } = realtimeContext;
+      presenceUnsub = sdk.onValue(sdk.ref(database, `presence/${opponentUid}`), (snapshot) => {
+        if (!active || localToken !== token || watchedOpponentUid !== opponentUid) return;
+        const online = Boolean(snapshot.exists?.() && snapshot.val()?.online !== false);
+        const previousOnline = opponentPresenceOnline;
+        opponentPresenceOnline = online;
+        if (online) {
+          clearPresenceTimer();
+          const serverMarkedOffline = Number(battle?.members?.[opponentUid]?.offlineSinceMs) > 0;
+          if (previousOnline === false || (previousOnline === undefined && serverMarkedOffline)) {
+            void command("member-reconnected", { battleId: activeBattleId, targetUid: opponentUid });
+          }
+          return;
+        }
+        if (previousOnline === false) return;
+        void command("member-offline", { battleId: activeBattleId, targetUid: opponentUid });
+        clearPresenceTimer();
+        presenceTimer = setTimeout(() => {
+          presenceTimer = 0;
+          if (!active || localToken !== token || watchedOpponentUid !== opponentUid) return;
+          void command("disconnect-timeout", { battleId: activeBattleId, targetUid: opponentUid });
+        }, DISCONNECT_GRACE_MS + 250);
+      }, onError);
     }
     function watchBattle(nextBattleId, localToken) {
       const id = text(nextBattleId);
@@ -82,6 +134,7 @@
       battleUnsub = sdk.onSnapshot(sdk.doc(db, `pvpBattles/${id}`), (snapshot) => {
         if (!active || localToken !== token || battleId !== id) return;
         battle = snapshot.exists() ? localizeBattle({ id: snapshot.id, ...snapshot.data() }, uid) : null;
+        syncOpponentPresence(localToken);
         emitState();
         try { onBattle(battle); } catch (_) {}
       }, onError);
@@ -93,6 +146,7 @@
       const localToken = ++token;
       try {
         firestoreContext = await firebase.firestore();
+        realtimeContext = firebase?.realtime ? await firebase.realtime() : null;
         if (localToken !== token) return false;
         uid = nextUid; active = true;
         const { db, sdk } = firestoreContext;
@@ -111,6 +165,7 @@
           if (!active || localToken !== token) return;
           pointer = snapshot.exists() ? { ...snapshot.data() } : null;
           watchBattle(pointer?.battleId || (battle?.status === "finished" && battle?.finishReleased !== true ? battleId : ""), localToken);
+          syncOpponentPresence(localToken);
           emitState();
         }, onError));
         emitState(); return true;
@@ -138,5 +193,5 @@
       retreat: (id) => command("battle-retreat", { battleId: text(id) }),
     });
   }
-  return Object.freeze({ create, normalizeInvite });
+  return Object.freeze({ create, normalizeInvite, DISCONNECT_GRACE_MS });
 });

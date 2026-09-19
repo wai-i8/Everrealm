@@ -34,6 +34,73 @@
   let deferredAuthUser = null;
   let runtimePrefetchStarted = false;
 
+  // Start fetching the title/login track before the full game runtime. On a
+  // signed-in refresh this gives the loading screen music immediately instead
+  // of waiting for every gameplay module to finish loading.
+  const BOOT_TITLE_BGM_SRC = asset("assets/audio/bgm/login-v1-01-loop.mp3");
+  const bootTitleBgm = root.__everrealmBootTitleBgm || (typeof Audio === "function" ? new Audio(BOOT_TITLE_BGM_SRC) : null);
+  let bootTitleBgmWanted = false;
+  if (bootTitleBgm) {
+    root.__everrealmBootTitleBgm = bootTitleBgm;
+    bootTitleBgm.loop = true;
+    bootTitleBgm.preload = "auto";
+    let storedVolume = .7;
+    try {
+      const parsed = Number(localStorage.getItem("everrealm-bgm-volume-v1"));
+      if (Number.isFinite(parsed)) storedVolume = Math.max(0, Math.min(1, parsed));
+    } catch (_) {}
+    bootTitleBgm.volume = storedVolume;
+    try { bootTitleBgm.load(); } catch (_) {}
+  }
+
+  function startBootTitleBgm() {
+    bootTitleBgmWanted = true;
+    if (!bootTitleBgm || document.visibilityState !== "visible" || bootTitleBgm.paused === false) return Promise.resolve(false);
+    try {
+      return Promise.resolve(bootTitleBgm.play()).then(() => true).catch(() => false);
+    } catch (_) {
+      return Promise.resolve(false);
+    }
+  }
+
+  function prepareBootTitleBgm({ timeoutMs = 3200 } = {}) {
+    if (!bootTitleBgm) return Promise.resolve(false);
+    // Let the tiny login track win the initial network race before the large
+    // gameplay script batch starts.  Without this gate browsers can defer the
+    // media request behind dozens of scripts, making the title music audible
+    // only after the loading counter has already finished.
+    if (bootTitleBgm.readyState >= 3) return startBootTitleBgm();
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        bootTitleBgm.removeEventListener("canplay", finish);
+        bootTitleBgm.removeEventListener("canplaythrough", finish);
+        clearTimeout(timer);
+        Promise.resolve(startBootTitleBgm()).finally(() => resolve(true));
+      };
+      const timer = setTimeout(finish, Math.max(400, Number(timeoutMs) || 3200));
+      bootTitleBgm.addEventListener("canplay", finish, { once: true });
+      bootTitleBgm.addEventListener("canplaythrough", finish, { once: true });
+      try { bootTitleBgm.load(); } catch (_) { finish(); }
+    });
+  }
+
+  function retryBootTitleBgmFromGesture() {
+    if (!bootTitleBgmWanted || handedOff) return;
+    startBootTitleBgm();
+  }
+
+  root.addEventListener("pointerdown", retryBootTitleBgmFromGesture, { capture: true, passive: true });
+  root.addEventListener("touchstart", retryBootTitleBgmFromGesture, { capture: true, passive: true });
+  root.addEventListener("keydown", retryBootTitleBgmFromGesture, { capture: true });
+
+  // Try from the very start of bootstrap, before authentication and before the
+  // large runtime batch. Browsers that allow persisted media playback can
+  // therefore keep the login track running through the whole loading screen.
+  startBootTitleBgm();
+
   function authErrorMessage(error) {
     const code = String(error?.code || "");
     const messages = {
@@ -121,6 +188,7 @@
   }
 
   function setLoadingUi(user, loaded = 0, total = 0) {
+    startBootTitleBgm();
     closeAuthPanel();
     titleActions.hidden = true;
     accountButton.hidden = true;
@@ -170,6 +238,9 @@
   }
 
   function cleanupBootUiHandlers() {
+    root.removeEventListener("pointerdown", retryBootTitleBgmFromGesture, { capture: true });
+    root.removeEventListener("touchstart", retryBootTitleBgmFromGesture, { capture: true });
+    root.removeEventListener("keydown", retryBootTitleBgmFromGesture, { capture: true });
     authForm?.removeEventListener("submit", handleAuthSubmit);
     authSwitchButton?.removeEventListener("click", handleAuthSwitch);
     authForgotButton?.removeEventListener("click", handlePasswordReset);
@@ -220,14 +291,15 @@
     const total = scripts.length;
     setLoadingUi(user, 0, total);
 
-    runtimePromise = loadOrderedBatch(dependencies, (loaded) => setLoadingUi(user, loaded, total))
+    runtimePromise = prepareBootTitleBgm()
+      .then(() => loadOrderedBatch(dependencies, (loaded) => setLoadingUi(user, loaded, total)))
       .then(() => {
-        cleanupBootUiHandlers();
         authUnsubscribe();
         handedOff = true;
         return loadScript(entry);
       })
       .then(() => {
+        cleanupBootUiHandlers();
         root.dispatchEvent(new CustomEvent("everrealm-runtime-ready"));
         scheduleWarmAssets();
       })
@@ -247,6 +319,9 @@
   async function handleAuthSubmit(event) {
     event.preventDefault();
     if (runtimePromise) return;
+    // This call is still inside the trusted submit gesture, so browsers that
+    // block autoplay can unlock the login track before the async sign-in wait.
+    startBootTitleBgm();
     const email = authEmail.value.trim();
     const password = authPassword.value;
     const characterName = authMode === "register" ? String(authCharacterName.value || "").trim().slice(0, 24) : "";

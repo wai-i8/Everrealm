@@ -1,4 +1,4 @@
-// staged startup manifest: 20260919-monster-death-sfx-01
+// staged startup manifest: 20260919-battle-rounds-offline-02
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -67,7 +67,7 @@
     "social.js?v=20260919-pvpfix-01",
     "trade.js?v=20260918-invite-ui-02",
     "party.js?v=20260919-uifix7-01",
-    "pvp.js?v=20260919-pvpfix-01",
+    "pvp.js?v=20260919-battle-rounds-offline-02",
     "cloud-save.js?v=20260917-latency-cleanup-02",
     "save-persistence.js?v=20260917-latency-cleanup-02",
     "world-time.js?v=20260917-latency-cleanup-02",
@@ -89,7 +89,7 @@
     "game/facility-action-router.js?v=20260918-main-quest-panels-01",
     "game/battle-victory.js?v=20260917-latency-cleanup-02",
     "game/player-state-actions.js?v=20260917-latency-cleanup-02",
-    "game.js?v=20260919-pvpfix-01",
+    "game.js?v=20260919-battle-rounds-offline-02",
   ]);
 
   const warmAssets = Object.freeze([

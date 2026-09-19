@@ -40,6 +40,8 @@ const MAP_TRANSITION_POSITION_MARGIN = 180;
 const POSITION_AUTHORITY_VERSION = 1;
 const WORLD_RESPAWN = Object.freeze({ mapId: "world", x: 3663, y: 1746 });
 const FIELD_ENCOUNTER_LEVEL_VARIANCE = Object.freeze({ minDelta: -2, maxDelta: 3, floor: 1, cap: 45 });
+const SOLO_BATTLE_PHASE_MS = 30000;
+const SOLO_BATTLE_CATCHUP_MAX_PHASES = 720;
 
 function fieldEncounterLevelWindow(blueprint) {
   const baseLevel = clamp(whole(blueprint?.baseLevel, 1), 1, FIELD_ENCOUNTER_LEVEL_VARIANCE.cap);
@@ -1519,7 +1521,7 @@ function battleCommand(save, input = {}, options = {}) {
       saves: { [callerUid]: state },
       canonicalBattle: legacy,
       nowMs,
-      phaseMs: 0,
+      phaseMs: SOLO_BATTLE_PHASE_MS,
       loading: false,
     });
     shared.solo = true;
@@ -1540,7 +1542,8 @@ function battleCommand(save, input = {}, options = {}) {
     // Legacy snapshots were persisted after a resolved round and before the
     // next planning AP grant. Re-enter the canonical shared planning phase once.
     shared.phase = "planning_move";
-    shared.phaseEndsAtMs = 0;
+    shared.phaseDurationMs = SOLO_BATTLE_PHASE_MS;
+    shared.phaseEndsAtMs = nowMs + SOLO_BATTLE_PHASE_MS;
     shared.movePlans = {};
     shared.actions = {};
     return shared;
@@ -1610,7 +1613,7 @@ function battleCommand(save, input = {}, options = {}) {
       saves: { [callerUid]: state },
       canonicalBattle: seed,
       nowMs,
-      phaseMs: 0,
+      phaseMs: SOLO_BATTLE_PHASE_MS,
       loading: false,
     });
     shared.solo = true;
@@ -1625,16 +1628,81 @@ function battleCommand(save, input = {}, options = {}) {
   existing = migrateLegacyBattle(existing);
   existing.solo = true;
   existing.soloUid = existing.soloUid || callerUid;
-  existing.phaseDurationMs = 0;
+  existing.phaseDurationMs = SOLO_BATTLE_PHASE_MS;
+  if (existing.status === "active" && ["planning_move", "planning_action"].includes(existing.phase) && !(Number(existing.phaseEndsAtMs) > 0)) {
+    const phaseBaseMs = Number(existing.updatedAtMs) > 0 ? Number(existing.updatedAtMs) : nowMs;
+    existing.phaseEndsAtMs = phaseBaseMs + SOLO_BATTLE_PHASE_MS;
+  }
 
   const saves = { [callerUid]: state };
   const commitBattle = (nextBattle, nextState = state, extra = {}) => {
     nextBattle.solo = true;
     nextBattle.soloUid = callerUid;
-    nextBattle.phaseDurationMs = 0;
+    nextBattle.phaseDurationMs = SOLO_BATTLE_PHASE_MS;
     nextState.expansion.serverBattle = nextBattle;
     return resultWithState(nextState, { action, battle: clone(nextBattle), ...extra });
   };
+
+  const catchUpSoloBattle = (sourceBattle, sourceSaves, targetNowMs = nowMs) => {
+    let nextBattle = sourceBattle;
+    let nextSaves = sourceSaves;
+    let advancedPhases = 0;
+    while (
+      nextBattle?.status === "active"
+      && ["planning_move", "planning_action"].includes(String(nextBattle.phase || ""))
+      && Number(nextBattle.phaseEndsAtMs) > 0
+      && Number(nextBattle.phaseEndsAtMs) <= targetNowMs
+      && advancedPhases < SOLO_BATTLE_CATCHUP_MAX_PHASES
+    ) {
+      const resolveAtMs = Number(nextBattle.phaseEndsAtMs);
+      if (nextBattle.phase === "planning_move") {
+        const movePlans = { ...(nextBattle.movePlans || {}) };
+        for (const memberUid of SharedBattle.activeMemberUids(nextBattle)) {
+          if (!movePlans[memberUid]) {
+            movePlans[memberUid] = {
+              commands: [],
+              facing: nextBattle.members?.[memberUid]?.facing || "right",
+              timedOut: true,
+              submittedAtMs: resolveAtMs,
+            };
+          }
+        }
+        nextBattle = { ...nextBattle, movePlans };
+        const moved = SharedBattle.resolveMovement(nextBattle, nextSaves, resolveAtMs);
+        if (!moved.ok) break;
+        nextBattle = moved.battle;
+      } else {
+        const actions = { ...(nextBattle.actions || {}) };
+        for (const memberUid of SharedBattle.activeMemberUids(nextBattle)) {
+          if (!actions[memberUid]) actions[memberUid] = { type: "wait", timedOut: true, submittedAtMs: resolveAtMs };
+        }
+        nextBattle = { ...nextBattle, actions };
+        const acted = SharedBattle.resolveActions(nextBattle, nextSaves, resolveAtMs);
+        if (!acted.ok) break;
+        nextBattle = acted.battle;
+        nextSaves = acted.saves || nextSaves;
+      }
+      advancedPhases += 1;
+    }
+    return { battle: nextBattle, saves: nextSaves, advancedPhases };
+  };
+
+  if (action === "resume" || action === "advance") {
+    if (existing.status !== "active") return commitBattle(existing, state, { resumed: action === "resume", advancedPhases: 0 });
+    const deadline = Number(existing.phaseEndsAtMs) || 0;
+    if (action === "advance" && deadline > nowMs) {
+      return commitBattle(existing, state, { early: true, advancedPhases: 0, phase: existing.phase });
+    }
+    const caughtUp = catchUpSoloBattle(existing, saves, nowMs);
+    existing = caughtUp.battle;
+    const nextState = caughtUp.saves?.[callerUid] || state;
+    return commitBattle(existing, nextState, {
+      resumed: action === "resume",
+      advancedPhases: caughtUp.advancedPhases,
+      finished: existing.status === "finished",
+      result: existing.result || null,
+    });
+  }
 
   const submitMove = () => {
     if (existing.status !== "active") return { ok: false, reason: "battle-closed", battle: clone(existing) };
