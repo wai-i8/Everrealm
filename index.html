@@ -18,11 +18,11 @@
         // standalone build, so leave the local file build on favicon.ico.
         if (!/^https?:$/.test(window.location.protocol)) return;
         const links = [
-          ["manifest", "", "", "everrealm.webmanifest?v=20260917-01"],
-          ["apple-touch-icon", "", "180x180", "assets/pwa/everrealm-icon-180-v2.png?v=20260910-02"],
-          ["icon", "image/png", "32x32", "assets/pwa/everrealm-icon-32-v2.png?v=20260910-02"],
-          ["icon", "image/png", "16x16", "assets/pwa/everrealm-icon-16-v2.png?v=20260910-02"],
-          ["shortcut icon", "", "", "assets/pwa/everrealm-favicon-v2.ico?v=20260910-02"],
+          ["manifest", "", "", "everrealm.webmanifest?v=20260919-fourfix-01"],
+          ["apple-touch-icon", "", "180x180", "assets/pwa/everrealm-icon-180-v3.png?v=20260919-fourfix-01"],
+          ["icon", "image/png", "32x32", "assets/pwa/everrealm-icon-32-v3.png?v=20260919-fourfix-01"],
+          ["icon", "image/png", "16x16", "assets/pwa/everrealm-icon-16-v3.png?v=20260919-fourfix-01"],
+          ["shortcut icon", "", "", "assets/pwa/everrealm-favicon-v3.ico?v=20260919-fourfix-01"],
         ];
         for (const [rel, type, sizes, href] of links) {
           const link = document.createElement("link");
@@ -63,12 +63,12 @@
         }
       })();
     </script>
-    <link rel="preload" href="assets/audio/bgm/login-v1-01-loop.mp3" as="audio" type="audio/mpeg" fetchpriority="high" />
+    <link rel="preload" href="assets/audio/bgm/login-v1-01-loop.mp3?v=20260919-fourfix-01" as="audio" type="audio/mpeg" fetchpriority="high" />
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260919-battle-rounds-offline-02"],
+          ["everrealmStyles", "styles.css?v=20260919-fourfix-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -79,10 +79,10 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const bootstrapScripts = [
-          "runtime-assets.js?v=20260919-battle-rounds-offline-02",
+          "runtime-assets.js?v=20260919-fourfix-01",
           "firebase-config.js?v=20260919-loading-01",
           "firebase-client.js?v=20260919-loading-01",
-          "bootstrap.js?v=20260919-battle-rounds-offline-02",
+          "bootstrap.js?v=20260919-fourfix-01",
         ];
         for (const src of bootstrapScripts) {
           document.write(`<script defer src="${asset(src)}"><\/script>`);
@@ -597,7 +597,7 @@
             </div>
             <p id="dialogueText"></p>
             <div id="dialogueChoices" class="dialogue-choices" role="list" hidden></div>
-            <button id="dialogueNext" class="dialogue-next" type="button"><span class="dialogue-next-label">繼續</span></button>
+            <button id="dialogueNext" class="ui-button dialogue-next" type="button"><span class="dialogue-next-label">繼續</span></button>
           </div>
         </section>
 
@@ -701,7 +701,7 @@
 
         window.addEventListener("load", async () => {
           try {
-            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260919-battle-rounds-offline-02", {
+            const registration = await navigator.serviceWorker.register("/Everrealm/everrealm-sw.js?v=20260919-fourfix-01", {
               scope: "/Everrealm/",
               updateViaCache: "none",
             });

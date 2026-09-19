@@ -37,7 +37,7 @@
           const button = createElement("button");
           button.type = "button";
           const choiceStyle = choice.buttonStyle === "primary" ? " is-primary primary-button" : choice.buttonStyle === "secondary" ? " is-secondary secondary-button" : "";
-          button.className = `dialogue-choice${choiceStyle}${index === dialogueChoiceIndex ? " selected" : ""}`;
+          button.className = `ui-button dialogue-choice${choiceStyle}${index === dialogueChoiceIndex ? " selected" : ""}`;
           button.setAttribute("role", "listitem");
           button.setAttribute("aria-pressed", String(index === dialogueChoiceIndex));
           button.textContent = choice.label;

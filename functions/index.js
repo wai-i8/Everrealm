@@ -137,6 +137,8 @@ function outgoingInviteMatches(snapshot, type, targetUid, referenceId = "") {
 
 
 const PVP_DISCONNECT_GRACE_MS = 8000;
+const PVP_STALE_STATE_TTL_MS = 2 * 60 * 1000;
+const PVP_INVITE_TTL_MS = 2 * 60 * 1000;
 
 function pvpBattleRef(battleId) { return db.doc(`pvpBattles/${String(battleId || "").trim()}`); }
 function pvpPointerRef(uid) { return db.doc(`players/${uid}/pvpState/current`); }
@@ -145,6 +147,24 @@ function pvpInviteId() { return `duel-${crypto.randomBytes(10).toString("hex")}`
 function pvpBattleId() { return `pvp-${crypto.randomBytes(10).toString("hex")}`; }
 function pvpPointerPayload(battleId, opponentUid, opponentName, initiatorUid, nowMs) {
   return { battleId, opponentUid, opponentName, initiatorUid, updatedAtMs: nowMs };
+}
+
+function pvpPresenceOnline(snapshot) {
+  return Boolean(snapshot?.exists?.() && snapshot.val?.()?.online !== false);
+}
+
+function pvpStateIsStale(pointer, battle, { online = false, nowMs = Date.now() } = {}) {
+  if (!pointer?.battleId) return true;
+  if (!battle) return true;
+  const status = String(battle.status || "");
+  if (status === "finished") {
+    const finishedAtMs = Number(battle.finishedAtMs) || Number(battle.updatedAtMs) || Number(pointer.updatedAtMs) || 0;
+    return !finishedAtMs || nowMs - finishedAtMs >= PVP_STALE_STATE_TTL_MS;
+  }
+  if (!['loading', 'active'].includes(status)) return true;
+  if (online) return false;
+  const updatedAtMs = Math.max(Number(battle.updatedAtMs) || 0, Number(pointer.updatedAtMs) || 0);
+  return !updatedAtMs || nowMs - updatedAtMs >= PVP_STALE_STATE_TTL_MS;
 }
 
 function partyRef(partyId) { return db.doc(`parties/${String(partyId || "").trim()}`); }
@@ -958,6 +978,36 @@ exports.pvpCommand = onCall({ region: REGION, maxInstances: 30 }, async (request
   const action = String(request.data?.action || "").trim();
   const nowMs = Date.now();
 
+  if (action === "cleanup-stale") {
+    const pointerRef = pvpPointerRef(uid);
+    const lockRef = outgoingInviteRef(uid);
+    const presenceSnap = await realtimeDb.ref(`presence/${uid}`).get();
+    const online = pvpPresenceOnline(presenceSnap);
+    return db.runTransaction(async (transaction) => {
+      const [pointerSnap, lockSnap] = await Promise.all([transaction.get(pointerRef), transaction.get(lockRef)]);
+      const pointer = pointerSnap.exists ? pointerSnap.data() : null;
+      const battleId = String(pointer?.battleId || "").trim();
+      const battleRef = battleId ? pvpBattleRef(battleId) : null;
+      const battleSnap = battleRef ? await transaction.get(battleRef) : null;
+      let cleanedBattle = false;
+      let cleanedInvite = false;
+      if (pointerSnap.exists && pvpStateIsStale(pointer, battleSnap?.exists ? battleSnap.data() : null, { online, nowMs })) {
+        transaction.delete(pointerRef);
+        cleanedBattle = true;
+      }
+      if (lockSnap.exists) {
+        const lock = lockSnap.data() || {};
+        const createdAtMs = Number(lock.createdAtMs) || 0;
+        if (String(lock.type || "") === "pvp" && (!createdAtMs || nowMs - createdAtMs >= PVP_INVITE_TTL_MS)) {
+          transaction.delete(lockRef);
+          if (lock.targetUid && lock.referenceId) transaction.delete(pvpInviteRef(lock.targetUid, lock.referenceId));
+          cleanedInvite = true;
+        }
+      }
+      return { ok: true, cleaned: cleanedBattle || cleanedInvite, cleanedBattle, cleanedInvite };
+    });
+  }
+
   if (action === "invite") {
     const targetUid = safeSocialUid(request.data?.targetUid);
     if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
@@ -966,15 +1016,42 @@ exports.pvpCommand = onCall({ region: REGION, maxInstances: 30 }, async (request
     const callerPvpRef = pvpPointerRef(uid);
     const targetPvpRef = pvpPointerRef(targetUid);
     const lockRef = outgoingInviteRef(uid);
+    const [callerPresenceSnap, targetPresenceSnap] = await Promise.all([
+      realtimeDb.ref(`presence/${uid}`).get(),
+      realtimeDb.ref(`presence/${targetUid}`).get(),
+    ]);
+    const onlineByUid = { [uid]: pvpPresenceOnline(callerPresenceSnap), [targetUid]: pvpPresenceOnline(targetPresenceSnap) };
     return db.runTransaction(async (transaction) => {
       const [callerSnap, targetSnap, callerPvp, targetPvp, lockSnap, callerTrade, targetTrade, callerParty, targetParty] = await Promise.all([
         transaction.get(callerRef), transaction.get(targetRef), transaction.get(callerPvpRef), transaction.get(targetPvpRef), transaction.get(lockRef),
         transaction.get(tradePointerRef(uid)), transaction.get(tradePointerRef(targetUid)), transaction.get(partyPointerRef(uid)), transaction.get(partyPointerRef(targetUid)),
       ]);
+      const pointerEntries = [[uid, callerPvp, callerPvpRef], [targetUid, targetPvp, targetPvpRef]];
+      const battleIds = [...new Set(pointerEntries.map(([, snapshot]) => String(snapshot.data()?.battleId || "").trim()).filter(Boolean))];
+      const battleSnapshots = new Map();
+      for (const battleId of battleIds) battleSnapshots.set(battleId, await transaction.get(pvpBattleRef(battleId)));
+      const stalePointers = new Map(pointerEntries.map(([memberUid, snapshot]) => {
+        const battleId = String(snapshot.data()?.battleId || "").trim();
+        const battleSnapshot = battleId ? battleSnapshots.get(battleId) : null;
+        return [memberUid, snapshot.exists && pvpStateIsStale(snapshot.data(), battleSnapshot?.exists ? battleSnapshot.data() : null, { online: onlineByUid[memberUid], nowMs })];
+      }));
       if (!callerSnap.exists || !targetSnap.exists) return { ok: false, reason: "player-not-found" };
-      if (lockSnap.exists) return { ok: false, reason: "outgoing-invite-pending" };
-      if (callerPvp.exists) return { ok: false, reason: "caller-busy" };
-      if (targetPvp.exists) return { ok: false, reason: "target-busy" };
+      for (const [memberUid, snapshot, pointerRef] of pointerEntries) {
+        if (stalePointers.get(memberUid)) transaction.delete(pointerRef);
+        if (snapshot.exists && !stalePointers.get(memberUid)) {
+          if (memberUid === uid) return { ok: false, reason: "caller-busy" };
+          return { ok: false, reason: "target-busy" };
+        }
+      }
+      if (lockSnap.exists) {
+        const lock = lockSnap.data() || {};
+        const createdAtMs = Number(lock.createdAtMs) || 0;
+        if (String(lock.type || "") === "pvp" && (!createdAtMs || nowMs - createdAtMs >= PVP_INVITE_TTL_MS)) {
+          if (lock.targetUid && lock.referenceId) transaction.delete(pvpInviteRef(lock.targetUid, lock.referenceId));
+        } else {
+          return { ok: false, reason: "outgoing-invite-pending" };
+        }
+      }
       if (callerTrade.exists || targetTrade.exists || callerParty.exists || targetParty.exists) return { ok: false, reason: "player-busy" };
       if (callerSnap.data()?.expansion?.serverBattle?.status === "active" || targetSnap.data()?.expansion?.serverBattle?.status === "active") return { ok: false, reason: "player-busy" };
       if (!(Number(callerSnap.data()?.player?.hp) > 0) || !(Number(targetSnap.data()?.player?.hp) > 0)) return { ok: false, reason: "player-unavailable" };

@@ -150,6 +150,8 @@
         if (localToken !== token) return false;
         uid = nextUid; active = true;
         const { db, sdk } = firestoreContext;
+        await command("cleanup-stale");
+        if (localToken !== token) return false;
         unsubs.push(sdk.onSnapshot(sdk.collection(db, `players/${uid}/pvpInvites`), (snapshot) => {
           if (!active || localToken !== token) return;
           const next = new Map();
@@ -168,7 +170,8 @@
           syncOpponentPresence(localToken);
           emitState();
         }, onError));
-        emitState(); return true;
+        emitState();
+        return true;
       } catch (error) { if (localToken === token) onError(error); stop(); return false; }
     }
 

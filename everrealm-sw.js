@@ -1,7 +1,7 @@
 "use strict";
 
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260919-battle-rounds-offline-02";
+const CACHE_VERSION = "everrealm-pwa-v3-20260919-fourfix-01";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -18,8 +18,10 @@ const PRECACHE_URLS = [
   `${APP_BASE}bootstrap.js`,
   `${APP_BASE}assets/ui/title/everrealm-logo-main-v1.png`,
   `${APP_BASE}assets/ui/ui-close-v2.png`,
-  `${APP_BASE}assets/pwa/everrealm-icon-192-v2.png`,
-  `${APP_BASE}assets/pwa/everrealm-icon-512-v2.png`,
+  `${APP_BASE}assets/pwa/everrealm-icon-192-v3.png`,
+  `${APP_BASE}assets/pwa/everrealm-icon-512-v3.png`,
+  `${APP_BASE}assets/pwa/everrealm-maskable-192-v3.png`,
+  `${APP_BASE}assets/pwa/everrealm-maskable-512-v3.png`,
 ];
 
 function isEverrealmUrl(url) {

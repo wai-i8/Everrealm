@@ -3,7 +3,7 @@
   "short_name": "Everrealm",
   "description": "結合探索、戰棋回合戰鬥、任務與角色培育的 browser RPG。",
   "id": "/Everrealm/",
-  "start_url": "/Everrealm/?source=pwa-v2",
+  "start_url": "/Everrealm/?source=pwa-v3",
   "scope": "/Everrealm/",
   "display": "standalone",
   "display_override": [
@@ -15,25 +15,25 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/Everrealm/assets/pwa/everrealm-icon-192-v2.png",
+      "src": "/Everrealm/assets/pwa/everrealm-icon-192-v3.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Everrealm/assets/pwa/everrealm-icon-512-v2.png",
+      "src": "/Everrealm/assets/pwa/everrealm-icon-512-v3.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Everrealm/assets/pwa/everrealm-maskable-192-v2.png",
+      "src": "/Everrealm/assets/pwa/everrealm-maskable-192-v3.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/Everrealm/assets/pwa/everrealm-maskable-512-v2.png",
+      "src": "/Everrealm/assets/pwa/everrealm-maskable-512-v3.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

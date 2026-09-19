@@ -1091,9 +1091,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   gap: .35rem;
   margin-top: auto;
   padding: .28rem .55rem;
-  border: 6px solid transparent !important;
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .42rem !important;
-  border-image: var(--ui-button-image) 14 fill / 6px / 0 stretch !important;
+  border-image: var(--ui-button-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   color: var(--muted);
   background: rgba(8,16,32,.8) !important;
   font: inherit;
@@ -1115,9 +1115,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   display: block;
   width: 100%;
   padding: .42rem .62rem;
-  border: 7px solid transparent !important;
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .45rem !important;
-  border-image: var(--ui-button-image) 14 fill / 7px / 0 stretch !important;
+  border-image: var(--ui-button-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   color: var(--cream);
   background: rgba(8,16,32,.82) !important;
   font-size: .72rem;
@@ -3215,6 +3215,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   --ui-info-art: 1.45rem;
   --ui-action-gap: .55rem;
   --ui-action-gap-compact: .36rem;
+  --ui-button-slice: 16 52 16 52;
+  --ui-button-border-width: 8px;
   /* Bitmap button end-caps are decorative, so text needs a shared safe gutter.
      Keep this at the component-system level instead of patching longer labels
      (e.g. 返回標題) one button at a time. */
@@ -3442,26 +3444,42 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 
 .facility-action-button,
 .primary-button,
-.secondary-button {
-  border: 8px solid transparent !important;
+.secondary-button,
+.ui-button {
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .55rem !important;
   background: linear-gradient(145deg, rgba(34,48,77,.92), rgba(8,16,32,.96)) !important;
-  border-image: var(--ui-button-image) 14 fill / 8px / 0 stretch !important;
+  border-image: var(--ui-button-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   box-shadow: 0 .3rem .8rem rgba(0,0,0,.36) !important;
   text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
 }
 .facility-action-button:hover:not(:disabled),
 .primary-button:hover,
 .secondary-button:hover,
+.ui-button:hover,
 .facility-action-button:focus-visible,
 .primary-button:focus-visible,
-.secondary-button:focus-visible {
+.secondary-button:focus-visible,
+.ui-button:focus-visible {
   border-image-source: var(--ui-button-active-image) !important;
   filter: brightness(1.08);
 }
 .primary-button,
-.facility-action-button:not(.is-quiet) { border-image-source: var(--ui-button-gold-image) !important; color: var(--ui-text-on-accent); text-shadow: none; }
-.facility-action-button:disabled { border-image-source: var(--ui-button-disabled-image) !important; opacity: .78; }
+.facility-action-button:not(.is-quiet),
+.ui-button[data-variant="gold"] { border-image-source: var(--ui-button-gold-image) !important; color: var(--ui-text-on-accent); text-shadow: none; }
+.secondary-button,
+.facility-action-button.is-quiet,
+.ui-button[data-variant="blue"] { border-image-source: var(--ui-button-image) !important; }
+.facility-action-button:disabled,
+.primary-button:disabled,
+.secondary-button:disabled,
+.ui-button:disabled,
+.ui-button[data-variant="gray"] { border-image-source: var(--ui-button-disabled-image) !important; color: var(--ui-text-disabled) !important; opacity: .82; cursor: not-allowed; filter: saturate(.72); }
 .facility-action-button.is-quiet,
 .secondary-button { color: var(--cream); }
 
@@ -3472,6 +3490,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
 .primary-button,
 .secondary-button {
   padding-inline: var(--ui-button-label-pad-inline) !important;
+}
+
+.ui-button {
+  padding-inline: var(--ui-button-label-pad-inline);
+  text-align: center;
 }
 
 .facility-tab {
@@ -6510,17 +6533,24 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-
   width: 100% !important;
   min-height: 2.4rem !important;
   padding: .55rem .75rem !important;
-  border: 1px solid rgba(255,200,87,.3) !important;
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .5rem !important;
-  background: rgba(14,28,50,.78) !important;
+  border-image: var(--ui-button-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
+  background: transparent !important;
   color: #f2ead7 !important;
   text-align: left !important;
   box-shadow: none !important;
   font-size: .8rem !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
 }
+.dialogue-choice.primary-button,
+.dialogue-choice.is-primary { border-image-source: var(--ui-button-gold-image) !important; }
+.dialogue-choice.secondary-button,
+.dialogue-choice.is-secondary { border-image-source: var(--ui-button-image) !important; }
 .dialogue-choice:hover,
 .dialogue-choice:focus-visible,
-.dialogue-choice.selected { border-color: rgba(255,200,87,.75) !important; background: rgba(36,48,68,.86) !important; }
+.dialogue-choice.selected { border-image-source: var(--ui-button-active-image) !important; background: transparent !important; }
 .dialogue-next {
   margin: .75rem 0 0 auto !important;
   min-width: 6.5rem !important;
@@ -7687,21 +7717,23 @@ html body [aria-disabled="true"] {
 .dialogue-choices.is-compact .dialogue-choice {
   width: fit-content !important;
   min-width: 0 !important;
-  height: 2.25rem !important;
   min-height: 2.25rem !important;
   padding: .3rem .9rem !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
   text-align: center !important;
-  line-height: 1 !important;
+  line-height: 1.3 !important;
   flex: 0 0 auto;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
 }
 .dialogue-choices.is-compact .dialogue-choice.is-primary,
 .dialogue-choices.is-compact .dialogue-choice.primary-button {
-  border: 8px solid transparent !important;
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .55rem !important;
-  border-image: var(--ui-button-gold-image) 14 fill / 8px / 0 stretch !important;
+  border-image: var(--ui-button-gold-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--cream) !important;
@@ -7712,14 +7744,14 @@ html body [aria-disabled="true"] {
 .dialogue-choices.is-compact .dialogue-choice.is-primary.selected,
 .dialogue-choices.is-compact .dialogue-choice.primary-button:hover,
 .dialogue-choices.is-compact .dialogue-choice.primary-button:focus-visible {
-  border-image: var(--ui-button-gold-image) 14 fill / 8px / 0 stretch !important;
+  border-image: var(--ui-button-gold-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   filter: brightness(1.12);
 }
 .dialogue-choices.is-compact .dialogue-choice.is-secondary,
 .dialogue-choices.is-compact .dialogue-choice.secondary-button {
-  border: 8px solid transparent !important;
+  border: var(--ui-button-border-width) solid transparent !important;
   border-radius: .55rem !important;
-  border-image: var(--ui-button-image) 14 fill / 8px / 0 stretch !important;
+  border-image: var(--ui-button-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--cream) !important;
@@ -7729,7 +7761,7 @@ html body [aria-disabled="true"] {
 .dialogue-choices.is-compact .dialogue-choice.is-secondary.selected,
 .dialogue-choices.is-compact .dialogue-choice.secondary-button:hover,
 .dialogue-choices.is-compact .dialogue-choice.secondary-button:focus-visible {
-  border-image: var(--ui-button-active-image) 14 fill / 8px / 0 stretch !important;
+  border-image: var(--ui-button-active-image) var(--ui-button-slice) fill / var(--ui-button-border-width) / 0 stretch !important;
   filter: brightness(1.08);
 }
 
@@ -8550,6 +8582,16 @@ html body [aria-disabled="true"] {
 .facility-action-button.is-quiet:hover:not(:disabled),
 .facility-action-button.is-quiet:focus-visible {
   border-image-source: var(--ui-button-active-image) !important;
+}
+.primary-button:disabled,
+.secondary-button:disabled,
+.facility-action-button:disabled,
+.ui-button:disabled {
+  border-image-source: var(--ui-button-disabled-image) !important;
+  color: var(--ui-text-disabled) !important;
+  opacity: .82;
+  cursor: not-allowed;
+  filter: saturate(.72);
 }
 
 

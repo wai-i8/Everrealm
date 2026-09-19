@@ -37,7 +37,7 @@
   // Start fetching the title/login track before the full game runtime. On a
   // signed-in refresh this gives the loading screen music immediately instead
   // of waiting for every gameplay module to finish loading.
-  const BOOT_TITLE_BGM_SRC = asset("assets/audio/bgm/login-v1-01-loop.mp3");
+  const BOOT_TITLE_BGM_SRC = asset("assets/audio/bgm/login-v1-01-loop.mp3?v=20260919-fourfix-01");
   const bootTitleBgm = root.__everrealmBootTitleBgm || (typeof Audio === "function" ? new Audio(BOOT_TITLE_BGM_SRC) : null);
   let bootTitleBgmWanted = false;
   if (bootTitleBgm) {

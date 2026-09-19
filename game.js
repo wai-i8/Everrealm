@@ -602,7 +602,7 @@
   let sfxVolume = Core.clamp(Number(readPreference(SFX_VOLUME_KEY, readPreference(BGM_VOLUME_KEY, "0.70"))), 0, 1);
   if (!Number.isFinite(sfxVolume)) sfxVolume = .7;
   const bgm = Bgm.createBgmManager({ enabled: musicEnabled, volume: bgmVolume });
-  const titleBgmAudio = window.__everrealmBootTitleBgm || (typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3") : null);
+  const titleBgmAudio = window.__everrealmBootTitleBgm || (typeof Audio === "function" ? new Audio("assets/audio/bgm/login-v1-01-loop.mp3?v=20260919-fourfix-01") : null);
   const battleBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3") : null;
   const victoryBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/victory-v1.mp3") : null;
   const defeatBgmAudio = typeof Audio === "function" ? new Audio("assets/audio/bgm/defeat-screen-v1.mp3") : null;
