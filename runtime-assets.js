@@ -1,4 +1,4 @@
-// battle command UI fixes: 20260918-battle-ui-01
+// staged startup manifest: 20260919-loading-01
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -62,8 +62,6 @@
     "monster-ai.js?v=20260917-latency-cleanup-02",
     "audio-core.js?v=20260917-latency-cleanup-02",
     "save-system.js?v=20260917-latency-cleanup-02",
-    "firebase-config.js?v=20260917-latency-cleanup-02",
-    "firebase-client.js?v=20260917-latency-cleanup-02",
     "game/server-api.js?v=20260918-party-01",
     "chat.js?v=20260917-latency-cleanup-02",
     "social.js?v=20260919-uifix7-01",
@@ -93,5 +91,24 @@
     "game.js?v=20260919-uifix7-01",
   ]);
 
-  return Object.freeze({ scripts });
+  const warmAssets = Object.freeze([
+    "assets/ui/mobile-menu/status-v3.png",
+    "assets/ui/mobile-menu/inventory-v3.png",
+    "assets/ui/mobile-menu/skills-v3.png",
+    "assets/ui/mobile-menu/missions-v3.png",
+    "assets/ui/mobile-menu/system-v3.png",
+    "assets/ui/mobile-menu/friend-v1.png",
+    "assets/ui/mobile-menu/party-v1.png",
+    "assets/field/vanmer-mountains.jpg",
+    "assets/field/vanmer-mountains-south.jpg",
+    "assets/battle/mountain/mountain-battle-background-v1.png",
+    "assets/battle/mountain/mountain-battle-ground-v3.png",
+    "assets/battle/fighter/fighter-battle-diagonal-v1.png",
+    "assets/battle/chick/chick-battle-diagonal-v1.png",
+    "assets/audio/sfx/battle/common/encounter-transition-v2.mp3",
+    "assets/audio/bgm/mountainousareas-v1-02-loop.mp3",
+    "assets/audio/bgm/fighting-easy-mode-v1-01-loop.mp3"
+  ]);
+
+  return Object.freeze({ scripts, warmAssets });
 });

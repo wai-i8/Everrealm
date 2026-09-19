@@ -1,51 +1,25 @@
 "use strict";
 
-importScripts("runtime-assets.js");
-
 const APP_BASE = "/Everrealm/";
-const CACHE_VERSION = "everrealm-pwa-v2-20260918-invite-ui-02";
+const CACHE_VERSION = "everrealm-pwa-v2-20260919-loading-01";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-const RUNTIME_SCRIPTS = self.EverrealmRuntimeAssets?.scripts || [];
-const runtimePrecacheUrls = RUNTIME_SCRIPTS.map((src) => `${APP_BASE}${String(src).split("?")[0]}`);
-
+// Keep installation intentionally small. Runtime code and game media are
+// cached on demand after login instead of blocking service-worker install.
 const PRECACHE_URLS = [
   APP_BASE,
   `${APP_BASE}index.html`,
   `${APP_BASE}everrealm.webmanifest`,
   `${APP_BASE}styles.css`,
   `${APP_BASE}runtime-assets.js`,
-  ...runtimePrecacheUrls,
+  `${APP_BASE}firebase-config.js`,
+  `${APP_BASE}firebase-client.js`,
+  `${APP_BASE}bootstrap.js`,
+  `${APP_BASE}assets/ui/title/everrealm-logo-main-v1.png`,
+  `${APP_BASE}assets/ui/ui-close-v2.png`,
   `${APP_BASE}assets/pwa/everrealm-icon-192-v2.png`,
   `${APP_BASE}assets/pwa/everrealm-icon-512-v2.png`,
-  `${APP_BASE}assets/pwa/everrealm-maskable-192-v2.png`,
-  `${APP_BASE}assets/pwa/everrealm-maskable-512-v2.png`,
-  `${APP_BASE}assets/ui/mobile-menu/status-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/missions-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/inventory-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/skills-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/panel-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/system-v3.png`,
-  `${APP_BASE}assets/ui/mobile-menu/friend-v1.png`,
-  `${APP_BASE}assets/ui/mobile-menu/party-v1.png`,
-  `${APP_BASE}assets/ui/mobile-menu/sidebar-tab-open-v1.png`,
-  `${APP_BASE}assets/ui/mobile-menu/sidebar-tab-close-v1.png`,
-  `${APP_BASE}assets/ui/battle-state-crossed-swords-v1.png`,
-  `${APP_BASE}assets/ui/defeat/defeat-logo-v1.png`,
-  `${APP_BASE}assets/ui/defeat/defeat-logo-v2.png`,
-  `${APP_BASE}assets/ui/defeat/defeat-frame-v1.png`,
-  `${APP_BASE}assets/ui/title/everrealm-logo-main-v1.png`,
-  `${APP_BASE}assets/items/weak-potion-v1.png`,
-  `${APP_BASE}assets/audio/bgm/victory-v1.mp3`,
-  `${APP_BASE}assets/audio/bgm/defeat-screen-v1.mp3`,
-  `${APP_BASE}assets/audio/sfx/battle/common/battle-miss.wav`,
-  `${APP_BASE}assets/audio/sfx/battle/common/encounter-transition-v2.mp3`,
-  `${APP_BASE}assets/audio/sfx/battle/fighter/fighter-punch.wav`,
-  `${APP_BASE}assets/audio/sfx/battle/fighter/fighter-utility-skill.wav`,
-  `${APP_BASE}assets/audio/sfx/battle/chick/chick-attack.wav`,
-  `${APP_BASE}assets/audio/sfx/battle/chick/chick-footstep.wav`,
-  `${APP_BASE}assets/audio/sfx/battle/chick/chick-death.wav`
 ];
 
 function isEverrealmUrl(url) {
@@ -59,8 +33,37 @@ async function putIfUsable(cache, request, response) {
   return response;
 }
 
+async function warmUrls(urls = []) {
+  const cache = await caches.open(RUNTIME_CACHE);
+  const queue = urls
+    .map((value) => {
+      try { return new URL(String(value || ""), self.location.origin); } catch (_) { return null; }
+    })
+    .filter((url) => url && isEverrealmUrl(url));
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < queue.length) {
+      const url = queue[cursor++];
+      const request = new Request(url.href, { cache: "no-cache" });
+      const existing = await cache.match(request);
+      if (existing) continue;
+      try {
+        const response = await fetch(request);
+        await putIfUsable(cache, request, response);
+      } catch (_) {}
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
+}
+
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data?.type === "WARM_ASSETS") {
+    event.waitUntil(warmUrls(Array.isArray(event.data.urls) ? event.data.urls : []));
+  }
 });
 
 self.addEventListener("install", (event) => {
@@ -92,7 +95,7 @@ async function networkFirst(request, navigation = false) {
     await putIfUsable(cache, request, response);
     return response;
   } catch (error) {
-    const cached = await caches.match(request, { ignoreSearch: true });
+    const cached = await caches.match(request);
     if (cached) return cached;
     if (navigation) {
       return (await caches.match(`${APP_BASE}index.html`)) || (await caches.match(APP_BASE)) || Response.error();
@@ -103,7 +106,7 @@ async function networkFirst(request, navigation = false) {
 
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(RUNTIME_CACHE);
-  const cached = await caches.match(request, { ignoreSearch: true });
+  const cached = (await cache.match(request)) || (await caches.match(request));
   const update = fetch(new Request(request, { cache: "no-cache" }))
     .then((response) => putIfUsable(cache, request, response))
     .catch(() => null);
@@ -126,8 +129,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const codeLike = ["script", "style", "worker", "manifest"].includes(request.destination)
-    || /\.(?:js|css|json|webmanifest)$/i.test(url.pathname);
-
-  event.respondWith(codeLike ? networkFirst(request) : staleWhileRevalidate(request));
+  // Versioned code requests are safe to serve immediately from their exact
+  // cache key while refreshing in the background. A changed ?v= value creates
+  // a new cache entry, so old code is never matched accidentally.
+  event.respondWith(staleWhileRevalidate(request));
 });

@@ -13,6 +13,9 @@
   let activeSessionUid = null;
   let activeSessionId = null;
   let sessionUnsubscribe = () => {};
+  let firestoreReady = null;
+  let realtimeReady = null;
+  let functionsReady = null;
 
   function assertConfig() {
     if (!config || config.projectId !== "everrealm-f5a7d" || !config.appId) {
@@ -52,29 +55,65 @@
     activeSessionId = null;
   }
 
+  // Startup deliberately loads only Firebase App + Auth. Firestore, RTDB and
+  // Functions are imported on first use after authentication/gameplay starts.
   const ready = Promise.resolve().then(async () => {
     assertConfig();
-    const [appSdk, authSdk, firestoreSdk, databaseSdk, functionsSdk] = await Promise.all([
+    const [appSdk, authSdk] = await Promise.all([
       import(`${SDK_BASE}/firebase-app.js`),
       import(`${SDK_BASE}/firebase-auth.js`),
-      import(`${SDK_BASE}/firebase-firestore.js`),
-      import(`${SDK_BASE}/firebase-database.js`),
-      import(`${SDK_BASE}/firebase-functions.js`),
     ]);
     const firebaseApp = appSdk.getApps().length ? appSdk.getApp() : appSdk.initializeApp(config);
     const auth = authSdk.getAuth(firebaseApp);
-    const db = firestoreSdk.getFirestore(firebaseApp);
-    const realtimeDb = databaseSdk.getDatabase(firebaseApp, config.databaseURL);
-    const functions = functionsSdk.getFunctions(firebaseApp, "europe-west2");
     authInstance = auth;
-    if (useEmulators) {
-      authSdk.connectAuthEmulator(auth, "http://127.0.0.1:19099", { disableWarnings: true });
-      firestoreSdk.connectFirestoreEmulator(db, "127.0.0.1", 18085);
-      databaseSdk.connectDatabaseEmulator(realtimeDb, "127.0.0.1", 19000);
-      functionsSdk.connectFunctionsEmulator(functions, "127.0.0.1", 15001);
-    }
-    return Object.freeze({ appSdk, authSdk, firestoreSdk, databaseSdk, functionsSdk, firebaseApp, auth, db, realtimeDb, functions });
+    if (useEmulators) authSdk.connectAuthEmulator(auth, "http://127.0.0.1:19099", { disableWarnings: true });
+    return Object.freeze({ appSdk, authSdk, firebaseApp, auth });
   });
+
+  function firestoreContext() {
+    if (!firestoreReady) {
+      firestoreReady = ready.then(async ({ firebaseApp }) => {
+        const sdk = await import(`${SDK_BASE}/firebase-firestore.js`);
+        const db = sdk.getFirestore(firebaseApp);
+        if (useEmulators) sdk.connectFirestoreEmulator(db, "127.0.0.1", 18085);
+        return Object.freeze({ db, sdk });
+      }).catch((error) => {
+        firestoreReady = null;
+        throw error;
+      });
+    }
+    return firestoreReady;
+  }
+
+  function realtimeContext() {
+    if (!realtimeReady) {
+      realtimeReady = ready.then(async ({ firebaseApp }) => {
+        const sdk = await import(`${SDK_BASE}/firebase-database.js`);
+        const database = sdk.getDatabase(firebaseApp, config.databaseURL);
+        if (useEmulators) sdk.connectDatabaseEmulator(database, "127.0.0.1", 19000);
+        return Object.freeze({ database, sdk });
+      }).catch((error) => {
+        realtimeReady = null;
+        throw error;
+      });
+    }
+    return realtimeReady;
+  }
+
+  function functionsContext() {
+    if (!functionsReady) {
+      functionsReady = ready.then(async ({ firebaseApp }) => {
+        const sdk = await import(`${SDK_BASE}/firebase-functions.js`);
+        const functions = sdk.getFunctions(firebaseApp, "europe-west2");
+        if (useEmulators) sdk.connectFunctionsEmulator(functions, "127.0.0.1", 15001);
+        return Object.freeze({ functions, sdk });
+      }).catch((error) => {
+        functionsReady = null;
+        throw error;
+      });
+    }
+    return functionsReady;
+  }
 
   function authCall(method, ...args) {
     return ready.then(({ authSdk, auth }) => authSdk[method](auth, ...args));
@@ -103,7 +142,7 @@
   async function activateSingleSession(uid, onInvalidated) {
     const safeUid = String(uid || "").trim();
     if (!safeUid) throw new Error("A Firebase UID is required for a device session.");
-    const { db, firestoreSdk: sdk } = await ready;
+    const { db, sdk } = await firestoreContext();
     const sessionId = deviceSessionId(safeUid);
     const ref = sdk.doc(db, SESSION_COLLECTION, safeUid);
     const forceClaim = forceNextSessionClaim;
@@ -181,9 +220,9 @@
       stopSessionWatch();
       return ready.then(({ authSdk, auth }) => authSdk.signOut(auth));
     },
-    firestore: () => ready.then(({ firestoreSdk, db }) => ({ db, sdk: firestoreSdk })),
-    realtime: () => ready.then(({ databaseSdk, realtimeDb }) => ({ database: realtimeDb, sdk: databaseSdk })),
-    functions: () => ready.then(({ functionsSdk, functions }) => ({ functions, sdk: functionsSdk })),
+    firestore: firestoreContext,
+    realtime: realtimeContext,
+    functions: functionsContext,
   };
 
   root.EverrealmFirebase = Object.freeze(api);
