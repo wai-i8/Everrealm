@@ -110,3 +110,39 @@ test("retreated and disconnected players are excluded from shared battle active 
   battle.members.b.alive = false;
   assert.deepEqual(PartyBattle.activeMemberUids(battle), []);
 });
+
+test("dead units remain static corpse blockers without joining active submissions", () => {
+  const { battle, saves } = makeBattle(1000);
+  PartyBattle.beginMovePhase(battle, 2000);
+  battle.enemies[0].alive = false;
+  battle.enemies[0].hp = 0;
+  battle.enemies[0].deathRound = battle.round;
+  const blockers = PartyBattle.corpseBlockers(battle, saves);
+  assert.equal(blockers.length, 1);
+  assert.equal(blockers[0].type, "corpse");
+  assert.equal(blockers[0].moveRange, 0);
+  assert.ok(blockers[0].id.startsWith("corpse:"));
+});
+
+test("shared battle continues to the next round while another monster is still alive", () => {
+  const { battle, saves } = makeBattle(1000);
+  battle.enemies = [
+    { ...battle.enemies[0], id: "enemy-dead", hp: 0, alive: false, deathRound: 1 },
+    { ...battle.enemies[0], id: "enemy-live", hp: Math.max(1, battle.enemies[0].hp), alive: true, deathRound: null },
+  ];
+  battle.status = "active";
+  PartyBattle.beginMovePhase(battle, 2000);
+  battle.movePlans = {
+    a: { commands: [], facing: battle.members.a.facing },
+    b: { commands: [], facing: battle.members.b.facing },
+  };
+  const moved = PartyBattle.resolveMovement(battle, saves, 3000);
+  assert.equal(moved.ok, true);
+  moved.battle.actions = { a: { type: "wait" }, b: { type: "wait" } };
+  const acted = PartyBattle.resolveActions(moved.battle, saves, 4000);
+  assert.equal(acted.ok, true);
+  assert.equal(acted.battle.status, "active");
+  assert.equal(acted.battle.phase, "planning_move");
+  assert.equal(acted.battle.round, 2);
+  assert.equal(acted.battle.enemies.some((enemy) => enemy.id === "enemy-live" && enemy.alive), true);
+});

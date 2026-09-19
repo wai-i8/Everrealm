@@ -49,8 +49,8 @@
           : state === "complete" ? "已完成" : "未開放";
       const title = main.title || "主線任務";
       const note = main.ready
-        ? "返公會搵資深冒險者艾利斯領取獎勵"
-        : state === "available" ? "返公會搵資深冒險者艾利斯"
+        ? "返回公會找資深冒險者艾利斯領取獎勵"
+        : state === "available" ? "返回公會找資深冒險者艾利斯"
           : "";
       return `
         <section class="mission-section mission-main-section" aria-label="主線任務">

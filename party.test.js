@@ -19,3 +19,13 @@ test("party presentation anchors remote members around the local player without 
   assert.equal(leaderTrue.x, 12);
   assert.equal(tailTrue.x, 800);
 });
+
+test("party presentation makes every displayed teammate follow the local facing", () => {
+  const party = { id: "p1", state: "idle", transition: null, battleId: "", memberUids: ["a", "b", "c"] };
+  const local = { x: 200, y: 300, facing: "up", moving: false };
+  const remote = { uid: "a", x: 10, y: 20, facing: "left", moving: true, kind: "remote-player" };
+  const shown = Party.presentationRemote(remote, party, "b", local, 40);
+  assert.equal(shown.facing, "up");
+  assert.equal(shown.moving, false);
+  assert.equal(remote.facing, "left");
+});

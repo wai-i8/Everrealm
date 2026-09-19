@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1020" />
-    <meta name="description" content="永恆國度 — 有探索、戰棋回合戰鬥、任務同角色育成嘅短篇 browser RPG。" />
+    <meta name="description" content="永恆國度 — 結合探索、戰棋回合戰鬥、任務與角色培育的 browser RPG。" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -78,7 +78,7 @@
   <body>
     <main id="gameShell" class="game-shell">
       <section id="gameStage" class="game-stage" data-game-state="title" data-testid="game-stage">
-        <canvas id="gameCanvas" tabindex="0" aria-label="永恆國度遊戲地圖。探索時撳地面移動，長按半秒可拖住指向角色；遇敵後喺格仔棋盤輪流行動。">
+        <canvas id="gameCanvas" tabindex="0" aria-label="永恆國度遊戲地圖。探索時點選地面移動，長按半秒可拖曳指向角色；遇敵後在格狀棋盤上輪流行動。">
           你的瀏覽器需要支援 Canvas 才能玩。
         </canvas>
 
@@ -147,7 +147,7 @@
             <div class="quest-heading"><span>公會委託</span><i aria-hidden="true"></i></div>
             <strong id="commissionTitle">未接公會委託</strong>
             <p id="commissionDetail">去公會查看可重複委託</p>
-            <small id="commissionDistance">目標喺附近</small>
+            <small id="commissionDistance">目標就在附近</small>
           </section>
         </aside>
 
@@ -185,7 +185,7 @@
             <span id="chatComposeChannel" class="system-log-chat-channel">世界</span>
             <input id="worldChatInput" class="system-log-chat-input" type="text" maxlength="200" placeholder="請輸入…" aria-label="聊天訊息" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true" />
           </form>
-          <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="喺呢度用滑鼠滾輪或手指上下掃動翻閱訊息"></div>
+          <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="在此使用滑鼠滾輪或手指上下滑動以翻閱訊息"></div>
         </section>
 
         <section id="socialFriendsPopover" class="social-friends-popover sidebar-social-popover" aria-label="好友" hidden>
@@ -199,7 +199,7 @@
         </section>
 
         <div id="interactionPrompt" class="interaction-prompt" hidden>
-          <span aria-hidden="true">☝</span><span id="interactionText">撳一下傾偈</span>
+          <span aria-hidden="true">☝</span><span id="interactionText">按一下交談</span>
         </div>
 
         <section id="remotePlayerMenu" class="remote-player-menu" aria-label="玩家互動" hidden>
@@ -257,7 +257,7 @@
           <div class="trade-invite-card">
             <small>TRADE REQUEST</small>
             <strong id="tradeInviteTitle">交易邀請</strong>
-            <p><span id="tradeInviteName">冒險者</span> 想同你進行交易。</p>
+            <p><span id="tradeInviteName">冒險者</span> 想與你進行交易。</p>
             <div class="trade-invite-actions">
               <button type="button" data-trade-invite-action="reject">拒絕</button>
               <button type="button" data-trade-invite-action="accept">接受</button>
@@ -291,7 +291,7 @@
             </div>
             <section id="tradeInventoryPicker" class="trade-inventory-picker" hidden>
               <header><strong>選擇可交易物品</strong><button id="tradeInventoryCloseButton" type="button" aria-label="關閉物品選擇">×</button></header>
-              <p>綁定技能書、已裝備而且冇多餘副本嘅裝備唔會顯示。</p>
+              <p>綁定技能書，以及已裝備且沒有多餘副本的裝備不會顯示。</p>
               <div id="tradeInventoryList" class="trade-inventory-list"></div>
             </section>
             <footer class="trade-footer">
@@ -328,10 +328,10 @@
 
           <header id="battleTurnHeader" class="battle-turn-header" data-battle-panel="turn-status">
             <span id="battleRoundLabel" class="battle-round-label">ROUND 1</span>
-            <strong id="battleTurnLabel">阿巡嘅回合</strong>
+            <strong id="battleTurnLabel">阿巡的回合</strong>
             <span id="battlePhaseLabel" class="battle-phase-label">先部署移動，再選擇行動</span>
-            <span id="battlePhaseTimer" class="battle-phase-timer" hidden>30</span>
           </header>
+          <span id="battlePhaseTimer" class="battle-phase-timer" hidden>30</span>
 
           <aside id="selectedUnitCard" class="selected-unit-card battle-card" data-battle-panel="selected-unit" aria-label="目前角色狀態">
             <div class="selected-unit-copy">
@@ -625,14 +625,14 @@
                 </button>
               </div>
               <div id="facilityHelpPopover" class="facility-help-popover" role="note" hidden>
-                <p id="facilityHelpText">揀一個分頁查看目前資料；任何需要操作嘅按鈕都會放喺內容卡片入面。</p>
+                <p id="facilityHelpText">選擇一個分頁查看目前資料；所有操作按鈕都會顯示在內容卡片中。</p>
               </div>
             </header>
 
             <div id="facilityContent" class="facility-content ui-content" role="tabpanel" tabindex="0" aria-live="polite">
               <div class="facility-empty-state">
                 <span aria-hidden="true">✦</span>
-                <strong>公會緊整理今晚嘅委託……</strong>
+                <strong>公會正在整理目前的委託……</strong>
                 <small>稍等一陣，委託板就會亮起。</small>
               </div>
             </div>

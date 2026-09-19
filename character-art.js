@@ -584,6 +584,7 @@
       column = frames[frameName] ?? config.attackColumns?.[0] ?? config.idleColumn;
     } else if (state === "attack") column = config.attackColumn;
     else if (state === "hurt") column = config.hurtColumn;
+    else if (state === "death" && Number.isInteger(config.deathColumn)) column = config.deathColumn;
     return { atlas, index: row * atlas.columns + column, facing, sourceFacing, mirror, state, config };
   }
 

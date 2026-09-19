@@ -613,20 +613,6 @@ function economyCommand(save, input = {}, options = {}) {
     return resultWithState(state, { action, star, skill: { id: skill.id, name: skill.name } });
   }
 
-  if (action === "open-main-quest-envelope") {
-    const star = clamp(whole(input.star, 0), 0, 99);
-    const skillId = Skills.canonicalSkillId(String(input.skillId || ""));
-    const consumed = MainQuest.consumeBoundChoiceEnvelope(state.expansion.mainQuest, star);
-    if (!consumed.ok) return { ok: false, reason: consumed.reason };
-    const choice = MainQuest.choiceSkillPool(state.expansion.skills, star).find((skill) => skill.id === skillId);
-    if (!choice) return { ok: false, reason: "invalid-reward-skill" };
-    const granted = Skills.grantBoundSkillManuals(state.expansion.skills, choice.id, 1);
-    if (!granted.ok) return { ok: false, reason: granted.reason };
-    state.expansion.mainQuest = consumed.state;
-    state.expansion.skills = granted.state;
-    return resultWithState(state, { action, star, skill: { id: choice.id, name: choice.name, bound: true } });
-  }
-
 
   if (action === "open-skill-book") {
     const star = clamp(whole(input.star, 0), 0, 99);
@@ -767,32 +753,28 @@ function questCommand(save, input = {}, options = {}) {
 
   if (action === "main-answer") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex, options.currentGameDay);
-    if (!result.ok) return { ok: false, reason: result.reason, nextQuizDay: result.nextQuizDay || 0 };
+    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex);
+    if (!result.ok) return { ok: false, reason: result.reason };
     state.expansion.mainQuest = result.state;
-    return resultWithState(state, {
-      action,
-      correct: result.correct,
-      explanation: result.explanation || "",
-      completedObjective: result.completedObjective === true,
-      nextQuizDay: result.nextQuizDay || 0,
-    });
+    return resultWithState(state, { action, correct: result.correct, explanation: result.explanation || "", completedObjective: result.completedObjective === true });
   }
 
   if (action === "main-claim") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const claim = MainQuest.claim(state.expansion.mainQuest);
+    const claim = MainQuest.claim(state.expansion.mainQuest, state.expansion.skills, String(input.skillId || ""));
     if (!claim.ok) return { ok: false, reason: claim.reason };
-    const panel = Panels.grantPanel(state.expansion.panels, claim.reward.panelId, state.expansion.skills);
+    const manual = Skills.grantBoundSkillManuals(state.expansion.skills, claim.skill.id, 1);
+    if (!manual.ok) return { ok: false, reason: manual.reason };
+    const panel = Panels.grantPanel(state.expansion.panels, claim.reward.panelId, manual.state);
     if (!panel.ok) return { ok: false, reason: panel.reason };
     state.expansion.mainQuest = claim.state;
     state.expansion.panels = panel.state;
-    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, state.expansion.skills);
+    state.expansion.skills = Panels.syncSkillState(state.expansion.panels, manual.state);
     return resultWithState(state, {
       action,
       quest: claim.quest,
       reward: {
-        envelope: { star: claim.reward.boundChoiceEnvelopeStar, bound: true, choice: true },
+        skill: { id: claim.skill.id, name: claim.skill.name, bound: true },
         panel: panel.panel,
       },
     });
@@ -841,6 +823,7 @@ function recordServerKill(state, monsterType, instanceId) {
 
 const SERVER_BATTLE_TACTICAL_VERSION = 1;
 const SERVER_BATTLE_TURN_COST = .5;
+const SERVER_BATTLE_CORPSE_ROUNDS = 3;
 const SERVER_BATTLE_FINAL_FACING_RESERVE = 1;
 const SERVER_BATTLE_SIDE_DAMAGE_BONUS = .15;
 const SERVER_BATTLE_REAR_DAMAGE_BONUS = .35;
@@ -983,6 +966,7 @@ function ensureServerBattleTacticalState(state, battle) {
     else enemy.cell = { x: whole(enemy.cell.x, 0), y: whole(enemy.cell.y, 0) };
     enemy.facing = canonicalBattleFacing(enemy.facing, "left");
     enemy.ap = clamp(whole(enemy.ap, 0), 0, Skills.MAX_AP);
+    enemy.deathRound = whole(enemy.deathRound, 0) > 0 ? whole(enemy.deathRound, 0) : null;
     enemy.statusEffects = enemy.statusEffects && typeof enemy.statusEffects === "object" ? enemy.statusEffects : {};
     enemy.id = String(enemy.id || (index === 0 ? `battle-${battle.encounterId || battle.id}` : `battle-${battle.encounterId || battle.id}-pack-${index + 1}`));
   }
@@ -1005,6 +989,7 @@ function serverEnemyUnit(battle, enemy, index) {
     hp: Math.max(0, Number(enemy.hp) || 0),
     maxHp: Math.max(1, Number(enemy.maxHp) || 1),
     alive: enemy.alive !== false && Number(enemy.hp) > 0,
+    deathRound: whole(enemy.deathRound, 0) > 0 ? whole(enemy.deathRound, 0) : null,
     attack: Math.max(1, Number(stats?.attack) || 1),
     defence: Math.max(0, Number(stats?.defense) || 0),
     accuracy: 99,
@@ -1041,11 +1026,26 @@ function serverBattleUnits(state, battle) {
     hp: Math.max(0, Number(battle.heroHp) || 0),
     maxHp: Math.max(1, Number(battle.heroMaxHp) || heroStats.maxHp),
     alive: Number(battle.heroHp) > 0,
+    deathRound: whole(battle.heroDeathRound, 0) > 0 ? whole(battle.heroDeathRound, 0) : null,
     statusEffects: clone(battle.heroStatusEffects || {}),
     ...heroStats,
   };
   const enemies = battle.enemies.map((enemy, index) => serverEnemyUnit(battle, enemy, index));
   return { hero, enemies, units: [hero, ...enemies] };
+}
+
+function serverCorpseVisible(unit, round) {
+  const deathRound = whole(unit?.deathRound, 0);
+  if (unit?.alive !== false || Number(unit?.hp) > 0 || deathRound <= 0) return false;
+  return Math.max(1, whole(round, 1)) < deathRound + SERVER_BATTLE_CORPSE_ROUNDS + 1;
+}
+
+function serverCorpseBlockers(battle, hero, enemies) {
+  return [hero, ...enemies].filter((unit) => serverCorpseVisible(unit, battle?.round)).map((unit) => ({
+    id: `corpse:${unit.id}`, side: "corpse", team: "corpse", type: "corpse",
+    alive: true, hp: 1, maxHp: 1, cell: { ...unit.cell }, facing: unit.facing || "down",
+    weight: 9999, initiative: -9999, moveRange: 0,
+  }));
 }
 
 function sanitizeServerMoveCommands(value) {
@@ -1059,7 +1059,7 @@ function sanitizeServerMoveCommands(value) {
 }
 
 function serverEnemyPlans(state, battle, grid, hero, enemies) {
-  const simulated = [hero, ...enemies].map((unit) => ({ ...unit, cell: { ...unit.cell } }));
+  const simulated = [hero, ...enemies, ...serverCorpseBlockers(battle, hero, enemies)].map((unit) => ({ ...unit, cell: { ...unit.cell } }));
   const plans = [];
   const enemyOrder = Tactics.buildTurnOrder(enemies.filter((unit) => unit.alive));
   for (const actual of enemyOrder) {
@@ -1142,7 +1142,7 @@ function validateServerHeroMovement(state, battle, grid, hero, enemyPlans, enemi
   }
   for (const event of schedule.events) {
     if (event.type !== "move") continue;
-    if (!Tactics.isInside(grid, event.to) || !Tactics.isWalkable(grid, event.to, [])) {
+    if (!Tactics.isInside(grid, event.to) || !Tactics.isWalkable(grid, event.to, serverCorpseBlockers(battle, hero, enemies))) {
       return { ok: false, reason: "movement-blocked" };
     }
   }
@@ -1159,7 +1159,7 @@ function validateServerHeroMovement(state, battle, grid, hero, enemyPlans, enemi
   const movement = Tactics.resolveSimultaneousMovement({
     timed: true,
     grid,
-    units: [hero, ...enemies].filter((unit) => unit.alive),
+    units: [...[hero, ...enemies].filter((unit) => unit.alive), ...serverCorpseBlockers(battle, hero, enemies)],
     routes,
     turnCost: SERVER_BATTLE_TURN_COST,
     priorityUnitId: hero.id,
@@ -1252,7 +1252,6 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
   let targetResult = null;
   let guardReduction = 0;
   let evasionBonus = 0;
-  const heroHits = [];
   if (heroAction === "potion") {
     const count = clamp(whole(state.player.potions, 0), 0, 9);
     if (count <= 0) return { ok: false, reason: "empty" };
@@ -1316,33 +1315,20 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
           side: 1 + SERVER_BATTLE_SIDE_DAMAGE_BONUS,
           rear: 1 + SERVER_BATTLE_REAR_DAMAGE_BONUS,
         });
-        let totalDamage = Tactics.calculateDamage(hero, target, {
+        let damage = Tactics.calculateDamage(hero, target, {
           defence,
           multiplier: authoredMultiplier * positional.multiplier,
           minimum: Tactics.MIN_DIRECT_DAMAGE,
         });
-        totalDamage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(totalDamage, Tactics.MIN_DIRECT_DAMAGE));
-        if (specialHpEffect?.type === "halve_hp") totalDamage = Math.max(totalDamage, Math.floor(enemyState.hp / 2));
-        if (specialHpEffect?.type === "set_hp") totalDamage = Math.max(totalDamage, Math.max(0, enemyState.hp - Math.max(0, whole(specialHpEffect.value, 1))));
-        const hitDamages = Skills.splitDamageLaterHits(totalDamage, hitCount);
-        const appliedHitDamages = [];
-        for (const hitDamage of hitDamages) {
-          if (!enemyState.alive || enemyState.hp <= 0) break;
-          const applied = Math.min(Math.max(0, whole(hitDamage, 0)), enemyState.hp);
-          enemyState.hp = Math.max(0, enemyState.hp - applied);
-          enemyState.alive = enemyState.hp > 0;
-          target.hp = enemyState.hp;
-          target.alive = enemyState.alive;
-          appliedHitDamages.push(applied);
-        }
-        heroHits.push({
-          targetId: target.id,
-          targetIndex: index,
-          totalDamage,
-          hitDamages,
-          appliedHitDamages,
-          position: positional.position,
-        });
+        damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(damage, Tactics.MIN_DIRECT_DAMAGE) * hitCount);
+        if (specialHpEffect?.type === "halve_hp") damage = Math.max(damage, Math.floor(enemyState.hp / 2));
+        if (specialHpEffect?.type === "set_hp") damage = Math.max(damage, Math.max(0, enemyState.hp - Math.max(0, whole(specialHpEffect.value, 1))));
+        enemyState.hp = Math.max(0, enemyState.hp - damage);
+        enemyState.alive = enemyState.hp > 0;
+        if (!enemyState.alive && !(whole(enemyState.deathRound, 0) > 0)) enemyState.deathRound = battle.round;
+        target.hp = enemyState.hp;
+        target.alive = enemyState.alive;
+        target.deathRound = enemyState.deathRound || target.deathRound || null;
       }
     }
     if (heals.length) {
@@ -1432,6 +1418,8 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
     battle.heroHp = Math.max(0, battle.heroHp - damage);
     hero.hp = battle.heroHp;
     hero.alive = hero.hp > 0;
+    if (!hero.alive && !(whole(battle.heroDeathRound, 0) > 0)) battle.heroDeathRound = battle.round;
+    hero.deathRound = battle.heroDeathRound || hero.deathRound || null;
     if (hero.alive && skillToUse.effects?.length) {
       FighterEffects.applySkillEffects({ skill: skillToUse, caster: enemy, targets: [hero], units: [hero, ...enemies], grid, round: battle.round, random: rng });
       battle.heroHp = Math.max(0, hero.hp);
@@ -1446,14 +1434,7 @@ function applyServerHeroAction(state, battle, hero, enemies, grid, input, enemyP
       if (enemyEntry) executeEnemy(enemyEntry);
     }
   }
-  return {
-    ok: true,
-    report: {
-      heroAction,
-      skillId: skill?.id || null,
-      heroHits,
-    },
-  };
+  return { ok: true };
 }
 
 function persistServerBattleUnits(battle, hero, enemies) {
@@ -1461,12 +1442,14 @@ function persistServerBattleUnits(battle, hero, enemies) {
   battle.heroCell = { ...hero.cell };
   battle.heroFacing = canonicalBattleFacing(hero.facing, battle.heroFacing);
   battle.heroStatusEffects = clone(hero.statusEffects || {});
+  battle.heroDeathRound = whole(hero.deathRound, 0) > 0 ? whole(hero.deathRound, 0) : (whole(battle.heroDeathRound, 0) > 0 ? whole(battle.heroDeathRound, 0) : null);
   for (let index = 0; index < battle.enemies.length; index += 1) {
     const stateEnemy = battle.enemies[index];
     const unit = enemies[index];
     if (!stateEnemy || !unit) continue;
     stateEnemy.hp = Math.max(0, Number(unit.hp) || 0);
     stateEnemy.alive = unit.alive !== false && stateEnemy.hp > 0;
+    stateEnemy.deathRound = whole(unit.deathRound, 0) > 0 ? whole(unit.deathRound, 0) : (whole(stateEnemy.deathRound, 0) > 0 ? whole(stateEnemy.deathRound, 0) : null);
     stateEnemy.cell = { ...unit.cell };
     stateEnemy.facing = canonicalBattleFacing(unit.facing, stateEnemy.facing);
     stateEnemy.ap = clamp(whole(unit.ap, stateEnemy.ap || 0), 0, Skills.MAX_AP);
@@ -1526,6 +1509,7 @@ function battleCommand(save, input = {}, options = {}) {
       hp: Math.max(1, Math.round(stats.hp * hpMultiplier)),
       maxHp: Math.max(1, Math.round(stats.hp * hpMultiplier)),
       alive: true,
+      deathRound: null,
       ap: 0,
       cell: serverBattleDeploymentCell(battlefield, "enemy", index),
       facing: "left",
@@ -1551,6 +1535,7 @@ function battleCommand(save, input = {}, options = {}) {
       heroCell: serverBattleDeploymentCell(battlefield, "ally", 0),
       heroFacing: "right",
       heroStatusEffects: {},
+      heroDeathRound: null,
       enemies,
     };
     return resultWithState(state, {
@@ -1595,7 +1580,7 @@ function battleCommand(save, input = {}, options = {}) {
     persistServerBattleUnits(existing, units.hero, units.enemies);
     state.player.hp = clamp(existing.heroHp, 0, existing.heroMaxHp);
     state.expansion.serverBattle = existing;
-    return resultWithState(state, { action, battle: clone(existing), actionReport: actionResult.report || null });
+    return resultWithState(state, { action, battle: clone(existing) });
   }
 
   if (action === "settle") {
@@ -1700,6 +1685,8 @@ module.exports = Object.freeze({
   serverBattleDeploymentCell,
   serverHeroBattleStats,
   serverEnemyUnit,
+  serverCorpseVisible,
+  serverCorpseBlockers,
   sanitizeServerMoveCommands,
   canonicalBattleFacing,
   deterministicBattleRng,

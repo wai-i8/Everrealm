@@ -28,6 +28,11 @@ const REGION = "europe-west2";
 const COMMAND_VERSION = 1;
 const LEGACY_MIGRATION_ACCOUNT_CUTOFF_MS = Date.parse("2026-09-17T12:00:00.000Z");
 
+function whole(value, fallback = 0) {
+  const number = Math.floor(Number(value));
+  return Number.isFinite(number) ? number : fallback;
+}
+
 function authenticatedUid(request) {
   const uid = String(request.auth?.uid || "").trim();
   if (!uid) throw new HttpsError("unauthenticated", "Authentication is required.");
@@ -1135,11 +1140,11 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
       const shared = PartyBattle.createBattle({ id: battleId, party, saves, canonicalBattle, nowMs });
       transaction.set(partyBattleRef(battleId), shared);
       transaction.update(currentPartyRef, { state: "battle_loading", battleId, transition: null, updatedAtMs: nowMs });
-      return { ok: true, partyId: currentPartyId, battleId, battle: shared };
+      return { ok: true, partyId: currentPartyId, battleId };
     });
   }
 
-  if (["battle-ready", "battle-move", "battle-action", "battle-advance"].includes(action)) {
+  if (["battle-ready", "battle-move", "battle-action", "battle-advance", "battle-finish-ready", "battle-exit"].includes(action)) {
     const battleId = String(request.data?.battleId || "").trim();
     if (!battleId) return { ok: false, reason: "invalid-battle" };
     return db.runTransaction(async (transaction) => {
@@ -1167,6 +1172,69 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
         return { ok: true, battleId, started: battle.status === "active" };
       }
 
+      if (action === "battle-finish-ready") {
+        if (battle.status !== "finished") return { ok: false, reason: "battle-not-finished" };
+        const expected = (Array.isArray(battle.finishParticipantUids) && battle.finishParticipantUids.length
+          ? battle.finishParticipantUids
+          : (battle.memberUids || []).filter((memberUid) => {
+              const member = battle.members?.[memberUid];
+              return member && member.retreated !== true && member.disconnected !== true;
+            }));
+        const finishReadyUids = [...new Set([...(battle.finishReadyUids || []), uid])].filter((memberUid) => expected.includes(memberUid));
+        battle = { ...battle, finishParticipantUids: expected, finishReadyUids, updatedAtMs: nowMs };
+        const release = expected.length === 0 || PartySystem.allReady(expected, finishReadyUids);
+        if (release && battle.finishReleased !== true) {
+          battle.finishReleased = true;
+          battle.finishReleasedAtMs = nowMs;
+          const survivingUids = (party.memberUids || []).filter((memberUid) => battle.members?.[memberUid]?.retreated !== true && battle.members?.[memberUid]?.disconnected !== true);
+          let leaderUid = party.leaderUid;
+          if (!survivingUids.includes(leaderUid) || Number(battle.members?.[leaderUid]?.hp) <= 0) {
+            leaderUid = survivingUids.find((memberUid) => Number(battle.members?.[memberUid]?.hp) > 0) || survivingUids[0] || "";
+          }
+          if (battle.result === "victory" && survivingUids.length > 0) {
+            // Keep the battle attached while the shared victory screen is open.
+            // The leader releases the whole party together with battle-exit.
+            transaction.update(currentPartyRef, { state: "battle_victory", battleId, leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+            for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
+          } else if (survivingUids.length <= 1) {
+            battle.exitReleased = battle.result === "victory";
+            if (battle.exitReleased) battle.exitReleasedAtMs = nowMs;
+            for (const memberUid of survivingUids) transaction.delete(partyPointerRef(memberUid));
+            transaction.delete(currentPartyRef);
+          } else {
+            battle.exitReleased = battle.result === "victory";
+            if (battle.exitReleased) battle.exitReleasedAtMs = nowMs;
+            transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+            for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
+          }
+        }
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, released: battle.finishReleased === true, readyCount: finishReadyUids.length, expectedCount: expected.length };
+      }
+
+      if (action === "battle-exit") {
+        if (battle.status !== "finished" || battle.result !== "victory" || battle.finishReleased !== true) return { ok: false, reason: "battle-not-released" };
+        if (battle.exitReleased === true) return { ok: true, battleId, released: true };
+        if (party.leaderUid !== uid) return { ok: false, reason: "leader-only" };
+        const survivingUids = (party.memberUids || []).filter((memberUid) => battle.members?.[memberUid]?.retreated !== true && battle.members?.[memberUid]?.disconnected !== true);
+        let leaderUid = party.leaderUid;
+        if (!survivingUids.includes(leaderUid) || Number(battle.members?.[leaderUid]?.hp) <= 0) {
+          leaderUid = survivingUids.find((memberUid) => Number(battle.members?.[memberUid]?.hp) > 0) || survivingUids[0] || "";
+        }
+        battle.exitReleased = true;
+        battle.exitReleasedAtMs = nowMs;
+        battle.updatedAtMs = nowMs;
+        if (survivingUids.length <= 1) {
+          for (const memberUid of survivingUids) transaction.delete(partyPointerRef(memberUid));
+          transaction.delete(currentPartyRef);
+        } else {
+          transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+          for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
+        }
+        transaction.set(battleRef, battle);
+        return { ok: true, battleId, released: true };
+      }
+
       if (battle.status !== "active") return { ok: false, reason: "battle-closed" };
       if (action !== "battle-advance" && whole(request.data?.round, -1) !== whole(battle.round, 1)) return { ok: false, reason: "round" };
       const saveRefs = Object.fromEntries((battle.memberUids || []).map((memberUid) => [memberUid, db.doc(`players/${memberUid}`)]));
@@ -1178,12 +1246,12 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
       let resolving = battle.phase;
       if (action === "battle-move") {
         const validation = PartyBattle.validateMoveSubmission(battle, uid, saves[uid], request.data?.commands || [], request.data?.facing);
-        if (!validation.ok) return validation;
+        if (!validation.ok) return { ...validation };
         battle.movePlans = { ...(battle.movePlans || {}), [uid]: { commands: validation.commands, facing: validation.finalFacing, submittedAtMs: nowMs } };
         shouldResolve = PartySystem.allActiveSubmitted(battle, "movePlans");
       } else if (action === "battle-action") {
         const validation = PartyBattle.validatePlayerAction(battle, uid, saves[uid], request.data?.battleAction || {});
-        if (!validation.ok) return validation;
+        if (!validation.ok) return { ...validation };
         battle.actions = { ...(battle.actions || {}), [uid]: { ...validation.action, submittedAtMs: nowMs } };
         shouldResolve = PartySystem.allActiveSubmitted(battle, "actions");
       } else {
@@ -1213,14 +1281,14 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
 
       if (resolving === "planning_move") {
         const result = PartyBattle.resolveMovement(battle, saves, nowMs);
-        if (!result.ok) return result;
+        if (!result.ok) return { ...result };
         battle = result.battle;
         transaction.set(battleRef, battle);
         return { ok: true, resolved: true, battleId, phase: battle.phase };
       }
 
       const result = PartyBattle.resolveActions(battle, saves, nowMs);
-      if (!result.ok) return result;
+      if (!result.ok) return { ...result };
       battle = result.battle;
       let nextSaves = result.saves;
       if (battle.status === "finished" && battle.result === "victory") {
@@ -1237,18 +1305,10 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
         }
       }
       if (battle.status === "finished") {
-        const survivingUids = (party.memberUids || []).filter((memberUid) => battle.members?.[memberUid]?.retreated !== true && battle.members?.[memberUid]?.disconnected !== true);
-        let leaderUid = party.leaderUid;
-        if (!survivingUids.includes(leaderUid) || Number(battle.members?.[leaderUid]?.hp) <= 0) {
-          leaderUid = survivingUids.find((memberUid) => Number(battle.members?.[memberUid]?.hp) > 0) || survivingUids[0] || "";
-        }
-        if (survivingUids.length <= 1) {
-          for (const memberUid of survivingUids) transaction.delete(partyPointerRef(memberUid));
-          transaction.delete(currentPartyRef);
-        } else {
-          transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
-          for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
-        }
+        // Keep every client attached to the same Firestore battle document until
+        // each participant has drained the authoritative presentation queue.
+        // The party is released only by battle-finish-ready acknowledgements.
+        transaction.update(currentPartyRef, { state: "battle_finishing", battleId, updatedAtMs: nowMs });
       } else if (Number(battle.members?.[party.leaderUid]?.hp) <= 0) {
         const nextLeader = PartySystem.activeBattleMemberUids(battle)[0] || party.leaderUid;
         if (nextLeader !== party.leaderUid) {

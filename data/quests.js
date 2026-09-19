@@ -27,7 +27,7 @@
     "star": 2,
     "type": "wish",
     "title": "代客許願",
-    "description": "有位居民堅信山地深處嗰個古怪水池非常靈驗。只不過……今日佢唔想行咁遠，所以決定請冒險者代佢許願。",
+    "description": "有位居民深信山地深處的古怪水池非常靈驗。只不過……今天他不想走那麼遠，所以決定請冒險者代為許願。",
     "recommendedLevel": 3,
     "repeatable": true,
     "objective": {
@@ -44,7 +44,7 @@
     "star": 3,
     "type": "hunt",
     "title": "灰紋浣熊討伐",
-    "description": "驅走山路附近結群翻找行囊的灰紋浣熊，免得旅人一轉身就少咗乾糧。",
+    "description": "驅走山路附近成群翻找行囊的灰紋浣熊，以免旅人一轉身就發現乾糧少了。",
     "recommendedLevel": 10,
     "repeatable": true,
     "objective": {
@@ -61,7 +61,7 @@
     "star": 5,
     "type": "hunt",
     "title": "沼澤蛙討伐",
-    "description": "處理積水地帶出沒的沼澤蛙，避免牠們用長舌同黏液封住前路。",
+    "description": "處理積水地帶出沒的沼澤蛙，避免牠們用長舌與黏液封住前路。",
     "recommendedLevel": 21,
     "repeatable": true,
     "objective": {
@@ -78,7 +78,7 @@
     "star": 7,
     "type": "hunt",
     "title": "苔甲龜討伐",
-    "description": "深入危險區域討伐厚甲苔龜；牠行得慢，但一轉起龜殼就絕對唔慢。",
+    "description": "深入危險區域討伐厚甲苔龜；牠移動雖慢，但旋轉起龜殼時可一點也不慢。",
     "recommendedLevel": 33,
     "repeatable": true,
     "objective": {

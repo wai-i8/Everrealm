@@ -34,7 +34,7 @@
   }
 
   function materialDescription(id) {
-    return ItemData?.getItem?.(id)?.description || "冒險途中取得嘅素材，可以留作交換或製作裝備。";
+    return ItemData?.getItem?.(id)?.description || "冒險途中取得的素材，可以留作交換或製作裝備。";
   }
 
   function skillStars(star) {

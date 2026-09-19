@@ -8,11 +8,11 @@
   const ACTIVE_ITEMS = Object.freeze([
     { id: "healing_potion", name: "小型回復藥", description: "回復 150 HP。", iconIndex: 0, kind: "consumable" },
     { id: "weak_potion", name: "弱氣之藥", description: "一瓶來歷可疑的藥氣之藥。據說喝下後會令人變得孱弱，但身上散出的怪味，卻會令附近魔物蠢蠢欲動。", iconIndex: 0, iconSrc: "assets/items/weak-potion-v1.png", kind: "consumable" },
-    { id: "bright_feather", name: "亮羽", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "boar_tusk", name: "野豬獠牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "bear_claw", name: "岩穴熊爪", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "moss_shell", name: "苔甲碎片", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
-    { id: "coyote_fang", name: "郊狼尖牙", description: "冒險途中取得嘅素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
+    { id: "bright_feather", name: "亮羽", description: "冒險途中取得的素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
+    { id: "boar_tusk", name: "野豬獠牙", description: "冒險途中取得的素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
+    { id: "bear_claw", name: "岩穴熊爪", description: "冒險途中取得的素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
+    { id: "moss_shell", name: "苔甲碎片", description: "冒險途中取得的素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
+    { id: "coyote_fang", name: "郊狼尖牙", description: "冒險途中取得的素材，可以留作交換或製作裝備。", iconIndex: 4, kind: "material" },
   ].map(Object.freeze));
 
   function skillBookRankLabel(rank) {

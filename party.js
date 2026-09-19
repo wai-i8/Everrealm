@@ -30,35 +30,10 @@
     };
   }
 
-  function presentationRemote(remote, party, ownUid, localPlayer, spacing = 44) {
-    const source = remote && typeof remote === "object" ? remote : null;
-    const current = party && typeof party === "object" ? party : null;
-    const selfUid = uid(ownUid);
-    if (!source || !current || current.state !== "idle" || current.transition || current.battleId || !selfUid) return source;
-    const memberUids = Array.isArray(current.memberUids) ? current.memberUids.map(uid).filter(Boolean) : [];
-    const ownIndex = memberUids.indexOf(selfUid);
-    const remoteIndex = memberUids.indexOf(uid(source.uid));
-    if (ownIndex < 0 || remoteIndex < 0 || ownIndex === remoteIndex) return source;
-    const local = localPlayer && typeof localPlayer === "object" ? localPlayer : null;
-    if (!local || !Number.isFinite(Number(local.x)) || !Number.isFinite(Number(local.y))) return source;
-    const facing = text(local.facing, "down") || "down";
-    const vectors = {
-      up: { x: 0, y: -1 },
-      down: { x: 0, y: 1 },
-      left: { x: -1, y: 0 },
-      right: { x: 1, y: 0 },
-    };
-    const vector = vectors[facing] || vectors.down;
-    const gap = Math.max(26, Number(spacing) || 44);
-    const signedSteps = ownIndex - remoteIndex;
-    return {
-      ...source,
-      x: Number(local.x) + vector.x * gap * signedSteps,
-      y: Number(local.y) + vector.y * gap * signedSteps,
-      facing,
-      moving: Boolean(local.moving),
-      presentationOnly: true,
-    };
+  function presentationRemote(remote) {
+    // Compatibility shim: party members now render from real multiplayer
+    // coordinates. The follower path controls spacing instead of fake offsets.
+    return remote && typeof remote === "object" ? remote : null;
   }
 
   function normalizeInvite(id, raw) {
@@ -131,6 +106,47 @@
       statusEffects: source.statusEffects && typeof source.statusEffects === "object" ? { ...source.statusEffects } : {},
     };
   }
+  function normalizeMovementReplay(raw) {
+    const source = raw && typeof raw === "object" ? raw : null;
+    if (!source || !text(source.id)) return null;
+    const normalizeCellMap = (value) => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {}).map(([key, entry]) => [key, { x: Number(entry?.x) || 0, y: Number(entry?.y) || 0 }]));
+    const unitResults = Object.fromEntries(Object.entries(source.unitResults && typeof source.unitResults === "object" ? source.unitResults : {}).map(([key, result]) => [key, {
+      ...(result || {}),
+      start: result?.start ? { x: Number(result.start.x) || 0, y: Number(result.start.y) || 0 } : null,
+      cell: result?.cell ? { x: Number(result.cell.x) || 0, y: Number(result.cell.y) || 0 } : null,
+      completedPath: Array.isArray(result?.completedPath) ? result.completedPath.map((entry) => ({ x: Number(entry?.x) || 0, y: Number(entry?.y) || 0 })) : [],
+      blockedBy: Array.isArray(result?.blockedBy) ? [...result.blockedBy] : [],
+    }]));
+    return {
+      id: text(source.id),
+      round: Math.max(1, whole(source.round, 1)),
+      actors: Array.isArray(source.actors) ? source.actors.map(text).filter(Boolean) : [],
+      frameTimes: Array.isArray(source.frameTimes) ? source.frameTimes.map((value) => Math.max(0, Number(value) || 0)) : [],
+      frames: Array.isArray(source.frames) ? source.frames.map(normalizeCellMap) : [],
+      timeline: Array.isArray(source.timeline) ? source.timeline.map((frame) => ({
+        time: Math.max(0, Number(frame?.time) || 0),
+        renderCells: normalizeCellMap(frame?.renderCells),
+        facings: frame?.facings && typeof frame.facings === "object" ? { ...frame.facings } : {},
+      })) : [],
+      cancelled: Array.isArray(source.cancelled) ? [...source.cancelled] : [],
+      unitResults,
+    };
+  }
+
+  function normalizePresentation(raw) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    const serial = Math.max(0, whole(source.serial, 0));
+    if (!serial) return null;
+    return {
+      serial,
+      type: text(source.type),
+      round: Math.max(1, whole(source.round, 1)),
+      result: text(source.result),
+      events: Array.isArray(source.events) ? source.events.map((event) => ({ ...event })) : [],
+      movementReplay: normalizeMovementReplay(source.movementReplay),
+    };
+  }
+
   function normalizeBattle(id, raw) {
     const source = raw && typeof raw === "object" ? raw : {};
     const battleId = text(source.id || id);
@@ -162,6 +178,16 @@
       enemies: Array.isArray(source.enemies) ? source.enemies.map((enemy) => ({ ...enemy, cell: { x: whole(enemy?.cell?.x, 0), y: whole(enemy?.cell?.y, 0) } })) : [],
       eventSerial: Math.max(0, whole(source.eventSerial, 0)),
       events: Array.isArray(source.events) ? source.events.map((event) => ({ ...event })) : [],
+      presentationSerial: Math.max(0, whole(source.presentationSerial, 0)),
+      presentations: Array.isArray(source.presentations) ? source.presentations.map(normalizePresentation).filter(Boolean) : [],
+      movementReplay: normalizeMovementReplay(source.movementReplay),
+      finishParticipantUids: Array.isArray(source.finishParticipantUids) ? source.finishParticipantUids.map(uid).filter(Boolean) : [],
+      finishReadyUids: Array.isArray(source.finishReadyUids) ? source.finishReadyUids.map(uid).filter(Boolean) : [],
+      finishReleased: source.finishReleased === true,
+      exitReleased: source.exitReleased === true,
+      finishedAtMs: Math.max(0, Number(source.finishedAtMs) || 0),
+      finishReleasedAtMs: Math.max(0, Number(source.finishReleasedAtMs) || 0),
+      exitReleasedAtMs: Math.max(0, Number(source.exitReleasedAtMs) || 0),
       rewards: source.rewards && typeof source.rewards === "object" ? { ...source.rewards } : {},
       createdAtMs: Number(source.createdAtMs) || 0,
       updatedAtMs: Number(source.updatedAtMs) || 0,
@@ -246,8 +272,21 @@
     }
     async function command(action, payload = {}) {
       if (!active || !serverApi?.party) return { ok: false, reason: "inactive" };
-      try { return await serverApi.party(action, payload); }
-      catch (error) { onError(error); return { ok: false, reason: "command-failed", error }; }
+      try {
+        const result = await serverApi.party(action, payload);
+        if (!result || typeof result !== "object") return result;
+        // Firestore is the only authoritative battle-state transport. Callable
+        // responses are command acknowledgements only and must never advance
+        // local battle presentation ahead of the shared snapshot listener.
+        if (action.startsWith("battle-")) {
+          const { battle: _ignoredBattle, ...ack } = result;
+          return ack;
+        }
+        return result;
+      } catch (error) {
+        onError(error);
+        return { ok: false, reason: "command-failed", error };
+      }
     }
     function watchBattle(nextBattleId, localToken) {
       const id = text(nextBattleId);
@@ -301,13 +340,19 @@
         presenceUnsubs.set(memberUid, unsub);
       }
     }
+    function keepFinishedBattleWatch() {
+      return Boolean(battleId && (
+        battle?.finishReleased !== true ||
+        (battle?.result === "victory" && battle?.exitReleased !== true)
+      ));
+    }
     function watchParty(nextPartyId, localToken) {
       const id = text(nextPartyId);
       if (!id || !firestoreContext || localToken !== token) {
         // A finished battle can clear the party pointer in the same transaction.
         // Keep the direct battle listener alive long enough to receive the final
         // result snapshot; otherwise the client can miss victory/defeat entirely.
-        clearPartyWatch({ keepBattle: Boolean(battleId && battle?.status !== "finished") });
+        clearPartyWatch({ keepBattle: keepFinishedBattleWatch() });
         emitState();
         return;
       }
@@ -321,10 +366,11 @@
         if (!party || !party.memberUids.includes(ownUid)) {
           party = null;
           // Do not cancel the battle listener before its terminal snapshot arrives.
-          if (!battleId || battle?.status === "finished") watchBattle("", localToken);
+          if (!keepFinishedBattleWatch()) watchBattle("", localToken);
           clearPresenceWatches();
         } else {
-          watchBattle(party.battleId, localToken);
+          const watchedBattleId = party.battleId || (keepFinishedBattleWatch() ? battleId : "");
+          watchBattle(watchedBattleId, localToken);
           syncPresenceWatches(localToken);
         }
         emitState();
@@ -393,6 +439,8 @@
       submitMove: (battleIdValue, round, commands, facing) => command("battle-move", { battleId: text(battleIdValue), round: whole(round, 1), commands, facing }),
       submitAction: (battleIdValue, round, action) => command("battle-action", { battleId: text(battleIdValue), round: whole(round, 1), battleAction: action }),
       advanceBattle: (battleIdValue) => command("battle-advance", { battleId: text(battleIdValue) }),
+      finishReady: (battleIdValue, presentationSerial = 0) => command("battle-finish-ready", { battleId: text(battleIdValue), presentationSerial: whole(presentationSerial, 0) }),
+      exitBattle: (battleIdValue) => command("battle-exit", { battleId: text(battleIdValue) }),
       retreat: (battleIdValue) => command("battle-retreat", { battleId: text(battleIdValue) }),
       getState: snapshotState,
       isActive: () => active,

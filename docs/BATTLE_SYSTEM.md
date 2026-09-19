@@ -2685,3 +2685,20 @@ Automated tests pass 後仍然必須實際 run game。
 - Base tile outlines are not rendered; only movement/skill/selection overlays reveal the logical grid.
 - Mountain high-tree and low-scrub battle obstacles use the latest transparent user-supplied cutouts.
 - The world skill panel is named 「戰技面板」. Its authored interaction region stays invisible; proximity/hover adds only a subtle warm-gold breathing glow. Desktop exploration uses feather/default and hand/interactive custom cursors.
+
+### V11 corpse / revival-ready battlefield state
+- A unit reduced to 0 HP becomes a corpse immediately instead of disappearing. `deathRound` records the round in which the unit fell.
+- A corpse remains on its original cell for the next **3 complete rounds**. If it falls in round R, the following round starts show `3`, then `2`, then `1`; it stops occupying/rendering from round R+4.
+- Corpse cells are **movement blockers** for players and monsters, so pathfinding and simultaneous movement must route around them.
+- Corpses are low obstacles only: they do **not** block normal linear/projectile attack traces or line of effect, and they are not normal attack targets. This intentionally leaves the state ready for a future resurrection-target rule.
+- Authored monster death frames are used where available. Units without a death frame use a temporary low corpse placeholder until dedicated art exists.
+- If the last enemy dies and combat ends immediately, the corpse remains visible on the result presentation but no `3/2/1` countdown is shown because no further combat rounds occur.
+- Solo and shared-party battles use the same corpse timing and movement-blocking semantics; authoritative server/party snapshots preserve `deathRound` for reconnect consistency.
+
+### V12 shared-party authoritative presentation transport
+- Shared-party battle state is transported authoritatively through the Firestore `partyBattles/{battleId}` snapshot listener. Cloud Function battle commands return acknowledgements only; their responses must not directly advance local battle state or animation.
+- Movement, action and result presentation are appended to a monotonically increasing `presentationSerial` / `presentations[]` queue on the authoritative battle document. Every client, including the leader, consumes the same ordered queue and must not skip directly to a newer visual state.
+- Server-resolved movement stores its replay inside the matching movement presentation item. Clients finish that replay before applying a later canonical snapshot to the visible battlefield.
+- Action presentations carry the authoritative combat events for that resolved action phase. Result presentation is sequenced after the final action presentation.
+- A finished shared battle enters a synchronized finishing barrier. Each participating client acknowledges `battle-finish-ready` only after draining its presentation queue; Firestore sets `finishReleased` only after all expected participants are ready. Party pointers / `battleId` are retained until that release so no member leaves the battlefield before the others finish presentation.
+- RTDB remains presence/exploration-only and is not a tactical battle transport.

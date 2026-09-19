@@ -23,7 +23,7 @@
       slotCount: 3,
       passive: null,
       source: "初始",
-      description: "最基本嘅戰技面板。",
+      description: "最基本的戰技面板。",
     },
     adventurer: {
       id: "adventurer",
@@ -31,7 +31,7 @@
       slotCount: 4,
       passive: null,
       source: "主線一",
-      description: "完成第一段主線後獲得嘅四格面板。",
+      description: "完成第一段主線後獲得的四格面板。",
     },
     skilled_adventurer: {
       id: "skilled_adventurer",
@@ -39,7 +39,7 @@
       slotCount: 5,
       passive: null,
       source: "主線二",
-      description: "畀已經掌握戰場基本功嘅冒險者使用。",
+      description: "提供給已經掌握戰場基本技巧的冒險者使用。",
     },
     veteran_adventurer: {
       id: "veteran_adventurer",
@@ -47,7 +47,7 @@
       slotCount: 6,
       passive: null,
       source: "主線三",
-      description: "得到公會認同後獲得嘅六格面板。",
+      description: "得到公會認同後獲得的六格面板。",
     },
   });
 

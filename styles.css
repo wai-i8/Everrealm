@@ -7764,6 +7764,7 @@ html body [aria-disabled="true"] {
 .battle-victory-footer { position:relative; z-index:1; display:flex; justify-content:center; padding:.72rem 1rem .9rem; border-top:1px solid rgba(255,200,87,.16); }
 .battle-victory-continue { min-width:min(17rem,100%); min-height:2.45rem; padding:.45rem .9rem; border:1px solid rgba(255,200,87,.56); border-radius:.6rem; color:var(--cream); background:linear-gradient(180deg,rgba(80,62,28,.78),rgba(36,29,20,.84)); box-shadow:2px 3px 0 rgba(0,0,0,.32); font-size:.7rem; font-weight:900; letter-spacing:.03em; cursor:pointer; }
 .battle-victory-continue:hover,.battle-victory-continue:focus-visible { border-color:var(--gold); color:#fff3c5; outline:1px solid rgba(255,200,87,.25); }
+.battle-victory-continue:disabled { opacity:.62; cursor:default; filter:saturate(.65); }
 .battle-victory-overlay:not(.is-ready) .battle-victory-body { animation:battleVictoryBodyReveal .42s .38s ease both; }
 @keyframes battleVictoryBodyReveal { from { opacity:0; transform:translateY(.35rem); } to { opacity:1; transform:none; } }
 @media (max-width:520px) { .battle-victory-overlay{padding:.42rem}.battle-victory-window{width:calc(100% - .1rem);max-height:calc(100% - .1rem)}.battle-victory-heading{padding:.9rem .8rem .65rem}.battle-victory-body{padding:.65rem .7rem .72rem}.battle-victory-reward-grid{gap:.4rem}.battle-victory-reward{padding:.5rem}.battle-victory-footer{padding:.58rem .7rem .7rem} }
@@ -9373,17 +9374,24 @@ html body [aria-disabled="true"] {
 .party-summary strong { color:#e9f4ff; font-size:.68rem; }
 .party-empty-actions { display:flex; justify-content:center; padding:.3rem 0 .05rem; }
 .battle-phase-timer {
+  position:absolute;
+  z-index:12;
+  left:50%;
+  top:max(.8rem,calc(env(safe-area-inset-top) + .35rem));
+  transform:translateX(-50%);
   display:inline-grid;
   place-items:center;
-  min-width:2rem;
-  height:1.35rem;
-  margin-left:.35rem;
-  padding:0 .35rem;
-  border:1px solid rgba(255,200,87,.35);
+  min-width:4.8rem;
+  height:1.5rem;
+  padding:0 .55rem;
+  border:1px solid rgba(255,200,87,.42);
   border-radius:999px;
-  background:rgba(7,14,28,.76);
+  background:rgba(7,14,28,.9);
+  box-shadow:0 .3rem .9rem rgba(0,0,0,.3);
   color:#ffd66c;
-  font:900 .64rem/1 ui-monospace,monospace;
+  font:900 .68rem/1 ui-monospace,monospace;
+  white-space:nowrap;
+  pointer-events:none;
 }
 .battle-phase-timer[hidden] { display:none !important; }
 .battle-phase-timer.is-urgent { color:#ff8d99; border-color:rgba(255,104,124,.55); }
@@ -9393,7 +9401,7 @@ html body [aria-disabled="true"] {
 @media (max-width:760px) {
   .sidebar-social-popover { width:min(19rem,calc(100% - .7rem)); max-height:58vh; }
   .party-member-actions button,.party-leave-button { min-height:2rem; padding-inline:.5rem; }
-  .battle-phase-timer { height:1.2rem; font-size:.58rem; }
+  .battle-phase-timer { top:max(.45rem,calc(env(safe-area-inset-top) + .25rem)); height:1.3rem; font-size:.58rem; }
 }
 
 /* === 2026-09-18 unified outgoing invite waiting card === */

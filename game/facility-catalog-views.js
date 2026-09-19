@@ -64,7 +64,7 @@
         <aside class="paperdoll-stats"><small>CURRENT STATS</small><strong>目前能力</strong><dl><div><dt>生命</dt><dd>${stats.maxHp}</dd></div><div><dt>攻擊</dt><dd>${stats.attack}</dd></div><div><dt>防禦</dt><dd>${stats.defence}</dd></div><div><dt>速度</dt><dd>${Math.round(stats.speed)}</dd></div><div><dt>移動</dt><dd>${stats.moveRange}</dd></div></dl></aside>
       </section>
       <div class="facility-section-heading skill-list-heading"><div><small>OWNED GEAR</small><h3>已擁有裝備</h3></div><span>${ownedEquipment.length} 件</span></div>
-      <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>未有裝備</strong></div>'}</div>
+      <div class="gear-collection-grid">${collection || '<div class="facility-empty-state"><strong>暫無裝備</strong></div>'}</div>
       <div class="facility-note"><b>裝備槽位</b><span>頭部、武器、上身、下身都會按裝備資料獨立佔用；武道服屬一件式裝備，會同時佔用上身及下身。</span></div>`;
     drawEquipmentPaperdoll();
     setFacilityFooter(`<span aria-hidden="true">⚔</span> 換裝會即時更新角色能力並自動保存。`);
@@ -120,7 +120,7 @@
       }));
       const selectedItem = items.find((item) => item.id === selectedShopItemId) || null;
       const cards = items.map(summaryMarkup).join("");
-      content.innerHTML = `<section class="equipment-shop-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}</div>${detailMarkup(selectedItem)}</section>`;
+      content.innerHTML = `<section class="equipment-shop-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>暫時沒有可出售的物品</strong></div>'}</div>${detailMarkup(selectedItem)}</section>`;
       setFacilityFooter("");
       return;
     }
@@ -148,10 +148,10 @@
     const selectedItem = buyItems.find((item) => item.id === selectedShopItemId) || null;
     const cards = buyItems.map(summaryMarkup).join("");
     content.innerHTML = `
-      ${!atShop ? '<div class="facility-note is-warning"><b>只供試睇</b><span>購買要親身去「裝備店」。</span></div>' : ""}
+      ${!atShop ? '<div class="facility-note is-warning"><b>僅供預覽</b><span>購買要親身去「裝備店」。</span></div>' : ""}
       <nav class="equipment-shop-tabs" role="tablist" aria-label="裝備分類">${tabs}</nav>
       <section class="equipment-shop-browser" aria-label="${activeCategory.label}">
-        <div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>呢個分類暫時冇商品</strong></div>'}</div>
+        <div class="equipment-grid equipment-shop-compact-grid">${cards || '<div class="facility-empty-state"><strong>此分類暫時沒有商品</strong></div>'}</div>
         ${detailMarkup(selectedItem)}
       </section>`;
     setFacilityFooter(`<span aria-hidden="true">⚒</span> ${discountRate ? `${guildRankName}折扣 ${Math.round(discountRate * 100)}% · ` : ""}裝備店`);
@@ -192,7 +192,7 @@
         <div class="equipment-copy"><div class="facility-card-heading"><strong>${selectedItem.name}</strong>${selectedItem.quantity > 1 ? `<span class="facility-chip">×${selectedItem.quantity}</span>` : ""}</div><p>${selectedItem.description || ""}</p>${selectedItem.equipment ? `<small>LV.${selectedItem.equipment.requiredLevel} · ${statText(selectedItem.equipment.stats)}</small>` : selectedItem.quantity > 1 ? `<small>持有 ×${selectedItem.quantity}</small>` : ""}</div>
         <div class="equipment-shop-purchase"><span class="equipment-price">${selectedItem.priceLabel}</span><button class="facility-action-button" type="button" data-facility-action="${selectedItem.action}" data-item-id="${selectedItem.id}" ${selectedItem.disabled ? "disabled" : ""}>${selectedItem.actionLabel}</button></div>
       </article>` : "";
-      content.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid general-store-grid">${cards || '<div class="facility-empty-state"><strong>暫時冇可出售物品</strong></div>'}</div>${detail}</section>`;
+      content.innerHTML = `<section class="equipment-shop-browser general-store-browser" aria-label="出售物品"><div class="equipment-grid equipment-shop-compact-grid general-store-grid">${cards || '<div class="facility-empty-state"><strong>暫時沒有可出售的物品</strong></div>'}</div>${detail}</section>`;
       setFacilityFooter("");
       return;
     }

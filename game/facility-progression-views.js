@@ -18,7 +18,7 @@
       const stateLabel = activeRow ? (status === "ready_to_report" ? "待回報" : "進行中") : "";
       return `<button class="guild-simple-row ${activeRow ? "is-active" : ""}" type="button" data-facility-action="commission-detail" data-offer-id="${offer.id}"><strong>${offer.title}</strong><span class="guild-simple-stars">${formatSkillBookRank(offer.star)}</span>${stateLabel ? `<em>${stateLabel}</em>` : ""}</button>`;
     }).join("");
-    content.innerHTML = `<section class="guild-simple-list" aria-label="公會委託">${rows || '<div class="facility-empty-state"><strong>暫時冇委託</strong></div>'}</section>`;
+    content.innerHTML = `<section class="guild-simple-list" aria-label="公會委託">${rows || '<div class="facility-empty-state"><strong>暫時沒有委託</strong></div>'}</section>`;
     setFacilityFooter("");
   }
 
@@ -82,7 +82,7 @@
       || ownedPanels[0]
       || null;
     if (!selected) {
-      content.innerHTML = '<div class="facility-empty-state"><strong>暫時未有戰技面板</strong></div>';
+      content.innerHTML = '<div class="facility-empty-state"><strong>暫時沒有戰技面板</strong></div>';
       setFacilityFooter("");
       return;
     }
@@ -113,7 +113,7 @@
 
     const management = canEdit ? (() => {
       const learned = learnedSkills.map((skill) => `<article class="deck-skill-choice" data-deck-drag-source="library" data-skill-id="${skill.id}" aria-label="${skill.name}">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></article>`).join("");
-      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><h3 id="deckLearnedHeading">已學技能</h3><small>拖到右邊面板</small></div><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>未有已學技能</strong></div>'}</div></section>`;
+      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><h3 id="deckLearnedHeading">已學技能</h3><small>拖曳至右側面板</small></div><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>尚未學會任何技能</strong></div>'}</div></section>`;
     })() : "";
 
     const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="${selected.name}">
@@ -123,7 +123,7 @@
       </div>
       <div class="panel-passive-row"><span>被動效果</span><strong>${passiveText}</strong></div>
       <div class="deck-slot-list" style="--panel-slot-count:${selected.slotCount}">${slots}</div>
-      ${canEdit ? '<p class="panel-edit-hint">每塊面板會獨立保存自己嘅技能配置。</p>' : ''}
+      ${canEdit ? '<p class="panel-edit-hint">每塊面板都會獨立保存自己的技能配置。</p>' : ''}
     </section>`;
 
     content.innerHTML = `
@@ -131,7 +131,7 @@
         <section class="panel-selector-strip" aria-label="持有面板">${panelCards}</section>
         ${canEdit ? `<div class="deck-manage-layout">${management}${currentDeck}</div>` : currentDeck}
       </div>`;
-    setFacilityFooter(canEdit ? "城門面板配置 · 更換面板前會要求確認" : "可隨時查看；更換面板及技能配置只可於舊港城門進行");
+    setFacilityFooter(canEdit ? "城門面板配置 · 更換面板前會要求確認" : "可隨時查看；更換面板及技能配置只能在城門進行");
   }
 
   return Object.freeze({

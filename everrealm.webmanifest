@@ -1,7 +1,7 @@
 {
   "name": "永恆國度 · Everrealm",
   "short_name": "Everrealm",
-  "description": "有探索、戰棋回合戰鬥、任務同角色育成嘅 browser RPG。",
+  "description": "結合探索、戰棋回合戰鬥、任務與角色培育的 browser RPG。",
   "id": "/Everrealm/",
   "start_url": "/Everrealm/?source=pwa-v2",
   "scope": "/Everrealm/",

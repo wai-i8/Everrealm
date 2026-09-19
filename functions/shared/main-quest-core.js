@@ -52,31 +52,31 @@
     },
     {
       id: "rear-damage",
-      prompt: "如果你成功由敵人背後命中，通常會有咩好處？",
-      choices: ["傷害會提高", "傷害會降低", "必定 Miss", "完全冇分別"],
+      prompt: "如果成功從敵人背後命中，通常會有甚麼好處？",
+      choices: ["傷害會提高", "傷害會降低", "必定 Miss", "完全沒有分別"],
       correctIndex: 0,
       explanation: "背後攻擊有較高位置傷害加成。",
     },
     {
       id: "speed-grade",
-      prompt: "同一輪雙方都出手時，技能速度級別通常有咩作用？",
+      prompt: "同一回合雙方都出手時，技能速度級別通常有甚麼作用？",
       choices: ["決定金幣掉落", "影響出手先後", "只影響動畫", "決定移動格數"],
       correctIndex: 1,
-      explanation: "速度級別會參與行動排序；較快嘅技能通常會先出手。",
+      explanation: "速度級別會影響行動順序；較快的技能通常會先出手。",
     },
     {
       id: "friendly-fire",
-      prompt: "範圍攻擊覆蓋到自己人時，應該點諗？",
-      choices: ["自己人永遠免疫", "有機會連自己人都打中", "只會回復自己人", "範圍技唔會命中任何單位"],
+      prompt: "範圍攻擊覆蓋到友軍時，應該注意甚麼？",
+      choices: ["自己人永遠免疫", "有可能連友軍也會命中", "只會回復自己人", "範圍技能不會命中任何單位"],
       correctIndex: 1,
-      explanation: "戰場有友軍傷害，落點要睇清楚。",
+      explanation: "戰場存在友軍傷害，選擇落點時要特別注意。",
     },
     {
       id: "ap-shortage",
-      prompt: "如果目前 AP 唔夠支付一個技能嘅消耗，最合理嘅做法係？",
+      prompt: "如果目前 AP 不足以支付技能消耗，最合理的做法是？",
       choices: ["照用，之後先扣", "技能會免費", "今輪改用其他行動或留 AP", "直接跳過前置技能"],
       correctIndex: 2,
-      explanation: "AP 唔夠就唔可以硬出技能，要改用其他行動或者儲 AP。",
+      explanation: "AP 不足時無法強行使用技能，應改用其他行動或累積 AP。",
     },
   ]);
 
@@ -330,7 +330,7 @@
       };
     }
     const available = availableQuest(state, level);
-    if (available) return { state: "available", quest: available, ready: false, objectiveText: "返公會搵資深冒險者艾利斯", progressText: "可以開始" };
+    if (available) return { state: "available", quest: available, ready: false, objectiveText: "返回公會找資深冒險者艾利斯", progressText: "可以開始" };
     const next = nextLockedQuest(state);
     if (next) return { state: "locked", quest: next, ready: false, objectiveText: `Lv.${next.requiredLevel} 開放`, progressText: "" };
     return { state: "complete", quest: null, ready: false, objectiveText: "目前主線已完成", progressText: "" };

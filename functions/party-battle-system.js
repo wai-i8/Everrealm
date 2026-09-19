@@ -16,6 +16,8 @@ const AP_GAIN = Skills.ROUND_AP_GAIN || 10;
 const SIDE_BONUS = 0.12;
 const REAR_BONUS = 0.25;
 const MAX_EVENTS = 40;
+const MAX_PRESENTATIONS = 24;
+const CORPSE_ROUNDS = 3;
 
 function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
 function whole(value, fallback = 0) { const n = Math.floor(Number(value)); return Number.isFinite(n) ? n : fallback; }
@@ -59,6 +61,7 @@ function memberUnit(battle, memberUid, save) {
     hp: Math.max(0, Number(member?.hp) || 0),
     maxHp: Math.max(1, Number(member?.maxHp) || maxHpForSave(save)),
     alive: member?.alive !== false && Number(member?.hp) > 0 && member?.retreated !== true && member?.disconnected !== true,
+    deathRound: whole(member?.deathRound, 0) > 0 ? whole(member.deathRound, 0) : null,
     ap: clamp(whole(member?.ap, 0), 0, MAX_AP),
     statusEffects: clone(member?.statusEffects || {}),
     defenceDown: Math.max(0, Number(member?.defenceDown) || 0),
@@ -71,6 +74,24 @@ function memberUnit(battle, memberUid, save) {
 }
 function enemyUnits(battle) { return (battle.enemies || []).map((enemy, index) => ServerGame.serverEnemyUnit(battle, enemy, index)); }
 function activeMemberUids(battle) { return Party.activeBattleMemberUids(battle); }
+function corpseVisible(unit, round) {
+  const deathRound = whole(unit?.deathRound, 0);
+  if (unit?.alive !== false || Number(unit?.hp) > 0 || deathRound <= 0) return false;
+  return Math.max(1, whole(round, 1)) < deathRound + CORPSE_ROUNDS + 1;
+}
+function corpseBlockers(battle, saves = {}) {
+  const blockers = [];
+  for (const uid of battle.memberUids || []) {
+    const member = battle.members?.[uid];
+    if (!member || member.retreated || member.disconnected || !corpseVisible(member, battle.round)) continue;
+    blockers.push({ id: `corpse:party:${uid}`, side: "corpse", team: "corpse", type: "corpse", alive: true, hp: 1, maxHp: 1, cell: cell(member.cell), facing: member.facing || "down", weight: 9999, initiative: -9999, moveRange: 0 });
+  }
+  for (const enemy of battle.enemies || []) {
+    if (!corpseVisible(enemy, battle.round)) continue;
+    blockers.push({ id: `corpse:${enemy.id}`, side: "corpse", team: "corpse", type: "corpse", alive: true, hp: 1, maxHp: 1, cell: cell(enemy.cell), facing: enemy.facing || "left", weight: 9999, initiative: -9999, moveRange: 0 });
+  }
+  return blockers;
+}
 function allUnits(battle, saves) {
   const allies = activeMemberUids(battle).map((memberUid) => memberUnit(battle, memberUid, saves[memberUid])).filter(Boolean);
   const enemies = enemyUnits(battle).filter((enemy) => enemy.alive && enemy.hp > 0);
@@ -82,6 +103,7 @@ function persistMember(battle, unit) {
   member.hp = Math.max(0, Number(unit.hp) || 0);
   member.maxHp = Math.max(1, Number(unit.maxHp) || member.maxHp || 1);
   member.alive = unit.alive !== false && member.hp > 0;
+  member.deathRound = whole(unit.deathRound, 0) > 0 ? whole(unit.deathRound, 0) : (whole(member.deathRound, 0) > 0 ? whole(member.deathRound, 0) : null);
   member.cell = cell(unit.cell);
   member.facing = facing(unit.facing, member.facing || "right");
   member.ap = clamp(whole(unit.ap, member.ap || 0), 0, MAX_AP);
@@ -96,6 +118,7 @@ function persistEnemy(battle, unit, index) {
   if (!enemy) return;
   enemy.hp = Math.max(0, Number(unit.hp) || 0);
   enemy.alive = unit.alive !== false && enemy.hp > 0;
+  enemy.deathRound = whole(unit.deathRound, 0) > 0 ? whole(unit.deathRound, 0) : (whole(enemy.deathRound, 0) > 0 ? whole(enemy.deathRound, 0) : null);
   enemy.cell = cell(unit.cell);
   enemy.facing = facing(unit.facing, enemy.facing || "left");
   enemy.ap = clamp(whole(unit.ap, enemy.ap || 0), 0, MAX_AP);
@@ -108,6 +131,13 @@ function persistEnemy(battle, unit, index) {
 function appendEvent(battle, event) {
   battle.eventSerial = Math.max(0, whole(battle.eventSerial, 0)) + 1;
   battle.events = [...(Array.isArray(battle.events) ? battle.events : []), { serial: battle.eventSerial, ...event }].slice(-MAX_EVENTS);
+}
+function appendPresentation(battle, presentation) {
+  battle.presentationSerial = Math.max(0, whole(battle.presentationSerial, 0)) + 1;
+  battle.presentations = [...(Array.isArray(battle.presentations) ? battle.presentations : []), {
+    serial: battle.presentationSerial,
+    ...(presentation && typeof presentation === "object" ? clone(presentation) : {}),
+  }].slice(-MAX_PRESENTATIONS);
 }
 function beginMovePhase(battle, nowMs) {
   battle.phase = "planning_move";
@@ -140,6 +170,7 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() })
       maxHp,
       ap: 0,
       alive: Number(save?.player?.hp) > 0,
+      deathRound: null,
       retreated: false,
       disconnected: false,
       offlineSinceMs: 0,
@@ -170,9 +201,19 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() })
     readyUids: [],
     movePlans: {},
     actions: {},
-    enemies: clone(canonicalBattle.enemies || []),
+    enemies: clone(canonicalBattle.enemies || []).map((enemy) => ({ ...enemy, deathRound: whole(enemy?.deathRound, 0) > 0 ? whole(enemy.deathRound, 0) : null })),
     eventSerial: 0,
     events: [],
+    presentationSerial: 0,
+    presentations: [],
+    movementReplay: null,
+    finishParticipantUids: [],
+    finishReadyUids: [],
+    finishReleased: false,
+    exitReleased: false,
+    finishedAtMs: 0,
+    finishReleasedAtMs: 0,
+    exitReleasedAtMs: 0,
     rewards: {},
     createdAtMs: nowMs,
     updatedAtMs: nowMs,
@@ -197,12 +238,12 @@ function validateMoveSubmission(battle, memberUid, save, commands, requestedFaci
   for (const event of schedule.events) {
     spent += Math.max(0, Number(event.duration) || 0);
     if (event.type === "move" && spent > routeLimit + 1e-7) return { ok: false, reason: "movement-route-range" };
-    if (event.type === "move" && (!Tactics.isInside(grid, event.to) || !Tactics.isWalkable(grid, event.to, []))) return { ok: false, reason: "movement-blocked" };
+    if (event.type === "move" && (!Tactics.isInside(grid, event.to) || !Tactics.isWalkable(grid, event.to, corpseBlockers(battle, { [memberUid]: save })))) return { ok: false, reason: "movement-blocked" };
   }
   return { ok: true, commands: cleaned, finalFacing: facing(requestedFacing, schedule.finalTravelFacing || hero.facing), schedule };
 }
 function enemyMovePlans(battle, allies, enemies, grid) {
-  const simulated = [...allies, ...enemies].map((unit) => ({ ...unit, cell: { ...unit.cell } }));
+  const simulated = [...allies, ...enemies, ...corpseBlockers(battle)].map((unit) => ({ ...unit, cell: { ...unit.cell } }));
   const plans = [];
   const order = Tactics.buildTurnOrder(enemies.filter((enemy) => enemy.alive));
   for (const actual of order) {
@@ -242,7 +283,7 @@ function resolveMovement(battle, saves, nowMs = Date.now()) {
   const result = Tactics.resolveSimultaneousMovement({
     timed: true,
     grid,
-    units: [...allies, ...enemies].filter((unit) => unit.alive),
+    units: [...[...allies, ...enemies].filter((unit) => unit.alive), ...corpseBlockers(next, saves)],
     routes,
     turnCost: TURN_COST,
     priorityUnitId: `party:${next.leaderUid}`,
@@ -262,6 +303,24 @@ function resolveMovement(battle, saves, nowMs = Date.now()) {
     }
     persistEnemy(next, enemy, index);
   });
+  // Keep a compact authoritative movement replay on the battle snapshot.
+  // Clients can animate exactly what the server resolved instead of snapping
+  // every unit straight to its final Firestore cell.
+  next.movementReplay = {
+    id: `${next.round}:${nowMs}`,
+    round: next.round,
+    actors: [...(result.actors || [])],
+    frameTimes: [...(result.frameTimes || [])],
+    frames: (result.frames || []).map((frame) => clone(frame)),
+    timeline: (result.timeline || []).map((frame) => ({
+      time: Number(frame?.time) || 0,
+      renderCells: clone(frame?.renderCells || {}),
+      facings: clone(frame?.facings || {}),
+    })),
+    cancelled: [...(result.cancelled || [])],
+    unitResults: clone(result.unitResults || {}),
+  };
+  appendPresentation(next, { type: "movement", round: next.round, movementReplay: next.movementReplay });
   next.phase = "planning_action";
   next.phaseEndsAtMs = nowMs + Party.PHASE_MS;
   next.actions = {};
@@ -350,6 +409,8 @@ function enemyActionPlans(battle, allies, enemies, grid) {
 function resolveActions(battle, saves, nowMs = Date.now()) {
   const next = clone(battle);
   if (next.phase !== "planning_action") return { ok: false, reason: "phase", battle: next, saves };
+  const actionRound = Math.max(1, whole(next.round, 1));
+  const firstActionEventSerial = Math.max(0, whole(next.eventSerial, 0));
   const nextSaves = Object.fromEntries(Object.entries(saves).map(([uid, save]) => [uid, clone(save)]));
   const battlefield = ServerGame.serverBattlefieldFor(next.mapId, next.monsterType);
   const grid = ServerGame.serverBattleGrid(battlefield);
@@ -381,7 +442,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       save.player.potions = Math.max(0, whole(save.player.potions, 0) - 1);
       const healed = Math.min(150, actor.maxHp - actor.hp);
       actor.hp += healed;
-      appendEvent(next, { type: "heal", actorUid: actor.uid, actorName: actor.name, targetUid: actor.uid, targetName: actor.name, amount: healed, text: `${actor.name} 使用藥水恢復 ${healed} HP` });
+      appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: actor.id, targetUid: actor.uid, targetName: actor.name, amount: healed, text: `${actor.name} 使用藥水恢復 ${healed} HP` });
       return;
     }
     if (entry.type !== "skill" || !entry.skill) return;
@@ -403,7 +464,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
         const healed = Math.min(amount, target.maxHp - target.hp);
         target.hp += healed;
         target.alive = target.hp > 0;
-        if (healed > 0) appendEvent(next, { type: "heal", actorUid: actor.uid, actorName: actor.name, targetUid: target.uid, targetName: target.name, amount: healed, text: `${actor.name} 對 ${target.name} 恢復 ${healed} HP` });
+        if (healed > 0) appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetUid: target.uid, targetName: target.name, amount: healed, text: `${actor.name} 對 ${target.name} 恢復 ${healed} HP` });
       }
     }
     const damageEffect = effects.find((effect) => effect.type === "damage");
@@ -412,16 +473,15 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(entry.skill)) || 0);
       const hitCount = Math.max(1, whole(entry.skill.hitResolution?.hit_count || damageEffect.hits, 1));
       for (const target of targetResult.affected.filter((unit) => unit.side === "enemy").slice(0, 3)) {
-        const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
-        const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
-        const positional = Tactics.positionalAttack(actor, target, { attackPath: targetResult.attackPath, facing: actor.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
-        const totalDamage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(Tactics.calculateDamage(actor, target, { defence, multiplier: authoredMultiplier * positional.multiplier, minimum: Tactics.MIN_DIRECT_DAMAGE }), Tactics.MIN_DIRECT_DAMAGE));
-        const hitDamages = Skills.splitDamageLaterHits(totalDamage, hitCount);
-        for (let hit = 0; hit < hitDamages.length && target.alive && target.hp > 0; hit += 1) {
-          const damage = Math.min(Math.max(0, whole(hitDamages[hit], 0)), target.hp);
+        for (let hit = 0; hit < hitCount && target.alive && target.hp > 0; hit += 1) {
+          const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
+          const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
+          const positional = Tactics.positionalAttack(actor, target, { attackPath: targetResult.attackPath, facing: actor.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
+          const damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(Tactics.calculateDamage(actor, target, { defence, multiplier: authoredMultiplier * positional.multiplier, minimum: Tactics.MIN_DIRECT_DAMAGE }), Tactics.MIN_DIRECT_DAMAGE));
           target.hp = Math.max(0, target.hp - damage);
           target.alive = target.hp > 0;
-          appendEvent(next, { type: "damage", actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetName: target.name, amount: damage, skillName: entry.skill.name, hit: hit + 1, hits: hitDamages.length, totalDamage, hitDamages, text: `${actor.name} 用 ${entry.skill.name} 對 ${target.name} 造成 ${damage} 傷害` });
+          if (!target.alive && !(whole(target.deathRound, 0) > 0)) target.deathRound = next.round;
+          appendEvent(next, { type: "damage", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetName: target.name, amount: damage, skillName: entry.skill.name, hit: hit + 1, hits: hitCount, text: `${actor.name} 用 ${entry.skill.name} 對 ${target.name} 造成 ${damage} 傷害` });
         }
       }
     }
@@ -452,7 +512,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     const rng = ServerGame.deterministicBattleRng(next, next.round, `enemy:${enemy.id}:${target.uid}`);
     const hit = Tactics.rollHit({ accuracy: enemy.accuracy, accuracyMultiplier: skill.accuracyMultiplier ?? 1, evasion: Math.max(0, target.evasion + (evasionByUid.get(target.uid) || 0) * 100 + (FighterEffects.statusEvasion(target, next.round, {}) || 0) * 100), accuracyPenalties: [(FighterEffects.accuracyPenalty(enemy, next.round) || 0) * 100] }, rng);
     if (!hit.hit) {
-      appendEvent(next, { type: "miss", actorName: enemy.name, targetUid: target.uid, targetName: target.name, text: `${enemy.name} 攻擊 ${target.name}，但失手` });
+      appendEvent(next, { type: "miss", actorId: enemy.id, actorName: enemy.name, targetId: target.id, targetUid: target.uid, targetName: target.name, text: `${enemy.name} 攻擊 ${target.name}，但失手` });
       return;
     }
     const positional = Tactics.positionalAttack(enemy, target, { attackPath: Tactics.facingOrthogonalPriority(enemy.cell, target.cell, enemy.facing), facing: enemy.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
@@ -463,7 +523,8 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     damage = counter.damage;
     target.hp = Math.max(0, target.hp - damage);
     target.alive = target.hp > 0;
-    appendEvent(next, { type: "damage", actorName: enemy.name, targetUid: target.uid, targetName: target.name, amount: damage, skillName: skill.name, text: `${enemy.name} 對 ${target.name} 造成 ${damage} 傷害` });
+    if (!target.alive && !(whole(target.deathRound, 0) > 0)) target.deathRound = next.round;
+    appendEvent(next, { type: "damage", actorId: enemy.id, actorName: enemy.name, targetId: target.id, targetUid: target.uid, targetName: target.name, amount: damage, skillName: skill.name, text: `${enemy.name} 對 ${target.name} 造成 ${damage} 傷害` });
     if (target.alive && skill.effects?.length) FighterEffects.applySkillEffects({ skill, caster: enemy, targets: [target], units: [...allies, ...enemies], grid, round: next.round, random: rng });
   }
 
@@ -504,6 +565,21 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     const refreshedEnemies = enemyUnits(next);
     refreshedEnemies.forEach((enemy, index) => { FighterEffects.tickStatuses(enemy, next.round, {}); persistEnemy(next, enemy, index); });
     beginMovePhase(next, nowMs);
+  }
+  const actionEvents = (next.events || []).filter((event) => whole(event?.serial, 0) > firstActionEventSerial);
+  appendPresentation(next, { type: "action", round: actionRound, events: actionEvents });
+  if (next.status === "finished") {
+    next.finishParticipantUids = (next.memberUids || []).filter((memberUid) => {
+      const member = next.members?.[memberUid];
+      return member && member.retreated !== true && member.disconnected !== true;
+    });
+    next.finishReadyUids = [];
+    next.finishReleased = false;
+    next.exitReleased = false;
+    next.finishedAtMs = nowMs;
+    next.finishReleasedAtMs = 0;
+    next.exitReleasedAtMs = 0;
+    appendPresentation(next, { type: "result", round: actionRound, result: next.result || "" });
   }
   next.updatedAtMs = nowMs;
   return { ok: true, battle: next, saves: nextSaves };
@@ -555,5 +631,7 @@ module.exports = Object.freeze({
   grantVictoryRewards,
   retreatChance,
   activeMemberUids,
+  corpseVisible,
+  corpseBlockers,
   maxHpForSave,
 });

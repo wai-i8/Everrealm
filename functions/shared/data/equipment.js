@@ -77,7 +77,7 @@
       "weapon"
     ],
     "name": "疾風護拳",
-    "description": "薄甲拳套帶動氣流，令出拳同走位更快。",
+    "description": "薄甲拳套帶動氣流，讓出拳與走位更加迅速。",
     "cost": 360,
     "requiredLevel": 7,
     "purchasable": true,
@@ -713,7 +713,7 @@
       "hands"
     ],
     "name": "練武用護腕",
-    "description": "保護腕骨同時維持拳路靈活的護腕。",
+    "description": "保護腕骨，同時維持拳路靈活的護腕。",
     "cost": 3675,
     "requiredLevel": 14,
     "purchasable": true,

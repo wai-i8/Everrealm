@@ -45,14 +45,14 @@
       navigationRegion: "npc", navigationRegionIndex: 0,
       nameLabel: { prefix: "資深冒險者", name: "艾利斯" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
       interactionHitRadius: 128, color: "#efbd59", facing: "down", zone: "waiting-lounge",
-      chatter: "火爐邊嘅位留畀願意聽故事嘅冒險者。", render: false,
+      chatter: "火爐旁的位置，是留給願意聽故事的冒險者的。", render: false,
     }, {
       id: "guild-roxy", name: "Roxy", displayName: "公會會長 洛琪希", role: "公會會長", kind: "npc",
       x: roxyRegion.anchor.x, y: roxyRegion.anchor.y - 13, radius: 12,
       navigationRegion: "npc", navigationRegionIndex: 1,
       nameLabel: { prefix: "公會會長", name: "洛琪希" }, nameLabelGapPx: 8, nameLabelAnchorMode: "region-top",
       interactionHitRadius: 128, color: "#e0b3ff", facing: "down", zone: "waiting-lounge",
-      chatter: "歡迎返到公會。每一段旅程，都由一個細小決定開始。", render: false,
+      chatter: "歡迎回到公會。每一段旅程，都從一個小小的決定開始。", render: false,
     }, {
       id: "guildmaster-yin", name: "妍姐", displayName: "公會接待員", role: "公會接待員／委託回報", kind: "npc",
       x: npcFeet.x, y: npcFeet.y - 13, radius: 12,
