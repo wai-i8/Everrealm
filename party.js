@@ -84,6 +84,7 @@
       state: text(source.state, "idle"),
       transition: normalizeTransition(source.transition),
       battleId: text(source.battleId),
+      battleEncounterName: text(source.battleEncounterName),
       createdAtMs: Number(source.createdAtMs) || 0,
       updatedAtMs: Number(source.updatedAtMs) || 0,
     };
@@ -217,6 +218,10 @@
     const seenInvites = new Set();
     const presenceUnsubs = new Map();
     const presenceTimers = new Map();
+    // Track the previous RTDB presence state so a 15-second heartbeat does not
+    // invoke the party Cloud Function over and over while a member remains
+    // online.  Server commands are only needed on an actual state edge.
+    const presenceStates = new Map();
 
     function snapshotState() {
       return Object.freeze({
@@ -242,6 +247,7 @@
       for (const unsub of presenceUnsubs.values()) { try { unsub?.(); } catch (_) {} }
       presenceUnsubs.clear();
       for (const memberUid of [...presenceTimers.keys()]) clearTimer(memberUid);
+      presenceStates.clear();
     }
     function clearBattleWatch() {
       try { battleUnsub?.(); } catch (_) {}
@@ -315,6 +321,7 @@
         if (wanted.has(memberUid)) continue;
         try { unsub?.(); } catch (_) {}
         presenceUnsubs.delete(memberUid);
+        presenceStates.delete(memberUid);
         clearTimer(memberUid);
       }
       const { database, sdk } = realtimeContext;
@@ -324,11 +331,25 @@
         const unsub = sdk.onValue(ref, (snapshot) => {
           if (!active || localToken !== token || !party?.memberUids.includes(memberUid)) return;
           const online = Boolean(snapshot.exists?.() ? snapshot.val()?.online !== false : snapshot.val?.());
+          const previousOnline = presenceStates.get(memberUid);
+          presenceStates.set(memberUid, online);
+
           if (online) {
             clearTimer(memberUid);
-            void command("member-reconnected", { targetUid: memberUid });
+            // Initial online snapshots and normal heartbeat writes do not need
+            // a Function call.  Reconnect only when this client actually saw
+            // the member go offline, or the authoritative party document still
+            // carries an offline marker from before this listener attached.
+            const serverMarkedOffline = Number(party?.members?.[memberUid]?.offlineSinceMs) > 0;
+            if (previousOnline === false || (previousOnline === undefined && serverMarkedOffline)) {
+              void command("member-reconnected", { targetUid: memberUid });
+            }
             return;
           }
+
+          // Repeated offline snapshots must not restart the grace timer or call
+          // member-offline again.
+          if (previousOnline === false) return;
           void command("member-offline", { targetUid: memberUid });
           clearTimer(memberUid);
           const timer = setTimeout(() => {

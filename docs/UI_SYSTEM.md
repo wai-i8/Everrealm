@@ -84,7 +84,7 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 
 所有 `ui-window` major popup 與 shared modal 預設可拖動：desktop 用 pointer/mouse，mobile 用 touch；標題、文字及非互動空白位可以作 drag surface，button、link、input、select、textarea、技能節點／技能 drag source 等 interactive control 不可劫持成 window drag。Skill Tree 桌面空白位可以拖動整個 window，但技能節點 click 必須直接打開 Skill Detail；touch 裝置可保留 tree pan。拖動位置要限制到 viewport 仍保留可操作部分。Overlay 只作輕微 dim，禁止 `backdrop-filter: blur(...)`，玩家仍應清楚睇到正常遊戲背景。
 
-探索左側六個主功能（狀態、物品、面板、技能、任務、系統）採 desktop-style multi-window contract：開啟 major window 後左側 launcher 保持可用；不同功能可以同時存在，同一功能再次開啟只 focus 現有 instance，唔建立 duplicate。新開或被點擊嘅 window 升到最高 z-layer；各 window 可獨立拖動。功能 window 自身嘅 full-stage positioning layer 必須 transparent 並讓 pointer 穿透到未被 window 覆蓋嘅遊戲／launcher 區域。系統設定亦係同一種可拖 major window，唔再依附喺 sidebar icon 旁邊。
+探索左側主功能（狀態、物品、面板、任務、系統）採 desktop-style multi-window contract：開啟 major window 後左側 launcher 保持可用；不同功能可以同時存在，同一功能再次開啟只 focus 現有 instance，唔建立 duplicate。技能樹由「面板」視窗內嘅單一入口開啟，唔再佔用獨立探索 icon。好友／隊伍等社交入口放右下角，並同左側 launcher 及手機收合 tab 共用同一尺寸 token、hit target 同 icon scaling；手機 launcher 收合時右下角社交入口一併收合。新開或被點擊嘅 window 升到最高 z-layer；各 window 可獨立拖動。功能 window 自身嘅 full-stage positioning layer 必須 transparent 並讓 pointer 穿透到未被 window 覆蓋嘅遊戲／launcher 區域。系統設定亦係同一種可拖 major window，唔再依附喺 sidebar icon 旁邊。
 
 ## 4. Hierarchy and components
 
@@ -94,7 +94,7 @@ Inventory、Guild 或 Skill Detail 各自製作固定尺寸背景。窗口需要
 usable height，主標題放左側，右上角以 close button 為必要控制；只有真正有可用說明內容
 嘅頁面先顯示 shared bitmap-backed info 入口，Inventory、Guild 等冇額外說明內容嘅頁面
 唔保留空殼 `[i]`。English taxonomy eyebrow 只在真正增加辨識價值時保留，唔可以同中文
-頁名形成第二個 headline。長說明如存在先放入可點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
+頁名形成第二個 headline；任務頁的「主線任務／公會委託」只保留中文 section title 並置中。長說明如存在先放入可點開的 help popover，唔喺永久標頭重複 subtitle。close button 由
 `ui-close-button`/`facility-close-button` 共用，使用 `assets/ui/ui-close-v2.png`；
 info 使用 `assets/ui/ui-info-v1.png`，兩者保持約 40px hit target，但 info visible
 art 約 21–25px，close visible art 約 30–34px；X 永遠係 primary action。裝飾 bitmap 與可
@@ -163,9 +163,9 @@ Tree、普通 Guild 或其他 management page 嘅預設 footer action；一般 f
 
 ### Exploration HUD
 
-探索左側 HUD 係 compact mobile-game function menu，而唔係常駐角色資料表。expanded
-state 只保留四個 primary entry：`狀態`、`物品欄`、`戰技面板`、`技能樹`，以及底部
-視角控制同 close control。視角由 desktop mouse wheel 或 mobile two-finger pinch
+探索左側 HUD 係 compact mobile-game function menu，而唔係常駐角色資料表。主功能入口只保留
+`狀態`、`物品欄`、`面板`、`任務`、`系統`；技能樹由「面板」內進入，好友／隊伍等社交入口
+獨立放右下角但共用同一 launcher 尺寸。視角由 desktop mouse wheel 或 mobile two-finger pinch
 連續調整，範圍係 `0.35–1.0`。角色頭像、名稱、Level、HP／XP、金錢、藥水、
 目前武器及公會委託摘要唔喺 expanded rail 常駐顯示；詳細資料由相應 Status、Inventory、
 Guild 等 feature panel 擁有。primary entries 使用純文字，唔加 icon、英文副標、右箭嘴或

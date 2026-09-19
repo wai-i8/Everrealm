@@ -8,8 +8,8 @@ V1 trading is a direct player-to-player exchange launched from the same-map play
 
 1. Select another player and choose `交易`. The sender sees a small `等待對方回覆` card; this pending invite is **not** an active trade.
 2. The target accepts or rejects the trade invite. Only acceptance creates both players' active `tradeState/current` pointers and opens the trade panel.
-3. Both players edit their own offer. Each side can see the other side's current items and Gold in realtime.
-4. Each player presses `鎖定`. Locking freezes that player's offer.
+3. Both players edit their own offer. While editing, the left side shows the local offer and the right side is a compact draggable inventory; normal item/equipment/skill-book artwork is reused instead of text-only rows.
+4. Each player presses `鎖定`. Locking freezes that player's offer, replaces the Gold input with a read-only offered-Gold display, and switches the right side from inventory to the peer's current offer/state.
 5. Only after **both** offers are locked does `確認交易` become available.
 6. Each player confirms once. The exchange executes only when both sides are confirmed.
 

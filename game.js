@@ -97,7 +97,7 @@
   const ZOOM_KEY = "everrealm-zoom";
   const HUD_COLLAPSED_KEY = "everrealm-hud-collapsed";
   const MOBILE_HUD_IDLE_MS = 10000;
-  const MOBILE_HUD_MEDIA_QUERY = "(max-width: 820px) and (orientation: portrait)";
+  const MOBILE_HUD_MEDIA_QUERY = "(max-width: 1100px) and (pointer: coarse)";
   const BATTLE_COMMAND_POSITION_KEY = "everrealm-battle-command-position-v1";
   const BATTLE_FACING_POSITION_KEY = "everrealm-battle-facing-position-v1";
   const LOCAL_BATTLE_RESUME_KEY = "everrealm-battle-resume-v1";
@@ -138,12 +138,12 @@
   let facilityHelpPopover = document.getElementById("facilityHelpPopover");
   let facilityHelpText = document.getElementById("facilityHelpText");
   const exploreSidebar = document.getElementById("exploreSidebar");
+  const socialDock = document.getElementById("socialDock");
   const sidebarToggle = document.getElementById("sidebarToggle");
   const statusButton = document.getElementById("statusButton");
   const missionButton = document.getElementById("missionButton");
   const inventoryButton = document.getElementById("inventoryButton");
   const deckButton = document.getElementById("deckButton");
-  const skillTreeButton = document.getElementById("skillTreeButton");
   const systemButton = document.getElementById("systemButton");
   const systemSettingsPopover = document.getElementById("systemSettingsPopover");
   const systemSettingsCloseButton = document.getElementById("systemSettingsCloseButton");
@@ -216,15 +216,13 @@
   const partyInviteName = document.getElementById("partyInviteName");
   const remotePlayerMenu = document.getElementById("remotePlayerMenu");
   const remotePlayerMenuName = document.getElementById("remotePlayerMenuName");
-  const remotePlayerMenuMeta = document.getElementById("remotePlayerMenuMeta");
   const remotePlayerMenuClose = document.getElementById("remotePlayerMenuClose");
-  const remotePlayerProfileDetail = document.getElementById("remotePlayerProfileDetail");
   const tradeInvitePanel = document.getElementById("tradeInvitePanel");
   const battlePhaseTimer = document.getElementById("battlePhaseTimer");
   const tradeInviteName = document.getElementById("tradeInviteName");
   const tradePanel = document.getElementById("tradePanel");
+  const tradeWindow = document.getElementById("tradeWindow");
   const tradePanelTitle = document.getElementById("tradePanelTitle");
-  const tradePeerLabel = document.getElementById("tradePeerLabel");
   const tradeCloseButton = document.getElementById("tradeCloseButton");
   const tradeStatusText = document.getElementById("tradeStatusText");
   const tradeLocalBadge = document.getElementById("tradeLocalBadge");
@@ -232,12 +230,14 @@
   const tradeRemoteOfferTitle = document.getElementById("tradeRemoteOfferTitle");
   const tradeLocalItems = document.getElementById("tradeLocalItems");
   const tradeRemoteItems = document.getElementById("tradeRemoteItems");
+  const tradeCoinsEditor = document.getElementById("tradeCoinsEditor");
   const tradeCoinsInput = document.getElementById("tradeCoinsInput");
   const tradeCoinsAvailable = document.getElementById("tradeCoinsAvailable");
+  const tradeCoinsDisplay = document.getElementById("tradeCoinsDisplay");
   const tradeRemoteCoins = document.getElementById("tradeRemoteCoins");
-  const tradeAddItemButton = document.getElementById("tradeAddItemButton");
-  const tradeInventoryPicker = document.getElementById("tradeInventoryPicker");
-  const tradeInventoryCloseButton = document.getElementById("tradeInventoryCloseButton");
+  const tradeLocalOfferCard = document.getElementById("tradeLocalOfferCard");
+  const tradeInventoryPane = document.getElementById("tradeInventoryPane");
+  const tradeRemotePane = document.getElementById("tradeRemotePane");
   const tradeInventoryList = document.getElementById("tradeInventoryList");
   const tradeCancelButton = document.getElementById("tradeCancelButton");
   const tradeLockButton = document.getElementById("tradeLockButton");
@@ -262,6 +262,12 @@
   const skillBookConfirmPanel = document.getElementById("skillBookConfirmPanel");
   const skillDetailPanel = document.getElementById("skillDetailPanel");
   const abandonCommissionPanel = document.getElementById("abandonCommissionPanel");
+  const gameConfirmPanel = document.getElementById("gameConfirmPanel");
+  const gameConfirmTitle = document.getElementById("gameConfirmTitle");
+  const gameConfirmMessage = document.getElementById("gameConfirmMessage");
+  const gameConfirmCloseButton = document.getElementById("gameConfirmCloseButton");
+  const gameConfirmCancelButton = document.getElementById("gameConfirmCancelButton");
+  const gameConfirmAcceptButton = document.getElementById("gameConfirmAcceptButton");
   const battleUi = {
     round: document.getElementById("battleRoundLabel"),
     turn: document.getElementById("battleTurnLabel"),
@@ -440,6 +446,10 @@
   let partyFormationRemotes = [];
   const partyFormationActors = new Map();
   let tradeCommandPending = false;
+  let tradeDraggedAsset = null;
+  let tradeDraftSessionId = "";
+  let tradeDraftOffer = null;
+  let gameConfirmResolver = null;
   let lastCompletedTradeId = "";
   let activeWhisperUid = "";
   let activeWhisperName = "";
@@ -794,6 +804,9 @@
     ? Core.clamp(storedExploreZoom, EXPLORE_ZOOM_MIN, EXPLORE_ZOOM_MAX)
     : EXPLORE_ZOOM_DEFAULT;
   let hudCollapsed = readPreference(HUD_COLLAPSED_KEY, "0") === "1";
+  const sentChatHistory = [];
+  let sentChatHistoryCursor = 0;
+  let sentChatDraft = "";
   let mobileHudIdleTimer = 0;
   let mobileHudModeActive = false;
 
@@ -1708,9 +1721,16 @@
     if (registeredName) pendingRegistrationCharacterName = "";
   }
 
-  function requestNewGame() {
+  async function requestNewGame() {
     if (!requireAuthenticatedGameplay()) return;
-    if (!testingMode && savePersistence?.hasCloudSave?.() && !window.confirm("開始新旅程會覆蓋目前的存檔。確定重新出發？")) return;
+    if (!testingMode && savePersistence?.hasCloudSave?.()) {
+      const confirmed = await requestGameConfirmation({
+        title: "開始新旅程",
+        message: "開始新旅程會覆蓋目前的存檔",
+        confirmLabel: "重新出發",
+      });
+      if (!confirmed) return;
+    }
     pendingPlayerGender = normalizeGender(player.gender);
     classSelectPanel.hidden = false;
     updateGenderChoiceUi();
@@ -2112,7 +2132,9 @@
 
   function syncExploreSidebarVisibility() {
     const canPlay = isGameplayAuthorized();
-    exploreSidebar.hidden = !(canPlay && ["playing", "facility", "dialogue"].includes(mode));
+    const showExploreUi = canPlay && ["playing", "facility", "dialogue"].includes(mode);
+    exploreSidebar.hidden = !showExploreUi;
+    if (socialDock) socialDock.hidden = !showExploreUi;
   }
 
   function restoreExplorationUiAfterBattle() {
@@ -2380,6 +2402,28 @@
     onStatus: (status) => syncAccountStatus(status),
   }) || null;
 
+  function closeGameConfirm(result = false) {
+    if (gameConfirmPanel) gameConfirmPanel.hidden = true;
+    const resolve = gameConfirmResolver;
+    gameConfirmResolver = null;
+    if (resolve) resolve(Boolean(result));
+  }
+
+  function requestGameConfirmation({ title = "確認", message = "", confirmLabel = "確定", cancelLabel = "取消" } = {}) {
+    if (!gameConfirmPanel || !gameConfirmTitle || !gameConfirmMessage || !gameConfirmAcceptButton || !gameConfirmCancelButton) {
+      return Promise.resolve(false);
+    }
+    closeGameConfirm(false);
+    gameConfirmTitle.textContent = title;
+    gameConfirmMessage.textContent = message;
+    gameConfirmAcceptButton.textContent = confirmLabel;
+    gameConfirmCancelButton.textContent = cancelLabel;
+    gameConfirmPanel.hidden = false;
+    resetDraggableWindowPosition(gameConfirmPanel.querySelector(".ui-modal-window"));
+    gameConfirmCancelButton.focus({ preventScroll: true });
+    return new Promise((resolve) => { gameConfirmResolver = resolve; });
+  }
+
   function hideAllOverlays() {
     closeRemotePlayerMenu();
     setSocialFriendsOpen(false);
@@ -2395,6 +2439,7 @@
     skillBookConfirmPanel.hidden = true;
     skillDetailPanel.hidden = true;
     abandonCommissionPanel.hidden = true;
+    closeGameConfirm(false);
     guildCommissionDetailPanel.hidden = true;
     pendingCommissionDetailId = null;
     pendingAbandonContractId = null;
@@ -2551,7 +2596,7 @@
     }
   }
 
-  function usesMobilePortraitSidebar() {
+  function usesMobileAutoHideSidebar() {
     return window.matchMedia(MOBILE_HUD_MEDIA_QUERY).matches;
   }
 
@@ -2563,10 +2608,10 @@
 
   function scheduleMobileHudAutoHide() {
     clearMobileHudAutoHide();
-    if (!usesMobilePortraitSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
+    if (!usesMobileAutoHideSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
     mobileHudIdleTimer = window.setTimeout(() => {
       mobileHudIdleTimer = 0;
-      if (!usesMobilePortraitSidebar() || hudCollapsed) return;
+      if (!usesMobileAutoHideSidebar() || hudCollapsed) return;
       setHudCollapsed(true, { persist: false });
     }, MOBILE_HUD_IDLE_MS);
   }
@@ -2592,7 +2637,7 @@
   }
 
   function syncMobileHudAutoHideMode() {
-    const active = usesMobilePortraitSidebar();
+    const active = usesMobileAutoHideSidebar();
     if (active === mobileHudModeActive) return;
     mobileHudModeActive = active;
     clearMobileHudAutoHide();
@@ -3011,13 +3056,14 @@
     entity.partyFacingCandidateTime = 0;
   }
 
-  function updatePartyFollowerLocomotion(previous, { moving = false, facing = "down", dt = 0 } = {}) {
-    const seconds = Math.max(0, Number(dt) || 0);
+  function updatePartyFollowerLocomotion(previous, { moving = false, facing = "down", distance = 0, speed = 160 } = {}) {
     if (!moving) return { state: "idle", facing, time: 0 };
     const priorTime = previous?.state === "walk" ? Math.max(0, Number(previous.time) || 0) : 0;
-    // Keep one continuous walk cadence while the auto-follow path turns.
-    // Changing sprite rows must not restart the left/right foot cycle.
-    return { state: "walk", facing, time: priorTime + seconds };
+    const travelledSeconds = Math.max(0, Number(distance) || 0) / Math.max(1, Number(speed) || 160);
+    // Party follow animation is distance-driven. Network/follow retargets may
+    // update more often than the actor really travels; only real displacement
+    // is allowed to advance the left/right foot cycle.
+    return { state: "walk", facing, time: priorTime + travelledSeconds };
   }
 
   function updateStableEnemyFacing(enemy, vector, dt) {
@@ -3061,6 +3107,7 @@
       skillBookConfirmPanel?.hidden === false ||
       skillDetailPanel?.hidden === false ||
       abandonCommissionPanel?.hidden === false ||
+      gameConfirmPanel?.hidden === false ||
       authPanel?.hidden === false ||
       legacySavePanel?.hidden === false ||
       classSelectPanel?.hidden === false ||
@@ -3080,7 +3127,12 @@
     player.knockback.x *= drag;
     player.knockback.y *= drag;
 
-    const movementBlockedByUi = mapTransitionPending || blockingGameplayOverlayOpen() || mobileChatInputActive() || monitorOutgoingInviteMovementLock();
+    const partyBattleMovementLocked = partyBattleStartPending || (() => {
+      const membership = currentPartyMembership();
+      const state = String(membership?.party?.state || "");
+      return Boolean(membership?.party?.battleId || ["battle_loading", "in_battle", "battle_finishing", "battle_victory"].includes(state));
+    })();
+    const movementBlockedByUi = mapTransitionPending || partyBattleMovementLocked || blockingGameplayOverlayOpen() || mobileChatInputActive() || monitorOutgoingInviteMovementLock();
     if (movementBlockedByUi && (exploreMoveTarget || exploreMovePath.length)) {
       clearExploreMovePath();
       pendingClickInteractionId = null;
@@ -3125,8 +3177,20 @@
     } else if (player.partyFacingCandidate || player.partyFacingTravelX || player.partyFacingTravelY) {
       resetPartyFollowerFacingTracking(player);
     }
+    if (partyFollower) {
+      // The follower target is refreshed from the buffered formation path. A
+      // short zero-displacement frame between retargets is not a real stop, so
+      // keep the same walk pose/cadence briefly instead of snapping to idle and
+      // back to walk (the visible rapid left/right-foot flicker).
+      player.partyWalkHold = player.moving
+        ? 0.16
+        : Math.max(0, (Number(player.partyWalkHold) || 0) - dt);
+    } else {
+      player.partyWalkHold = 0;
+    }
+    const partyAnimationMoving = partyFollower && (player.moving || player.partyWalkHold > 0);
     player.locomotion = partyFollower
-      ? updatePartyFollowerLocomotion(player.locomotion, { moving: player.moving, facing: player.facing, dt })
+      ? updatePartyFollowerLocomotion(player.locomotion, { moving: partyAnimationMoving, facing: player.facing, distance: travelDistance, speed })
       : Locomotion.update(player.locomotion, { moving: player.moving, facing: player.facing, dt });
     if (player.moving) player.walkCycle += dt * 8;
 
@@ -3535,7 +3599,11 @@
   }
 
   persistence = SaveSystem.create({
-    intervalMs: 5000,
+    // Position changes constantly while exploring.  A five-second checkpoint
+    // turns ordinary walking into background Cloud Function traffic.  Keep
+    // explicit important saves immediate, but let movement-only autosaves
+    // settle to one checkpoint per minute.
+    intervalMs: 60000,
     fingerprint: getPersistenceFingerprint,
     save: () => saveGame(false),
   });
@@ -4552,7 +4620,7 @@
     ];
     if (quest.id === "main-2") return [
       "完成了幾輪委託，下一步就看看你是否真的了解戰場規則。",
-      "我會問你五個問題。答錯也沒關係，想清楚再回答。",
+      "我會問你五個問題。每天只有一次挑戰機會；只要答錯一題，就要隔天從第一題重新開始。",
     ];
     return [
       "你現在已經不是只能跟隨他人的新人。下一步，我希望你親自取得會長洛琪希的認同。",
@@ -4578,6 +4646,40 @@
     }
   }
 
+  function mainQuestQuizDay() {
+    return Math.max(0, Math.floor(Number(worldTime?.getDay?.()) || 0));
+  }
+
+  function beginMainQuestQuiz(npc) {
+    const state = MainQuest.normalizeState(mainQuestState);
+    const day = mainQuestQuizDay();
+    const nextQuizDay = Math.max(0, Number(state.progress.nextQuizDay) || 0);
+    if (day > 0 && nextQuizDay > day) {
+      return startDialogue({
+        speaker: npc.name,
+        color: npc.color,
+        lines: [
+          "今天的考驗就到這裡。",
+          "先回去把戰場規則再看一遍，明天再來找我。到時要從第一題重新開始。",
+        ],
+      });
+    }
+    if (state.progress.quizIndex > 0) return showMainQuestQuiz(npc);
+    const retry = nextQuizDay > 0 && (day <= 0 || nextQuizDay <= day);
+    return startDialogue({
+      speaker: npc.name,
+      color: npc.color,
+      lines: retry
+        ? ["又來了？昨天有沒有好好複習？", "規矩不變：五題全部答對才算通過。準備好就重新從第一題開始。"]
+        : ["接下來是戰場知識考驗。", "我會問你五個問題；每天只有一次挑戰機會，答錯就要隔天再從第一題開始。準備好了嗎？"],
+      choiceLayout: "compact",
+      choices: [
+        { label: "開始問答", buttonStyle: "primary", action: () => showMainQuestQuiz(npc) },
+        { label: "稍後再來", buttonStyle: "secondary", action: () => {} },
+      ],
+    });
+  }
+
   function showMainQuestQuiz(npc) {
     const question = MainQuest.currentQuizQuestion(mainQuestState);
     if (!question) return interactMainQuestNpc(npc);
@@ -4599,14 +4701,33 @@
     if (!beginGuildQuestMutation()) return;
     try {
       const result = await runGuildQuestServerCommand("main-answer", { questionId, answerIndex });
-      if (!result?.ok) return showToast("題目狀態已更新，請再次與艾利斯交談。", "danger");
+      if (!result?.ok) {
+        if (result?.reason === "quiz-cooldown") {
+          return startDialogue({
+            speaker: npc.name,
+            color: npc.color,
+            lines: [
+              "今天的考驗已經結束了。",
+              "先回去把戰場規則再看一遍，明天再來找我；下一次要從第一題重新開始。",
+            ],
+          });
+        }
+        return startDialogue({
+          speaker: npc.name,
+          color: npc.color,
+          lines: ["先停一下，這輪問答沒有成功記錄。請重新與我交談後再試。"],
+        });
+      }
       applyAuthoritativeState(result.state);
       if (!result.correct) {
         return startDialogue({
           speaker: npc.name,
           color: npc.color,
-          lines: ["不對。", result.explanation || "再仔細想想戰場規則。"],
-          choices: [{ label: "再答一次", buttonStyle: "primary", action: () => showMainQuestQuiz(npc) }],
+          lines: [
+            "這題答錯了。今天的考驗到此為止。",
+            result.explanation || "回去把戰場規則再看一遍吧。",
+            "明天再來找我；下一次要從第一題重新開始。",
+          ],
         });
       }
       if (result.completedObjective) {
@@ -4700,7 +4821,7 @@
         choices: [{ label: "選擇獎勵", buttonStyle: "primary", action: () => showMainQuestRewardChoices(npc) }],
       });
     }
-    if (quest.objectiveType === "quiz") return showMainQuestQuiz(npc);
+    if (quest.objectiveType === "quiz") return beginMainQuestQuiz(npc);
     if (quest.id === "main-1") {
       const p = MainQuest.normalizeState(mainQuestState).progress.commissionStars;
       const missing = [1, 2, 3].filter((star) => !p[star]);
@@ -5832,6 +5953,7 @@
       pendingEquipPanelId: pendingPanelEquipId,
       learnedSkills,
       skillBadgeMarkup,
+      showSkillBookButton: state.context !== "deck",
     });
   }
 
@@ -5879,7 +6001,6 @@
 
   async function confirmEquipLoadoutPanel(panelId) {
     if (!(facilityContext === "deck" && currentMapId === "world")) return showToast("只能在城門更換面板。", "danger"), false;
-    if (pendingPanelEquipId !== panelId) return false;
     if (!ServerApi?.economy) return showToast("伺服器面板指令尚未就緒。", "danger"), false;
     const prediction = Panels.equipPanel(panelState, panelId, skillState);
     if (!prediction.ok) return showToast("無法更換此面板。", "danger"), false;
@@ -6285,10 +6406,10 @@
 
   function focusUiWindow(windowElement) {
     if (!windowElement) return;
-    const layer = windowElement.closest?.(".facility-overlay[data-facility-window-key]") || windowElement;
+    const layer = windowElement.closest?.(".facility-overlay[data-facility-window-key], .trade-panel") || windowElement;
     uiWindowZCounter += 1;
     layer.style.zIndex = String(uiWindowZCounter);
-    for (const candidate of document.querySelectorAll(".facility-window.ui-window.is-ui-window-active, .system-settings-window.is-ui-window-active")) {
+    for (const candidate of document.querySelectorAll(".ui-window.is-ui-window-active, .ui-modal-window.is-ui-window-active, .system-settings-window.is-ui-window-active")) {
       candidate.classList.remove("is-ui-window-active");
     }
     windowElement.classList.add("is-ui-window-active");
@@ -7065,11 +7186,24 @@
 
   function showBattleEntryTransition(source) {
     if (!battleEntryTransition) return;
+    const alreadyVisible = battleEntryTransition.hidden === false;
+    const nextName = String(source?.name || "").trim();
+    const currentName = String(battleEntryName?.textContent || "").trim();
     battleEntryTransition.hidden = false;
     battleEntryTransition.setAttribute("aria-hidden", "false");
     battleEntryTransition.dataset.encounterToken = String(battleToken + 1);
-    if (battleEntryName) battleEntryName.textContent = source?.name || "遭遇戰";
-    playEncounterTransitionSfx();
+    if (battleEntryName && (nextName || !currentName)) {
+      // Never let a generic party-loading label overwrite a monster name that
+      // is already on screen.  The real encounter name may still upgrade a
+      // generic placeholder when a follower receives the battle snapshot.
+      if (!(alreadyVisible && nextName === "遭遇戰" && currentName && currentName !== "遭遇戰")) {
+        battleEntryName.textContent = nextName || "遭遇戰";
+      }
+    }
+    // A party leader sees this immediately and later receives the same battle
+    // through Firestore. Do not replay the encounter cue for the same visible
+    // transition; each client hears it exactly once.
+    if (!alreadyVisible) playEncounterTransitionSfx();
   }
 
   function hideBattleEntryTransition() {
@@ -7097,6 +7231,10 @@
   async function startPartyBattleEncounter(source) {
     if (partyBattleStartPending || encounterBlockedByMapTransition() || !partyClient?.isActive?.() || !isPartyLeader()) return false;
     partyBattleStartPending = true;
+    clearExploreMovePath();
+    pendingClickInteractionId = null;
+    player.moving = false;
+    player.locomotion = Locomotion.create(player.facing || "down");
     showBattleEntryTransition(source);
     try {
       await flushForServerCommand();
@@ -7118,7 +7256,7 @@
   function partyBattleUnitFromMember(memberUid, member, isLocal = false) {
     const stats = isLocal ? playerStats() : {};
     return {
-      id: `party:${memberUid}`,
+      id: String(member?.battleUnitId || `party:${memberUid}`),
       uid: memberUid,
       side: "ally",
       team: "ally",
@@ -7224,6 +7362,143 @@
     return true;
   }
 
+  function latestAuthoritativePresentation(snapshot, type, afterSerial = 0) {
+    return (Array.isArray(snapshot?.presentations) ? snapshot.presentations : [])
+      .filter((item) => String(item?.type || "") === String(type || "") && (Number(item?.serial) || 0) > Math.max(0, Number(afterSerial) || 0))
+      .sort((a, b) => (Number(a?.serial) || 0) - (Number(b?.serial) || 0))
+      .at(-1) || null;
+  }
+
+  function finishSoloAuthoritativeAction(snapshot, state = null) {
+    if (!battle || battle.isPartyBattle || !snapshot?.id || String(snapshot.id) !== String(battle.serverBattleId || "")) return;
+    if (state) applyAuthoritativeState(state);
+    hydrateSharedBattleSnapshot(battle, snapshot, { render: false });
+    battle.serverSyncPending = false;
+    if (snapshot.status === "finished" && snapshot.result === "victory") {
+      finishBattleVictory();
+      return;
+    }
+    const local = authoritativeBattleLocalEntry(snapshot)?.member;
+    if (snapshot.status === "finished" || local?.alive === false || Number(local?.hp) <= 0) {
+      finishBattleDefeat();
+      return;
+    }
+    battle.phase = snapshot.phase || "planning_move";
+    battle.selectedAction = battle.phase === "planning_move" ? "move" : null;
+    battle.heroMoveDraft = [copyBattleCell(battle.hero.cell)];
+    battle.heroMoveCommands = [];
+    battle.heroMovePlan = null;
+    battle.cursor = copyBattleCell(battle.hero.cell);
+    battle.awaitingFacing = true;
+    battle.messageDanger = false;
+    battle.message = battle.phase === "planning_move" ? "請決定本回合移動。" : "請選擇技能。";
+    updateHud(true);
+    updateBattleUi();
+    schedulePersistBattleResumeState({ delayMs: 0 });
+  }
+
+  async function submitSoloBattleMove(finalFacing = null) {
+    if (!battle || battle.isPartyBattle || battle.phase !== "planning_move" || !battle.serverReady || !battle.serverBattleId || battle.serverSyncPending) return false;
+    let commands = [...(battle.heroMoveCommands || [])];
+    let schedule = battleMoveSchedule(commands);
+    if (finalFacing != null && ["up", "down", "left", "right"].includes(finalFacing)
+      && finalFacing !== (schedule.finalTravelFacing || battle.hero.facing)) {
+      const candidate = [...commands, { type: "face", facing: finalFacing }];
+      const candidateSchedule = battleMoveSchedule(candidate);
+      if (candidateSchedule.totalCost <= battle.hero.moveRange + 1e-9) {
+        commands = candidate;
+        schedule = candidateSchedule;
+      }
+    }
+    battle.heroMoveCommands = commands;
+    battle.heroMoveDraft = schedule.path.map(copyBattleCell);
+    battle.awaitingFacing = false;
+    battle.serverSyncPending = true;
+    battle.messageDanger = false;
+    battle.message = "正在向伺服器提交移動…";
+    updateBattleUi();
+    const token = battle.token;
+    const battleId = battle.serverBattleId;
+    const round = battle.round;
+    const afterSerial = Math.max(0, Number(battle.serverPresentationPresentedSerial) || 0);
+    try {
+      const result = await ServerApi.battle("move", {
+        battleId,
+        round,
+        moveCommands: commands.map((command) => ({ ...command, ...(command.to ? { to: copyBattleCell(command.to) } : {}) })),
+        finalFacing: schedule.finalTravelFacing || battle.hero.facing,
+      });
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return false;
+      if (!result?.ok || !result.battle) {
+        battle.serverSyncPending = false;
+        battle.awaitingFacing = true;
+        setBattleMessage("伺服器拒絕了移動，可以重新選擇。", true);
+        return false;
+      }
+      const snapshot = result.battle;
+      const presentation = latestAuthoritativePresentation(snapshot, "movement", afterSerial);
+      if (presentation?.serial) battle.serverPresentationPresentedSerial = Number(presentation.serial) || afterSerial;
+      const complete = () => {
+        if (!battle || battle.token !== token) return;
+        hydrateSharedBattleSnapshot(battle, snapshot, { render: false });
+        battle.serverSyncPending = false;
+        battle.phase = snapshot.phase || "planning_action";
+        battle.selectedAction = null;
+        battle.cursor = copyBattleCell(battle.hero.cell);
+        battle.messageDanger = false;
+        battle.message = "移動完成；請選擇技能。";
+        updateBattleUi();
+        schedulePersistBattleResumeState({ delayMs: 0 });
+      };
+      if (presentation?.movementReplay?.id && startPartyMovementReplay(battle, presentation.movementReplay, snapshot.phase || "planning_action", { onComplete: complete })) {
+        return true;
+      }
+      complete();
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token) return false;
+      battle.serverSyncPending = false;
+      battle.awaitingFacing = true;
+      serverCommandError(error, "移動同步失敗，可以再試一次。");
+      return false;
+    }
+  }
+
+  async function submitSoloBattleAction(action) {
+    if (!battle || battle.isPartyBattle || battle.phase !== "planning_action" || !battle.serverReady || !battle.serverBattleId || battle.serverSyncPending) return false;
+    const payload = action && typeof action === "object" ? action : { type: "wait" };
+    battle.serverSyncPending = true;
+    battle.selectedAction = null;
+    battle.messageDanger = false;
+    battle.message = "正在向伺服器提交行動…";
+    updateBattleUi();
+    const token = battle.token;
+    const battleId = battle.serverBattleId;
+    const round = battle.round;
+    const afterSerial = Math.max(0, Number(battle.serverPresentationPresentedSerial) || 0);
+    try {
+      const result = await ServerApi.battle("action", { battleId, round, battleAction: payload });
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return false;
+      if (!result?.ok || !result.battle) {
+        battle.serverSyncPending = false;
+        setBattleMessage("伺服器拒絕了本回合行動，可以重新選擇。", true);
+        return false;
+      }
+      const snapshot = result.battle;
+      const presentation = latestAuthoritativePresentation(snapshot, "action", afterSerial);
+      if (presentation?.serial) battle.serverPresentationPresentedSerial = Number(presentation.serial) || afterSerial;
+      const complete = () => finishSoloAuthoritativeAction(snapshot, result.state || null);
+      if (presentation && startPartyActionReplay(presentation, battle, { onComplete: complete })) return true;
+      complete();
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token) return false;
+      battle.serverSyncPending = false;
+      serverCommandError(error, "行動同步失敗，可以再試一次。");
+      return false;
+    }
+  }
+
   async function requestPartyBattleAdvance() {
     if (!battle?.isPartyBattle || !battle.partyBattleId || !["planning_move", "planning_action"].includes(battle.phase)) return false;
     const nowMs = Date.now();
@@ -7296,8 +7571,8 @@
     if (deadline > 0 && remainingMs <= 0 && battle.phase === authoritativePhase) void requestPartyBattleAdvance();
   }
 
-  function startPartyMovementReplay(targetBattle, replay, targetPhase = "planning_action") {
-    if (!targetBattle?.isPartyBattle || !replay?.id) return false;
+  function startPartyMovementReplay(targetBattle, replay, targetPhase = "planning_action", options = {}) {
+    if (!targetBattle || !replay?.id) return false;
     if (targetBattle.partyMovementReplayId === replay.id) return false;
     targetBattle.partyMovementReplayId = replay.id;
     const timeline = Array.isArray(replay.timeline) ? replay.timeline : [];
@@ -7320,12 +7595,13 @@
       stepDuration: BATTLE_MOVE_STEP_SECONDS,
       partyReplay: true,
       partyTargetPhase: targetPhase,
+      onComplete: typeof options.onComplete === "function" ? options.onComplete : null,
     };
     targetBattle.phase = "resolving_move";
     targetBattle.selectedAction = null;
     targetBattle.actingUnitIds = actors;
     targetBattle.messageDanger = false;
-    targetBattle.message = "全隊與敵人同步移動中…";
+    targetBattle.message = targetBattle.isPartyBattle ? "全隊與敵人同步移動中…" : "你與敵人同步移動中…";
     const firstFrame = timeline[0]?.renderCells || replay.frames?.[0] || {};
     for (const unit of [targetBattle.hero, ...(targetBattle.partyAllies || []), ...(targetBattle.enemies || [])]) {
       if (!unit || !firstFrame[unit.id]) continue;
@@ -7335,26 +7611,43 @@
     return true;
   }
 
-  function hydratePartyBattleSnapshot(targetBattle, snapshot, { render = true } = {}) {
-    if (!targetBattle?.isPartyBattle || !snapshot?.id) return false;
-    const uid = authenticatedUid();
-    const localMember = snapshot.members?.[uid];
-    if (!localMember) return false;
-    const previousPhase = targetBattle.partySnapshot?.phase;
-    const previousRound = targetBattle.partySnapshot?.round;
-    targetBattle.partySnapshot = snapshot;
-    targetBattle.partyBattleId = snapshot.id;
+  function authoritativeBattleLocalEntry(snapshot) {
+    if (!snapshot?.members) return null;
+    const authUid = authenticatedUid();
+    const preferredUid = snapshot.solo === true
+      ? String(snapshot.soloUid || authUid || snapshot.memberUids?.[0] || "")
+      : String(authUid || "");
+    const memberUid = snapshot.members?.[preferredUid]
+      ? preferredUid
+      : String((snapshot.memberUids || []).find((uid) => snapshot.members?.[uid]) || "");
+    const member = memberUid ? snapshot.members?.[memberUid] : null;
+    return member ? { memberUid, member } : null;
+  }
+
+  function hydrateSharedBattleSnapshot(targetBattle, snapshot, { render = true, preservePresentationPhase = false } = {}) {
+    if (!targetBattle || !snapshot?.id || !snapshot?.members) return false;
+    const localEntry = authoritativeBattleLocalEntry(snapshot);
+    if (!localEntry) return false;
+    const { memberUid, member: localMember } = localEntry;
+    const previousPhase = targetBattle.authoritativeSnapshot?.phase;
+    const previousRound = targetBattle.authoritativeSnapshot?.round;
+    targetBattle.authoritativeSnapshot = snapshot;
+    targetBattle.serverBattleId = String(snapshot.id);
+    targetBattle.serverReady = true;
     targetBattle.round = Math.max(1, Number(snapshot.round) || 1);
-    const local = partyBattleUnitFromMember(uid, localMember, true);
+
+    const local = partyBattleUnitFromMember(memberUid, localMember, true);
     Object.assign(targetBattle.hero, local, {
       baseMoveRange: targetBattle.hero.baseMoveRange,
       moveRange: Math.max(0, targetBattle.hero.baseMoveRange - (FighterEffects?.movementPenalty?.(local, targetBattle.round) || 0)),
     });
     player.hp = targetBattle.hero.hp;
     targetBattle.ap = local.ap;
-    targetBattle.partyAllies = (snapshot.memberUids || [])
-      .filter((memberUid) => memberUid !== uid)
-      .map((memberUid) => partyBattleUnitFromMember(memberUid, snapshot.members?.[memberUid], false));
+
+    targetBattle.partyAllies = snapshot.solo === true ? [] : (snapshot.memberUids || [])
+      .filter((uid) => String(uid) !== String(memberUid))
+      .map((uid) => partyBattleUnitFromMember(uid, snapshot.members?.[uid], false));
+
     for (let index = 0; index < targetBattle.enemies.length; index += 1) {
       const canonical = snapshot.enemies?.[index];
       const enemy = targetBattle.enemies[index];
@@ -7366,21 +7659,37 @@
       enemy.maxHp = Math.max(1, Number(canonical.maxHp) || enemy.maxHp || 1);
       enemy.hp = Core.clamp(Number(canonical.hp) || 0, 0, enemy.maxHp);
       enemy.alive = canonical.alive !== false && enemy.hp > 0;
-      enemy.deathRound = Number.isFinite(Number(canonical.deathRound)) && Number(canonical.deathRound) > 0 ? Math.floor(Number(canonical.deathRound)) : (enemy.alive ? null : (enemy.deathRound || Math.max(1, targetBattle.round - 1)));
+      enemy.deathRound = Number.isFinite(Number(canonical.deathRound)) && Number(canonical.deathRound) > 0
+        ? Math.floor(Number(canonical.deathRound))
+        : (enemy.alive ? null : (enemy.deathRound || Math.max(1, targetBattle.round - 1)));
       if (canonical.cell) enemy.cell = copyBattleCell(canonical.cell);
       if (["up", "right", "down", "left"].includes(canonical.facing)) enemy.facing = canonical.facing;
       enemy.ap = Math.max(0, Number(canonical.ap) || 0);
       enemy.statusEffects = { ...(canonical.statusEffects || {}) };
+      enemy.defenceDown = Math.max(0, Number(canonical.defenceDown) || 0);
+      enemy.defenceDownUntilRound = Math.max(0, Number(canonical.defenceDownUntilRound) || 0);
+      enemy.moveDown = Math.max(0, Number(canonical.moveDown) || 0);
+      enemy.moveDownUntilRound = Math.max(0, Number(canonical.moveDownUntilRound) || 0);
       enemy.hitFlash = enemy.hitFlash || 0;
       enemy.stopFlash = enemy.stopFlash || 0;
     }
-    targetBattle.phase = snapshot.status === "loading" ? "intro"
-      : snapshot.status === "finished" ? targetBattle.phase
-      : snapshot.phase;
-    targetBattle.partyMoveSubmitted = Boolean(snapshot.movePlans?.[uid]);
-    targetBattle.partyActionSubmitted = Boolean(snapshot.actions?.[uid]);
-    targetBattle.partyPhaseEndsAtMs = Math.max(0, Number(snapshot.phaseEndsAtMs) || 0);
-    if (snapshot.phase !== previousPhase || snapshot.round !== previousRound) {
+
+    if (targetBattle.isPartyBattle) {
+      targetBattle.partySnapshot = snapshot;
+      targetBattle.partyBattleId = snapshot.id;
+      targetBattle.partyMoveSubmitted = Boolean(snapshot.movePlans?.[memberUid]);
+      targetBattle.partyActionSubmitted = Boolean(snapshot.actions?.[memberUid]);
+      targetBattle.partyPhaseEndsAtMs = Math.max(0, Number(snapshot.phaseEndsAtMs) || 0);
+    }
+
+    const canAdoptPhase = !preservePresentationPhase && !["resolving_move", "resolving_action", "victory", "defeat"].includes(targetBattle.phase);
+    if (canAdoptPhase) {
+      targetBattle.phase = snapshot.status === "loading" ? "intro"
+        : snapshot.status === "finished" ? targetBattle.phase
+        : snapshot.phase;
+    }
+
+    if ((snapshot.phase !== previousPhase || snapshot.round !== previousRound) && !preservePresentationPhase) {
       partyAdvanceKey = "";
       partyAdvanceRetryAtMs = 0;
       targetBattle.selectedAction = snapshot.phase === "planning_move" ? "move" : null;
@@ -7390,39 +7699,80 @@
       targetBattle.cursor = copyBattleCell(targetBattle.hero.cell);
       targetBattle.awaitingFacing = true;
       targetBattle.messageDanger = false;
-      targetBattle.message = snapshot.phase === "planning_move"
-        ? "全隊移動階段：30 秒內決定位置。"
-        : snapshot.phase === "planning_action"
-          ? "全隊行動階段：30 秒內選擇技能。"
-          : "等待隊友同步…";
+      if (targetBattle.isPartyBattle) {
+        targetBattle.message = snapshot.phase === "planning_move"
+          ? "全隊移動階段：30 秒內決定位置。"
+          : snapshot.phase === "planning_action"
+            ? "全隊行動階段：30 秒內選擇技能。"
+            : "等待隊友同步…";
+      } else {
+        targetBattle.message = snapshot.phase === "planning_move"
+          ? "請決定本回合移動。"
+          : snapshot.phase === "planning_action"
+            ? "移動完成；請選擇技能。"
+            : "正在同步戰況…";
+      }
     }
+
     if (local.alive === false && snapshot.status === "active") {
       targetBattle.messageDanger = false;
-      targetBattle.message = "你已倒下，等待隊友完成戰鬥。";
+      targetBattle.message = targetBattle.isPartyBattle ? "你已倒下，等待隊友完成戰鬥。" : "你倒下了……";
       targetBattle.selectedAction = null;
       targetBattle.awaitingFacing = false;
     }
     if (render) {
       updateHud(true);
       updateBattleUi();
+      schedulePersistBattleResumeState();
     }
     return true;
   }
 
-  function presentPartyBattleEventList(events) {
-    if (!battle?.isPartyBattle) return;
+  function hydratePartyBattleSnapshot(targetBattle, snapshot, options = {}) {
+    if (!targetBattle?.isPartyBattle) return false;
+    return hydrateSharedBattleSnapshot(targetBattle, snapshot, options);
+  }
+
+  function battleSfxRuntime() {
+    return window.__everrealmBattleSfxRuntimeV1 || null;
+  }
+
+  function presentPartyBattleEventList(events, targetBattle = battle) {
+    if (!targetBattle) return;
+    targetBattle.authoritativeEventSerial = Math.max(0, Number(targetBattle.authoritativeEventSerial) || 0);
     for (const event of Array.isArray(events) ? events : []) {
       const serial = Number(event.serial) || 0;
-      if (serial <= lastPartyBattleEventSerial) continue;
-      lastPartyBattleEventSerial = Math.max(lastPartyBattleEventSerial, serial);
+      if (serial && serial <= targetBattle.authoritativeEventSerial) continue;
+      if (serial) targetBattle.authoritativeEventSerial = Math.max(targetBattle.authoritativeEventSerial, serial);
+      if (targetBattle.isPartyBattle) lastPartyBattleEventSerial = Math.max(lastPartyBattleEventSerial, serial);
       if (event.text) addSystemMessage("combat", event.text);
       const target = battleUnits().find((unit) => unit.uid === event.targetUid || unit.id === event.targetId);
       if (target && event.type === "damage") {
+        const requested = Math.max(0, Number(event.amount) || 0);
+        const applied = Number.isFinite(Number(event.appliedAmount)) ? Math.max(0, Number(event.appliedAmount)) : requested;
+        target.hp = Math.max(0, Number(target.hp) - applied);
+        if (event.defeated === true || target.hp <= 0) {
+          target.alive = false;
+          if (!(Number(target.deathRound) > 0)) target.deathRound = Math.max(1, Math.floor(Number(targetBattle.round) || 1));
+        }
         target.hitFlash = .3;
-        battle.effects.push({ cell: { ...target.cell }, text: `-${Math.max(0, Number(event.amount) || 0)}`, color: "#ff8b8b", life: .9, maxLife: .9, kind: "damage", offsetY: .16 });
+        targetBattle.effects.push({ cell: { ...target.cell }, text: `-${requested}`, color: "#ff8b8b", life: .9, maxLife: .9, kind: "damage", offsetY: .16 });
         sound.hit();
+        if (event.defeated === true && String(target.type || "").toLowerCase() === "chick") battleSfxRuntime()?.playChickDeath?.();
       } else if (target && event.type === "heal") {
-        battle.effects.push({ cell: { ...target.cell }, text: `+${Math.max(0, Number(event.amount) || 0)}`, color: "#7fffc1", life: .9, maxLife: .9, kind: "heal", offsetY: .16 });
+        const healed = Math.max(0, Number(event.amount) || 0);
+        target.hp = Math.min(Math.max(1, Number(target.maxHp) || 1), Math.max(0, Number(target.hp) || 0) + healed);
+        target.alive = target.hp > 0;
+        targetBattle.effects.push({ cell: { ...target.cell }, text: `+${healed}`, color: "#7fffc1", life: .9, maxLife: .9, kind: "heal", offsetY: .16 });
+      } else if (target && event.type === "move_effect" && event.targetCell) {
+        target.cell = copyBattleCell(event.targetCell);
+        target.renderCell = copyBattleCell(event.targetCell);
+      } else if (target && event.type === "status" && event.text) {
+        targetBattle.effects.push({ cell: { ...target.cell }, text: String(event.text).replace(/^.*?：/, ""), color: "#a9c9ff", life: 1, maxLife: 1, kind: "status", offsetY: -.82 });
+      } else if (event.type === "miss") {
+        const missCell = target?.cell || event.targetCell;
+        if (missCell) targetBattle.effects.push({ cell: { ...missCell }, text: "MISS", color: BATTLE_MISS_COLOR, life: .9, maxLife: .9, offsetY: .16 });
+        battleSfxRuntime()?.playMiss?.();
       }
     }
   }
@@ -7461,35 +7811,75 @@
 
   function buildPartyActionReplaySteps(events) {
     const steps = [];
+    let current = null;
     for (const event of Array.isArray(events) ? events : []) {
+      if (event?.type === "action") {
+        current = {
+          actorId: partyBattleEventActorId(event),
+          actionType: String(event.actionType || "wait"),
+          skillId: event.skillId || null,
+          skillName: event.skillName || null,
+          events: [],
+          targetCell: event.targetCell ? copyBattleCell(event.targetCell) : null,
+          hitCount: Math.max(1, Math.floor(Number(event.hitCount) || 1)),
+        };
+        steps.push(current);
+        continue;
+      }
       const actorId = partyBattleEventActorId(event);
-      const previous = steps.at(-1);
-      const step = previous && previous.actorId === actorId && actorId
-        ? previous
-        : { actorId, events: [], targetCell: null, hitCount: 1 };
-      if (step !== previous) steps.push(step);
-      step.events.push(event);
+      const eventActionType = String(event?.actionType || "wait");
+      if (!current
+        || (actorId && current.actorId && actorId !== current.actorId)
+        || (eventActionType && current.actionType && eventActionType !== current.actionType)) {
+        current = {
+          actorId,
+          actionType: eventActionType,
+          skillId: event?.skillId || null,
+          skillName: event?.skillName || null,
+          events: [],
+          targetCell: event?.targetCell ? copyBattleCell(event.targetCell) : null,
+          hitCount: 1,
+        };
+        steps.push(current);
+      }
+      current.events.push(event);
+      if (!current.skillId && event?.skillId) current.skillId = event.skillId;
+      if (!current.skillName && event?.skillName) current.skillName = event.skillName;
       const target = partyBattleEventTarget(event);
-      if (!step.targetCell && target?.cell) step.targetCell = copyBattleCell(target.cell);
-      step.hitCount = Math.max(step.hitCount, Math.max(1, Math.floor(Number(event?.hits) || Number(event?.hit) || 1)));
+      if (!current.targetCell && target?.cell) current.targetCell = copyBattleCell(target.cell);
+      if (!current.targetCell && event?.targetCell) current.targetCell = copyBattleCell(event.targetCell);
+      if (["damage", "miss"].includes(String(event?.type || "")) || event?.hits || event?.hit) {
+        current.hitCount = Math.max(current.hitCount, Math.max(1, Math.floor(Number(event?.hits) || Number(event?.hit) || 1)));
+      }
     }
     return steps;
   }
 
-  function startPartyActionReplay(item) {
-    if (!battle?.isPartyBattle) return false;
+  function beginAuthoritativeActionSfx(targetBattle, step) {
+    const runtime = battleSfxRuntime();
+    if (!runtime) return;
+    const unit = battleUnits().find((entry) => entry.id === step?.actorId);
+    if (unit?.side === "ally" && step?.actionType === "skill" && step?.skillId) {
+      runtime.beginAction?.({ skill: Skills.getSkill(step.skillId) });
+    } else {
+      runtime.endAction?.();
+    }
+  }
+
+  function startPartyActionReplay(item, targetBattle = battle, options = {}) {
+    if (!targetBattle) return false;
     const events = Array.isArray(item?.events) ? item.events : [];
     const replayActions = buildPartyActionReplaySteps(events);
     if (!replayActions.some((entry) => entry.actorId)) {
-      presentPartyBattleEventList(events);
+      presentPartyBattleEventList(events, targetBattle);
       return false;
     }
-    const replayId = `party-action:${Number(item?.serial) || Date.now()}`;
-    battle.phase = "resolving_action";
-    battle.selectedAction = null;
-    battle.messageDanger = false;
-    battle.message = "全隊與敵人同步行動中…";
-    battle.actionResolution = {
+    const replayId = `battle-action:${Number(item?.serial) || Date.now()}`;
+    targetBattle.phase = "resolving_action";
+    targetBattle.selectedAction = null;
+    targetBattle.messageDanger = false;
+    targetBattle.message = targetBattle.isPartyBattle ? "全隊與敵人同步行動中…" : "正在播放本回合行動…";
+    targetBattle.actionResolution = {
       partyReplay: true,
       partyReplayId: replayId,
       actionIndex: 0,
@@ -7497,9 +7887,11 @@
       replayActions,
       resolvedActorIds: [],
       actionHitCount: Math.max(1, replayActions[0]?.hitCount || 1),
+      onComplete: typeof options.onComplete === "function" ? options.onComplete : null,
     };
-    battle.actingUnitId = replayActions[0]?.actorId || null;
-    battle.actingUnitIds = [];
+    targetBattle.actingUnitId = replayActions[0]?.actorId || null;
+    targetBattle.actingUnitIds = [];
+    beginAuthoritativeActionSfx(targetBattle, replayActions[0]);
     updateBattleUi();
     return replayId;
   }
@@ -7833,6 +8225,9 @@
       serverBattleId: null,
       serverReady: false,
       serverSyncPending: false,
+      serverPresentationPresentedSerial: 0,
+      authoritativeEventSerial: 0,
+      authoritativeSnapshot: null,
       predictedRoundPending: false,
       entryTransitionStartedAt,
       isPartyBattle: Boolean(partyBattleSnapshot),
@@ -7865,6 +8260,7 @@
     if (partyBattleSnapshot) {
       battle.hero.id = `party:${authenticatedUid()}`;
       lastPartyBattleEventSerial = Math.max(0, Number(partyBattleSnapshot.eventSerial) || 0) - (partyBattleSnapshot.events?.length || 0);
+      battle.authoritativeEventSerial = lastPartyBattleEventSerial;
       const initialPresentations = Array.isArray(partyBattleSnapshot.presentations) ? partyBattleSnapshot.presentations : [];
       const presentationBase = Math.max(0, Number(partyBattleSnapshot.presentationSerial) || 0) - initialPresentations.length;
       battle.partyPresentationQueuedSerial = presentationBase;
@@ -7907,6 +8303,10 @@
 
   function syncServerBattleSnapshot(targetBattle, snapshot, options = {}) {
     if (!targetBattle || !snapshot || typeof snapshot !== "object") return false;
+    if (snapshot.members && Array.isArray(snapshot.memberUids)) {
+      return hydrateSharedBattleSnapshot(targetBattle, snapshot, options);
+    }
+    // Legacy tactical-v1 snapshots are still readable during rolling updates.
     if (snapshot.id) targetBattle.serverBattleId = String(snapshot.id);
     if (Number.isFinite(Number(snapshot.round))) targetBattle.round = Math.max(1, Math.floor(Number(snapshot.round)));
     if (Number.isFinite(Number(snapshot.heroHp))) {
@@ -7915,15 +8315,9 @@
       targetBattle.hero.deathRound = targetBattle.hero.alive ? null : (Number.isFinite(Number(snapshot.heroDeathRound)) && Number(snapshot.heroDeathRound) > 0 ? Math.floor(Number(snapshot.heroDeathRound)) : (targetBattle.hero.deathRound || Math.max(1, targetBattle.round - 1)));
       player.hp = targetBattle.hero.hp;
     }
-    if (snapshot.heroCell && Tactics.isInside(targetBattle.grid, snapshot.heroCell)) {
-      targetBattle.hero.cell = copyBattleCell(snapshot.heroCell);
-    }
-    if (["up", "right", "down", "left"].includes(String(snapshot.heroFacing || ""))) {
-      targetBattle.hero.facing = String(snapshot.heroFacing);
-    }
-    if (snapshot.heroStatusEffects && typeof snapshot.heroStatusEffects === "object") {
-      targetBattle.hero.statusEffects = Object.fromEntries(Object.entries(snapshot.heroStatusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
-    }
+    if (snapshot.heroCell && Tactics.isInside(targetBattle.grid, snapshot.heroCell)) targetBattle.hero.cell = copyBattleCell(snapshot.heroCell);
+    if (["up", "right", "down", "left"].includes(String(snapshot.heroFacing || ""))) targetBattle.hero.facing = String(snapshot.heroFacing);
+    if (snapshot.heroStatusEffects && typeof snapshot.heroStatusEffects === "object") targetBattle.hero.statusEffects = Object.fromEntries(Object.entries(snapshot.heroStatusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
     if (Number.isFinite(Number(snapshot.ap))) targetBattle.ap = Core.clamp(Math.floor(Number(snapshot.ap)), 0, BATTLE_AP_MAX);
     if (Array.isArray(snapshot.enemies)) {
       for (let index = 0; index < targetBattle.enemies.length; index += 1) {
@@ -7937,13 +8331,7 @@
         if (canonical.cell && Tactics.isInside(targetBattle.grid, canonical.cell)) local.cell = copyBattleCell(canonical.cell);
         if (["up", "right", "down", "left"].includes(String(canonical.facing || ""))) local.facing = String(canonical.facing);
         if (Number.isFinite(Number(canonical.ap))) local.ap = Core.clamp(Math.floor(Number(canonical.ap)), 0, BATTLE_AP_MAX);
-        if (canonical.statusEffects && typeof canonical.statusEffects === "object") {
-          local.statusEffects = Object.fromEntries(Object.entries(canonical.statusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
-        }
-        local.defenceDown = Math.max(0, Number(canonical.defenceDown) || 0);
-        local.defenceDownUntilRound = Math.max(0, Math.floor(Number(canonical.defenceDownUntilRound) || 0));
-        local.moveDown = Math.max(0, Number(canonical.moveDown) || 0);
-        local.moveDownUntilRound = Math.max(0, Math.floor(Number(canonical.moveDownUntilRound) || 0));
+        if (canonical.statusEffects && typeof canonical.statusEffects === "object") local.statusEffects = Object.fromEntries(Object.entries(canonical.statusEffects).map(([key, value]) => [key, { ...(value || {}) }]));
       }
     }
     if (options.render !== false) {
@@ -7994,6 +8382,23 @@
     stopEncounterTransitionSfx();
     battleHud.hidden = false;
     startBattleBgm();
+
+    if (snapshot.members && Array.isArray(snapshot.memberUids)) {
+      targetBattle.serverPresentationPresentedSerial = Math.max(0, Number(snapshot.presentationSerial) || 0);
+      targetBattle.authoritativeEventSerial = Math.max(0, Number(snapshot.eventSerial) || 0);
+      targetBattle.phase = snapshot.phase || "planning_move";
+      targetBattle.selectedAction = targetBattle.phase === "planning_move" ? "move" : null;
+      targetBattle.cursor = copyBattleCell(targetBattle.hero.cell);
+      targetBattle.heroMoveDraft = [copyBattleCell(targetBattle.hero.cell)];
+      targetBattle.heroMoveCommands = [];
+      targetBattle.heroMovePlan = null;
+      targetBattle.awaitingFacing = true;
+      targetBattle.messageDanger = false;
+      targetBattle.message = targetBattle.phase === "planning_move" ? "請決定本回合移動。" : "請選擇技能。";
+      updateBattleUi();
+      schedulePersistBattleResumeState({ delayMs: 0 });
+      return true;
+    }
 
     // The server snapshot is captured after the previous resolved action and
     // before the next-round AP grant. Rebuild the same planning state that a
@@ -8131,7 +8536,22 @@
       hideBattleEntryTransition();
       battleHud.hidden = false;
       startBattleBgm();
-      beginPlayerRound();
+      if (result.battle.members && Array.isArray(result.battle.memberUids)) {
+        targetBattle.serverPresentationPresentedSerial = Math.max(0, Number(result.battle.presentationSerial) || 0);
+        targetBattle.authoritativeEventSerial = Math.max(0, Number(result.battle.eventSerial) || 0);
+        targetBattle.phase = result.battle.phase || "planning_move";
+        targetBattle.selectedAction = targetBattle.phase === "planning_move" ? "move" : null;
+        targetBattle.cursor = copyBattleCell(targetBattle.hero.cell);
+        targetBattle.heroMoveDraft = [copyBattleCell(targetBattle.hero.cell)];
+        targetBattle.heroMoveCommands = [];
+        targetBattle.heroMovePlan = null;
+        targetBattle.awaitingFacing = true;
+        targetBattle.messageDanger = false;
+        targetBattle.message = targetBattle.phase === "planning_move" ? "請決定本回合移動。" : "請選擇技能。";
+        updateBattleUi();
+      } else {
+        beginPlayerRound();
+      }
       schedulePersistBattleResumeState({ delayMs: 0 });
       return true;
     } catch (error) {
@@ -8632,6 +9052,10 @@
     if (battle.isPartyBattle) {
       if (battle.partyMoveSubmitted) return false;
       void submitPartyBattleMove(finalFacing);
+      return true;
+    }
+    if (battle.serverReady && battle.authoritativeSnapshot?.members) {
+      void submitSoloBattleMove(finalFacing);
       return true;
     }
     let commands = [...(battle.heroMoveCommands || [])];
@@ -9212,9 +9636,14 @@
       unit.locomotion = Locomotion.create(unit.facing || "down");
       delete unit.renderCell;
     }
+    const onComplete = movement.onComplete;
     battle.movementResolution = null;
-    battle.phase = movement.partyTargetPhase || battle.partySnapshot?.phase || "planning_action";
     battle.actingUnitIds = [];
+    if (typeof onComplete === "function") {
+      onComplete();
+      return;
+    }
+    battle.phase = movement.partyTargetPhase || battle.partySnapshot?.phase || "planning_action";
     battle.selectedAction = battle.phase === "planning_move" ? "move" : null;
     battle.cursor = copyBattleCell(battle.hero.cell);
     battle.messageDanger = false;
@@ -9287,6 +9716,10 @@
     if (battle.isPartyBattle) {
       if (battle.partyActionSubmitted) return;
       void submitPartyBattleAction({ type: "skill", skillId: skill.id, targetCell: copyBattleCell(centre) });
+      return;
+    }
+    if (battle.serverReady && battle.authoritativeSnapshot?.members) {
+      void submitSoloBattleAction({ type: "skill", skillId: skill.id, targetCell: copyBattleCell(centre) });
       return;
     }
     if (!godModeActive) battle.ap -= skill.apCost;
@@ -9415,6 +9848,13 @@
       void submitPartyBattleAction(action);
       return;
     }
+    if (battle.serverReady && battle.authoritativeSnapshot?.members) {
+      const action = heroAction?.type === "skill"
+        ? { type: "skill", skillId: heroAction.skillId, targetCell: heroAction.targetCell ? copyBattleCell(heroAction.targetCell) : copyBattleCell(battle.hero.cell) }
+        : heroAction?.type === "potion" ? { type: "potion" } : { type: "wait" };
+      void submitSoloBattleAction(action);
+      return;
+    }
     if (battle.serverSyncPending) {
       setBattleMessage("戰況同步中；可以先選擇技能，伺服器確認後會立即行動。", false);
       return;
@@ -9503,9 +9943,12 @@
     if (!resolution?.partyReplay || battle.phase !== "resolving_action") return;
     const current = resolution.replayActions?.[resolution.actionIndex] || null;
     if (!current) {
+      const onComplete = resolution.onComplete;
+      battleSfxRuntime()?.endAction?.();
       battle.actingUnitId = null;
       battle.actingUnitIds = [];
       battle.actionResolution = null;
+      if (typeof onComplete === "function") onComplete();
       return;
     }
     resolution.actionElapsed += Math.max(0, Number(dt) || 0);
@@ -9517,21 +9960,23 @@
     }
 
     const events = current.events || [];
-    const span = Math.max(0, (resolution.actionHitCount - 1) * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS);
     current.presentedEventCount = Math.max(0, Number(current.presentedEventCount) || 0);
     while (current.presentedEventCount < events.length) {
-      const index = current.presentedEventCount;
-      const ratio = events.length <= 1 ? 0 : index / (events.length - 1);
-      const triggerAt = BATTLE_ACTION_WINDUP_SECONDS + span * ratio;
+      const event = events[current.presentedEventCount];
+      const strikeIndex = Math.max(0, Math.min(
+        resolution.actionHitCount - 1,
+        Math.floor(Number(event?.hit) || 1) - 1,
+      ));
+      const triggerAt = BATTLE_ACTION_WINDUP_SECONDS + strikeIndex * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS;
       if (resolution.actionElapsed + 1e-6 < triggerAt) break;
-      presentPartyBattleEventList([events[index]]);
+      presentPartyBattleEventList([event], battle);
       current.presentedEventCount += 1;
     }
 
     const duration = Math.max(.01, BATTLE_ACTION_WINDUP_SECONDS + resolution.actionHitCount * BATTLE_ACTION_STRIKE_INTERVAL_SECONDS);
     if (resolution.actionElapsed < duration) return;
     while (current.presentedEventCount < events.length) {
-      presentPartyBattleEventList([events[current.presentedEventCount]]);
+      presentPartyBattleEventList([events[current.presentedEventCount]], battle);
       current.presentedEventCount += 1;
     }
     resolution.actionIndex += 1;
@@ -9540,12 +9985,16 @@
     if (next) {
       battle.actingUnitId = next.actorId || null;
       resolution.actionHitCount = Math.max(1, Math.floor(Number(next.hitCount) || 1));
+      beginAuthoritativeActionSfx(battle, next);
       updateBattleUi();
       return;
     }
+    const onComplete = resolution.onComplete;
+    battleSfxRuntime()?.endAction?.();
     battle.actingUnitId = null;
     battle.actingUnitIds = [];
     battle.actionResolution = null;
+    if (typeof onComplete === "function") onComplete();
   }
 
   function updateActionResolution(dt) {
@@ -10446,12 +10895,61 @@
     }, 620);
   }
 
+  async function retreatSoloBattle() {
+    if (!battle || battle.isPartyBattle || !battle.serverReady || !battle.serverBattleId || battle.serverSyncPending || !ServerApi?.battle) return false;
+    const token = battle.token;
+    const battleId = battle.serverBattleId;
+    battle.serverSyncPending = true;
+    setBattleMessage("正在向伺服器確認撤退…", false);
+    try {
+      const result = await ServerApi.battle("retreat", { battleId });
+      if (!battle || battle.token !== token || battle.serverBattleId !== battleId) return false;
+      battle.serverSyncPending = false;
+      if (!result?.ok) {
+        serverCommandError(result, "撤退同步失敗，可以再試一次。");
+        return false;
+      }
+      const chance = Core.clamp(Number(result.chance) || 0, 0, 1);
+      if (!result.success) {
+        const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
+        setBattleMessage(`${retreatMessage}，戰鬥繼續。`, true);
+        showToast(retreatMessage, "danger");
+        updateBattleUi();
+        return false;
+      }
+      if (result.state) applyAuthoritativeState(result.state);
+      const source = battle.source;
+      const away = Core.normalize({ x: player.x - source.x, y: player.y - source.y });
+      source.encounterCooldown = 3;
+      moveEntity(player, (away.x || -1) * 54, away.y * 54);
+      clearBattlePersistenceSnapshots();
+      closeBattleHud();
+      restoreExplorationUiAfterBattle();
+      encounterGrace = 1.4;
+      addSystemMessage("combat", "撤退成功。", "good");
+      showToast("撤退成功", "good");
+      canvas.focus({ preventScroll: true });
+      return true;
+    } catch (error) {
+      if (!battle || battle.token !== token) return false;
+      battle.serverSyncPending = false;
+      serverCommandError(error, "撤退同步失敗，可以再試一次。");
+      return false;
+    }
+  }
+
   function fleeBattle() {
     if (!battle || !["planning_move", "planning_action"].includes(battle.phase)) return;
     if (battle.isPartyBattle) {
       void retreatPartyBattle();
       return;
     }
+    if (battle.serverReady && battle.serverBattleId && ServerApi?.battle) {
+      void retreatSoloBattle();
+      return;
+    }
+    // Legacy/offline compatibility only. Normal solo battles use the same
+    // authoritative server retreat decision as shared battles.
     const chance = RETREAT_CHANCE_OVERRIDE ?? ExpansionWorld.retreatChance(player.level, livingBattleEnemies());
     if (battleRandom() >= chance) {
       const retreatMessage = `撤退失敗 · 成功率 ${Math.round(chance * 100)}%`;
@@ -11049,7 +11547,7 @@
       activeFriendInvite = request;
       renderSocialInviteUi();
       addSystemMessage("system", `${request.name} 向你發送好友申請`);
-      showToast(`${request.name} 想加你做好友。`, "");
+      showToast(`${request.name} 希望加你為好友。`, "");
     },
     onWhisper: (message) => {
       const author = message.direction === "outgoing" ? `→ ${message.peerName}` : message.peerName;
@@ -11085,7 +11583,8 @@
       // Invites may arrive while a map/battle/loading overlay temporarily puts
       // the client outside `playing`.  Keep them queued and surface the oldest
       // valid one as soon as the receiver is available again.
-      if (!activeTradeInvite && mode === "playing" && !nextState.session) activeTradeInvite = (nextState.invites || [])[0] || null;
+      const hasLiveTradeSession = Boolean(nextState.session && ["pending", "active"].includes(nextState.session.status));
+      if (!activeTradeInvite && mode === "playing" && !hasLiveTradeSession) activeTradeInvite = (nextState.invites || [])[0] || null;
       renderTradeUi();
       syncRemotePlayerMenu();
       if (session?.status === "completed" && session.id !== lastCompletedTradeId) {
@@ -11103,7 +11602,7 @@
     onInvite: (invite) => {
       // Queue receiver-side invitations even while a short loading/transition
       // state is active. renderTradeUi() decides when the modal is safe to show.
-      if (tradeState.session) return;
+      if (tradeState.session && ["pending", "active"].includes(tradeState.session.status)) return;
       activeTradeInvite = invite;
       renderTradeUi();
       addSystemMessage("system", `${invite.fromName} 邀請你進行交易`);
@@ -11166,10 +11665,27 @@
     return id || "物品";
   }
 
-  function tradeAssetTypeLabel(entry) {
-    const labels = { inventory: "物品", potion: "消耗品", equipment: "裝備", envelope: "信封", "skill-book": "技能書", manual: "技能書" };
-    return labels[entry?.kind] || "物品";
+  function tradeAssetIconHtml(entry) {
+    const kind = String(entry?.kind || "");
+    const id = String(entry?.id || "");
+    const label = tradeAssetLabel(entry);
+    let icon = "";
+    if (kind === "equipment") {
+      icon = equipmentIconHtml({ id, name: label }, "trade-asset-icon");
+    } else if (kind === "envelope") {
+      icon = envelopeIconHtml(label);
+    } else if (kind === "skill-book") {
+      icon = itemIconHtml(`skill_book_${Math.max(1, Number(id) || 1)}`, label, "trade-asset-icon", 4);
+    } else if (kind === "manual") {
+      const skill = Skills.getSkill(id);
+      const rank = skill?.classId === "fighter" ? (skill.guildBookStars?.[0] || skill.star || 1) : (skill?.star || 1);
+      icon = itemIconHtml(`skill_book_${rank}`, label, "trade-asset-icon", 4);
+    } else {
+      icon = itemIconHtml(kind === "potion" ? "healing_potion" : id, label, "trade-asset-icon", 4);
+    }
+    return `<span class="trade-item-art" aria-hidden="true">${icon}</span>`;
   }
+
 
   function tradeCatalog() {
     const items = [];
@@ -11211,42 +11727,77 @@
     return { own: session.offers?.[session.side] || null, peer: session.offers?.[session.otherSide] || null };
   }
 
-  function tradeOfferHtml(offer, { editable = false } = {}) {
+  function cloneTradeOfferDraft(offer) {
+    return {
+      coins: Math.max(0, Math.floor(Number(offer?.coins) || 0)),
+      items: (offer?.items || []).map((entry) => ({
+        kind: String(entry?.kind || ""),
+        id: String(entry?.id || ""),
+        quantity: Math.max(1, Math.floor(Number(entry?.quantity) || 1)),
+      })).filter((entry) => entry.kind && entry.id),
+    };
+  }
+
+  function clearTradeDraft() {
+    tradeDraftSessionId = "";
+    tradeDraftOffer = null;
+  }
+
+  function editableTradeOffer(session, own) {
+    if (!session || session.status !== "active" || !own || own.locked) return own;
+    if (tradeDraftSessionId !== session.id || !tradeDraftOffer) {
+      tradeDraftSessionId = session.id;
+      tradeDraftOffer = cloneTradeOfferDraft(own);
+    }
+    return tradeDraftOffer;
+  }
+
+  function tradeOfferHtml(offer, { editable = false, controlsDisabled = false } = {}) {
     const entries = offer?.items || [];
     if (!entries.length) return '<div class="trade-offer-empty">未放入任何物品</div>';
+    const limits = new Map(tradeCatalog().map((entry) => [tradeAssetKey(entry), Math.max(0, Number(entry.quantity) || 0)]));
     return entries.map((entry) => {
-      const key = escapeUiText(tradeAssetKey(entry));
+      const rawKey = tradeAssetKey(entry);
+      const key = escapeUiText(rawKey);
       const name = escapeUiText(tradeAssetLabel(entry));
-      const type = escapeUiText(tradeAssetTypeLabel(entry));
+      const max = limits.get(rawKey) || 0;
+      const atMax = max <= 0 || Number(entry.quantity) >= max;
       const controls = editable
-        ? `<div class="trade-offer-item-controls"><button type="button" data-trade-offer-action="decrease" data-trade-key="${key}" aria-label="減少">−</button><span>×${entry.quantity}</span><button type="button" data-trade-offer-action="increase" data-trade-key="${key}" aria-label="增加">＋</button></div>`
+        ? `<div class="trade-offer-item-controls"><button type="button" data-trade-offer-action="decrease" data-trade-key="${key}" aria-label="減少" ${controlsDisabled ? "disabled" : ""}>−</button><span>×${entry.quantity}</span><button type="button" data-trade-offer-action="increase" data-trade-key="${key}" aria-label="增加" ${(controlsDisabled || atMax) ? "disabled" : ""}>＋</button></div>`
         : `<div class="trade-offer-item-controls"><span>×${entry.quantity}</span></div>`;
-      return `<div class="trade-offer-item"><div class="trade-offer-item-main"><strong>${name}</strong><small>${type}</small></div>${controls}</div>`;
+      return `<div class="trade-offer-item"><div class="trade-offer-item-main">${tradeAssetIconHtml(entry)}<strong>${name}</strong></div>${controls}</div>`;
     }).join("");
   }
 
-  function tradeStateBadge(element, offer) {
+  function tradeStateBadge(element, offer, { hideEditing = false } = {}) {
     if (!element) return;
+    const editing = !offer?.locked && !offer?.confirmed;
+    element.hidden = hideEditing && editing;
     element.classList.toggle("is-locked", Boolean(offer?.locked && !offer?.confirmed));
     element.classList.toggle("is-confirmed", Boolean(offer?.confirmed));
     element.textContent = offer?.confirmed ? "已確認" : offer?.locked ? "已鎖定" : "編輯中";
   }
 
-  function renderTradeInventoryPicker() {
+  function renderTradeInventory() {
     if (!tradeInventoryList) return;
     const session = tradeState.session;
     const { own } = currentTradeOffers();
+    const localOffer = editableTradeOffer(session, own);
     if (!session || session.status !== "active" || own?.locked) {
-      tradeInventoryPicker.hidden = true;
+      tradeInventoryList.replaceChildren();
       return;
     }
-    const offered = new Map((own.items || []).map((entry) => [tradeAssetKey(entry), entry.quantity]));
+    const offered = new Map((localOffer?.items || []).map((entry) => [tradeAssetKey(entry), entry.quantity]));
     const catalog = tradeCatalog();
-    tradeInventoryList.innerHTML = catalog.length ? catalog.map((entry) => {
-      const key = escapeUiText(tradeAssetKey(entry));
-      const remaining = Math.max(0, entry.quantity - (offered.get(tradeAssetKey(entry)) || 0));
-      return `<div class="trade-inventory-entry"><div><strong>${escapeUiText(entry.name)}</strong><small>${escapeUiText(tradeAssetTypeLabel(entry))}・可用 ${remaining}</small></div><button type="button" data-trade-add-kind="${escapeUiText(entry.kind)}" data-trade-add-id="${escapeUiText(entry.id)}" ${remaining <= 0 ? "disabled" : ""}>加入</button></div>`;
-    }).join("") : '<div class="trade-offer-empty">暫時沒有可交易的物品</div>';
+    const available = catalog.map((entry) => ({
+      ...entry,
+      remaining: Math.max(0, entry.quantity - (offered.get(tradeAssetKey(entry)) || 0)),
+    })).filter((entry) => entry.remaining > 0);
+    tradeInventoryList.innerHTML = available.length ? available.map((entry) => {
+      const kind = escapeUiText(entry.kind);
+      const id = escapeUiText(entry.id);
+      return `<button class="trade-inventory-entry" type="button" draggable="true" data-trade-add-kind="${kind}" data-trade-add-id="${id}" aria-label="加入 ${escapeUiText(entry.name)}">${tradeAssetIconHtml(entry)}<span class="trade-inventory-entry-copy"><strong>${escapeUiText(entry.name)}</strong></span><b>×${entry.remaining}</b></button>`;
+    }).join("") : '<div class="trade-offer-empty">暫時沒有可交易物品</div>';
   }
 
   function renderTradeUi() {
@@ -11258,41 +11809,65 @@
     if (tradeInvitePanel) {
       const inviteStillValid = activeTradeInvite && pendingInvites.some((entry) => entry.tradeId === activeTradeInvite.tradeId);
       tradeInvitePanel.hidden = !inviteStillValid || hasLiveSession || mode !== "playing";
+      tradeInvitePanel.querySelectorAll("[data-trade-invite-action]").forEach((button) => {
+        button.disabled = Boolean(tradeCommandPending);
+      });
       if (inviteStillValid && tradeInviteName) tradeInviteName.textContent = activeTradeInvite.fromName || "冒險者";
     }
     if (!tradePanel) return;
     if (!hasLiveSession) {
       tradePanel.hidden = true;
-      if (tradeInventoryPicker) tradeInventoryPicker.hidden = true;
+      tradeDraggedAsset = null;
+      clearTradeDraft();
+      tradeLocalOfferCard?.classList.remove("is-drag-over");
       return;
     }
+    const tradeWasHidden = tradePanel.hidden;
     tradePanel.hidden = false;
+    if (tradeWasHidden && tradeWindow) focusUiWindow(tradeWindow);
     const { own, peer } = currentTradeOffers();
+    const localOffer = editableTradeOffer(session, own);
     const peerName = session.peer?.name || "冒險者";
-    if (tradePanelTitle) tradePanelTitle.textContent = session.status === "pending" ? "交易邀請已送出" : "玩家交易";
-    if (tradePeerLabel) tradePeerLabel.textContent = `與 ${peerName} 交易`;
+    if (tradePanelTitle) tradePanelTitle.textContent = "玩家交易";
     if (tradeRemoteOfferTitle) tradeRemoteOfferTitle.textContent = `${peerName} 提供`;
-    tradeStateBadge(tradeLocalBadge, own);
+    tradeStateBadge(tradeLocalBadge, own, { hideEditing: true });
     tradeStateBadge(tradeRemoteBadge, peer);
-    if (tradeLocalItems) tradeLocalItems.innerHTML = tradeOfferHtml(own, { editable: session.status === "active" && !own?.locked && !tradeCommandPending });
+    if (tradeLocalItems) tradeLocalItems.innerHTML = tradeOfferHtml(localOffer, {
+      editable: session.status === "active" && !own?.locked,
+      controlsDisabled: tradeCommandPending,
+    });
     if (tradeRemoteItems) tradeRemoteItems.innerHTML = tradeOfferHtml(peer);
     if (tradeRemoteCoins) tradeRemoteCoins.textContent = (peer?.coins || 0).toLocaleString("zh-HK");
+    const ownLocked = Boolean(own?.locked);
+    if (tradeCoinsEditor) tradeCoinsEditor.hidden = ownLocked;
+    if (tradeCoinsDisplay) {
+      tradeCoinsDisplay.hidden = !ownLocked;
+      const amount = tradeCoinsDisplay.querySelector("strong");
+      if (amount) amount.textContent = Math.max(0, Math.floor(Number(own?.coins) || 0)).toLocaleString("zh-HK");
+    }
     if (tradeCoinsInput) {
-      if (document.activeElement !== tradeCoinsInput) tradeCoinsInput.value = String(own?.coins || 0);
-      tradeCoinsInput.disabled = session.status !== "active" || own?.locked || tradeCommandPending;
+      const maxCoins = Math.max(0, Math.floor(Number(player.coins) || 0));
+      tradeCoinsInput.max = String(maxCoins);
+      if (document.activeElement !== tradeCoinsInput) tradeCoinsInput.value = String(localOffer?.coins || 0);
+      tradeCoinsInput.disabled = session.status !== "active" || ownLocked || tradeCommandPending;
     }
     if (tradeCoinsAvailable) tradeCoinsAvailable.textContent = `持有 ${Math.max(0, Math.floor(Number(player.coins) || 0)).toLocaleString("zh-HK")}`;
-    if (tradeAddItemButton) tradeAddItemButton.disabled = session.status !== "active" || own?.locked || tradeCommandPending;
+
+    if (tradeInventoryPane) tradeInventoryPane.hidden = ownLocked || session.status !== "active";
+    if (tradeRemotePane) tradeRemotePane.hidden = !ownLocked;
+    if (!ownLocked && session.status === "active") renderTradeInventory();
 
     const bothLocked = Boolean(own?.locked && peer?.locked);
+    let statusMessage = "";
+    if (session.status === "pending") statusMessage = `等待 ${peerName} 接受交易邀請…`;
+    else if (own?.confirmed) statusMessage = `已確認，等待 ${peerName} 確認…`;
+    else if (peer?.confirmed) statusMessage = `${peerName} 已確認`;
+    else if (bothLocked) statusMessage = "雙方已鎖定";
+    else if (own?.locked) statusMessage = `等待 ${peerName} 鎖定`;
+    else if (peer?.locked) statusMessage = `${peerName} 已鎖定`;
     if (tradeStatusText) {
-      if (session.status === "pending") tradeStatusText.textContent = `等待 ${peerName} 接受交易邀請…`;
-      else if (own?.confirmed) tradeStatusText.textContent = `你已確認交易，等待 ${peerName} 最後確認…`;
-      else if (peer?.confirmed) tradeStatusText.textContent = `${peerName} 已確認。請核對內容後按「確認交易」。`;
-      else if (bothLocked) tradeStatusText.textContent = "雙方已鎖定。內容已凍結，請再次確認交易。";
-      else if (own?.locked) tradeStatusText.textContent = `你已鎖定內容，等待 ${peerName} 鎖定。`;
-      else if (peer?.locked) tradeStatusText.textContent = `${peerName} 已鎖定；確認自己的交易內容後按「鎖定」。`;
-      else tradeStatusText.textContent = "放好物品／金幣後先鎖定；雙方鎖定後，每人再確認一次先會成交。";
+      tradeStatusText.textContent = statusMessage;
+      tradeStatusText.hidden = !statusMessage;
     }
     if (tradeLockButton) {
       tradeLockButton.textContent = own?.locked ? "取消鎖定" : "鎖定";
@@ -11303,8 +11878,6 @@
       tradeConfirmButton.disabled = session.status !== "active" || !bothLocked || own?.confirmed || tradeCommandPending;
     }
     if (tradeCancelButton) tradeCancelButton.disabled = tradeCommandPending;
-    if (tradeInventoryPicker && (own?.locked || session.status !== "active")) tradeInventoryPicker.hidden = true;
-    if (tradeInventoryPicker?.hidden === false) renderTradeInventoryPicker();
   }
 
   function tradeFailureMessage(reason) {
@@ -11351,28 +11924,35 @@
     }
   }
 
-  async function updateTradeOffer(nextOffer) {
+  function updateTradeDraft(nextOffer) {
     const session = tradeState.session;
-    if (!session || session.status !== "active") return false;
-    const result = await runTradeCommand(() => trade?.setOffer?.(nextOffer, session.id));
-    return Boolean(result?.ok);
+    const { own } = currentTradeOffers();
+    if (!session || session.status !== "active" || !own || own.locked || tradeCommandPending) return false;
+    tradeDraftSessionId = session.id;
+    tradeDraftOffer = cloneTradeOfferDraft(nextOffer);
+    renderTradeUi();
+    return true;
   }
 
-  async function adjustTradeOffer(kind, id, delta) {
+  function adjustTradeOffer(kind, id, delta) {
+    const session = tradeState.session;
     const { own } = currentTradeOffers();
-    if (!own || own.locked) return false;
-    const items = (own.items || []).map((entry) => ({ ...entry }));
+    const draft = editableTradeOffer(session, own);
+    if (!draft || own?.locked || tradeCommandPending) return false;
+    const items = (draft.items || []).map((entry) => ({ ...entry }));
     const key = `${kind}:${id}`;
     const index = items.findIndex((entry) => tradeAssetKey(entry) === key);
     const catalogEntry = tradeCatalog().find((entry) => tradeAssetKey(entry) === key);
     const max = catalogEntry?.quantity || 0;
     if (index < 0 && delta > 0 && max > 0) items.push({ kind, id, quantity: 1 });
     else if (index >= 0) {
-      const next = Core.clamp((items[index].quantity || 0) + delta, 0, max);
+      const current = Math.max(0, Math.floor(Number(items[index].quantity) || 0));
+      if (delta > 0 && current >= max) return false;
+      const next = Core.clamp(current + delta, 0, max);
       if (next <= 0) items.splice(index, 1);
       else items[index].quantity = next;
     }
-    return updateTradeOffer({ coins: own.coins || 0, items });
+    return updateTradeDraft({ coins: draft.coins || 0, items });
   }
 
   async function requestTradeWithRemote(remote) {
@@ -11473,19 +12053,23 @@
     const next = Boolean(open);
     socialFriendsPopover.hidden = !next;
     socialFriendsButton.setAttribute("aria-expanded", String(next));
-    if (next) renderSocialFriends();
+    if (next) {
+      resetDraggableWindowPosition(socialFriendsPopover);
+      renderSocialFriends();
+      focusUiWindow(socialFriendsPopover);
+    }
   }
 
   function socialRow(entry, kind) {
     const uid = escapeUiText(entry.uid);
     const name = escapeUiText(entry.name || "冒險者");
     if (kind === "friend") {
-      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>好友</small></div><div class="social-friend-actions"><button type="button" data-social-action="whisper" data-uid="${uid}">密語</button><button type="button" data-social-action="remove" data-uid="${uid}">解除</button></div></div>`;
+      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong></div><div class="social-friend-actions"><button class="secondary-button" type="button" data-social-action="whisper" data-uid="${uid}">密語</button><button class="secondary-button" type="button" data-social-action="remove" data-uid="${uid}">解除</button></div></div>`;
     }
     if (kind === "incoming") {
-      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>好友申請</small></div><div class="social-friend-actions"><button type="button" data-social-action="accept" data-uid="${uid}">接受</button><button type="button" data-social-action="reject" data-uid="${uid}">拒絕</button></div></div>`;
+      return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>好友申請</small></div><div class="social-friend-actions"><button class="primary-button" type="button" data-social-action="accept" data-uid="${uid}">接受</button><button class="secondary-button" type="button" data-social-action="reject" data-uid="${uid}">拒絕</button></div></div>`;
     }
-    return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>等待對方接受</small></div><div class="social-friend-actions"><button type="button" data-social-action="cancel" data-uid="${uid}">取消</button></div></div>`;
+    return `<div class="social-friend-row"><div class="social-friend-main"><strong>${name}</strong><small>等待對方接受</small></div><div class="social-friend-actions"><button class="secondary-button" type="button" data-social-action="cancel" data-uid="${uid}">取消</button></div></div>`;
   }
 
   function renderSocialFriends() {
@@ -11495,9 +12079,9 @@
     const outgoing = socialState.outgoing || [];
     const sections = [];
     if (incoming.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">好友申請</div>${incoming.map((entry) => socialRow(entry, "incoming")).join("")}</section>`);
-    if (friends.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">好友</div>${friends.map((entry) => socialRow(entry, "friend")).join("")}</section>`);
+    if (friends.length) sections.push(`<section class="social-friends-section">${friends.map((entry) => socialRow(entry, "friend")).join("")}</section>`);
     if (outgoing.length) sections.push(`<section class="social-friends-section"><div class="social-friends-section-title">已發送</div>${outgoing.map((entry) => socialRow(entry, "outgoing")).join("")}</section>`);
-    socialFriendsContent.innerHTML = sections.join("") || '<div class="social-friends-empty">暫時沒有好友。<br>在地圖上點選其他玩家即可發送好友申請。</div>';
+    socialFriendsContent.innerHTML = sections.join("") || '<div class="social-friends-empty">暫時沒有好友。</div>';
     if (socialFriendsBadge) {
       socialFriendsBadge.textContent = String(incoming.length);
       socialFriendsBadge.hidden = incoming.length === 0;
@@ -11513,22 +12097,6 @@
     if (activeFriendInvite && friendInviteName) friendInviteName.textContent = activeFriendInvite.name || "冒險者";
   }
 
-  function positionSidebarSocialPopover(popover, button) {
-    if (!popover || !button || !stage || popover.hidden) return;
-    const stageRect = stage.getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-    const gap = 8;
-    window.requestAnimationFrame(() => {
-      if (popover.hidden) return;
-      const widthPx = popover.offsetWidth || 300;
-      const heightPx = popover.offsetHeight || 260;
-      const left = Core.clamp(buttonRect.right - stageRect.left + gap, 6, Math.max(6, stageRect.width - widthPx - 6));
-      const preferredTop = buttonRect.top - stageRect.top + buttonRect.height * .5 - heightPx * .5;
-      const top = Core.clamp(preferredTop, 6, Math.max(6, stageRect.height - heightPx - 6));
-      popover.style.left = `${left}px`;
-      popover.style.top = `${top}px`;
-    });
-  }
 
   function setPartyOpen(open) {
     if (!partyPopover || !partyButton) return;
@@ -11536,19 +12104,16 @@
     partyPopover.hidden = !next;
     partyButton.setAttribute("aria-expanded", String(next));
     if (next) {
-      setSocialFriendsOpen(false);
+      resetDraggableWindowPosition(partyPopover);
       renderPartyUi();
-      positionSidebarSocialPopover(partyPopover, partyButton);
+      focusUiWindow(partyPopover);
     }
   }
 
   function partyMemberMeta(memberUid) {
-    const current = partyState.party;
-    const member = current?.members?.[memberUid];
-    if (!member) return "冒險者";
-    const labels = [];
-    if (memberUid === current.leaderUid) labels.push("隊長");
-    labels.push(`LV.${member.level || 1}`);
+    const member = partyState.party?.members?.[memberUid];
+    if (!member) return "LV.1";
+    const labels = [`LV.${member.level || 1}`];
     if (Number(member.offlineSinceMs) > 0) labels.push("重連中");
     return labels.join("・");
   }
@@ -11564,20 +12129,20 @@
     if (!current) {
       const pending = partyState.invites || [];
       const invites = pending.length
-        ? `<section class="social-friends-section"><div class="social-friends-section-title">組隊邀請</div>${pending.map((entry) => `<div class="social-friend-row"><div class="social-friend-main"><strong>${escapeUiText(entry.fromName || "冒險者")}</strong><small>邀請你加入隊伍</small></div><div class="social-friend-actions"><button type="button" data-party-action="accept" data-invite-id="${escapeUiText(entry.inviteId)}">接受</button><button type="button" data-party-action="reject" data-invite-id="${escapeUiText(entry.inviteId)}">拒絕</button></div></div>`).join("")}</section>`
+        ? `<section class="social-friends-section"><div class="social-friends-section-title">組隊邀請</div>${pending.map((entry) => `<div class="social-friend-row"><div class="social-friend-main"><strong>${escapeUiText(entry.fromName || "冒險者")}</strong><small>邀請你加入隊伍</small></div><div class="social-friend-actions"><button class="primary-button" type="button" data-party-action="accept" data-invite-id="${escapeUiText(entry.inviteId)}">接受</button><button class="secondary-button" type="button" data-party-action="reject" data-invite-id="${escapeUiText(entry.inviteId)}">拒絕</button></div></div>`).join("")}</section>`
         : "";
-      partyContent.innerHTML = invites || '<div class="social-friends-empty">暫時沒有隊伍。<br>在地圖上點選其他玩家即可邀請組隊。</div>';
+      partyContent.innerHTML = invites || '<div class="social-friends-empty">暫時沒有隊伍。</div>';
       return;
     }
     const ownUid = authenticatedUid();
     const isLeader = current.leaderUid === ownUid;
-    const rows = current.memberUids.map((memberUid) => {
+    const orderedMemberUids = [current.leaderUid, ...(current.memberUids || []).filter((memberUid) => memberUid !== current.leaderUid)].filter(Boolean);
+    const rows = orderedMemberUids.map((memberUid) => {
       const member = current.members?.[memberUid] || { name: "冒險者", level: 1 };
       const canKick = isLeader && memberUid !== ownUid && current.state === "idle";
-      return `<div class="party-member-row"><div class="party-member-main"><strong>${escapeUiText(member.name || "冒險者")}${memberUid === ownUid ? "（你）" : ""}</strong><small>${escapeUiText(partyMemberMeta(memberUid))}</small></div><div class="party-member-actions">${canKick ? `<button type="button" data-party-action="kick" data-uid="${escapeUiText(memberUid)}">踢出</button>` : ""}</div></div>`;
+      return `<div class="party-member-row"><div class="party-member-main"><strong>${escapeUiText(member.name || "冒險者")}</strong><small>${escapeUiText(partyMemberMeta(memberUid))}</small></div><div class="party-member-actions">${canKick ? `<button class="secondary-button" type="button" data-party-action="kick" data-uid="${escapeUiText(memberUid)}">移出隊伍</button>` : ""}</div></div>`;
     }).join("");
-    const stateLabel = current.state === "transitioning" ? "全隊轉場中" : current.state === "battle_loading" ? "等待全隊進入戰場" : current.state === "in_battle" ? "共同戰鬥中" : "跟隨隊長中";
-    partyContent.innerHTML = `<div class="party-summary"><strong>${isLeader ? "你係隊長" : `隊長：${escapeUiText(current.members?.[current.leaderUid]?.name || "冒險者")}`}</strong><span>${escapeUiText(stateLabel)}・${current.memberUids.length}/${Party?.MAX_MEMBERS || 3} 人</span></div>${rows}<div class="party-empty-actions"><button class="party-leave-button" type="button" data-party-action="leave" ${["battle_loading","in_battle"].includes(current.state) ? "disabled" : ""}>離開隊伍</button></div>`;
+    partyContent.innerHTML = `${rows}<div class="party-empty-actions"><button class="party-leave-button secondary-button" type="button" data-party-action="leave" ${["battle_loading","in_battle"].includes(current.state) ? "disabled" : ""}>離開隊伍</button></div>`;
   }
 
   function renderPartyInviteUi() {
@@ -11784,27 +12349,38 @@
       if (!real && Number(meta.offlineSinceMs) > 0) continue;
       const sample = samplePartyFormationPath(index * spacing, leaderSource);
       const previous = partyFormationActors.get(memberUid) || null;
-      const movedDistance = previous ? Math.hypot(sample.x - previous.x, sample.y - previous.y) : 0;
+      const movementVector = previous ? { x: sample.x - previous.x, y: sample.y - previous.y } : { x: 0, y: 0 };
+      const movedDistance = Math.hypot(movementVector.x, movementVector.y);
       const visuallyAdvancing = previous ? movedDistance > .05 : false;
-      // Rendering can run faster than the fixed exploration step.  A formation
-      // sample therefore often has the exact same coordinates for one or more
-      // render frames even though the leader is still walking.  Treat those as
-      // cadence holds, not a stop/start pair, or the feet reset several times
-      // per second and appear to vibrate.
-      const authoredMoving = Boolean(leaderSource.moving);
-      const moving = previous
-        ? visuallyAdvancing || (Boolean(previous.moving) && authoredMoving)
-        : authoredMoving;
+      // The visual formation is completely presentation-driven.  Network
+      // `moving` flags are intentionally not mixed into its animation state:
+      // actual presented displacement advances the feet, while a short grace
+      // bridges fixed-step/buffer gaps without walk/idle/walk flicker.
+      const walkHold = visuallyAdvancing
+        ? 0.16
+        : Math.max(0, (Number(previous?.partyWalkHold) || 0) - Math.max(0, Number(dt) || 0));
+      const moving = previous ? visuallyAdvancing || walkHold > 0 : Boolean(leaderSource.moving);
       const pathFacing = sample.facing || previous?.facing || real?.facing || "down";
-      const facing = visuallyAdvancing || !previous ? pathFacing : previous.facing || pathFacing;
-      const seconds = Math.max(0, Number(dt) || 0);
+      let facing = previous?.facing || pathFacing;
+      let facingState = previous || { facing };
+      if (previous && visuallyAdvancing) {
+        // Use the same turn hysteresis as the local auto-follower so diagonal
+        // interpolation cannot flip sprite rows on alternating render frames.
+        facingState = { ...previous, facing };
+        updateStablePartyFollowerFacing(facingState, movementVector, Math.max(0, Number(dt) || 0));
+        facing = facingState.facing || facing;
+      } else if (!previous) {
+        facing = pathFacing;
+      }
+      const nominalSpeed = Math.max(1, Number(playerStats()?.speed) || 160);
+      const travelledSeconds = movedDistance / nominalSpeed;
       const previousLocomotion = previous?.locomotion || Locomotion.create(facing);
       let locomotion;
       if (visuallyAdvancing || (!previous && moving)) {
         locomotion = {
           state: "walk",
           facing,
-          time: (previousLocomotion.state === "walk" ? Math.max(0, Number(previousLocomotion.time) || 0) : 0) + seconds,
+          time: (previousLocomotion.state === "walk" ? Math.max(0, Number(previousLocomotion.time) || 0) : 0) + travelledSeconds,
         };
       } else if (moving && previousLocomotion.state === "walk") {
         locomotion = { state: "walk", facing, time: Math.max(0, Number(previousLocomotion.time) || 0) };
@@ -11824,6 +12400,12 @@
         facing,
         moving,
         locomotion,
+        partyWalkHold: walkHold,
+        partyFacingTravelX: Number(facingState.partyFacingTravelX) || 0,
+        partyFacingTravelY: Number(facingState.partyFacingTravelY) || 0,
+        partyFacingCandidate: facingState.partyFacingCandidate || null,
+        partyFacingCandidateTime: Number(facingState.partyFacingCandidateTime) || 0,
+        partyFacingTurnCooldown: Math.max(0, Number(facingState.partyFacingTurnCooldown) || 0),
         partyPresentation: true,
       };
       partyFormationActors.set(memberUid, presented);
@@ -11922,10 +12504,34 @@
       window.setTimeout(() => {
         if (partyState.party?.transition?.id === transition.id && currentMapId === transition.targetMapId) void applyPartyTransition(transition);
       }, 500);
+      return;
     }
+
+    // Once this client has loaded the destination and the server has accepted
+    // its ready signal, local exploration can resume immediately.  The shared
+    // party transition object remains authoritative for encounters, so battle
+    // cannot begin until every member has finished the same transition.
+    mapTransitionPending = false;
+    await hideMapTransitionOverlay();
+    canvas.focus({ preventScroll: true });
   }
 
   function handlePartyStateTransition(previousParty, nextParty) {
+    const nextState = String(nextParty?.state || "");
+    const previousState = String(previousParty?.state || "");
+    if (nextState === "battle_loading" && nextParty?.battleId) {
+      clearExploreMovePath();
+      pendingClickInteractionId = null;
+      player.moving = false;
+      player.locomotion = Locomotion.create(player.facing || "down");
+      if (mode === "playing" && !battle) {
+        showBattleEntryTransition({ name: nextParty?.battleEncounterName || "遭遇戰" });
+      }
+    } else if (previousState === "battle_loading" && nextState === "idle" && !battle) {
+      hideBattleEntryTransition();
+      stopEncounterTransitionSfx();
+    }
+
     const transition = nextParty?.transition || null;
     if (transition?.id) {
       if (lastPartyTransitionId !== transition.id) {
@@ -11984,13 +12590,6 @@
     worldChatInput.placeholder = "請輸入…";
     worldChatInput.setAttribute("aria-label", "世界頻道訊息");
     systemLog.dataset.chatChannel = "world";
-  }
-
-  function remoteClassLabel(classId) {
-    const id = ClassData?.normalizeClassId?.(classId) || String(classId || "fighter");
-    if (id === "elementalist") return "元素使";
-    if (id === "fighter") return "格鬥士";
-    return "冒險者";
   }
 
   function remotePlayerHitAt(screenX, screenY) {
@@ -12106,7 +12705,6 @@
   function closeRemotePlayerMenu() {
     selectedRemotePlayer = null;
     if (remotePlayerMenu) remotePlayerMenu.hidden = true;
-    if (remotePlayerProfileDetail) remotePlayerProfileDetail.hidden = true;
   }
 
   function positionRemotePlayerMenu(clientX, clientY) {
@@ -12129,7 +12727,6 @@
     if (!remotePlayerMenu || !selectedRemotePlayer) return;
     const remote = selectedRemotePlayer;
     if (remotePlayerMenuName) remotePlayerMenuName.textContent = remote.name || "冒險者";
-    if (remotePlayerMenuMeta) remotePlayerMenuMeta.textContent = `${remoteClassLabel(remote.classId)}・${remote.state === "battle" ? "戰鬥中" : "探索中"}`;
     const friendButton = remotePlayerMenu.querySelector('[data-player-action="friend"]');
     const whisperButton = remotePlayerMenu.querySelector('[data-player-action="whisper"]');
     const tradeButton = remotePlayerMenu.querySelector('[data-player-action="trade"]');
@@ -12157,16 +12754,12 @@
       partyActionButton.disabled = sameParty || outgoingInviteLocked || remote.state === "battle" || !partyClient?.isActive?.() || !canInvite;
       partyActionButton.textContent = sameParty ? "隊伍成員 ✓" : outgoingInviteLocked ? "等待回覆中" : currentParty && currentParty.leaderUid !== authenticatedUid() ? "隊長先可邀請" : "邀請組隊";
     }
-    if (remotePlayerProfileDetail && !remotePlayerProfileDetail.hidden) {
-      remotePlayerProfileDetail.textContent = `${remoteClassLabel(remote.classId)}｜${remote.state === "battle" ? "目前戰鬥中" : "目前正在同一區域探索"}`;
-    }
   }
 
   function openRemotePlayerMenu(remote, clientX, clientY) {
     if (!remote?.uid || !remotePlayerMenu) return;
     selectedRemotePlayer = { ...remote };
     remotePlayerMenu.hidden = false;
-    if (remotePlayerProfileDetail) remotePlayerProfileDetail.hidden = true;
     syncRemotePlayerMenu();
     positionRemotePlayerMenu(clientX, clientY);
   }
@@ -13117,7 +13710,9 @@
       : null;
     const acting = battle.phase === "resolving_action"
       && (battle.actingUnitId === unit.id || battle.actingUnitIds?.includes(unit.id))
-      && (battle.actionResolution?.partyReplay || unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
+      && (battle.actionResolution?.partyReplay
+        ? partyReplayAction?.actionType === "skill"
+        : unit.side !== "ally" || battle.actionResolution?.heroAction?.type === "skill");
     const renderFacing = battleUnitRenderFacing(unit);
     const untargetable = FighterEffects?.isUntargetable?.(unit, battle.round) === true;
     const actionTargetCell = battle.actionResolution?.partyReplay
@@ -14679,12 +15274,14 @@
     const blink = player.invulnerable > 0 && Math.floor(elapsed * 18) % 2 === 0;
     ctx.save();
     ctx.globalAlpha = blink ? .45 : 1;
-    const walk = player.moving ? Math.sin(player.walkCycle) : 0;
+    const partyFollowerVisualWalking = isPartyFollower() && player.locomotion?.state === "walk";
+    const visualWalking = player.moving || partyFollowerVisualWalking;
+    const walk = visualWalking ? Math.sin(player.walkCycle) : 0;
     const state = mode === "dead"
       ? "death"
       : player.attackTimer > 0
         ? "attack"
-        : player.moving
+        : visualWalking
           ? "walk"
           : "idle";
     const progress = state === "death"
@@ -14982,6 +15579,12 @@
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(code)) event.preventDefault();
     if (event.repeat) return;
 
+    if (gameConfirmPanel?.hidden === false) {
+      if (code === "Escape" || code === "KeyE") closeGameConfirm(false);
+      else if (code === "Enter" || code === "Space") closeGameConfirm(true);
+      return;
+    }
+
     if (mode === "title") {
       if (code === "Enter" || code === "Space") requestNewGame();
       return;
@@ -15035,7 +15638,7 @@
         return;
       }
       if (code === "KeyL") {
-        openFacility("skills");
+        openDeckFromSidebar();
         return;
       }
       if (code === "Escape" || code === "KeyE") closeFacility();
@@ -15104,7 +15707,7 @@
       return;
     }
     if (code === "KeyI") openFacility("bag");
-    else if (code === "KeyL") openFacility("skills");
+    else if (code === "KeyL") openDeckFromSidebar();
     else if (code === "KeyE" || code === "Enter") interact();
     else if (code === "Escape") canvas.focus({ preventScroll: true });
   }
@@ -15610,20 +16213,27 @@
   });
   document.getElementById("dialogueNext").addEventListener("click", advanceDialogue);
   sidebarToggle?.addEventListener("click", () => {
-    const mobilePortrait = usesMobilePortraitSidebar();
-    setHudCollapsed(!hudCollapsed, { persist: !mobilePortrait });
+    const mobileAutoHide = usesMobileAutoHideSidebar();
+    setHudCollapsed(!hudCollapsed, { persist: !mobileAutoHide });
   });
   exploreSidebar?.addEventListener("pointerdown", (event) => {
-    if (!usesMobilePortraitSidebar()) return;
+    if (!usesMobileAutoHideSidebar()) return;
     if (!event.target.closest?.(".sidebar-primary")) return;
     scheduleMobileHudAutoHide();
   }, { passive: true });
+  socialDock?.addEventListener("pointerdown", () => {
+    if (!usesMobileAutoHideSidebar()) return;
+    // The social dock is part of the same launcher HUD even though it lives
+    // outside #exploreSidebar in the DOM.  Keep it open long enough for the
+    // click to complete, then restart the normal idle countdown.
+    scheduleMobileHudAutoHide();
+  }, { passive: true });
   document.addEventListener("pointerdown", (event) => {
-    if (!usesMobilePortraitSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
-    if (exploreSidebar?.contains(event.target)) return;
+    if (!usesMobileAutoHideSidebar() || hudCollapsed || exploreSidebar?.hidden) return;
+    if (exploreSidebar?.contains(event.target) || socialDock?.contains(event.target)) return;
     setHudCollapsed(true, { persist: false });
   }, { capture: true, passive: true });
-  const draggableWindowSelector = ".facility-window.ui-window, .ui-modal-window, .system-settings-window.ui-window";
+  const draggableWindowSelector = ".facility-window.ui-window, .ui-modal-window, .system-settings-window.ui-window, .social-tool-window.ui-window, .trade-window.ui-window";
   const nonDraggableControlSelector = "button, a, input, select, textarea, [contenteditable], [role=button], [data-no-window-drag], [data-deck-drag-source]";
 
   function resetDraggableWindowPosition(windowElement) {
@@ -15639,7 +16249,7 @@
     if (!windowElement || windowElement.closest("[hidden]")) return;
     const facilityState = facilityStateForNode(windowElement);
     if (facilityState) activateFacilityWindow(facilityState);
-    else if (windowElement === systemSettingsPopover) focusUiWindow(windowElement);
+    else focusUiWindow(windowElement);
     if (event.pointerType === "touch" && event.target.closest?.(".skill-tree-scroll")) return;
     if (event.target.closest?.(nonDraggableControlSelector)) return;
     const style = getComputedStyle(windowElement);
@@ -15752,8 +16362,9 @@
     "use-manual": ({ skillId }) => useSkillManualFromBag(skillId, false),
     "use-bound-manual": ({ skillId }) => useSkillManualFromBag(skillId, true),
     "skill-detail": ({ skillId, button }) => openSkillDetail(skillId, button),
+    "open-skills": () => openFacility("skills"),
     "select-panel": ({ panelId }) => selectLoadoutPanel(panelId),
-    "equip-panel": ({ panelId }) => requestEquipLoadoutPanel(panelId),
+    "equip-panel": ({ panelId }) => confirmEquipLoadoutPanel(panelId),
     "confirm-equip-panel": ({ panelId }) => confirmEquipLoadoutPanel(panelId),
     "cancel-equip-panel": () => cancelEquipLoadoutPanel(),
     "equip-skill": ({ skillId }) => changeSkillLoadout(skillId, true),
@@ -15830,6 +16441,32 @@
     }
     renderSystemLog();
   });
+  function rememberSentChatMessage(text) {
+    const value = String(text || "").trim();
+    if (!value) return;
+    if (sentChatHistory[sentChatHistory.length - 1] !== value) sentChatHistory.push(value);
+    if (sentChatHistory.length > 50) sentChatHistory.splice(0, sentChatHistory.length - 50);
+    sentChatHistoryCursor = sentChatHistory.length;
+    sentChatDraft = "";
+  }
+
+  function recallSentChatMessage(direction) {
+    if (!worldChatInput || !sentChatHistory.length) return false;
+    if (direction < 0) {
+      if (sentChatHistoryCursor === sentChatHistory.length) sentChatDraft = worldChatInput.value;
+      sentChatHistoryCursor = Math.max(0, sentChatHistoryCursor - 1);
+    } else {
+      if (sentChatHistoryCursor >= sentChatHistory.length) return false;
+      sentChatHistoryCursor = Math.min(sentChatHistory.length, sentChatHistoryCursor + 1);
+    }
+    worldChatInput.value = sentChatHistoryCursor === sentChatHistory.length
+      ? sentChatDraft
+      : sentChatHistory[sentChatHistoryCursor];
+    const caret = worldChatInput.value.length;
+    worldChatInput.setSelectionRange?.(caret, caret);
+    return true;
+  }
+
   worldChatForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -15843,13 +16480,18 @@
       }
       try {
         const result = await social.sendWhisper(activeWhisperUid, text);
-        if (result?.ok) worldChatInput.value = "";
+        if (result?.ok) {
+          rememberSentChatMessage(text);
+          worldChatInput.value = "";
+        }
         else if (result?.reason === "cooldown") showToast("訊息傳送得太快，請等一等。", "warning");
         else if (result?.reason === "too-long") showToast(`密語每句最多 ${result.maxLength || 200} 字。`, "warning");
-        else showToast("密語暫時未能傳送。", "warning");
+        else if (result?.reason === "player-not-found") showToast("找不到這位玩家，密語未能傳送。", "warning");
+        else if (result?.reason === "invalid-target") showToast("目前無法向這位玩家傳送密語。", "warning");
+        else showToast("密語服務暫時未能連線。", "warning");
       } catch (error) {
         console.warn("Everrealm whisper send failed.", error);
-        showToast("密語暫時未能傳送。", "warning");
+        showToast("密語服務暫時未能連線。", "warning");
       } finally {
         worldChatInput?.focus?.({ preventScroll: true });
       }
@@ -15863,6 +16505,7 @@
     try {
       const result = await worldChat.send(text);
       if (result?.ok) {
+        rememberSentChatMessage(text);
         worldChatInput.value = "";
       } else if (result?.reason === "cooldown") {
         showToast("訊息傳送得太快，請等一等。", "danger");
@@ -15887,6 +16530,14 @@
   });
   worldChatInput?.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    if (!event.isComposing && !event.shiftKey && event.key === "ArrowUp") {
+      if (recallSentChatMessage(-1)) event.preventDefault();
+      return;
+    }
+    if (!event.isComposing && !event.shiftKey && event.key === "ArrowDown") {
+      if (recallSentChatMessage(1)) event.preventDefault();
+      return;
+    }
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
     worldChatForm?.requestSubmit?.();
@@ -15911,13 +16562,13 @@
 
   socialFriendsButton?.addEventListener("click", (event) => {
     event.stopPropagation();
-    setSocialFriendsOpen(socialFriendsPopover?.hidden !== false);
+    if (socialFriendsPopover?.hidden !== false) setSocialFriendsOpen(true);
+    else focusUiWindow(socialFriendsPopover);
   });
   socialFriendsCloseButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     setSocialFriendsOpen(false);
   });
-  socialFriendsPopover?.addEventListener("pointerdown", (event) => event.stopPropagation());
   socialFriendsPopover?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const button = event.target.closest("[data-social-action]");
@@ -15931,7 +16582,12 @@
     else if (action === "reject") result = await social?.respondFriendRequest?.(uid, false);
     else if (action === "cancel") result = await social?.cancelFriendRequest?.(uid);
     else if (action === "remove") {
-      if (!window.confirm("要解除與此玩家的好友關係嗎？")) {
+      const confirmed = await requestGameConfirmation({
+        title: "解除好友",
+        message: "要解除與此玩家的好友關係嗎？",
+        confirmLabel: "解除",
+      });
+      if (!confirmed) {
         button.disabled = false;
         return;
       }
@@ -15952,7 +16608,6 @@
     outgoingInviteCancelButton.disabled = false;
   });
 
-  friendInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
   friendInvitePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const button = event.target.closest("[data-friend-invite-action]");
@@ -15973,13 +16628,13 @@
 
   partyButton?.addEventListener("click", (event) => {
     event.stopPropagation();
-    setPartyOpen(partyPopover?.hidden !== false);
+    if (partyPopover?.hidden !== false) setPartyOpen(true);
+    else focusUiWindow(partyPopover);
   });
   partyCloseButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     setPartyOpen(false);
   });
-  partyPopover?.addEventListener("pointerdown", (event) => event.stopPropagation());
   partyPopover?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const button = event.target.closest("[data-party-action]");
@@ -15993,13 +16648,13 @@
     } else if (action === "kick") {
       result = await runPartyCommand(() => partyClient?.kick?.(button.dataset.uid));
     } else if (action === "leave") {
-      if (!window.confirm("離開目前隊伍？")) { button.disabled = false; return; }
+      const confirmed = await requestGameConfirmation({ title: "離開隊伍", message: "要離開目前隊伍嗎？", confirmLabel: "離開" });
+      if (!confirmed) { button.disabled = false; return; }
       result = await runPartyCommand(() => partyClient?.leave?.());
     }
     button.disabled = false;
     renderPartyUi();
   });
-  partyInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
   partyInvitePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const button = event.target.closest("[data-party-invite-action]");
@@ -16027,13 +16682,6 @@
     if (!button || button.disabled || !selectedRemotePlayer) return;
     const remote = selectedRemotePlayer;
     const action = button.dataset.playerAction;
-    if (action === "profile") {
-      if (remotePlayerProfileDetail) {
-        remotePlayerProfileDetail.hidden = !remotePlayerProfileDetail.hidden;
-        syncRemotePlayerMenu();
-      }
-      return;
-    }
     if (action === "whisper") return setWhisperTarget(remote.uid, { name: remote.name || "冒險者" });
     if (action === "trade") return requestTradeWithRemote(remote);
     if (action === "party") return requestPartyWithRemote(remote);
@@ -16055,13 +16703,11 @@
   });
 
 
-  tradeInvitePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
   tradeInvitePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const button = event.target.closest("[data-trade-invite-action]");
     if (!button || button.disabled || !activeTradeInvite) return;
     const invite = activeTradeInvite;
-    button.disabled = true;
     const accept = button.dataset.tradeInviteAction === "accept";
     const result = await runTradeCommand(() => trade?.respondInvite?.(invite.tradeId, accept));
     if (result?.ok) {
@@ -16071,7 +16717,6 @@
     renderTradeUi();
   });
 
-  tradePanel?.addEventListener("pointerdown", (event) => event.stopPropagation());
   tradePanel?.addEventListener("click", async (event) => {
     event.stopPropagation();
     const offerButton = event.target.closest("[data-trade-offer-action]");
@@ -16089,26 +16734,56 @@
     const addButton = event.target.closest("[data-trade-add-kind]");
     if (addButton && !addButton.disabled) {
       await adjustTradeOffer(addButton.dataset.tradeAddKind, addButton.dataset.tradeAddId, 1);
-      renderTradeInventoryPicker();
+      renderTradeInventory();
     }
   });
 
-  tradeAddItemButton?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (tradeAddItemButton.disabled || !tradeInventoryPicker) return;
-    tradeInventoryPicker.hidden = !tradeInventoryPicker.hidden;
-    if (!tradeInventoryPicker.hidden) renderTradeInventoryPicker();
+  tradePanel?.addEventListener("dragstart", (event) => {
+    const entry = event.target.closest?.("[data-trade-add-kind][data-trade-add-id]");
+    if (!entry || entry.disabled) return;
+    tradeDraggedAsset = { kind: entry.dataset.tradeAddKind, id: entry.dataset.tradeAddId };
+    try { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("text/plain", `${tradeDraggedAsset.kind}:${tradeDraggedAsset.id}`); } catch (_) {}
   });
-  tradeInventoryCloseButton?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (tradeInventoryPicker) tradeInventoryPicker.hidden = true;
+  tradePanel?.addEventListener("dragend", () => {
+    tradeDraggedAsset = null;
+    tradeLocalOfferCard?.classList.remove("is-drag-over");
   });
-  tradeCoinsInput?.addEventListener("change", async () => {
+  tradeLocalOfferCard?.addEventListener("dragover", (event) => {
     const { own } = currentTradeOffers();
-    if (!own || own.locked) return;
+    if (!tradeDraggedAsset || own?.locked || tradeCommandPending) return;
+    event.preventDefault();
+    tradeLocalOfferCard.classList.add("is-drag-over");
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  });
+  tradeLocalOfferCard?.addEventListener("dragleave", (event) => {
+    if (!tradeLocalOfferCard.contains(event.relatedTarget)) tradeLocalOfferCard.classList.remove("is-drag-over");
+  });
+  tradeLocalOfferCard?.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    tradeLocalOfferCard.classList.remove("is-drag-over");
+    const asset = tradeDraggedAsset;
+    tradeDraggedAsset = null;
+    if (!asset) return;
+    await adjustTradeOffer(asset.kind, asset.id, 1);
+    renderTradeInventory();
+  });
+  tradeCoinsInput?.addEventListener("input", () => {
+    const session = tradeState.session;
+    const { own } = currentTradeOffers();
+    const draft = editableTradeOffer(session, own);
+    if (!draft || own?.locked || tradeCommandPending) return;
+    const coins = Core.clamp(Math.floor(Number(tradeCoinsInput.value) || 0), 0, Math.max(0, Math.floor(Number(player.coins) || 0)));
+    tradeDraftSessionId = session.id;
+    tradeDraftOffer = { coins, items: (draft.items || []).map((entry) => ({ ...entry })) };
+  });
+  tradeCoinsInput?.addEventListener("change", () => {
+    const session = tradeState.session;
+    const { own } = currentTradeOffers();
+    const draft = editableTradeOffer(session, own);
+    if (!draft || own?.locked) return;
     const coins = Core.clamp(Math.floor(Number(tradeCoinsInput.value) || 0), 0, Math.max(0, Math.floor(Number(player.coins) || 0)));
     tradeCoinsInput.value = String(coins);
-    await updateTradeOffer({ coins, items: own.items || [] });
+    updateTradeDraft({ coins, items: draft.items || [] });
   });
   tradeCoinsInput?.addEventListener("keydown", (event) => {
     event.stopPropagation();
@@ -16119,7 +16794,12 @@
     const session = tradeState.session;
     const { own } = currentTradeOffers();
     if (!session || session.status !== "active" || own?.confirmed) return;
-    await runTradeCommand(() => own?.locked ? trade?.unlock?.(session.id) : trade?.lock?.(session.id));
+    if (own?.locked) {
+      await runTradeCommand(() => trade?.unlock?.(session.id));
+      return;
+    }
+    const draft = editableTradeOffer(session, own);
+    await runTradeCommand(() => trade?.lock?.(session.id, draft));
   });
   tradeConfirmButton?.addEventListener("click", async (event) => {
     event.stopPropagation();
@@ -16142,10 +16822,24 @@
     void cancelCurrentTrade();
   });
 
+  gameConfirmAcceptButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeGameConfirm(true);
+  });
+  gameConfirmCancelButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeGameConfirm(false);
+  });
+  gameConfirmCloseButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeGameConfirm(false);
+  });
+  gameConfirmPanel?.addEventListener("click", (event) => {
+    if (event.target === gameConfirmPanel) closeGameConfirm(false);
+  });
+
   document.addEventListener("pointerdown", (event) => {
     if (!remotePlayerMenu?.hidden && !remotePlayerMenu.contains(event.target) && event.target !== canvas) closeRemotePlayerMenu();
-    if (!socialFriendsPopover?.hidden && !socialFriendsPopover.contains(event.target) && !socialFriendsButton?.contains(event.target)) setSocialFriendsOpen(false);
-    if (!partyPopover?.hidden && !partyPopover.contains(event.target) && !partyButton?.contains(event.target)) setPartyOpen(false);
   });
 
   guildCommissionDetailCloseButton?.addEventListener("click", closeGuildCommissionDetail);
@@ -16195,7 +16889,6 @@
   inventoryButton.addEventListener("click", () => openFacility("bag"));
   missionButton?.addEventListener("click", () => openFacility("missions"));
   deckButton.addEventListener("click", openDeckFromSidebar);
-  skillTreeButton.addEventListener("click", () => openFacility("skills"));
   document.getElementById("skillBookLearnButton").addEventListener("click", confirmSkillManualLearning);
   document.getElementById("skillBookCancelButton").addEventListener("click", closeSkillManualConfirm);
   document.getElementById("skillBookConfirmCloseButton").addEventListener("click", closeSkillManualConfirm);

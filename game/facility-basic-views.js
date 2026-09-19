@@ -54,14 +54,14 @@
           : "";
       return `
         <section class="mission-section mission-main-section" aria-label="主線任務">
-          <div class="mission-section-label"><span>MAIN STORY</span><strong>主線任務</strong></div>
+          <div class="mission-section-label"><strong>主線任務</strong></div>
           <div class="mission-summary mission-main-summary is-${state} ${main.ready ? "is-ready" : ""}">
             <div class="mission-summary-heading">
               <strong>${title}</strong>
               <span>${statusLabel}</span>
             </div>
             ${main.objectiveText ? `<div class="mission-summary-line"><small>目標</small><strong>${main.objectiveText}</strong></div>` : ""}
-            ${main.progressText ? `<div class="mission-summary-line"><small>進度</small><strong>${main.progressText}</strong></div>` : ""}
+            ${main.progressText && main.quest?.objectiveType !== "quiz" ? `<div class="mission-summary-line"><small>進度</small><strong>${main.progressText}</strong></div>` : ""}
             ${note ? `<p class="mission-report-note">${note}</p>` : ""}
           </div>
         </section>`;
@@ -69,7 +69,7 @@
 
     const commissionMarkup = commission?.active ? `
       <section class="mission-section mission-commission-section" aria-label="公會委託">
-        <div class="mission-section-label"><span>GUILD COMMISSION</span><strong>公會委託</strong></div>
+        <div class="mission-section-label"><strong>公會委託</strong></div>
         <div class="mission-summary ${commission.ready ? "is-ready" : ""}">
           <div class="mission-summary-heading">
             <strong>${commission.title}</strong>
@@ -81,7 +81,7 @@
         </div>
       </section>` : `
       <section class="mission-section mission-commission-section" aria-label="公會委託">
-        <div class="mission-section-label"><span>GUILD COMMISSION</span><strong>公會委託</strong></div>
+        <div class="mission-section-label"><strong>公會委託</strong></div>
         <div class="mission-view is-empty"><strong>目前沒有進行中的公會委託</strong></div>
       </section>`;
 

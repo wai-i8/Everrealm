@@ -2,7 +2,7 @@
   const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EverrealmSocial = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
 
   const DEFAULT_MAX_MESSAGE_LENGTH = 200;
@@ -114,6 +114,10 @@
     let outgoingOfflineTimer = null;
     let outgoingOfflineCancelPending = false;
     let lastSendAt = -Infinity;
+    const whisperRepairPending = new Set();
+    const whisperRepairAttempted = new Set();
+    const whisperBlocked = new Set();
+    const whisperRetryTimers = new Map();
     const seenWhispers = new Set();
     const seenIncoming = new Set();
 
@@ -139,6 +143,10 @@
         try { subscription.unsubscribe?.(); } catch (_) {}
       }
       whisperUnsubs = new Map();
+      for (const timer of whisperRetryTimers.values()) {
+        try { root.clearTimeout(timer); } catch (_) {}
+      }
+      whisperRetryTimers.clear();
       seenWhispers.clear();
     }
 
@@ -173,6 +181,9 @@
       outgoing = new Map();
       outgoingInvite = null;
       seenIncoming.clear();
+      whisperRepairPending.clear();
+      whisperRepairAttempted.clear();
+      whisperBlocked.clear();
       firestoreContext = null;
       realtimeContext = null;
       emitState();
@@ -202,6 +213,41 @@
       return whisperPeers.get(target) || friends.get(target) || null;
     }
 
+    function whisperThreadKey(peerUid, threadId) {
+      return `${safeUid(peerUid)}:${String(threadId || "").trim()}`;
+    }
+
+    function whisperPermissionDenied(error) {
+      const code = String(error?.code || "").toLowerCase();
+      const message = String(error?.message || error || "").toLowerCase();
+      return code.includes("permission_denied") || code.includes("permission-denied")
+        || message.includes("permission_denied") || message.includes("permission denied")
+        || message.includes("doesn't have permission") || message.includes("does not have permission");
+    }
+
+    function resetWhisperRepairState(peerUid, threadId) {
+      const key = whisperThreadKey(peerUid, threadId);
+      whisperRepairPending.delete(key);
+      whisperRepairAttempted.delete(key);
+      whisperBlocked.delete(key);
+      const timer = whisperRetryTimers.get(key);
+      if (timer) {
+        try { root.clearTimeout(timer); } catch (_) {}
+        whisperRetryTimers.delete(key);
+      }
+    }
+
+    function scheduleWhisperResubscribe(peerUid, threadId, localToken, delayMs = 650) {
+      const key = whisperThreadKey(peerUid, threadId);
+      if (!key || whisperBlocked.has(key) || whisperRetryTimers.has(key)) return;
+      const timer = root.setTimeout(() => {
+        whisperRetryTimers.delete(key);
+        if (!active || localToken !== token || whisperBlocked.has(key)) return;
+        syncWhisperSubscriptions(localToken);
+      }, Math.max(250, Number(delayMs) || 650));
+      whisperRetryTimers.set(key, timer);
+    }
+
     function syncWhisperSubscriptions(localToken) {
       if (!active || localToken !== token || !realtimeContext) return;
       const wanted = new Map();
@@ -221,17 +267,20 @@
       const { database, sdk } = realtimeContext;
       for (const [peerUid, peer] of wanted.entries()) {
         if (whisperUnsubs.has(peerUid)) continue;
+        const threadKey = whisperThreadKey(peerUid, peer.threadId);
+        if (whisperBlocked.has(threadKey)) continue;
         const messagesRef = sdk.ref(database, `chat/whispers/${peer.threadId}/messages`);
+        const replayFloor = Math.max(0, sessionStartedAt - 30000);
         const query = sdk.query(
           messagesRef,
           sdk.orderByChild("createdAt"),
-          sdk.startAt(sessionStartedAt),
+          sdk.startAt(replayFloor),
           sdk.limitToLast(historyLimit),
         );
         const unsubscribe = sdk.onChildAdded(query, (snapshot) => {
           if (!active || localToken !== token) return;
           const message = normalizeWhisper(snapshot.key, snapshot.val());
-          if (!message || message.createdAt < sessionStartedAt || seenWhispers.has(`${peer.threadId}:${message.id}`)) return;
+          if (!message || message.createdAt < replayFloor || seenWhispers.has(`${peer.threadId}:${message.id}`)) return;
           if (message.uid !== uid && message.toUid !== uid) return;
           seenWhispers.add(`${peer.threadId}:${message.id}`);
           if (seenWhispers.size > historyLimit * Math.max(4, wanted.size * 2)) {
@@ -249,7 +298,49 @@
             });
           } catch (_) {}
         }, (error) => {
-          if (localToken === token) onError(error);
+          const current = whisperUnsubs.get(peerUid);
+          if (current?.threadId === peer.threadId) whisperUnsubs.delete(peerUid);
+          if (localToken !== token) return;
+
+          if (!whisperPermissionDenied(error)) {
+            onError(error);
+            return;
+          }
+
+          const key = whisperThreadKey(peerUid, peer.threadId);
+          if (whisperRepairPending.has(key)) return;
+          if (whisperRepairAttempted.has(key)) {
+            // A repaired listener that is still denied is a real deployment /
+            // rules mismatch.  Block it for this session and report once; do
+            // not create a retry -> Function -> retry loop.
+            whisperBlocked.add(key);
+            onError(error);
+            return;
+          }
+
+          // One bounded repair is allowed for an old/stale thread membership.
+          // The first permission error itself is intentionally quiet because
+          // it is recoverable and should not flood the console.
+          whisperRepairAttempted.add(key);
+          whisperRepairPending.add(key);
+          Promise.resolve(socialCommand("ensure-whisper", { targetUid: peerUid }))
+            .then((result) => {
+              if (!active || localToken !== token) return;
+              if (result?.ok) scheduleWhisperResubscribe(peerUid, peer.threadId, localToken, 800);
+              else {
+                whisperBlocked.add(key);
+                onError(new Error(`Whisper membership repair failed: ${result?.reason || "unknown"}`));
+              }
+            })
+            .catch((repairError) => {
+              if (active && localToken === token) {
+                whisperBlocked.add(key);
+                onError(repairError);
+              }
+            })
+            .finally(() => {
+              whisperRepairPending.delete(key);
+            });
         });
         whisperUnsubs.set(peerUid, { threadId: peer.threadId, unsubscribe });
       }
@@ -404,13 +495,18 @@
       const target = safeUid(targetUid);
       if (!target || target === uid) return { ok: false, reason: "invalid-target" };
       const known = whisperPeerFor(target);
-      if (known?.threadId) return { ok: true, threadId: known.threadId, targetName: known.name };
+      const knownThreadId = String(known?.threadId || "").trim();
+      if (knownThreadId && !whisperBlocked.has(whisperThreadKey(target, knownThreadId))) {
+        return { ok: true, threadId: knownThreadId, targetName: known.name };
+      }
       const result = await socialCommand("ensure-whisper", { targetUid: target });
       if (result?.ok && result.threadId) {
+        const threadId = String(result.threadId);
+        resetWhisperRepairState(target, threadId);
         whisperPeers.set(target, {
           uid: target,
           name: safeName(result.targetName),
-          threadId: String(result.threadId),
+          threadId,
           updatedAtMs: Date.now(),
         });
         syncWhisperSubscriptions(token);
@@ -424,43 +520,51 @@
       const text = String(rawText || "").trim();
       if (!text) return { ok: false, reason: "empty" };
       if (text.length > maxMessageLength) return { ok: false, reason: "too-long", maxLength: maxMessageLength };
-      if (!active || !realtimeContext || !target || target === uid) return { ok: false, reason: "invalid-target" };
+      if (!active || !target || target === uid) return { ok: false, reason: "invalid-target" };
       const now = Date.now();
       if (now - lastSendAt < sendCooldownMs) {
         return { ok: false, reason: "cooldown", retryAfterMs: Math.max(0, sendCooldownMs - (now - lastSendAt)) };
       }
-      let peer = whisperPeerFor(target);
-      if (!peer?.threadId) {
-        const ensured = await ensureWhisperPeer(target);
-        if (!ensured?.ok || !ensured.threadId) return ensured?.reason ? ensured : { ok: false, reason: "whisper-unavailable" };
-        peer = whisperPeerFor(target) || { uid: target, name: safeName(ensured.targetName), threadId: ensured.threadId };
-      }
+
+      const result = await socialCommand("send-whisper", { targetUid: target, text });
+      if (!result?.ok) return result || { ok: false, reason: "whisper-unavailable" };
       lastSendAt = now;
-      const writeMessage = async (threadId) => {
-        const { database, sdk } = realtimeContext;
-        const ref = sdk.push(sdk.ref(database, `chat/whispers/${threadId}/messages`));
-        await sdk.set(ref, {
-          uid,
-          toUid: target,
-          name,
-          text,
-          createdAt: sdk.serverTimestamp(),
+      if (result.threadId) {
+        const threadId = String(result.threadId);
+        resetWhisperRepairState(target, threadId);
+        const peerName = safeName(result.targetName || whisperPeerFor(target)?.name);
+        whisperPeers.set(target, {
+          uid: target,
+          name: peerName,
+          threadId,
+          updatedAtMs: Date.now(),
         });
-        return { ok: true, id: ref.key || "" };
-      };
-      try {
-        return await writeMessage(peer.threadId);
-      } catch (error) {
-        const repair = await socialCommand("ensure-whisper", { targetUid: target });
-        if (repair?.ok && repair.threadId) {
-          try { return await writeMessage(repair.threadId); } catch (retryError) {
-            onError(retryError);
-            return { ok: false, reason: "write-failed", error: retryError };
-          }
+        syncWhisperSubscriptions(token);
+        emitState();
+
+        // The sender should see a successful whisper immediately instead of
+        // waiting for the RTDB echo.  The shared seen key prevents the realtime
+        // listener from rendering the same message twice when it arrives.
+        const messageId = String(result.id || "").trim();
+        const seenKey = messageId ? `${threadId}:${messageId}` : "";
+        if (!seenKey || !seenWhispers.has(seenKey)) {
+          if (seenKey) seenWhispers.add(seenKey);
+          try {
+            onWhisper({
+              id: messageId,
+              uid,
+              toUid: target,
+              name,
+              text,
+              createdAt: Number(result.createdAt) || Date.now(),
+              peerUid: target,
+              peerName,
+              direction: "outgoing",
+            });
+          } catch (_) {}
         }
-        onError(error);
-        return { ok: false, reason: "write-failed", error };
       }
+      return result;
     }
 
     return Object.freeze({

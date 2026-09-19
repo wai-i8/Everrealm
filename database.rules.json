@@ -48,7 +48,6 @@
       },
       "whispers": {
         "$threadId": {
-          ".read": "auth != null && data.child('members').child(auth.uid).val() == true",
           "members": {
             ".write": "false"
           },
@@ -63,7 +62,7 @@
               "createdAt"
             ],
             "$messageId": {
-              ".write": "auth != null && !data.exists() && newData.exists() && root.child('chat/whispers').child($threadId).child('members').child(auth.uid).val() == true && newData.child('uid').val() == auth.uid && newData.child('toUid').isString() && newData.child('toUid').val() != auth.uid && root.child('chat/whispers').child($threadId).child('members').child(newData.child('toUid').val()).val() == true",
+              ".write": "false",
               ".validate": "newData.hasChildren(['uid', 'toUid', 'name', 'text', 'createdAt'])",
               "uid": {
                 ".validate": "newData.isString() && newData.val() == auth.uid"
@@ -83,7 +82,8 @@
               "$other": {
                 ".validate": false
               }
-            }
+            },
+            ".read": "auth != null && root.child('chat').child('whispers').child($threadId).child('members').child(auth.uid).val() == true"
           }
         }
       }

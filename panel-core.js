@@ -75,13 +75,14 @@
 
   function normalizeSlots(values, slotCount, skillState) {
     const skills = Skills?.normalizeSkillState?.(skillState) || skillState || {};
-    const unlocked = new Set(Array.isArray(skills.unlockedSkillIds) ? skills.unlockedSkillIds.map(String) : []);
+    const canonicalId = (value) => Skills?.canonicalSkillId?.(value) || String(value || "").trim();
+    const unlocked = new Set((Array.isArray(skills.unlockedSkillIds) ? skills.unlockedSkillIds : []).map(canonicalId));
     const classId = String(skills.classId || "fighter");
     const result = emptySlots(slotCount);
     const seen = new Set();
     const source = Array.isArray(values) ? values : [];
     for (let index = 0; index < Math.min(result.length, source.length); index += 1) {
-      const id = String(source[index] || "").trim();
+      const id = canonicalId(source[index]);
       const skill = Skills?.getSkill?.(id);
       if (!skill || skill.classId !== classId || skill.tags?.includes?.("passive") || !unlocked.has(id) || seen.has(id)) continue;
       result[index] = id;

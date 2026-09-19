@@ -45,8 +45,8 @@
   const QUIZ_QUESTIONS = freeze([
     {
       id: "ap-gain",
-      prompt: "每個新回合開始時，角色通常會增加幾多 AP？",
-      choices: ["5 AP", "10 AP", "20 AP", "全部回滿"],
+      prompt: "每個新回合開始時，角色通常會增加多少 AP？",
+      choices: ["5 AP", "10 AP", "20 AP", "全部恢復"],
       correctIndex: 1,
       explanation: "每回合會增加 10 AP；高消耗技能要預先留 AP。",
     },
@@ -74,7 +74,7 @@
     {
       id: "ap-shortage",
       prompt: "如果目前 AP 不足以支付技能消耗，最合理的做法是？",
-      choices: ["照用，之後先扣", "技能會免費", "今輪改用其他行動或留 AP", "直接跳過前置技能"],
+      choices: ["照常使用，之後再扣除", "技能會免費", "本回合改用其他行動或保留 AP", "直接跳過前置技能"],
       correctIndex: 2,
       explanation: "AP 不足時無法強行使用技能，應改用其他行動或累積 AP。",
     },
@@ -227,6 +227,9 @@
     const selected = whole(answerIndex, -1, -1, 99);
     if (selected !== question.correctIndex) {
       const next = clone(state);
+      // Any wrong answer ends today's attempt.  The next permitted attempt
+      // always restarts from question one on the following game day.
+      next.progress.quizIndex = 0;
       next.progress.nextQuizDay = day + 1;
       return { ok: true, reason: "wrong-answer", state: next, quest, correct: false, question, explanation: question.explanation, nextQuizDay: next.progress.nextQuizDay };
     }

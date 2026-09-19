@@ -33,6 +33,28 @@ function whole(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function timestampMillis(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value && typeof value.seconds === "number") return value.seconds * 1000 + Math.floor(Number(value.nanoseconds) || 0) / 1e6;
+  if (value instanceof Date) return value.getTime();
+  const number = Number(value);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function gameDayFromWorldConfig(raw, nowMs = Date.now()) {
+  const config = raw && typeof raw === "object" ? raw : {};
+  const epochRealTime = timestampMillis(config.epochRealTime);
+  const epochGameDay = Math.max(1, whole(config.epochGameDay, 1));
+  const epochGameHour = Math.max(0, Math.min(23, whole(config.epochGameHour, 0)));
+  const epochGameMinute = Math.max(0, Math.min(59, whole(config.epochGameMinute, 0)));
+  const realSecondsPerGameHour = Number(config.realSecondsPerGameHour) || 150;
+  if (!Number.isFinite(epochRealTime) || !(realSecondsPerGameHour > 0)) return 0;
+  const minuteMs = realSecondsPerGameHour * 1000 / 60;
+  const elapsedMinutes = Math.max(0, Math.floor((Number(nowMs) - epochRealTime) / minuteMs));
+  const baseMinutes = (epochGameDay - 1) * 1440 + epochGameHour * 60 + epochGameMinute;
+  return Math.floor((baseMinutes + elapsedMinutes) / 1440) + 1;
+}
+
 function authenticatedUid(request) {
   const uid = String(request.auth?.uid || "").trim();
   if (!uid) throw new HttpsError("unauthenticated", "Authentication is required.");
@@ -602,16 +624,60 @@ exports.socialCommand = onCall({ region: REGION, maxInstances: 20 }, async (requ
     const targetName = socialNameFromSave(targetPlayer.data());
     const threadId = socialThreadId(uid, targetUid);
     const nowMs = Date.now();
+    const threadRef = realtimeDb.ref(`chat/whispers/${threadId}`);
+    // Grant RTDB membership before publishing the Firestore peer index.  That
+    // prevents clients from observing whisperPeers first, subscribing to the
+    // thread too early and getting a permission-denied listener that never
+    // receives the first message.
+    await threadRef.update({
+      [`members/${uid}`]: true,
+      [`members/${targetUid}`]: true,
+      [`names/${uid}`]: ownerName,
+      [`names/${targetUid}`]: targetName,
+      updatedAt: nowMs,
+    });
     const batch = db.batch();
     batch.set(whisperPeerRef(uid, targetUid), { uid: targetUid, name: targetName, threadId, updatedAtMs: nowMs }, { merge: true });
     batch.set(whisperPeerRef(targetUid, uid), { uid, name: ownerName, threadId, updatedAtMs: nowMs }, { merge: true });
     await batch.commit();
-    await realtimeDb.ref(`chat/whispers/${threadId}`).update({
-      members: { [uid]: true, [targetUid]: true },
-      names: { [uid]: ownerName, [targetUid]: targetName },
+    return { ok: true, threadId, targetName };
+  }
+
+  if (action === "send-whisper") {
+    const targetUid = safeSocialUid(request.data?.targetUid);
+    const text = String(request.data?.text || "").trim();
+    if (!targetUid || targetUid === uid) return { ok: false, reason: "invalid-target" };
+    if (!text) return { ok: false, reason: "empty" };
+    if (text.length > 200) return { ok: false, reason: "too-long", maxLength: 200 };
+
+    const [ownerPlayer, targetPlayer] = await Promise.all([
+      db.doc(`players/${uid}`).get(),
+      db.doc(`players/${targetUid}`).get(),
+    ]);
+    if (!ownerPlayer.exists || !targetPlayer.exists) return { ok: false, reason: "player-not-found" };
+
+    const ownerName = socialNameFromSave(ownerPlayer.data());
+    const targetName = socialNameFromSave(targetPlayer.data());
+    const threadId = socialThreadId(uid, targetUid);
+    const nowMs = Date.now();
+    const threadRef = realtimeDb.ref(`chat/whispers/${threadId}`);
+    // RTDB membership must exist before the Firestore peer document can cause
+    // either client to attach its private-message listener.
+    await threadRef.update({
+      [`members/${uid}`]: true,
+      [`members/${targetUid}`]: true,
+      [`names/${uid}`]: ownerName,
+      [`names/${targetUid}`]: targetName,
       updatedAt: nowMs,
     });
-    return { ok: true, threadId, targetName };
+    const batch = db.batch();
+    batch.set(whisperPeerRef(uid, targetUid), { uid: targetUid, name: targetName, threadId, updatedAtMs: nowMs }, { merge: true });
+    batch.set(whisperPeerRef(targetUid, uid), { uid, name: ownerName, threadId, updatedAtMs: nowMs }, { merge: true });
+    await batch.commit();
+
+    const messageRef = threadRef.child("messages").push();
+    await messageRef.set({ uid, toUid: targetUid, name: ownerName, text, createdAt: nowMs });
+    return { ok: true, id: messageRef.key || "", threadId, targetName, createdAt: nowMs };
   }
 
   return { ok: false, reason: "unsupported-action", action };
@@ -786,7 +852,10 @@ exports.tradeCommand = onCall({ region: REGION, maxInstances: 20 }, async (reque
         offers[otherSide] = { ...other, confirmed: false };
       } else if (action === "lock") {
         if (own.locked) return { ok: true, locked: true, duplicate: true, tradeId };
-        const validation = TradeSystem.validateOffer(playerSnapshot.data(), own);
+        const submittedOffer = request.data?.offer && typeof request.data.offer === "object"
+          ? request.data.offer
+          : own;
+        const validation = TradeSystem.validateOffer(playerSnapshot.data(), submittedOffer);
         if (!validation.ok) return { ok: false, reason: validation.reason, entry: validation.entry || null };
         offers[side] = { ...validation.offer, locked: true, confirmed: false };
         offers[otherSide] = { ...other, confirmed: false };
@@ -1133,13 +1202,13 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
         level: request.data?.level,
         encounterId: request.data?.encounterId,
         position: request.data?.position,
-      }, { nowMs });
+      }, { nowMs, uid, encounterSeedOnly: true });
       if (!canonical?.ok || !canonical.state?.expansion?.serverBattle) return canonical;
       const battleId = partyBattleId();
       const canonicalBattle = canonical.state.expansion.serverBattle;
       const shared = PartyBattle.createBattle({ id: battleId, party, saves, canonicalBattle, nowMs });
       transaction.set(partyBattleRef(battleId), shared);
-      transaction.update(currentPartyRef, { state: "battle_loading", battleId, transition: null, updatedAtMs: nowMs });
+      transaction.update(currentPartyRef, { state: "battle_loading", battleId, battleEncounterName: String(shared.enemies?.[0]?.name || canonicalBattle.monsterType || "遭遇戰"), transition: null, updatedAtMs: nowMs });
       return { ok: true, partyId: currentPartyId, battleId };
     });
   }
@@ -1204,7 +1273,7 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
           } else {
             battle.exitReleased = battle.result === "victory";
             if (battle.exitReleased) battle.exitReleasedAtMs = nowMs;
-            transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+            transaction.update(currentPartyRef, { state: "idle", battleId: "", battleEncounterName: FieldValue.delete(), leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
             for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
           }
         }
@@ -1228,7 +1297,7 @@ exports.partyCommand = onCall({ region: REGION, maxInstances: 30 }, async (reque
           for (const memberUid of survivingUids) transaction.delete(partyPointerRef(memberUid));
           transaction.delete(currentPartyRef);
         } else {
-          transaction.update(currentPartyRef, { state: "idle", battleId: "", leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
+          transaction.update(currentPartyRef, { state: "idle", battleId: "", battleEncounterName: FieldValue.delete(), leaderUid, memberUids: survivingUids, updatedAtMs: nowMs });
           for (const memberUid of survivingUids) transaction.set(partyPointerRef(memberUid), partyPointerPayload(party.id, leaderUid, nowMs));
         }
         transaction.set(battleRef, battle);
@@ -1479,7 +1548,7 @@ function appendPartyBattleRetreatEvent(battle, uid, disconnected) {
 }
 
 
-async function runAuthoritativeCommand(request, command) {
+async function runAuthoritativeCommand(request, command, commandOptions = {}) {
   const uid = authenticatedUid(request);
   assertCommandVersion(request);
   return withPlayerTransaction(uid, ({ transaction, playerRef, save }) => {
@@ -1489,7 +1558,7 @@ async function runAuthoritativeCommand(request, command) {
     // ignore an older response that happens to arrive late.
     const nextRevision = Math.max(0, Math.floor(Number(save.stateRevision) || 0)) + 1;
     const commandSave = { ...save, stateRevision: nextRevision };
-    const result = command(commandSave, request.data || {}, { nowMs: Date.now() });
+    const result = command(commandSave, request.data || {}, { ...commandOptions, nowMs: Date.now(), uid });
     if (!result?.ok || !result.state) return result;
     const payload = { ...result.state, stateRevision: nextRevision };
     result.state = payload;
@@ -1511,8 +1580,14 @@ async function runAuthoritativeCommand(request, command) {
 exports.economyCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
   runAuthoritativeCommand(request, ServerGame.economyCommand));
 
-exports.questCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
-  runAuthoritativeCommand(request, ServerGame.questCommand));
+exports.questCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) => {
+  let currentDay = 0;
+  if (String(request.data?.action || "").trim() === "main-answer") {
+    const worldConfig = await db.doc("world/config").get();
+    currentDay = worldConfig.exists ? gameDayFromWorldConfig(worldConfig.data(), Date.now()) : 0;
+  }
+  return runAuthoritativeCommand(request, ServerGame.questCommand, { currentDay });
+});
 
 exports.battleCommand = onCall({ region: REGION, maxInstances: 20 }, async (request) =>
   runAuthoritativeCommand(request, ServerGame.battleCommand));

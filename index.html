@@ -67,7 +67,7 @@
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
         const stylesheets = [
-          ["everrealmStyles", "styles.css?v=20260918-invite-ui-02"],
+          ["everrealmStyles", "styles.css?v=20260919-uifix7-01"],
         ];
         for (const [id, href] of stylesheets) {
           document.write(`<link${id ? ` id="${id}"` : ""} rel="stylesheet" href="${asset(href)}" />`);
@@ -113,29 +113,15 @@
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/inventory-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>物品欄</b><small>I · ITEMS</small></span>
             </button>
-            <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開戰技面板">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/panel-v3.png" alt="" /></span>
-              <span class="explore-menu-copy"><b>戰技面板</b><small>DECK · 唯讀查看</small></span>
-            </button>
-            <button id="skillTreeButton" class="explore-menu-button" type="button" aria-label="打開技能樹（L）">
+            <button id="deckButton" class="explore-menu-button" type="button" aria-label="打開面板">
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/skills-v3.png" alt="" /></span>
-              <span class="explore-menu-copy"><b>技能樹</b><small>L · SKILLS</small></span>
+              <span class="explore-menu-copy"><b>面板</b><small>DECK</small></span>
               <b id="skillMenuBadge" class="menu-badge" hidden aria-label="有可學習技能"></b>
             </button>
             <button id="missionButton" class="explore-menu-button" type="button" aria-label="打開任務">
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/missions-v3.png" alt="" /></span>
               <span class="explore-menu-copy"><b>任務</b><small>QUESTS</small></span>
               <b id="missionMenuBadge" class="menu-badge" hidden aria-label="有可回報任務"></b>
-            </button>
-            <button id="socialFriendsButton" class="explore-menu-button" type="button" aria-label="打開好友" aria-expanded="false" aria-controls="socialFriendsPopover">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/friend-v1.png" alt="" /></span>
-              <span class="explore-menu-copy"><b>好友</b><small>FRIENDS</small></span>
-              <b id="socialFriendsBadge" class="menu-badge social-friends-badge" hidden aria-label="有好友申請">0</b>
-            </button>
-            <button id="partyButton" class="explore-menu-button" type="button" aria-label="打開隊伍" aria-expanded="false" aria-controls="partyPopover">
-              <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/party-v1.png" alt="" /></span>
-              <span class="explore-menu-copy"><b>隊伍</b><small>PARTY</small></span>
-              <b id="partyBadge" class="menu-badge" hidden aria-label="有組隊邀請">0</b>
             </button>
             <button id="systemButton" class="explore-menu-button" type="button" aria-label="打開系統設定" aria-expanded="false" aria-controls="systemSettingsPopover">
               <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/system-v3.png" alt="" /></span>
@@ -150,6 +136,20 @@
             <small id="commissionDistance">目標就在附近</small>
           </section>
         </aside>
+
+
+        <nav id="socialDock" class="social-dock" aria-label="社交功能" hidden>
+          <button id="socialFriendsButton" class="explore-menu-button" type="button" aria-label="打開好友" aria-expanded="false" aria-controls="socialFriendsPopover">
+            <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/friend-v1.png" alt="" /></span>
+            <span class="explore-menu-copy"><b>好友</b><small>FRIENDS</small></span>
+            <b id="socialFriendsBadge" class="menu-badge social-friends-badge" hidden aria-label="有好友申請">0</b>
+          </button>
+          <button id="partyButton" class="explore-menu-button" type="button" aria-label="打開隊伍" aria-expanded="false" aria-controls="partyPopover">
+            <span class="explore-menu-icon" aria-hidden="true"><img src="assets/ui/mobile-menu/party-v1.png" alt="" /></span>
+            <span class="explore-menu-copy"><b>隊伍</b><small>PARTY</small></span>
+            <b id="partyBadge" class="menu-badge" hidden aria-label="有組隊邀請">0</b>
+          </button>
+        </nav>
 
         <div id="worldClock" class="world-clock hud-card" aria-label="世界時間" aria-live="polite">101年 --月--日   --:--</div>
 
@@ -188,14 +188,20 @@
           <div id="systemLogScrollZone" class="system-log-scroll-zone" aria-label="上下捲動系統訊息" title="在此使用滑鼠滾輪或手指上下滑動以翻閱訊息"></div>
         </section>
 
-        <section id="socialFriendsPopover" class="social-friends-popover sidebar-social-popover" aria-label="好友" hidden>
-          <header class="social-friends-header"><strong>好友</strong><button id="socialFriendsCloseButton" type="button" aria-label="關閉好友列表">×</button></header>
-          <div id="socialFriendsContent" class="social-friends-content"></div>
+        <section id="socialFriendsPopover" class="ui-window social-tool-window social-friends-popover" aria-label="好友" hidden>
+          <header class="facility-header ui-header social-tool-header">
+            <div class="facility-heading-copy"><h2>好友</h2></div>
+            <button id="socialFriendsCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="關閉好友列表"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
+          </header>
+          <div id="socialFriendsContent" class="social-friends-content ui-content ui-scroll"></div>
         </section>
 
-        <section id="partyPopover" class="social-friends-popover party-popover sidebar-social-popover" aria-label="隊伍" hidden>
-          <header class="social-friends-header"><strong>隊伍</strong><button id="partyCloseButton" type="button" aria-label="關閉隊伍">×</button></header>
-          <div id="partyContent" class="social-friends-content"></div>
+        <section id="partyPopover" class="ui-window social-tool-window social-friends-popover party-popover" aria-label="隊伍" hidden>
+          <header class="facility-header ui-header social-tool-header">
+            <div class="facility-heading-copy"><h2>隊伍</h2></div>
+            <button id="partyCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="關閉隊伍"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
+          </header>
+          <div id="partyContent" class="social-friends-content ui-content ui-scroll"></div>
         </section>
 
         <div id="interactionPrompt" class="interaction-prompt" hidden>
@@ -204,103 +210,104 @@
 
         <section id="remotePlayerMenu" class="remote-player-menu" aria-label="玩家互動" hidden>
           <header class="remote-player-menu-header">
-            <div><strong id="remotePlayerMenuName">冒險者</strong><small id="remotePlayerMenuMeta">玩家</small></div>
-            <button id="remotePlayerMenuClose" type="button" aria-label="關閉玩家互動">×</button>
+            <strong id="remotePlayerMenuName">冒險者</strong>
+            <button id="remotePlayerMenuClose" class="ui-close-button remote-player-menu-close-button" type="button" aria-label="關閉玩家互動"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
           </header>
-          <div id="remotePlayerProfileDetail" class="remote-player-profile-detail" hidden></div>
           <div class="remote-player-menu-actions">
-            <button type="button" data-player-action="profile">查看資料</button>
-            <button type="button" data-player-action="friend">加好友</button>
-            <button type="button" data-player-action="whisper">密語</button>
-            <button type="button" data-player-action="trade">交易</button>
-            <button type="button" data-player-action="party">邀請組隊</button>
+            <button class="secondary-button" type="button" data-player-action="friend">加好友</button>
+            <button class="secondary-button" type="button" data-player-action="whisper">密語</button>
+            <button class="secondary-button" type="button" data-player-action="trade">交易</button>
+            <button class="secondary-button" type="button" data-player-action="party">邀請組隊</button>
           </div>
         </section>
 
         <section id="outgoingInvitePanel" class="outgoing-invite-panel" role="status" aria-live="polite" hidden>
-          <div class="trade-invite-card outgoing-invite-card">
-            <small>WAITING FOR REPLY</small>
-            <strong id="outgoingInviteTitle">等待回覆</strong>
-            <p>已向 <span id="outgoingInviteName">冒險者</span> 發出 <span id="outgoingInviteType">邀請</span>。</p>
+          <div class="trade-invite-card outgoing-invite-card ui-window">
+            <p>已向 <span id="outgoingInviteName">冒險者</span> 發出 <span id="outgoingInviteType">邀請</span></p>
             <div class="outgoing-invite-status">等待對方回覆…</div>
-            <div class="trade-invite-actions outgoing-invite-actions">
-              <button id="outgoingInviteCancelButton" type="button">取消邀請</button>
+            <div class="trade-invite-actions outgoing-invite-actions ui-actions ui-actions--center">
+              <button id="outgoingInviteCancelButton" class="secondary-button" type="button">取消</button>
             </div>
           </div>
         </section>
 
         <section id="friendInvitePanel" class="trade-invite-panel social-invite-panel" role="dialog" aria-modal="true" aria-labelledby="friendInviteTitle" hidden>
-          <div class="trade-invite-card">
-            <small>FRIEND REQUEST</small>
+          <div class="trade-invite-card ui-modal-window">
             <strong id="friendInviteTitle">好友申請</strong>
-            <p><span id="friendInviteName">冒險者</span> 想加你做好友。</p>
-            <div class="trade-invite-actions">
-              <button type="button" data-friend-invite-action="reject">拒絕</button>
-              <button type="button" data-friend-invite-action="accept">接受</button>
+            <p><span id="friendInviteName">冒險者</span> 希望加你為好友</p>
+            <div class="trade-invite-actions ui-actions ui-actions--center">
+              <button class="secondary-button" type="button" data-friend-invite-action="reject">拒絕</button>
+              <button class="primary-button" type="button" data-friend-invite-action="accept">接受</button>
             </div>
           </div>
         </section>
 
         <section id="partyInvitePanel" class="trade-invite-panel social-invite-panel" role="dialog" aria-modal="true" aria-labelledby="partyInviteTitle" hidden>
-          <div class="trade-invite-card">
-            <small>PARTY REQUEST</small>
+          <div class="trade-invite-card ui-modal-window">
             <strong id="partyInviteTitle">組隊邀請</strong>
-            <p><span id="partyInviteName">冒險者</span> 邀請你加入隊伍。</p>
-            <div class="trade-invite-actions">
-              <button type="button" data-party-invite-action="reject">拒絕</button>
-              <button type="button" data-party-invite-action="accept">接受</button>
+            <p><span id="partyInviteName">冒險者</span> 邀請你加入隊伍</p>
+            <div class="trade-invite-actions ui-actions ui-actions--center">
+              <button class="secondary-button" type="button" data-party-invite-action="reject">拒絕</button>
+              <button class="primary-button" type="button" data-party-invite-action="accept">接受</button>
             </div>
           </div>
         </section>
 
         <section id="tradeInvitePanel" class="trade-invite-panel" role="dialog" aria-modal="true" aria-labelledby="tradeInviteTitle" hidden>
-          <div class="trade-invite-card">
-            <small>TRADE REQUEST</small>
+          <div class="trade-invite-card ui-modal-window">
             <strong id="tradeInviteTitle">交易邀請</strong>
-            <p><span id="tradeInviteName">冒險者</span> 想與你進行交易。</p>
-            <div class="trade-invite-actions">
-              <button type="button" data-trade-invite-action="reject">拒絕</button>
-              <button type="button" data-trade-invite-action="accept">接受</button>
+            <p><span id="tradeInviteName">冒險者</span> 想與你進行交易</p>
+            <div class="trade-invite-actions ui-actions ui-actions--center">
+              <button class="secondary-button" type="button" data-trade-invite-action="reject">拒絕</button>
+              <button class="primary-button" type="button" data-trade-invite-action="accept">接受</button>
             </div>
           </div>
         </section>
 
-        <section id="tradePanel" class="trade-panel" role="dialog" aria-modal="true" aria-labelledby="tradePanelTitle" hidden>
-          <div class="trade-window">
-            <header class="trade-header">
-              <div>
-                <small>PLAYER TRADE</small>
-                <h2 id="tradePanelTitle">玩家交易</h2>
-                <p id="tradePeerLabel">與冒險者交易</p>
-              </div>
-              <button id="tradeCloseButton" type="button" aria-label="取消交易">×</button>
+        <section id="tradePanel" class="trade-panel" role="dialog" aria-labelledby="tradePanelTitle" hidden>
+          <div id="tradeWindow" class="trade-window ui-window social-tool-window">
+            <header class="trade-header facility-header ui-header">
+              <div class="facility-heading-copy"><h2 id="tradePanelTitle">玩家交易</h2></div>
+              <button id="tradeCloseButton" class="ui-close-button facility-close-button" type="button" aria-label="取消交易"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
             </header>
-            <div id="tradeStatusText" class="trade-status-text">等待對方接受交易邀請…</div>
+            <div id="tradeStatusText" class="trade-status-text" hidden></div>
             <div class="trade-offer-grid">
-              <section class="trade-offer-card is-local">
-                <header><strong>你提供</strong><span id="tradeLocalBadge" class="trade-state-badge">編輯中</span></header>
+              <section id="tradeLocalOfferCard" class="trade-offer-card is-local" data-trade-drop-target="offer">
+                <span id="tradeLocalBadge" class="trade-state-badge trade-local-state-badge" hidden>已鎖定</span>
                 <div id="tradeLocalItems" class="trade-offer-items"></div>
-                <label class="trade-coins-row"><span>金幣</span><input id="tradeCoinsInput" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" /><small id="tradeCoinsAvailable">持有 0</small></label>
-                <button id="tradeAddItemButton" class="trade-add-item-button" type="button">＋ 加入物品</button>
+                <label id="tradeCoinsEditor" class="trade-coins-row"><span>金幣</span><input id="tradeCoinsInput" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" /><small id="tradeCoinsAvailable">持有 0</small></label>
+                <div id="tradeCoinsDisplay" class="trade-coins-display" hidden><span>提供金幣</span><strong>0</strong></div>
               </section>
-              <section class="trade-offer-card is-remote">
-                <header><strong id="tradeRemoteOfferTitle">對方提供</strong><span id="tradeRemoteBadge" class="trade-state-badge">編輯中</span></header>
-                <div id="tradeRemoteItems" class="trade-offer-items"></div>
-                <div class="trade-remote-coins"><span>金幣</span><strong id="tradeRemoteCoins">0</strong></div>
+              <section class="trade-offer-card is-side">
+                <div id="tradeInventoryPane" class="trade-side-pane">
+                  <div id="tradeInventoryList" class="trade-inventory-list"></div>
+                </div>
+                <div id="tradeRemotePane" class="trade-side-pane" hidden>
+                  <header class="trade-side-heading"><strong id="tradeRemoteOfferTitle">對方提供</strong><span id="tradeRemoteBadge" class="trade-state-badge">編輯中</span></header>
+                  <div id="tradeRemoteItems" class="trade-offer-items"></div>
+                  <div class="trade-remote-coins"><span>金幣</span><strong id="tradeRemoteCoins">0</strong></div>
+                </div>
               </section>
             </div>
-            <section id="tradeInventoryPicker" class="trade-inventory-picker" hidden>
-              <header><strong>選擇可交易物品</strong><button id="tradeInventoryCloseButton" type="button" aria-label="關閉物品選擇">×</button></header>
-              <p>綁定技能書，以及已裝備且沒有多餘副本的裝備不會顯示。</p>
-              <div id="tradeInventoryList" class="trade-inventory-list"></div>
-            </section>
             <footer class="trade-footer">
-              <button id="tradeCancelButton" class="trade-cancel-button" type="button">取消交易</button>
+              <button id="tradeCancelButton" class="trade-cancel-button secondary-button" type="button">取消</button>
               <div class="trade-footer-primary">
-                <button id="tradeLockButton" class="trade-lock-button" type="button">鎖定</button>
-                <button id="tradeConfirmButton" class="trade-confirm-button" type="button" disabled>確認交易</button>
+                <button id="tradeLockButton" class="trade-lock-button secondary-button" type="button">鎖定</button>
+                <button id="tradeConfirmButton" class="trade-confirm-button primary-button" type="button" disabled>確認交易</button>
               </div>
             </footer>
+          </div>
+        </section>
+
+        <section id="gameConfirmPanel" class="overlay modal-overlay game-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="gameConfirmTitle" hidden>
+          <div class="ui-modal-window ui-window--confirm game-confirm-window">
+            <button id="gameConfirmCloseButton" class="ui-close-button modal-close-button" type="button" aria-label="關閉確認視窗" title="關閉"><img src="assets/ui/ui-close-v2.png" alt="" aria-hidden="true" /></button>
+            <h2 id="gameConfirmTitle">確認</h2>
+            <p id="gameConfirmMessage"></p>
+            <div class="modal-actions game-confirm-actions">
+              <button id="gameConfirmCancelButton" class="secondary-button" type="button">取消</button>
+              <button id="gameConfirmAcceptButton" class="primary-button" type="button">確定</button>
+            </div>
           </div>
         </section>
 
@@ -649,7 +656,7 @@
     <script>
       (() => {
         const asset = window.EverrealmDev?.asset || ((url) => url);
-        document.write(`<script src="${asset("runtime-assets.js?v=20260918-invite-ui-02")}"><\/script>`);
+        document.write(`<script src="${asset("runtime-assets.js?v=20260919-uifix7-01")}"><\/script>`);
       })();
     </script>
 

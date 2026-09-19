@@ -154,6 +154,22 @@
       chickVisualState: new Map(),
       deadChicks: typeof WeakSet === "function" ? new WeakSet() : null,
       player,
+      beginAction({ skill = null } = {}) {
+        runtime.activeHeroSkill = skill || null;
+        runtime.heroActionSoundPlayed = false;
+        runtime.heroActionStrikeIndex = -1;
+      },
+      endAction() {
+        runtime.activeHeroSkill = null;
+        runtime.heroActionSoundPlayed = false;
+        runtime.heroActionStrikeIndex = -1;
+      },
+      playMiss() {
+        return player.play("miss", { delay: 90, cooldown: 170, cooldownKey: "battle-miss" });
+      },
+      playChickDeath() {
+        return player.play("chickDeath", { gain: GAINS.chickDeath });
+      },
     };
     root[INSTALL_KEY] = runtime;
 
@@ -240,7 +256,11 @@
                 player.play(isDamagingSkill(runtime.activeHeroSkill) ? "fighterPunch" : "fighterUtility");
               }
             } else if (!Number.isInteger(strikeIndex) && !runtime.heroActionSoundPlayed) {
+              // The wind-up cue is the first strike's sound. Mark strike 0 as
+              // consumed so the same action does not replay the SFX when the
+              // authoritative resolver flips from wind-up to strike index 0.
               runtime.heroActionSoundPlayed = true;
+              runtime.heroActionStrikeIndex = 0;
               player.play(isDamagingSkill(runtime.activeHeroSkill) ? "fighterPunch" : "fighterUtility");
             }
           }

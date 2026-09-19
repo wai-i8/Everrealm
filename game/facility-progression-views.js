@@ -75,6 +75,7 @@
     pendingEquipPanelId,
     learnedSkills,
     skillBadgeMarkup,
+    showSkillBookButton = false,
   }) {
     const ownedPanels = Array.isArray(panels) ? panels : [];
     const selected = ownedPanels.find((panel) => panel.id === selectedPanelId)
@@ -90,9 +91,8 @@
     const panelCards = ownedPanels.map((panel) => {
       const equipped = panel.id === equippedPanelId;
       const active = panel.id === selected.id;
-      return `<button class="panel-selector-card ${active ? "is-selected" : ""} ${equipped ? "is-equipped" : ""}" type="button" data-facility-action="select-panel" data-panel-id="${panel.id}" aria-pressed="${active ? "true" : "false"}">
-        <span class="panel-selector-top"><strong>${panel.name}</strong>${equipped ? "<em>使用中</em>" : ""}</span>
-        <span class="panel-selector-meta">${panel.slotCount} 格技能</span>
+      return `<button class="panel-selector-card ${active ? "is-selected" : ""} ${equipped ? "is-equipped" : ""}" type="button" data-facility-action="select-panel" data-panel-id="${panel.id}" aria-pressed="${active ? "true" : "false"}" aria-label="${panel.name}${equipped ? "，使用中" : ""}">
+        <strong>${panel.name}</strong>
       </button>`;
     }).join("");
 
@@ -100,30 +100,24 @@
       ? `${skillBadgeMarkup(skill)}<strong>${skill.name}</strong>`
       : `<span class="deck-empty-slot-index">${index + 1}</span>`}</article>`).join("");
 
-    const passiveText = selected.passive || "無";
     const selectedEquipped = selected.id === equippedPanelId;
-    const confirmingEquip = canEdit && !selectedEquipped && pendingEquipPanelId === selected.id;
-    const panelAction = canEdit
-      ? (selectedEquipped
-        ? '<span class="panel-equipped-status">目前使用中</span>'
-        : confirmingEquip
-          ? `<span class="panel-equip-confirm"><button class="facility-action-button is-quiet" type="button" data-facility-action="cancel-equip-panel">取消</button><button class="facility-action-button panel-equip-button" type="button" data-facility-action="confirm-equip-panel" data-panel-id="${selected.id}">確認更換</button></span>`
-          : `<button class="facility-action-button panel-equip-button" type="button" data-facility-action="equip-panel" data-panel-id="${selected.id}">使用此面板</button>`)
-      : `<span class="panel-readonly-note">${selectedEquipped ? "目前使用中" : "只可於城門更換"}</span>`;
+    const panelAction = canEdit && !selectedEquipped
+      ? `<div class="deck-panel-configure-row"><button class="facility-action-button panel-equip-button" type="button" data-facility-action="equip-panel" data-panel-id="${selected.id}">配置</button></div>`
+      : "";
+
+    const skillTreeButton = showSkillBookButton
+      ? '<button class="facility-action-button is-quiet deck-skillbook-button" type="button" data-facility-action="open-skills">技能樹</button>'
+      : "";
 
     const management = canEdit ? (() => {
       const learned = learnedSkills.map((skill) => `<article class="deck-skill-choice" data-deck-drag-source="library" data-skill-id="${skill.id}" aria-label="${skill.name}">${skillBadgeMarkup(skill)}<strong>${skill.name}</strong></article>`).join("");
-      return `<section class="deck-management-column" data-deck-region="learned" aria-labelledby="deckLearnedHeading"><div class="deck-region-heading"><h3 id="deckLearnedHeading">已學技能</h3><small>拖曳至右側面板</small></div><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>尚未學會任何技能</strong></div>'}</div></section>`;
+      return `<section class="deck-management-column" data-deck-region="learned" aria-label="已學技能"><div class="deck-skill-list">${learned || '<div class="facility-empty-state"><strong>尚未學會任何技能</strong></div>'}</div></section>`;
     })() : "";
 
     const currentDeck = `<section class="deck-current-column" data-deck-region="current" aria-label="${selected.name}">
-      <div class="deck-panel-heading">
-        <div><small>${selected.source || "戰技面板"}</small><h3>${selected.name}</h3></div>
-        ${panelAction}
-      </div>
-      <div class="panel-passive-row"><span>被動效果</span><strong>${passiveText}</strong></div>
+      ${canEdit ? "" : `<div class="deck-panel-heading"><h3>${selected.name}</h3><span class="deck-panel-actions">${skillTreeButton}</span></div>`}
       <div class="deck-slot-list" style="--panel-slot-count:${selected.slotCount}">${slots}</div>
-      ${canEdit ? '<p class="panel-edit-hint">每塊面板都會獨立保存自己的技能配置。</p>' : ''}
+      ${panelAction}
     </section>`;
 
     content.innerHTML = `
@@ -131,7 +125,7 @@
         <section class="panel-selector-strip" aria-label="持有面板">${panelCards}</section>
         ${canEdit ? `<div class="deck-manage-layout">${management}${currentDeck}</div>` : currentDeck}
       </div>`;
-    setFacilityFooter(canEdit ? "城門面板配置 · 更換面板前會要求確認" : "可隨時查看；更換面板及技能配置只能在城門進行");
+    setFacilityFooter("");
   }
 
   return Object.freeze({

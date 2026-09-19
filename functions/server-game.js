@@ -753,10 +753,21 @@ function questCommand(save, input = {}, options = {}) {
 
   if (action === "main-answer") {
     if (mapId !== "guild") return { ok: false, reason: "wrong-map" };
-    const result = MainQuest.answerQuiz(state.expansion.mainQuest, String(input.questionId || ""), input.answerIndex);
-    if (!result.ok) return { ok: false, reason: result.reason };
+    const result = MainQuest.answerQuiz(
+      state.expansion.mainQuest,
+      String(input.questionId || ""),
+      input.answerIndex,
+      options.currentDay,
+    );
+    if (!result.ok) return { ok: false, reason: result.reason, nextQuizDay: result.nextQuizDay || 0 };
     state.expansion.mainQuest = result.state;
-    return resultWithState(state, { action, correct: result.correct, explanation: result.explanation || "", completedObjective: result.completedObjective === true });
+    return resultWithState(state, {
+      action,
+      correct: result.correct,
+      explanation: result.explanation || "",
+      completedObjective: result.completedObjective === true,
+      nextQuizDay: result.nextQuizDay || 0,
+    });
   }
 
   if (action === "main-claim") {
@@ -940,6 +951,7 @@ function serverHeroBattleStats(state) {
     accuracy: Math.max(0, 99 + (Number(gear.accuracy) || 0) + (passives.accuracy || 0) * 100),
     evasion: Math.max(0, (Number(gear.evasion) || 0) + (passives.evasion || 0) * 100),
     weight: Math.max(0, Number(gear.weight) || 0),
+    critChance: clamp(Number(gear.critChance) || 0, 0, 1),
     initiative: Math.max(5, Math.round(14 + (Number(gear.speed) || 0) * .35 + (passives.speedBonus || 0))),
     baseMoveRange: baseMove,
     facingReserve: classId === "fighter" ? SERVER_BATTLE_FINAL_FACING_RESERVE : 0,
@@ -1464,13 +1476,66 @@ function persistServerBattleUnits(battle, hero, enemies) {
 function battleCommand(save, input = {}, options = {}) {
   const state = saveCopy(save);
   const action = String(input.action || "").trim();
-  const existing = state.expansion.serverBattle && typeof state.expansion.serverBattle === "object" ? state.expansion.serverBattle : null;
+  const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+  const callerUid = String(options.uid || "").trim() || String(state?.player?.uid || "").trim() || "solo-player";
+  const SharedBattle = require("./party-battle-system.js");
+  let existing = state.expansion.serverBattle && typeof state.expansion.serverBattle === "object" ? state.expansion.serverBattle : null;
+
+  const soloParty = () => ({
+    id: `solo:${callerUid}`,
+    leaderUid: callerUid,
+    memberUids: [callerUid],
+    members: {
+      [callerUid]: {
+        uid: callerUid,
+        name: String(state?.player?.name || "冒險者"),
+        classId: String(state?.expansion?.classId || "fighter"),
+        gender: String(state?.player?.gender || "male"),
+        level: Math.max(1, whole(state?.player?.level, 1)),
+        battleUnitId: "battle-player",
+      },
+    },
+  });
+
+  const migrateLegacyBattle = (legacy) => {
+    if (!legacy || (Array.isArray(legacy.memberUids) && legacy.members && legacy.solo === true)) return legacy;
+    const shared = SharedBattle.createBattle({
+      id: legacy.id,
+      party: soloParty(),
+      saves: { [callerUid]: state },
+      canonicalBattle: legacy,
+      nowMs,
+      phaseMs: 0,
+      loading: false,
+    });
+    shared.solo = true;
+    shared.soloUid = callerUid;
+    shared.tacticalVersion = Math.max(2, whole(legacy.tacticalVersion, 0));
+    shared.round = Math.max(1, whole(legacy.round, 1));
+    const member = shared.members[callerUid];
+    if (member) {
+      member.hp = clamp(Number(legacy.heroHp ?? member.hp) || 0, 0, member.maxHp);
+      member.alive = member.hp > 0;
+      member.deathRound = whole(legacy.heroDeathRound, 0) > 0 ? whole(legacy.heroDeathRound, 0) : null;
+      if (legacy.heroCell) member.cell = { x: whole(legacy.heroCell.x, member.cell.x), y: whole(legacy.heroCell.y, member.cell.y) };
+      member.facing = canonicalBattleFacing(legacy.heroFacing, member.facing || "right");
+      member.ap = clamp(whole(legacy.ap, member.ap || 0), 0, Skills.MAX_AP);
+      member.statusEffects = clone(legacy.heroStatusEffects || {});
+    }
+    shared.enemies = clone(legacy.enemies || shared.enemies || []);
+    // Legacy snapshots were persisted after a resolved round and before the
+    // next planning AP grant. Re-enter the canonical shared planning phase once.
+    shared.phase = "planning_move";
+    shared.phaseEndsAtMs = 0;
+    shared.movePlans = {};
+    shared.actions = {};
+    return shared;
+  };
 
   if (action === "start") {
     const requestedEncounterId = String(input.encounterId || "");
     const requestedMonsterType = MonsterBlueprints.normalizeMonsterId(input.monsterType);
     if (existing?.status === "active") {
-      ensureServerBattleTacticalState(state, existing);
       const sameEncounter = requestedEncounterId
         && String(existing.encounterId || "") === requestedEncounterId
         && String(existing.monsterType || "") === String(requestedMonsterType || "");
@@ -1496,6 +1561,7 @@ function battleCommand(save, input = {}, options = {}) {
     } else if (Array.isArray(blueprint.habitat?.maps) && blueprint.habitat.maps.length && !blueprint.habitat.maps.includes(mapId)) {
       return { ok: false, reason: "wrong-map" };
     }
+
     const stats = MonsterBlueprints.monsterStatsAtLevel(monsterType, level);
     const count = clamp(whole(blueprint.encounterCount, 1), 1, 3);
     const hpMultiplier = MonsterBlueprints.encounterHpMultiplier(count);
@@ -1519,108 +1585,127 @@ function battleCommand(save, input = {}, options = {}) {
       moveDown: 0,
       moveDownUntilRound: 0,
     }));
-    const heroMaxHp = classMaxHp(state.expansion.classId, state.player.level) + Math.max(0, whole(Expansion.equipmentStats(state.expansion.equipped).maxHp, 0));
-    state.expansion.serverBattle = {
+    const seed = { id: battleId, status: "active", tacticalVersion: 2, mapId, monsterType, encounterId: requestedEncounterId, level, round: 1, enemies };
+    if (options.encounterSeedOnly === true) {
+      state.expansion.serverBattle = seed;
+      return resultWithState(state, { action, battle: clone(seed), ...(fieldEncounter ? { encounterZone: fieldEncounter.encounterZone } : {}) });
+    }
+    const shared = SharedBattle.createBattle({
       id: battleId,
-      status: "active",
-      tacticalVersion: SERVER_BATTLE_TACTICAL_VERSION,
-      mapId,
-      monsterType,
-      encounterId: requestedEncounterId,
-      level,
-      round: 1,
-      ap: 0,
-      heroHp: clamp(persistedHeroHp, 1, heroMaxHp),
-      heroMaxHp,
-      heroCell: serverBattleDeploymentCell(battlefield, "ally", 0),
-      heroFacing: "right",
-      heroStatusEffects: {},
-      heroDeathRound: null,
-      enemies,
-    };
-    return resultWithState(state, {
-      action,
-      battle: clone(state.expansion.serverBattle),
-      ...(fieldEncounter ? { encounterZone: fieldEncounter.encounterZone } : {}),
+      party: soloParty(),
+      saves: { [callerUid]: state },
+      canonicalBattle: seed,
+      nowMs,
+      phaseMs: 0,
+      loading: false,
     });
+    shared.solo = true;
+    shared.soloUid = callerUid;
+    shared.tacticalVersion = 2;
+    state.expansion.serverBattle = shared;
+    return resultWithState(state, { action, battle: clone(shared), ...(fieldEncounter ? { encounterZone: fieldEncounter.encounterZone } : {}) });
   }
 
-  if (!existing || existing.status !== "active") return { ok: false, reason: "no-battle" };
+  if (!existing || !["active", "finished"].includes(String(existing.status || ""))) return { ok: false, reason: "no-battle" };
   if (String(input.battleId || "") !== String(existing.id)) return { ok: false, reason: "battle-id" };
-  const tactical = ensureServerBattleTacticalState(state, existing);
+  existing = migrateLegacyBattle(existing);
+  existing.solo = true;
+  existing.soloUid = existing.soloUid || callerUid;
+  existing.phaseDurationMs = 0;
 
-  if (action === "act") {
-    const requestedRound = whole(input.round, -1);
+  const saves = { [callerUid]: state };
+  const commitBattle = (nextBattle, nextState = state, extra = {}) => {
+    nextBattle.solo = true;
+    nextBattle.soloUid = callerUid;
+    nextBattle.phaseDurationMs = 0;
+    nextState.expansion.serverBattle = nextBattle;
+    return resultWithState(nextState, { action, battle: clone(nextBattle), ...extra });
+  };
+
+  const submitMove = () => {
+    if (existing.status !== "active") return { ok: false, reason: "battle-closed", battle: clone(existing) };
+    const requestedRound = whole(input.round, whole(existing.round, 1));
     if (requestedRound !== whole(existing.round, 1)) return { ok: false, reason: "round", battle: clone(existing) };
-    existing.ap = Math.min(Skills.MAX_AP, Math.max(0, whole(existing.ap, 0)) + Skills.ROUND_AP_GAIN);
-    for (const enemy of existing.enemies) {
-      if (enemy.alive && enemy.hp > 0) enemy.ap = Math.min(Skills.MAX_AP, Math.max(0, whole(enemy.ap, 0)) + Skills.ROUND_AP_GAIN);
+    const validation = SharedBattle.validateMoveSubmission(existing, callerUid, state, input.moveCommands || input.commands || [], input.finalFacing || input.facing);
+    if (!validation.ok) return { ...validation, battle: clone(existing) };
+    existing.movePlans = { ...(existing.movePlans || {}), [callerUid]: { commands: validation.commands, facing: validation.finalFacing, submittedAtMs: nowMs } };
+    const resolved = SharedBattle.resolveMovement(existing, saves, nowMs);
+    if (!resolved.ok) return { ...resolved, battle: clone(existing) };
+    existing = resolved.battle;
+    return commitBattle(existing);
+  };
+
+  const submitAction = () => {
+    if (existing.status !== "active") return { ok: false, reason: "battle-closed", battle: clone(existing) };
+    const requestedRound = whole(input.round, whole(existing.round, 1));
+    if (requestedRound !== whole(existing.round, 1)) return { ok: false, reason: "round", battle: clone(existing) };
+    const battleAction = input.battleAction && typeof input.battleAction === "object"
+      ? input.battleAction
+      : {
+          type: String(input.heroAction || "wait"),
+          ...(input.skillId ? { skillId: input.skillId } : {}),
+          ...(input.targetCell ? { targetCell: input.targetCell } : {}),
+        };
+    const validation = SharedBattle.validatePlayerAction(existing, callerUid, state, battleAction);
+    if (!validation.ok) return { ...validation, battle: clone(existing) };
+    existing.actions = { ...(existing.actions || {}), [callerUid]: { ...validation.action, submittedAtMs: nowMs } };
+    const resolved = SharedBattle.resolveActions(existing, saves, nowMs);
+    if (!resolved.ok) return { ...resolved, battle: clone(existing) };
+    existing = resolved.battle;
+    const nextState = resolved.saves?.[callerUid] || state;
+    return commitBattle(existing, nextState, { finished: existing.status === "finished", result: existing.result || null });
+  };
+
+  if (action === "move") return submitMove();
+  if (action === "action") return submitAction();
+  if (action === "retreat") {
+    if (existing.status !== "active") return { ok: false, reason: "battle-closed", battle: clone(existing) };
+    const chance = clamp(Number(SharedBattle.retreatChance(existing, callerUid)) || 0, 0, 1);
+    const success = Math.random() < chance;
+    if (!success) return resultWithState(state, { action, success: false, chance, battle: clone(existing) });
+    state.expansion.serverBattle = null;
+    return resultWithState(state, { action, success: true, chance });
+  }
+  if (action === "act") {
+    // Rolling-update compatibility for older clients: resolve the same shared
+    // movement phase and shared action phase in one callable response.
+    if (existing.phase === "planning_move") {
+      const moved = submitMove();
+      if (!moved?.ok) return moved;
+      existing = state.expansion.serverBattle;
     }
-
-    const units = serverBattleUnits(state, existing);
-    if (!units.hero.alive || units.hero.hp <= 0) {
-      state.player.hp = 0;
-      state.expansion.serverBattle = existing;
-      return resultWithState(state, { action, battle: clone(existing) });
-    }
-    const enemyPlans = serverEnemyPlans(state, existing, tactical.grid, units.hero, units.enemies);
-    const movement = validateServerHeroMovement(state, existing, tactical.grid, units.hero, enemyPlans, units.enemies, input);
-    if (!movement.ok) return { ...movement, battle: clone(existing) };
-
-    const actionResult = applyServerHeroAction(state, existing, units.hero, units.enemies, tactical.grid, input, enemyPlans);
-    if (!actionResult.ok) return { ...actionResult, battle: clone(existing) };
-    persistServerBattleUnits(existing, units.hero, units.enemies);
-
-    existing.round = Math.max(1, whole(existing.round, 1) + 1);
-    // Persist the exact next planning-state status tick now, before returning
-    // the snapshot. This keeps refresh/reconnect identical to the continuously
-    // connected client's predicted next round instead of ticking twice later.
-    FighterEffects.tickStatuses(units.hero, existing.round, units.hero.passives || {});
-    for (const enemy of units.enemies) FighterEffects.tickStatuses(enemy, existing.round, {});
-    persistServerBattleUnits(existing, units.hero, units.enemies);
-    state.player.hp = clamp(existing.heroHp, 0, existing.heroMaxHp);
-    state.expansion.serverBattle = existing;
-    return resultWithState(state, { action, battle: clone(existing) });
+    return submitAction();
   }
 
   if (action === "settle") {
     const victory = input.outcome === "victory";
-    if (victory && existing.enemies.some((enemy) => enemy.alive && enemy.hp > 0)) return { ok: false, reason: "battle-not-won", battle: clone(existing) };
-    if (!victory) {
-      existing.status = "defeat";
-      state.player.hp = 0;
-      state.expansion.serverBattle = null;
-      return resultWithState(state, { action, outcome: "defeat" });
+    const member = existing.members?.[callerUid] || existing.members?.[existing.memberUids?.[0]] || null;
+    if (victory) {
+      if (existing.status !== "finished" || existing.result !== "victory" || (existing.enemies || []).some((enemy) => enemy.alive !== false && Number(enemy.hp) > 0)) {
+        return { ok: false, reason: "battle-not-won", battle: clone(existing) };
+      }
+      const rewarded = SharedBattle.grantVictoryRewards(existing, { [callerUid]: state });
+      const nextState = rewarded.saves?.[callerUid] || state;
+      const reward = rewarded.rewards?.[callerUid] || {};
+      nextState.expansion.serverBattle = null;
+      return resultWithState(nextState, {
+        action,
+        outcome: "victory",
+        earnedXp: Math.max(0, whole(reward.earnedXp, 0)),
+        coins: Math.max(0, whole(reward.coins, 0)),
+        drops: [],
+        beforeLevel: Math.max(1, whole(reward.beforeLevel, nextState.player.level)),
+        beforeXp: Math.max(0, whole(reward.beforeXp, 0)),
+        afterLevel: Math.max(1, whole(reward.afterLevel, nextState.player.level)),
+        afterXp: Math.max(0, whole(reward.afterXp, nextState.player.xp)),
+        levelsGained: Math.max(0, whole(reward.levelsGained, 0)),
+        questProgress: reward.questProgress || null,
+      });
     }
-    const blueprint = MonsterBlueprints.monsterBlueprint(existing.monsterType);
-    const encounterCount = existing.enemies.length;
-    const rewardLevel = Math.max(existing.level || blueprint?.baseLevel || 1, ...existing.enemies.map((enemy) => enemy.level || 1));
-    const earnedXp = MonsterBlueprints.battleXpReward(rewardLevel, state.player.level, encounterCount, blueprint?.rewards?.baseXp ?? 100);
-    const earnedCoins = existing.enemies.reduce((sum) => sum + Math.max(0, whole(blueprint?.rewards?.coins, 0)), 0);
-    const beforeLevel = clamp(whole(state.player.level, 1), 1, Expansion.LEVEL_CAP);
-    const beforeXp = Math.max(0, whole(state.player.xp, 0));
-    const xpResult = Expansion.grantExperience(beforeLevel, beforeXp, earnedXp);
-    state.player.level = xpResult.level;
-    state.player.xp = xpResult.xp;
-    const maxHp = classMaxHp(state.expansion.classId, state.player.level) + Math.max(0, whole(Expansion.equipmentStats(state.expansion.equipped).maxHp, 0));
-    state.player.hp = xpResult.levelsGained > 0 ? maxHp : clamp(existing.heroHp, 1, maxHp);
-    state.player.coins = clamp(whole(state.player.coins, 0) + earnedCoins, 0, MAX_COINS);
-    const questProgress = recordServerKill(state, existing.monsterType, existing.encounterId || existing.id);
-    for (let index = 1; index < encounterCount; index += 1) recordServerKill(state, existing.monsterType, `${existing.encounterId || existing.id}:pack-${index + 1}`);
-    state.expansion.serverBattle = null;
-    return resultWithState(state, {
-      action,
-      outcome: "victory",
-      earnedXp,
-      coins: earnedCoins,
-      drops: [],
-      beforeLevel,
-      beforeXp,
-      afterLevel: state.player.level,
-      afterXp: state.player.xp,
-      levelsGained: xpResult.levelsGained,
-      questProgress: questProgress ? { changed: questProgress.changed, reason: questProgress.reason } : null,
-    });
+    const nextState = state;
+    nextState.player.hp = 0;
+    nextState.expansion.serverBattle = null;
+    return resultWithState(nextState, { action, outcome: "defeat", memberHp: Math.max(0, Number(member?.hp) || 0) });
   }
 
   if (action === "cancel") {

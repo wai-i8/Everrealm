@@ -86,6 +86,7 @@
     let unsubs = [];
     let sessionUnsub = null;
     let sessionTradeId = "";
+    let pointerTradeId = "";
     let session = null;
     let invites = new Map();
     const seenInvites = new Set();
@@ -114,6 +115,7 @@
       for (const unsub of unsubs) { try { unsub(); } catch (_) {} }
       unsubs = [];
       clearSessionWatch();
+      pointerTradeId = "";
       firestoreContext = null;
       invites = new Map();
       seenInvites.clear();
@@ -136,6 +138,14 @@
         }
         session = normalizeSession(snapshot.id, snapshot.data(), uid);
         emitState();
+        if (["completed", "cancelled", "rejected"].includes(session?.status) && pointerTradeId !== id) {
+          Promise.resolve().then(() => {
+            if (!active || localToken !== token || sessionTradeId !== id || pointerTradeId === id) return;
+            if (!["completed", "cancelled", "rejected"].includes(session?.status)) return;
+            clearSessionWatch();
+            emitState();
+          });
+        }
       }, (error) => {
         if (localToken === token) onError(error);
       });
@@ -172,6 +182,7 @@
         unsubs.push(sdk.onSnapshot(pointerRef, (snapshot) => {
           if (!active || localToken !== token) return;
           const nextTradeId = snapshot.exists() ? safeTradeId(snapshot.data()?.tradeId) : "";
+          pointerTradeId = nextTradeId;
           if (nextTradeId) watchSession(nextTradeId, localToken);
           // If the pointer disappears while a watched session is still open,
           // keep that direct session listener long enough to receive its final
@@ -211,7 +222,11 @@
     }
     async function cancelTrade(tradeId = session?.id) { return command("cancel", { tradeId: safeTradeId(tradeId) }); }
     async function setOffer(offer, tradeId = session?.id) { return command("set-offer", { tradeId: safeTradeId(tradeId), offer: normalizeOffer(offer) }); }
-    async function lock(tradeId = session?.id) { return command("lock", { tradeId: safeTradeId(tradeId) }); }
+    async function lock(tradeId = session?.id, offer = null) {
+      const payload = { tradeId: safeTradeId(tradeId) };
+      if (offer) payload.offer = normalizeOffer(offer);
+      return command("lock", payload);
+    }
     async function unlock(tradeId = session?.id) { return command("unlock", { tradeId: safeTradeId(tradeId) }); }
     async function confirm(tradeId = session?.id) { return command("confirm", { tradeId: safeTradeId(tradeId) }); }
 

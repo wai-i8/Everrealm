@@ -2702,3 +2702,12 @@ Automated tests pass 後仍然必須實際 run game。
 - Action presentations carry the authoritative combat events for that resolved action phase. Result presentation is sequenced after the final action presentation.
 - A finished shared battle enters a synchronized finishing barrier. Each participating client acknowledges `battle-finish-ready` only after draining its presentation queue; Firestore sets `finishReleased` only after all expected participants are ready. Party pointers / `battleId` are retained until that release so no member leaves the battlefield before the others finish presentation.
 - RTDB remains presence/exploration-only and is not a tactical battle transport.
+
+### V13 unified authoritative battle core
+- Solo and shared-party combat use the same authoritative battle state machine, movement resolver, action resolver, event schema and client presentation engine. There must not be a separate gameplay resolver or separate animation/SFX implementation for party combat.
+- Both modes resolve `planning_move -> movement presentation -> planning_action -> action presentation -> next round/result` through the shared battle core. Movement, skill effects, multi-hit damage, AI, death/corpse state, facing, AP and status effects are produced by the same server code.
+- The only mode-specific command-collection rule is participation: solo resolves as soon as its one player submits; party waits for the required active members or the authoritative phase timeout.
+- Authoritative action events include the acting unit and action metadata (`actorId`, `actionType`, `skillId`, target data) so the same client presentation path drives attack sprites, skill SFX, hit/miss/death feedback and damage/heal presentation in both modes.
+- Solo may receive its authoritative snapshot in the callable response while party battles continue to use the Firestore ordered presentation transport/barrier described above; transport timing must not fork battle rules or presentation behavior.
+- Shared action resolution preserves the former solo combat semantics for multi-hit skills: authored total damage is split across strikes, hit/path checks are resolved per authored hit rules, interrupt durability is applied in speed order, and secondary HP/status/knockback effects are emitted into the same ordered presentation stream.
+- Presentation applies authoritative hit/heal/status/movement-effect events at strike time, then hydrates the final server snapshot. This keeps HP bars, death/corpse state, SFX and secondary effects visually aligned without a solo-only resolver.

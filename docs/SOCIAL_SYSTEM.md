@@ -41,7 +41,7 @@ A request must be explicitly accepted. Acceptance creates symmetric friend docum
 
 ## Whispers
 
-密語唔要求好友關係。任何已存在嘅玩家都可以成為一對一密語對象；`ensure-whisper` 由 Cloud Function 驗證兩個玩家 document 後建立 deterministic thread membership，同時喺雙方 Firestore 建立 `whisperPeers` 索引。
+密語不要求好友關係。任何已存在的玩家都可以成為一對一密語對象；`ensure-whisper` 由 Cloud Function 驗證兩個玩家 document 後建立 deterministic thread membership，同時在雙方 Firestore 建立 `whisperPeers` 索引。
 
 ```text
 players/{uid}/whisperPeers/{peerUid}
@@ -53,7 +53,7 @@ chat/whispers/{threadId}
   { uid, toUid, name, text, createdAt }
 ```
 
-只有 thread members 可以讀取 RTDB thread；browser 只可以以自己 `auth.uid` 寫訊息。好友關係唔係權限條件。左下角 `世界 / 密語` composer 會保留目前密語對象，直到玩家轉返世界頻道或揀另一個玩家。
+只有 thread members 可以讀取 RTDB thread。密語訊息由 `socialCommand("send-whisper")` 驗證玩家與目標後，由 Cloud Function 以 Admin 權限寫入 RTDB；browser 不直接寫入 whisper message。好友關係不是權限條件。若 RTDB listener 因舊 thread membership 缺失而被拒絕，client 會先經 `ensure-whisper` 修復 authoritative membership 再重訂閱。左下角 `世界 / 密語` composer 會保留目前密語對象，直到玩家切回世界頻道或選擇另一個玩家；desktop 可用上下方向鍵重叫本次 session 已成功送出的訊息。
 
 待回覆邀請另外記喺：
 
@@ -62,12 +62,12 @@ players/{uid}/outgoingInvite/current
 { type: friend | trade | party, targetUid, targetName, referenceId, createdAtMs }
 ```
 
-呢個 document 只由 Cloud Functions 寫；client 只讀，用嚟呈現等待視窗同跨三種邀請嘅全域 lock。
+這個 document 只由 Cloud Functions 寫入；client 只讀，用於呈現等待視窗與跨三種邀請的全域 lock。
 
 ## Security boundary
 
 - Firestore owns the durable friend graph and request state.
-- Cloud Functions own every friend mutation and RTDB thread membership change.
+- Cloud Functions own every friend mutation, RTDB thread membership change, and whisper message write.
 - RTDB owns transient/private chat messages and same-map remote-player presentation.
 - Remote-player presence, coordinates or names are never trusted for inventory, economy, battle or progression authority.
 - Trading uses its own Firestore session/pointer model and server-authoritative callable; it does not piggyback on friendship state.

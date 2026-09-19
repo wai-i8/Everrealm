@@ -13,8 +13,8 @@ const { classMaxHp } = require("./game-rules.js");
 const TURN_COST = 0.5;
 const MAX_AP = Skills.MAX_AP || 30;
 const AP_GAIN = Skills.ROUND_AP_GAIN || 10;
-const SIDE_BONUS = 0.12;
-const REAR_BONUS = 0.25;
+const SIDE_BONUS = 0.15;
+const REAR_BONUS = 0.35;
 const MAX_EVENTS = 40;
 const MAX_PRESENTATIONS = 24;
 const CORPSE_ROUNDS = 3;
@@ -47,7 +47,7 @@ function memberUnit(battle, memberUid, save) {
   const member = battle.members?.[memberUid];
   const stats = ServerGame.serverHeroBattleStats(save);
   return {
-    id: `party:${memberUid}`,
+    id: String(member?.battleUnitId || `party:${memberUid}`),
     uid: memberUid,
     side: "ally",
     team: "ally",
@@ -84,7 +84,7 @@ function corpseBlockers(battle, saves = {}) {
   for (const uid of battle.memberUids || []) {
     const member = battle.members?.[uid];
     if (!member || member.retreated || member.disconnected || !corpseVisible(member, battle.round)) continue;
-    blockers.push({ id: `corpse:party:${uid}`, side: "corpse", team: "corpse", type: "corpse", alive: true, hp: 1, maxHp: 1, cell: cell(member.cell), facing: member.facing || "down", weight: 9999, initiative: -9999, moveRange: 0 });
+    blockers.push({ id: `corpse:${member.battleUnitId || `party:${uid}`}`, side: "corpse", team: "corpse", type: "corpse", alive: true, hp: 1, maxHp: 1, cell: cell(member.cell), facing: member.facing || "down", weight: 9999, initiative: -9999, moveRange: 0 });
   }
   for (const enemy of battle.enemies || []) {
     if (!corpseVisible(enemy, battle.round)) continue;
@@ -130,7 +130,12 @@ function persistEnemy(battle, unit, index) {
 }
 function appendEvent(battle, event) {
   battle.eventSerial = Math.max(0, whole(battle.eventSerial, 0)) + 1;
-  battle.events = [...(Array.isArray(battle.events) ? battle.events : []), { serial: battle.eventSerial, ...event }].slice(-MAX_EVENTS);
+  const authored = { serial: battle.eventSerial, ...event };
+  // The rolling battle event log stays compact, but a resolving phase must
+  // keep its complete ordered event list for presentation. Multi-hit/AoE
+  // rounds can legitimately exceed MAX_EVENTS.
+  if (Array.isArray(battle.__collectPresentationEvents)) battle.__collectPresentationEvents.push(clone(authored));
+  battle.events = [...(Array.isArray(battle.events) ? battle.events : []), authored].slice(-MAX_EVENTS);
 }
 function appendPresentation(battle, presentation) {
   battle.presentationSerial = Math.max(0, whole(battle.presentationSerial, 0)) + 1;
@@ -139,9 +144,13 @@ function appendPresentation(battle, presentation) {
     ...(presentation && typeof presentation === "object" ? clone(presentation) : {}),
   }].slice(-MAX_PRESENTATIONS);
 }
-function beginMovePhase(battle, nowMs) {
+function phaseDurationMs(battle, fallback = Party.PHASE_MS) {
+  const value = Number(battle?.phaseDurationMs);
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : Math.max(0, Math.floor(Number(fallback) || 0));
+}
+function beginMovePhase(battle, nowMs, durationMs = phaseDurationMs(battle)) {
   battle.phase = "planning_move";
-  battle.phaseEndsAtMs = nowMs + Party.PHASE_MS;
+  battle.phaseEndsAtMs = durationMs > 0 ? nowMs + durationMs : 0;
   battle.movePlans = {};
   battle.actions = {};
   for (const memberUid of activeMemberUids(battle)) {
@@ -153,7 +162,7 @@ function beginMovePhase(battle, nowMs) {
   }
   return battle;
 }
-function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() }) {
+function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now(), phaseMs = Party.PHASE_MS, loading = true }) {
   const battleId = String(id || canonicalBattle?.id || "").trim();
   if (!battleId) throw new Error("party battle requires id");
   const memberUids = (party?.memberUids || []).filter((memberUid) => saves[memberUid]).slice(0, Party.MAX_MEMBERS);
@@ -183,7 +192,7 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() })
       moveDownUntilRound: 0,
     };
   });
-  return {
+  const battle = {
     id: battleId,
     partyId: party.id,
     leaderUid: party.leaderUid,
@@ -193,9 +202,10 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() })
     monsterType: canonicalBattle.monsterType,
     encounterId: canonicalBattle.encounterId || "",
     level: Math.max(1, whole(canonicalBattle.level, 1)),
-    status: "loading",
+    status: loading ? "loading" : "active",
     result: "",
-    phase: "loading",
+    phase: loading ? "loading" : "planning_move",
+    phaseDurationMs: Math.max(0, Math.floor(Number(phaseMs) || 0)),
     phaseEndsAtMs: 0,
     round: 1,
     readyUids: [],
@@ -218,6 +228,8 @@ function createBattle({ id, party, saves, canonicalBattle, nowMs = Date.now() })
     createdAtMs: nowMs,
     updatedAtMs: nowMs,
   };
+  if (!loading) beginMovePhase(battle, nowMs, battle.phaseDurationMs);
+  return battle;
 }
 function validateMoveSubmission(battle, memberUid, save, commands, requestedFacing) {
   if (battle.phase !== "planning_move") return { ok: false, reason: "phase" };
@@ -280,13 +292,14 @@ function resolveMovement(battle, saves, nowMs = Date.now()) {
   }
   const enemyPlans = enemyMovePlans(next, allies, enemies, grid);
   for (const plan of enemyPlans) routes.set(plan.enemyId, { path: plan.path, commands: plan.commands, finalFacing: plan.facing });
+  const leaderUnitId = allies.find((unit) => String(unit.uid || "") === String(next.leaderUid || ""))?.id || `party:${next.leaderUid}`;
   const result = Tactics.resolveSimultaneousMovement({
     timed: true,
     grid,
     units: [...[...allies, ...enemies].filter((unit) => unit.alive), ...corpseBlockers(next, saves)],
     routes,
     turnCost: TURN_COST,
-    priorityUnitId: `party:${next.leaderUid}`,
+    priorityUnitId: leaderUnitId,
   });
   for (const ally of allies) {
     const outcome = result.unitResults?.[ally.id];
@@ -322,7 +335,8 @@ function resolveMovement(battle, saves, nowMs = Date.now()) {
   };
   appendPresentation(next, { type: "movement", round: next.round, movementReplay: next.movementReplay });
   next.phase = "planning_action";
-  next.phaseEndsAtMs = nowMs + Party.PHASE_MS;
+  const actionPhaseMs = phaseDurationMs(next);
+  next.phaseEndsAtMs = actionPhaseMs > 0 ? nowMs + actionPhaseMs : 0;
   next.actions = {};
   next.updatedAtMs = nowMs;
   return { ok: true, battle: next };
@@ -386,7 +400,12 @@ function skillTargets(battle, actor, skill, targetCell, allies, enemies, grid) {
     attackPath = Tactics.facingOrthogonalPriority(actor.cell, targetCell, actor.facing);
     const trace = Tactics.traceAttackPath({ origin: actor.cell, target: targetCell, path: attackPath, facing: actor.facing, grid, units, actorId: actor.id, deliveryMode: skill.deliveryMode, blocksByTerrain: skill.blocksByTerrain, blocksByUnits: skill.blocksByUnits, arcHeight: skill.arcHeight, piercing: skill.piercing, maxPierce: skill.maxPierce, friendlyFire: Tactics.FRIENDLY_FIRE });
     if (trace.stoppedReason === "terrain") return { ok: false, reason: "skill-blocked-path" };
-    affected = trace.piercing ? (trace.impactedUnits || []).filter((unit) => unit.side === "enemy") : trace.actualTarget?.side === "enemy" ? [trace.actualTarget] : [];
+    // Route candidates must keep blockers from either team. Friendly-fire is
+    // decided by the damage resolver; a friendly unit can still be the impact
+    // that stops a non-piercing attack without taking damage.
+    affected = trace.piercing
+      ? (trace.candidateUnits || trace.impactedUnits || [])
+      : (trace.actualTarget ? [trace.actualTarget] : []);
   }
   const ground = skill.targeting?.mode === "ground";
   if (!affected.length && !ground && preferredTeam === "enemy") return { ok: false, reason: "target" };
@@ -410,7 +429,7 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
   const next = clone(battle);
   if (next.phase !== "planning_action") return { ok: false, reason: "phase", battle: next, saves };
   const actionRound = Math.max(1, whole(next.round, 1));
-  const firstActionEventSerial = Math.max(0, whole(next.eventSerial, 0));
+  next.__collectPresentationEvents = [];
   const nextSaves = Object.fromEntries(Object.entries(saves).map(([uid, save]) => [uid, clone(save)]));
   const battlefield = ServerGame.serverBattlefieldFor(next.mapId, next.monsterType);
   const grid = ServerGame.serverBattleGrid(battlefield);
@@ -432,17 +451,372 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
   const order = Skills.orderActionsBySpeed(queued);
   const guardByUid = new Map();
   const evasionByUid = new Map();
+  const pendingByActorId = new Map();
+  for (const entry of queued) {
+    const skill = entry.kind === "ally" ? entry.skill : entry.plan?.skill;
+    if (!skill) continue;
+    pendingByActorId.set(entry.actorId, Tactics.createPendingAction({
+      id: `round-${next.round}:${entry.actorId}`,
+      actorId: entry.actorId,
+      targetId: entry.kind === "enemy" ? entry.plan?.targetId : null,
+      targetCell: entry.kind === "ally" ? entry.raw?.targetCell : null,
+      skillId: skill.id,
+      skillDurability: skill.durability,
+      deliveryMode: skill.deliveryMode || "pathless",
+      rangeMin: skill.range?.min,
+      rangeMax: skill.range?.max,
+      targetArc: skill.targetArc,
+      blocksByTerrain: skill.blocksByTerrain,
+      blocksByUnits: skill.blocksByUnits,
+      arcHeight: skill.arcHeight,
+      piercing: skill.piercing,
+      maxPierce: skill.maxPierce,
+    }));
+  }
+
+  function interrupted(actorId) {
+    return Tactics.isPendingActionInterrupted?.(pendingByActorId.get(actorId)) === true;
+  }
+
+  function applyInterrupt(target, skill) {
+    if (!target?.id || !skill?.interrupt) return;
+    const pending = pendingByActorId.get(target.id);
+    if (pending) Tactics.applyInterrupt(pending, skill.interrupt);
+  }
+
+  function appendInterrupted(actor) {
+    if (!actor) return;
+    appendEvent(next, {
+      type: "status",
+      actorId: actor.id,
+      ...(actor.uid ? { actorUid: actor.uid } : {}),
+      actorName: actor.name,
+      targetId: actor.id,
+      ...(actor.uid ? { targetUid: actor.uid } : {}),
+      targetName: actor.name,
+      actionType: "interrupted",
+      text: `${actor.name} 的行動被中斷`,
+    });
+  }
+
+  function skillHitCount(skill, damageEffect = null) {
+    return Math.max(1, whole(skill?.hitResolution?.hit_count || damageEffect?.hits, 1));
+  }
+
+  function appendActionStart(entry, actor, target = null, skill = null) {
+    if (!actor) return;
+    const damageEffect = skill?.effects?.find?.((effect) => effect.type === "damage") || null;
+    appendEvent(next, {
+      type: "action",
+      actorId: actor.id,
+      ...(actor.uid ? { actorUid: actor.uid } : {}),
+      actorName: actor.name,
+      actorType: actor.type || (actor.side === "enemy" ? "monster" : "player"),
+      actionType: entry?.type || (skill ? "skill" : "wait"),
+      skillId: skill?.id || entry?.skill?.id || entry?.plan?.skill?.id || null,
+      skillName: skill?.name || entry?.skill?.name || entry?.plan?.skill?.name || null,
+      hitCount: skill ? skillHitCount(skill, damageEffect) : 1,
+      ...(target?.id ? { targetId: target.id } : {}),
+      ...(target?.uid ? { targetUid: target.uid } : {}),
+      ...((target?.cell || entry?.raw?.targetCell || entry?.plan?.targetCell)
+        ? { targetCell: cell(target?.cell || entry?.raw?.targetCell || entry?.plan?.targetCell) }
+        : {}),
+    });
+  }
+
+  function unitEvasion(target) {
+    return Math.max(0, Number(target?.evasion) || 0)
+      + (target?.uid ? (evasionByUid.get(target.uid) || 0) * 100 : 0)
+      + (FighterEffects.statusEvasion(target, next.round, target?.passives || {}) || 0) * 100;
+  }
+
+  function markDefeat(unit) {
+    if (!unit) return;
+    unit.alive = Number(unit.hp) > 0;
+    if (!unit.alive && !(whole(unit.deathRound, 0) > 0)) unit.deathRound = next.round;
+  }
+
+  function appendMiss(actor, target, skill, hitIndex, hitCount) {
+    appendEvent(next, {
+      type: "miss",
+      actorId: actor.id,
+      ...(actor.uid ? { actorUid: actor.uid } : {}),
+      actorName: actor.name,
+      targetId: target?.id || null,
+      ...(target?.uid ? { targetUid: target.uid } : {}),
+      targetName: target?.name || "目標",
+      ...(target?.cell ? { targetCell: cell(target.cell) } : {}),
+      actionType: "skill",
+      skillId: skill?.id || null,
+      skillName: skill?.name || null,
+      hit: hitIndex + 1,
+      hits: hitCount,
+      text: `${actor.name} 用 ${skill?.name || "攻擊"} 攻擊 ${target?.name || "目標"}，但失手`,
+    });
+  }
+
+  function appendDamage(actor, target, skill, amount, hitIndex, hitCount, extra = {}) {
+    appendEvent(next, {
+      type: "damage",
+      actorId: actor.id,
+      ...(actor.uid ? { actorUid: actor.uid } : {}),
+      actorName: actor.name,
+      targetId: target.id,
+      ...(target.uid ? { targetUid: target.uid } : {}),
+      targetName: target.name,
+      targetCell: cell(target.cell),
+      amount: Math.max(0, whole(amount, 0)),
+      actionType: "skill",
+      skillId: skill?.id || null,
+      skillName: skill?.name || null,
+      hit: hitIndex + 1,
+      hits: hitCount,
+      defeated: target.alive === false,
+      ...extra,
+      text: `${actor.name} 用 ${skill?.name || "攻擊"} 對 ${target.name} 造成 ${Math.max(0, whole(amount, 0))} 傷害`,
+    });
+  }
+
+  function applySecondaryEffectEvents(actor, skill, result, actionType = "skill") {
+    if (!result) return;
+    for (const change of result.hpChanges || []) {
+      const target = [...allies, ...enemies].find((unit) => String(unit.id) === String(change.unitId));
+      if (!target) continue;
+      markDefeat(target);
+      if (Number(change.amount) < 0) {
+        appendEvent(next, {
+          type: "damage",
+          actorId: actor.id,
+          ...(actor.uid ? { actorUid: actor.uid } : {}),
+          actorName: actor.name,
+          targetId: target.id,
+          ...(target.uid ? { targetUid: target.uid } : {}),
+          targetName: target.name,
+          targetCell: cell(target.cell),
+          amount: Math.abs(whole(change.amount, 0)),
+          actionType,
+          skillId: skill?.id || null,
+          skillName: skill?.name || null,
+          hit: 1,
+          hits: 1,
+          defeated: target.alive === false,
+          text: `${skill?.name || actor.name}令${target.name}損失 ${Math.abs(whole(change.amount, 0))} HP`,
+        });
+      } else if (Number(change.amount) > 0) {
+        appendEvent(next, {
+          type: "heal",
+          actorId: actor.id,
+          ...(actor.uid ? { actorUid: actor.uid } : {}),
+          actorName: actor.name,
+          targetId: target.id,
+          ...(target.uid ? { targetUid: target.uid } : {}),
+          targetName: target.name,
+          amount: whole(change.amount, 0),
+          actionType,
+          skillId: skill?.id || null,
+          skillName: skill?.name || null,
+          text: `${actor.name} 對 ${target.name} 恢復 ${whole(change.amount, 0)} HP`,
+        });
+      }
+    }
+    for (const moved of result.moved || []) {
+      const target = [...allies, ...enemies].find((unit) => String(unit.id) === String(moved.unitId));
+      if (!target) continue;
+      appendEvent(next, {
+        type: "move_effect",
+        actorId: actor.id,
+        ...(actor.uid ? { actorUid: actor.uid } : {}),
+        actorName: actor.name,
+        targetId: target.id,
+        ...(target.uid ? { targetUid: target.uid } : {}),
+        targetName: target.name,
+        targetCell: cell(moved.to, target.cell),
+        fromCell: cell(moved.from, target.cell),
+        actionType,
+        skillId: skill?.id || null,
+        skillName: skill?.name || null,
+      });
+    }
+    for (const event of result.events || []) {
+      if ((result.hpChanges || []).some((change) => String(change.unitId) === String(event.unitId) && Number(change.amount) === Number(event.amount))) continue;
+      const target = [...allies, ...enemies].find((unit) => String(unit.id) === String(event.unitId));
+      appendEvent(next, {
+        type: "status",
+        actorId: actor.id,
+        ...(actor.uid ? { actorUid: actor.uid } : {}),
+        actorName: actor.name,
+        ...(target?.id ? { targetId: target.id } : {}),
+        ...(target?.uid ? { targetUid: target.uid } : {}),
+        targetName: target?.name || "",
+        actionType,
+        skillId: skill?.id || null,
+        skillName: skill?.name || null,
+        text: target?.name ? `${target.name}：${event.text}` : String(event.text || ""),
+      });
+    }
+  }
+
+  function appendStatusTickEvents(unit, result) {
+    if (!unit || !result) return;
+    markDefeat(unit);
+    for (const change of result.hpChanges || []) {
+      const amount = whole(change.amount, 0);
+      if (amount < 0) {
+        appendEvent(next, {
+          type: "damage",
+          actorId: unit.id,
+          ...(unit.uid ? { actorUid: unit.uid } : {}),
+          actorName: unit.name,
+          targetId: unit.id,
+          ...(unit.uid ? { targetUid: unit.uid } : {}),
+          targetName: unit.name,
+          targetCell: cell(unit.cell),
+          amount: Math.abs(amount),
+          appliedAmount: Math.abs(amount),
+          actionType: "status",
+          skillId: null,
+          hit: 1,
+          hits: 1,
+          defeated: unit.alive === false,
+          text: `${unit.name} 因狀態效果損失 ${Math.abs(amount)} HP`,
+        });
+      } else if (amount > 0) {
+        appendEvent(next, {
+          type: "heal",
+          actorId: unit.id,
+          ...(unit.uid ? { actorUid: unit.uid } : {}),
+          actorName: unit.name,
+          targetId: unit.id,
+          ...(unit.uid ? { targetUid: unit.uid } : {}),
+          targetName: unit.name,
+          amount,
+          actionType: "status",
+          skillId: null,
+          text: `${unit.name} 因狀態效果恢復 ${amount} HP`,
+        });
+      }
+    }
+    for (const event of result.events || []) {
+      if ((result.hpChanges || []).some((change) => String(change.unitId) === String(event.unitId) && Number(change.amount) === Number(event.amount))) continue;
+      appendEvent(next, {
+        type: "status",
+        actorId: unit.id,
+        ...(unit.uid ? { actorUid: unit.uid } : {}),
+        actorName: unit.name,
+        targetId: unit.id,
+        ...(unit.uid ? { targetUid: unit.uid } : {}),
+        targetName: unit.name,
+        actionType: "status",
+        skillId: null,
+        text: `${unit.name}：${String(event.text || "")}`,
+      });
+    }
+  }
+
+  function resolveAllyDamage(actor, skill, targetResult, damageEffect, pierceEffect) {
+    const hitCount = skillHitCount(skill, damageEffect);
+    const routed = Tactics.usesAttackPath(skill.deliveryMode);
+    const recheck = Boolean(skill.hitResolution?.recheck_attack_path_each_hit || skill.hitResolution?.hit_judgement_mode === "each_hit");
+    const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(skill)) || 0);
+    const rng = ServerGame.deterministicBattleRng(next, next.round, `ally:${actor.uid}:${skill.id}`);
+    const totalDamageByTarget = new Map();
+    const executedTargets = new Set();
+    const combatUnits = () => [...allies, ...enemies].filter((unit) => unit.alive && unit.hp > 0);
+    const traceNow = () => Tactics.traceAttackPath({
+      origin: actor.cell,
+      target: targetResult.targetCell || targetResult.targetUnit?.cell || actor.cell,
+      path: targetResult.attackPath,
+      facing: actor.facing,
+      grid,
+      units: combatUnits(),
+      actorId: actor.id,
+      deliveryMode: skill.deliveryMode,
+      blocksByTerrain: skill.blocksByTerrain,
+      blocksByUnits: skill.blocksByUnits,
+      arcHeight: skill.arcHeight,
+      piercing: skill.piercing,
+      maxPierce: skill.maxPierce,
+      friendlyFire: Tactics.FRIENDLY_FIRE,
+    });
+    const initialTrace = routed ? traceNow() : null;
+    const initialTargets = routed
+      ? (initialTrace?.candidateUnits || (initialTrace?.actualTarget ? [initialTrace.actualTarget] : []))
+      : targetResult.affected.filter((unit) => unit.alive && unit.hp > 0);
+
+    function splitFor(target, attackPath) {
+      let split = totalDamageByTarget.get(target.id);
+      if (split) return split;
+      const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
+      const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
+      const positional = Tactics.positionalAttack(actor, target, {
+        attackPath: attackPath || targetResult.attackPath,
+        facing: actor.facing,
+        side: 1 + SIDE_BONUS,
+        rear: 1 + REAR_BONUS,
+      });
+      const critical = skill.area?.shape === "single" && rng() < Math.max(0, Number(actor.critChance) || 0);
+      const totalDamage = Tactics.calculateDamage(actor, target, {
+        defence,
+        multiplier: authoredMultiplier * positional.multiplier,
+        critical,
+        minimum: Tactics.MIN_DIRECT_DAMAGE,
+      });
+      split = Skills.splitDamageLaterHits(totalDamage, hitCount);
+      totalDamageByTarget.set(target.id, split);
+      return split;
+    }
+
+    for (let hitIndex = 0; hitIndex < hitCount; hitIndex += 1) {
+      const trace = routed ? (recheck ? traceNow() : initialTrace) : null;
+      const candidates = routed
+        ? (recheck ? (trace?.candidateUnits || (trace?.actualTarget ? [trace.actualTarget] : [])) : initialTargets)
+        : initialTargets;
+      let performed = false;
+      for (const candidate of candidates) {
+        const target = [...allies, ...enemies].find((unit) => String(unit.id) === String(candidate?.id)) || candidate;
+        if (!target?.alive || Number(target.hp) <= 0) continue;
+        performed = true;
+        const hitRoll = Tactics.rollHit({
+          accuracy: actor.accuracy,
+          accuracyMultiplier: skill.accuracyMultiplier ?? 1,
+          evasion: unitEvasion(target),
+          accuracyPenalties: [(FighterEffects.accuracyPenalty(actor, next.round) || 0) * 100],
+        }, rng);
+        if (!hitRoll.hit) {
+          appendMiss(actor, target, skill, hitIndex, hitCount);
+          continue;
+        }
+        if (Tactics.FRIENDLY_FIRE || target.side !== actor.side) {
+          const split = splitFor(target, trace?.path || targetResult.attackPath);
+          const requested = Math.max(0, whole(split[hitIndex], 0));
+          const applied = Math.min(Math.max(0, whole(target.hp, 0)), requested);
+          target.hp = Math.max(0, Number(target.hp) - requested);
+          markDefeat(target);
+          executedTargets.add(target);
+          appendDamage(actor, target, skill, requested, hitIndex, hitCount, { appliedAmount: applied });
+          applyInterrupt(target, skill);
+        }
+        // A successful unit is still the impact point for a normal routed
+        // delivery even when friendly-fire damage is disabled.
+        if (!skill.piercing) break;
+      }
+      if (!performed && routed) break;
+    }
+    return [...executedTargets];
+  }
 
   function executeAlly(entry) {
     const actor = allyByUid[entry.uid];
-    if (!actor?.alive || actor.hp <= 0) return;
+    if (!actor?.alive || actor.hp <= 0 || FighterEffects.isDisabled(actor, next.round)) return;
+    if (interrupted(actor.id)) { appendInterrupted(actor); return; }
     const save = nextSaves[entry.uid];
     if (entry.type === "potion") {
       if (whole(save?.player?.potions, 0) <= 0 || actor.hp >= actor.maxHp) return;
+      appendActionStart(entry, actor, actor, null);
       save.player.potions = Math.max(0, whole(save.player.potions, 0) - 1);
       const healed = Math.min(150, actor.maxHp - actor.hp);
       actor.hp += healed;
-      appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: actor.id, targetUid: actor.uid, targetName: actor.name, amount: healed, text: `${actor.name} 使用藥水恢復 ${healed} HP` });
+      appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: actor.id, targetUid: actor.uid, targetName: actor.name, amount: healed, actionType: "potion", skillId: null, text: `${actor.name} 使用藥水恢復 ${healed} HP` });
       return;
     }
     if (entry.type !== "skill" || !entry.skill) return;
@@ -451,6 +825,9 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     if (!state.equippedSkillIds.some((id) => Skills.canonicalSkillId(id) === skillId) || actor.ap < (entry.skill.apCost || 0)) return;
     const targetResult = skillTargets(next, actor, entry.skill, cell(entry.raw.targetCell, actor.cell), allies, enemies, grid);
     if (!targetResult.ok) return;
+    targetResult.targetCell = cell(entry.raw.targetCell, actor.cell);
+    const declaredTarget = targetResult.targetUnit || targetResult.affected?.[0] || actor;
+    appendActionStart(entry, actor, declaredTarget, entry.skill);
     actor.ap = Math.max(0, actor.ap - (entry.skill.apCost || 0));
     const effects = entry.skill.effects || [];
     for (const effect of effects) {
@@ -464,27 +841,12 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
         const healed = Math.min(amount, target.maxHp - target.hp);
         target.hp += healed;
         target.alive = target.hp > 0;
-        if (healed > 0) appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetUid: target.uid, targetName: target.name, amount: healed, text: `${actor.name} 對 ${target.name} 恢復 ${healed} HP` });
+        if (healed > 0) appendEvent(next, { type: "heal", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetUid: target.uid, targetName: target.name, amount: healed, actionType: "skill", skillId: entry.skill.id, skillName: entry.skill.name, text: `${actor.name} 對 ${target.name} 恢復 ${healed} HP` });
       }
     }
     const damageEffect = effects.find((effect) => effect.type === "damage");
     const pierceEffect = effects.find((effect) => effect.type === "armor_pierce");
-    if (damageEffect) {
-      const authoredMultiplier = Math.max(0, Number(Skills.calculateSkillDamageMultiplier(entry.skill)) || 0);
-      const hitCount = Math.max(1, whole(entry.skill.hitResolution?.hit_count || damageEffect.hits, 1));
-      for (const target of targetResult.affected.filter((unit) => unit.side === "enemy").slice(0, 3)) {
-        for (let hit = 0; hit < hitCount && target.alive && target.hp > 0; hit += 1) {
-          const existingDebuff = target.defenceDownUntilRound >= next.round ? target.defenceDown || 0 : 0;
-          const defence = Math.max(0, (Number(target.defence) || 0) * (1 - existingDebuff) * (1 - (Number(pierceEffect?.amount) || 0)));
-          const positional = Tactics.positionalAttack(actor, target, { attackPath: targetResult.attackPath, facing: actor.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
-          const damage = Math.max(Tactics.MIN_DIRECT_DAMAGE, whole(Tactics.calculateDamage(actor, target, { defence, multiplier: authoredMultiplier * positional.multiplier, minimum: Tactics.MIN_DIRECT_DAMAGE }), Tactics.MIN_DIRECT_DAMAGE));
-          target.hp = Math.max(0, target.hp - damage);
-          target.alive = target.hp > 0;
-          if (!target.alive && !(whole(target.deathRound, 0) > 0)) target.deathRound = next.round;
-          appendEvent(next, { type: "damage", actorId: actor.id, actorUid: actor.uid, actorName: actor.name, targetId: target.id, targetName: target.name, amount: damage, skillName: entry.skill.name, hit: hit + 1, hits: hitCount, text: `${actor.name} 用 ${entry.skill.name} 對 ${target.name} 造成 ${damage} 傷害` });
-        }
-      }
-    }
+    const executedTargets = damageEffect ? resolveAllyDamage(actor, entry.skill, targetResult, damageEffect, pierceEffect) : [];
     const defenceDown = effects.find((effect) => effect.type === "defense_down");
     const moveDown = effects.find((effect) => effect.type === "move_down");
     for (const target of targetResult.affected) {
@@ -492,15 +854,28 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       if (defenceDown) { target.defenceDown = Math.max(target.defenceDown || 0, Number(defenceDown.amount) || 0); target.defenceDownUntilRound = next.round + Math.max(1, whole(defenceDown.duration, 1)); }
       if (moveDown) { target.moveDown = Math.max(target.moveDown || 0, Number(moveDown.amount) || 0); target.moveDownUntilRound = next.round + Math.max(1, whole(moveDown.duration, 1)); }
     }
-    const handled = new Set(["damage", "heal", "guard", "move_up", "evasion", "defense_down", "move_down", "armor_pierce", "halve_hp", "set_hp"]);
+    const handled = new Set(["damage", "heal", "guard", "move_up", "evasion", "defense_down", "move_down", "armor_pierce"]);
     const extra = effects.filter((effect) => !handled.has(effect.type));
-    if (extra.length) FighterEffects.applySkillEffects({ skill: { ...entry.skill, effects: extra }, caster: actor, targets: targetResult.affected, units: [...allies, ...enemies], grid, round: next.round, random: ServerGame.deterministicBattleRng(next, next.round, `party:${actor.uid}:${entry.skill.id}`) });
+    if (extra.length) {
+      const effectTargets = damageEffect ? executedTargets.filter((unit) => unit.alive) : targetResult.affected;
+      const result = FighterEffects.applySkillEffects({
+        skill: { ...entry.skill, effects: extra },
+        caster: actor,
+        targets: effectTargets,
+        units: [...allies, ...enemies],
+        grid,
+        round: next.round,
+        random: ServerGame.deterministicBattleRng(next, next.round, `effect:${actor.uid}:${entry.skill.id}`),
+      });
+      applySecondaryEffectEvents(actor, entry.skill, result);
+    }
   }
 
   function executeEnemy(entry) {
     const enemy = enemies.find((unit) => unit.id === entry.enemy.id);
     const target = allies.find((unit) => unit.id === entry.plan.targetId);
-    if (!enemy?.alive || !target?.alive || target.hp <= 0) return;
+    if (!enemy?.alive || !target?.alive || target.hp <= 0 || FighterEffects.isDisabled(enemy, next.round)) return;
+    if (interrupted(enemy.id)) { appendInterrupted(enemy); return; }
     const skill = entry.plan.skill;
     const apCost = entry.plan.apCost || skill?.apCost || 0;
     if (!skill || enemy.ap < apCost) return;
@@ -508,24 +883,62 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
     if (!valid) return;
     const targetCells = Skills.patternCells(skill, enemy.cell, target.cell, { grid, heightMap: grid.heightMap, facing: enemy.facing });
     if (!targetCells.some((entryCell) => Tactics.cellKey(entryCell) === Tactics.cellKey(target.cell))) return;
+    appendActionStart({ ...entry, type: "skill" }, enemy, target, skill);
     enemy.ap = Math.max(0, enemy.ap - apCost);
-    const rng = ServerGame.deterministicBattleRng(next, next.round, `enemy:${enemy.id}:${target.uid}`);
-    const hit = Tactics.rollHit({ accuracy: enemy.accuracy, accuracyMultiplier: skill.accuracyMultiplier ?? 1, evasion: Math.max(0, target.evasion + (evasionByUid.get(target.uid) || 0) * 100 + (FighterEffects.statusEvasion(target, next.round, {}) || 0) * 100), accuracyPenalties: [(FighterEffects.accuracyPenalty(enemy, next.round) || 0) * 100] }, rng);
-    if (!hit.hit) {
-      appendEvent(next, { type: "miss", actorId: enemy.id, actorName: enemy.name, targetId: target.id, targetUid: target.uid, targetName: target.name, text: `${enemy.name} 攻擊 ${target.name}，但失手` });
-      return;
-    }
-    const positional = Tactics.positionalAttack(enemy, target, { attackPath: Tactics.facingOrthogonalPriority(enemy.cell, target.cell, enemy.facing), facing: enemy.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
+    const rng = ServerGame.deterministicBattleRng(next, next.round, `enemy:${enemy.id}:${target.uid}:${skill.id}`);
+    const hitCount = skillHitCount(skill, skill.effects?.find?.((effect) => effect.type === "damage"));
+    const positionalPath = Tactics.facingOrthogonalPriority(enemy.cell, target.cell, enemy.facing);
+    const positional = Tactics.positionalAttack(enemy, target, { attackPath: positionalPath, facing: enemy.facing, side: 1 + SIDE_BONUS, rear: 1 + REAR_BONUS });
     const guard = guardByUid.get(target.uid) || 0;
-    let damage = Tactics.calculateDamage(enemy, target, { multiplier: (skill.damageModel?.scale || 1) * positional.multiplier, guarded: guard > 0, guardMultiplier: 1 - guard, minimum: Tactics.MIN_DIRECT_DAMAGE });
-    damage = Math.max(1, Math.round(whole(damage, 1) * (FighterEffects.damageMultiplier(target, next.round) ?? 1)));
-    const counter = FighterEffects.resolveCounter({ defender: target, attacker: enemy, damage, isProjectile: skill.isProjectile === true, round: next.round });
-    damage = counter.damage;
-    target.hp = Math.max(0, target.hp - damage);
-    target.alive = target.hp > 0;
-    if (!target.alive && !(whole(target.deathRound, 0) > 0)) target.deathRound = next.round;
-    appendEvent(next, { type: "damage", actorId: enemy.id, actorName: enemy.name, targetId: target.id, targetUid: target.uid, targetName: target.name, amount: damage, skillName: skill.name, text: `${enemy.name} 對 ${target.name} 造成 ${damage} 傷害` });
-    if (target.alive && skill.effects?.length) FighterEffects.applySkillEffects({ skill, caster: enemy, targets: [target], units: [...allies, ...enemies], grid, round: next.round, random: rng });
+    let totalDamage = Tactics.calculateDamage(enemy, target, { multiplier: (skill.damageModel?.scale || Skills.calculateSkillDamageMultiplier(skill) || 1) * positional.multiplier, guarded: guard > 0, guardMultiplier: 1 - guard, minimum: Tactics.MIN_DIRECT_DAMAGE });
+    totalDamage = Math.max(1, Math.round(whole(totalDamage, 1) * (FighterEffects.damageMultiplier(target, next.round) ?? 1)));
+    const split = Skills.splitDamageLaterHits(totalDamage, hitCount);
+    for (let hitIndex = 0; hitIndex < hitCount && enemy.alive && target.alive && target.hp > 0; hitIndex += 1) {
+      const hit = Tactics.rollHit({
+        accuracy: enemy.accuracy,
+        accuracyMultiplier: skill.accuracyMultiplier ?? 1,
+        evasion: unitEvasion(target),
+        accuracyPenalties: [(FighterEffects.accuracyPenalty(enemy, next.round) || 0) * 100],
+      }, rng);
+      if (!hit.hit) {
+        appendMiss(enemy, target, skill, hitIndex, hitCount);
+        continue;
+      }
+      let damage = Math.max(0, whole(split[hitIndex], 0));
+      const counter = FighterEffects.resolveCounter({ defender: target, attacker: enemy, damage, isProjectile: skill.isProjectile === true, round: next.round });
+      damage = Math.max(0, whole(counter.damage, 0));
+      const appliedDamage = Math.min(Math.max(0, whole(target.hp, 0)), damage);
+      target.hp = Math.max(0, target.hp - damage);
+      markDefeat(target);
+      markDefeat(enemy);
+      appendDamage(enemy, target, skill, damage, hitIndex, hitCount, { appliedAmount: appliedDamage });
+      applyInterrupt(target, skill);
+      if (counter.reflectedDamage > 0) {
+        appendEvent(next, {
+          type: "damage",
+          actorId: target.id,
+          ...(target.uid ? { actorUid: target.uid } : {}),
+          actorName: target.name,
+          targetId: enemy.id,
+          targetName: enemy.name,
+          targetCell: cell(enemy.cell),
+          amount: Math.max(0, whole(counter.reflectedDamage, 0)),
+          actionType: "counter",
+          skillId: null,
+          hit: hitIndex + 1,
+          hits: hitCount,
+          defeated: enemy.alive === false,
+          text: `${target.name} 反擊 ${enemy.name}，造成 ${Math.max(0, whole(counter.reflectedDamage, 0))} 傷害`,
+        });
+      }
+    }
+    if (target.alive && skill.effects?.length) {
+      const extra = skill.effects.filter((effect) => !["damage", "armor_pierce"].includes(effect.type));
+      if (extra.length) {
+        const result = FighterEffects.applySkillEffects({ skill: { ...skill, effects: extra }, caster: enemy, targets: [target], units: [...allies, ...enemies], grid, round: next.round, random: rng });
+        applySecondaryEffectEvents(enemy, skill, result);
+      }
+    }
   }
 
   for (const ordered of order) {
@@ -542,31 +955,47 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
   }
   enemies.forEach((enemy, index) => persistEnemy(next, enemy, index));
 
-  const livingEnemies = next.enemies.filter((enemy) => enemy.alive !== false && Number(enemy.hp) > 0);
-  const active = activeMemberUids(next);
-  if (!livingEnemies.length) {
-    next.status = "finished";
-    next.result = "victory";
-    next.phase = "finished";
-    next.phaseEndsAtMs = 0;
-  } else if (!active.length) {
-    const anyoneDead = next.memberUids.some((memberUid) => next.members?.[memberUid] && next.members[memberUid].retreated !== true && Number(next.members[memberUid].hp) <= 0);
-    next.status = "finished";
-    next.result = anyoneDead ? "defeat" : "retreat";
-    next.phase = "finished";
-    next.phaseEndsAtMs = 0;
-  } else {
+  function finishFromCurrentState() {
+    const living = next.enemies.filter((enemy) => enemy.alive !== false && Number(enemy.hp) > 0);
+    const active = activeMemberUids(next);
+    if (!living.length) {
+      next.status = "finished";
+      next.result = "victory";
+      next.phase = "finished";
+      next.phaseEndsAtMs = 0;
+      return true;
+    }
+    if (!active.length) {
+      const anyoneDead = next.memberUids.some((memberUid) => next.members?.[memberUid] && next.members[memberUid].retreated !== true && Number(next.members[memberUid].hp) <= 0);
+      next.status = "finished";
+      next.result = anyoneDead ? "defeat" : "retreat";
+      next.phase = "finished";
+      next.phaseEndsAtMs = 0;
+      return true;
+    }
+    return false;
+  }
+
+  if (!finishFromCurrentState()) {
     next.round += 1;
-    for (const memberUid of active) {
+    for (const memberUid of activeMemberUids(next)) {
       const unit = memberUnit(next, memberUid, nextSaves[memberUid]);
-      FighterEffects.tickStatuses(unit, next.round, unit.passives || {});
+      const tick = FighterEffects.tickStatuses(unit, next.round, unit.passives || {});
+      appendStatusTickEvents(unit, tick);
       persistMember(next, unit);
+      const save = nextSaves[memberUid];
+      if (save?.player) save.player.hp = Math.max(0, Math.min(unit.maxHp, whole(unit.hp, 0)));
     }
     const refreshedEnemies = enemyUnits(next);
-    refreshedEnemies.forEach((enemy, index) => { FighterEffects.tickStatuses(enemy, next.round, {}); persistEnemy(next, enemy, index); });
-    beginMovePhase(next, nowMs);
+    refreshedEnemies.forEach((enemy, index) => {
+      const tick = FighterEffects.tickStatuses(enemy, next.round, {});
+      appendStatusTickEvents(enemy, tick);
+      persistEnemy(next, enemy, index);
+    });
+    if (!finishFromCurrentState()) beginMovePhase(next, nowMs);
   }
-  const actionEvents = (next.events || []).filter((event) => whole(event?.serial, 0) > firstActionEventSerial);
+  const actionEvents = Array.isArray(next.__collectPresentationEvents) ? next.__collectPresentationEvents : [];
+  delete next.__collectPresentationEvents;
   appendPresentation(next, { type: "action", round: actionRound, events: actionEvents });
   if (next.status === "finished") {
     next.finishParticipantUids = (next.memberUids || []).filter((memberUid) => {
@@ -574,8 +1003,8 @@ function resolveActions(battle, saves, nowMs = Date.now()) {
       return member && member.retreated !== true && member.disconnected !== true;
     });
     next.finishReadyUids = [];
-    next.finishReleased = false;
-    next.exitReleased = false;
+    next.finishReleased = next.solo === true;
+    next.exitReleased = next.solo === true;
     next.finishedAtMs = nowMs;
     next.finishReleasedAtMs = 0;
     next.exitReleasedAtMs = 0;
@@ -605,9 +1034,18 @@ function grantVictoryRewards(battle, saves) {
     const newMaxHp = maxHpForSave(save);
     save.player.hp = xp.levelsGained > 0 ? newMaxHp : clamp(whole(member.hp, 1), 1, newMaxHp);
     save.player.coins = clamp(whole(save.player.coins, 0) + earnedCoins, 0, 99999);
-    ServerGame.recordServerKill(save, nextBattle.monsterType, nextBattle.encounterId || nextBattle.id);
+    const questProgress = ServerGame.recordServerKill(save, nextBattle.monsterType, nextBattle.encounterId || nextBattle.id);
     for (let index = 1; index < encounterCount; index += 1) ServerGame.recordServerKill(save, nextBattle.monsterType, `${nextBattle.encounterId || nextBattle.id}:pack-${index + 1}`);
-    rewards[memberUid] = { earnedXp, coins: earnedCoins, beforeLevel, beforeXp, afterLevel: xp.level, afterXp: xp.xp, levelsGained: xp.levelsGained };
+    rewards[memberUid] = {
+      earnedXp,
+      coins: earnedCoins,
+      beforeLevel,
+      beforeXp,
+      afterLevel: xp.level,
+      afterXp: xp.xp,
+      levelsGained: xp.levelsGained,
+      questProgress: questProgress ? { changed: questProgress.changed === true, reason: questProgress.reason || null } : null,
+    };
   }
   nextBattle.rewards = rewards;
   return { battle: nextBattle, saves: nextSaves, rewards };
@@ -624,6 +1062,7 @@ module.exports = Object.freeze({
   AP_GAIN,
   createBattle,
   beginMovePhase,
+  phaseDurationMs,
   validateMoveSubmission,
   validatePlayerAction,
   resolveMovement,
